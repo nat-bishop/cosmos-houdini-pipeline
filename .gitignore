@@ -1,0 +1,18 @@
+# Ignore big/binary stuff
+*.mp4
+*.mov
+*.avi
+*.hip
+*.hiplc
+*.hipnc
+*.bgeo
+*.cache
+*.sim
+*.exr
+art/
+# Ignore hidden system files
+.DS_Store
+Thumbs.db
+
+# Ignore HuggingFace / model caches
+.cache/

@@ -1,0 +1,31 @@
+# README Update Rule
+
+When making changes to scripts, code, or configuration that affect the high-level functionality of the system, always update the README.md file to reflect those changes.
+
+## What to update:
+
+- **Script functionality changes**: New command-line options, new scripts, or changes to existing script behavior
+- **Configuration changes**: Updates to config.sh or other configuration files that affect how the system works
+- **File structure changes**: Changes to input/output directories, file naming conventions, or directory layouts
+- **API changes**: Changes to JSON formats, command-line arguments, or other interfaces
+- **New features**: Additional capabilities or options that users need to know about
+
+## Examples:
+
+- Adding new flags to scripts (like `--duplicate` to new_prompt.sh)
+- Changing default paths or directory structures
+- Modifying JSON schema or file formats
+- Adding new automation scripts
+- Updating Docker mount configurations
+
+## How to update:
+
+1. Update the relevant sections of README.md
+2. Ensure examples and usage instructions are current
+3. Update any file path references or directory structures
+4. Add documentation for new features or options
+5. Keep the "Example: End-to-End Run" section current
+
+This ensures that users can always understand how to use the system based on the current codebase.
+alwaysApply: false
+---

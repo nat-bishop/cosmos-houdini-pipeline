@@ -46,9 +46,9 @@ echo ">>> Creating remote directories..."
 ssh ${SSH_OPTS} "${REMOTE}" "mkdir -p '${REMOTE_DIR}/inputs/prompts' '${REMOTE_DIR}/inputs/videos/${VIDEOS_SUBDIR}'"
 
 echo ">>> Uploading prompt JSON -> remote"
-rsync -avz -e "${RSYNC_SSH}" "${PROMPT_PATH}" "${REMOTE}:${REMOTE_DIR}/inputs/prompts/${PROMPT_BN}"
+scp -P ${REMOTE_PORT} -i ${SSH_KEY} "${PROMPT_PATH}" "${REMOTE}:${REMOTE_DIR}/inputs/prompts/${PROMPT_BN}"
 
 echo ">>> Uploading videos dir -> remote"
-rsync -avz -e "${RSYNC_SSH}" "${LOCAL_VIDEOS_PATH}" "${REMOTE}:${REMOTE_DIR}/inputs/videos/${VIDEOS_SUBDIR}/"
+scp -r -P ${REMOTE_PORT} -i ${SSH_KEY} "${LOCAL_VIDEOS_PATH}" "${REMOTE}:${REMOTE_DIR}/inputs/videos/"
 
 echo "Done uploading. Prompt: $PROMPT_BN  Videos subdir: $VIDEOS_SUBDIR"

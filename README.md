@@ -1,6 +1,15 @@
 # Cosmos + Houdini Experiments
 
-This repository documents experiments combining **Houdini/Nuke procedural outputs** with **NVIDIA Cosmos‑Transfer1** inference. The workflow keeps **Art** (procedural generation) clearly separated from **AI inputs/outputs**, and automates upload → run → download with reproducible logging.
+A production-ready workflow for combining **Houdini/Nuke procedural outputs** with **NVIDIA Cosmos‑Transfer1** inference. This system maintains clear separation between procedural generation and AI processing while providing automated upload → run → download capabilities with comprehensive logging and reproducibility.
+
+---
+
+## Quick Start
+
+1. **Clone and configure** the repository with your remote instance details
+2. **Build Docker image** on your remote instance: `docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest`
+3. **Convert PNG sequences** to MP4: `./scripts/convert_png_sequences.sh <input_dir> <output_name>`
+4. **Create prompts** and run inference: `./scripts/full_cycle.sh <prompt.json>`
 
 ---
 
@@ -37,34 +46,20 @@ project-root/
 
 ## Docker Setup
 
-This workflow uses Docker containers for inference on remote instances. **Important**: You must build the custom Docker image on each new instance before running inference.
+This workflow uses Docker containers for inference on remote instances. A custom Docker image must be built on each new instance to ensure proper configuration and checkpoint access.
 
-### **Building the Docker Image**
+### **Requirements**
 
-On your remote instance, navigate to the cosmos-transfer1 directory and run:
+- Docker with NVIDIA Container Toolkit support
+- Sufficient disk space for the image (typically 10-20GB)
+- Access to model checkpoints and configuration files
+
+### **Image Build Command**
 
 ```bash
 cd /path/to/cosmos-transfer1
 docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
 ```
-
-This command:
-- Builds a custom image with all required packages pre-installed
-- Includes your specific model checkpoints and configuration
-- Creates the image tag that your scripts expect (`nvcr.io/$USER/cosmos-transfer1:latest`)
-
-### **Why This is Required**
-
-- **New instances start with no Docker images** - you lose all previously built images
-- **Custom configuration** - your image includes specific checkpoints and settings
-- **Dependency management** - ensures all required packages are available
-- **Reproducibility** - guarantees consistent environment across runs
-
-### **Requirements**
-
-- Docker must be installed on your remote instance
-- NVIDIA Container Toolkit must be available for GPU access
-- Sufficient disk space for the image (typically 10-20GB)
 
 ---
 
@@ -89,24 +84,7 @@ Paths are **relative to the cosmos-transfer1 repository root inside the containe
 
 ## Scripts Overview
 
-All scripts read shared settings from `scripts/config.sh`:
-
-```bash
-# Remote
-REMOTE_USER=ubuntu
-REMOTE_HOST=<your lambda ip>
-REMOTE_PORT=22
-SSH_KEY=$HOME/.ssh/LambdaSSHkey.pem
-REMOTE_DIR=$HOME/NatsFS/cosmos-transfer1
-
-# Local
-LOCAL_PROMPTS_DIR=./inputs/prompts
-LOCAL_VIDEOS_DIR=./inputs/videos
-LOCAL_OUTPUTS_DIR=./outputs
-
-# Docker image used on remote
-DOCKER_IMAGE=nvcr.io/$USER/cosmos-transfer1:latest
-```
+All scripts read shared settings from `scripts/config.sh`. Configuration includes remote connection details, local directory paths, and Docker image specifications.
 
 **Core scripts:**
 
@@ -139,7 +117,7 @@ DOCKER_IMAGE=nvcr.io/$USER/cosmos-transfer1:latest
 
 ---
 
-## Example: End-to-End Run
+## Example: End-to-End Workflow
 
 1. **Prepare inputs** (from Houdini/Nuke) into `inputs/videos/building_flythrough_v1/`:
    ```text
@@ -164,7 +142,7 @@ DOCKER_IMAGE=nvcr.io/$USER/cosmos-transfer1:latest
    ./scripts/full_cycle.sh inputs/prompts/building_flythrough_v1_<timestamp>.json
    ```
 
-4. **Inspect results**:
+4. **Output structure**:
    ```text
    outputs/building_flythrough_v1_<timestamp>/
      ├─ spec_used.json          # full inference command + spec
@@ -177,16 +155,11 @@ DOCKER_IMAGE=nvcr.io/$USER/cosmos-transfer1:latest
      └─ output.mp4              # 4K upscaled video
    ```
 
-5. **Review history** (auto-appended each run):
-   ```bash
-   cat notes/run_history.log
-   ```
-
 ---
 
 ## PNG Sequence to MP4 Conversion
 
-Before running inference, you'll need to convert your Houdini/Nuke PNG sequences to MP4 videos. The `convert_png_sequences.sh` script automates this process:
+The `convert_png_sequences.sh` script automates conversion of Houdini/Nuke PNG sequences to MP4 videos for inference:
 
 ### **Requirements**
 - **ffmpeg** must be installed and available in your PATH
@@ -237,7 +210,7 @@ Before running inference, you'll need to convert your Houdini/Nuke PNG sequences
      └─ segmentation.mp4
    ```
 
-4. **Continue with normal workflow**:
+4. **Continue with workflow**:
    ```bash
    ./scripts/new_prompt.sh building_shot1 "Cinematic futuristic building interior"
    ./scripts/full_cycle.sh inputs/prompts/building_shot1_<timestamp>.json
@@ -335,8 +308,8 @@ If `NUM_GPU=1`, it uses plain `python3`.
 
 ---
 
-## Notes
+## Technical Notes
 
-- Ensure your remote has the model checkpoints under `${REMOTE_DIR}/../checkpoints` (or set `CHECKPOINT_DIR_REMOTE` in your environment on the call), since REMOTE_DIR now points to the cosmos-transfer1 subdirectory.  
-- For gated models, run `huggingface-cli login` inside the container once.  
-- If outputs appear owned by root after runs, consider running the container with `-u $(id -u):$(id -g)` or use the `share` alias from the original docs.
+- Model checkpoints should be located under `${REMOTE_DIR}/../checkpoints` or configured via `CHECKPOINT_DIR_REMOTE` environment variable
+- Gated models require `huggingface-cli login` authentication inside the container
+- Container user permissions may need adjustment with `-u $(id -u):$(id -g)` for proper file ownership

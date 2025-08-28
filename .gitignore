@@ -16,3 +16,6 @@ Thumbs.db
 
 # Ignore HuggingFace / model caches
 .cache/
+
+# Ignore reference documentation
+REFERENCE.md

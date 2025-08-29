@@ -86,6 +86,9 @@ Paths are **relative to the cosmos-transfer1 repository root inside the containe
 
 All scripts read shared settings from `scripts/config.sh`. Configuration includes remote connection details, local directory paths, and Docker image specifications.
 
+> **💡 New: Python Workflow System**  
+> For enhanced workflow management, we now provide a modern Python-based system that replaces bash scripts with better error handling, cross-platform compatibility, and real-time progress tracking. See [Python Workflow System](cosmos_workflow/README.md) for details.
+
 **Core scripts:**
 
 - `convert_png_sequences.sh <input_directory> <output_name> [frame_count]`  
@@ -305,6 +308,67 @@ If `NUM_GPU=1`, it uses plain `python3`.
 - **Exact command capture** - Every run logs the precise command executed
 - **Environment snapshots** - GPU settings, checkpoint paths, and other variables are recorded
 - **Input validation** - Checks for required files before processing
+
+---
+
+## Python Workflow System
+
+For enhanced workflow management, we now provide a modern Python-based system that replaces bash scripts with better error handling, cross-platform compatibility, and real-time progress tracking.
+
+### **Key Benefits**
+- **Better Error Handling**: Python exceptions instead of bash exit codes
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Real-Time Progress**: Live output streaming from remote commands
+- **Modular Architecture**: Easy to test, extend, and maintain
+- **Comprehensive Logging**: Structured logging with configurable levels
+
+### **Quick Start**
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run complete workflow (equivalent to full_cycle.sh)
+python -m cosmos_workflow.main run prompt.json
+
+# Run only inference
+python -m cosmos_workflow.main inference prompt.json
+
+# Run only upscaling
+python -m cosmos_workflow.main upscale prompt.json
+
+# Check remote status
+python -m cosmos_workflow.main status
+```
+
+### **Advanced Usage**
+```bash
+# Custom videos subdirectory
+python -m cosmos_workflow.main run prompt.json --videos-subdir custom_videos
+
+# Skip upscaling
+python -m cosmos_workflow.main run prompt.json --no-upscale
+
+# Custom upscale weight
+python -m cosmos_workflow.main run prompt.json --upscale-weight 0.7
+
+# Use multiple GPUs
+python -m cosmos_workflow.main run prompt.json --num-gpu 2 --cuda-devices "0,1"
+
+# Verbose logging
+python -m cosmos_workflow.main run prompt.json --verbose
+```
+
+### **Migration from Bash Scripts**
+| Bash Script | Python Command |
+|-------------|----------------|
+| `./scripts/full_cycle.sh prompt.json` | `python -m cosmos_workflow.main run prompt.json` |
+| `./scripts/run_inference_remote.sh prompt.json` | `python -m cosmos_workflow.main inference prompt.json` |
+| `./scripts/run_upscale_remote.sh prompt.json` | `python -m cosmos_workflow.main upscale prompt.json` |
+| `./scripts/ssh_lambda.sh` | `python -m cosmos_workflow.main status` |
+
+> **💡 Tip**: You can use both approaches during transition. The Python system reads the same `scripts/config.sh` configuration file.
+
+For complete documentation, see [Python Workflow System](cosmos_workflow/README.md).
 
 ---
 

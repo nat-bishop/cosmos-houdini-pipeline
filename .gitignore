@@ -10,6 +10,7 @@
 *.sim
 *.exr
 art/
+
 # Ignore hidden system files
 .DS_Store
 Thumbs.db
@@ -19,3 +20,21 @@ Thumbs.db
 
 # Ignore reference documentation
 REFERENCE.md
+
+# Ignore old python directory (renamed to cosmos_workflow)
+python/
+
+# Ignore personal notes and logs
+notes/
+*.log
+
+# Ignore large input files but allow directory structure
+inputs/videos/*/
+inputs/prompts/*.json
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python

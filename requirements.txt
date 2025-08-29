@@ -1,0 +1,8 @@
+# Python dependencies for Cosmos-Transfer1 workflow system
+
+# SSH connection management
+paramiko>=3.0.0
+
+# Note: All other dependencies are Python standard library modules:
+# - argparse, json, subprocess, sys, pathlib, typing, datetime
+# - logging, contextlib, dataclasses

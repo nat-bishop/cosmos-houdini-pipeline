@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class WorkflowOrchestrator:
     """Orchestrates complete Cosmos-Transfer1 workflows."""
     
-    def __init__(self, config_file: str = "scripts/config.sh"):
+    def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
         self.config_manager = ConfigManager(config_file)
         self.ssh_manager: Optional[SSHManager] = None
         self.file_transfer: Optional[FileTransferService] = None

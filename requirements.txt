@@ -3,6 +3,9 @@
 # SSH connection management
 paramiko>=3.0.0
 
+# Configuration management
+toml>=0.10.0
+
 # Note: All other dependencies are Python standard library modules:
 # - argparse, json, subprocess, sys, pathlib, typing, datetime
 # - logging, contextlib, dataclasses

@@ -31,8 +31,6 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   --video_save_folder "outputs/${PROMPT_NAME}" \
   --controlnet_specs "inputs/prompts/${PROMPT_NAME}.json" \
   --offload_text_encoder_model \
-  --upsample_prompt \
-  --offload_prompt_upsampler \
   --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \
   2>&1 | tee "outputs/${PROMPT_NAME}/run.log"

@@ -1,0 +1,27 @@
+{
+  "prompt_spec": {
+  "prompt": "A cinematic drone shot of a wide city street lined with collapsed buildings. Concrete rubble spills across cracked asphalt, with twisted rebar jutting into the air. Shattered glass glitters faintly in the dim, dusty light. The skeletal remains of high-rises lean precariously, some missing entire facades, exposing empty office floors. In the distance, smoke drifts lazily from a half-collapsed tower. The mood is desolate and heavy, as if the city has long since been abandoned. The wide boulevard feels strangely silent, save for the whisper of wind carrying ash and torn posters fluttering against broken lamp posts.",
+
+  "input_video_path": "inputs/videos/Destroyed_City_Drone_Shot_24v1/color.mp4",
+
+  "edge": {
+    "control_weight": 0.25
+  },
+
+  "depth": {
+    "control_weight": 0.25,
+    "input_control": "inputs/videos/Destroyed_City_Drone_Shot_24v1/depth.mp4"
+  },
+
+  "seg": {
+    "control_weight": 0.25,
+    "input_control": "inputs/videos/Destroyed_City_Drone_Shot_24v1/segmentation.mp4"
+  }
+},
+  "inference_command": "torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir $CHECKPOINT_DIR --video_save_folder outputs/Destroyed_City_Drone_Shot_24v1_20250828_20250829_012940 --controlnet_specs inputs/prompts/Destroyed_City_Drone_Shot_24v1_20250828_20250829_012940.json --offload_text_encoder_model --upsample_prompt --offload_prompt_upsampler --offload_guardrail_models --num_gpus $NUM_GPU",
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "$CUDA_VISIBLE_DEVICES",
+    "CHECKPOINT_DIR": "$CHECKPOINT_DIR",
+    "NUM_GPU": "$NUM_GPU"
+  }
+}

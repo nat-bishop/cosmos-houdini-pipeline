@@ -351,7 +351,7 @@ This Python workflow system is part of your Cosmos-Transfer1 experiments reposit
 For issues or questions:
 1. Check the troubleshooting section above
 2. Enable verbose logging with `--verbose` flag
-3. Check the system status with `python python/main.py status`
+3. Check the system status with `python -m cosmos_workflow.main status`
 4. Review the logs in `notes/run_history.log`
 
 ---

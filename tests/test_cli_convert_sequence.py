@@ -175,8 +175,8 @@ class TestConvertSequenceCommand:
         mock_video_processor.standardize_video.assert_called_once()
         call_args = mock_video_processor.standardize_video.call_args
         assert call_args.kwargs['target_fps'] == 30
-        assert call_args.kwargs['target_width'] == 1920
-        assert call_args.kwargs['target_height'] == 1080
+        # Check that target_resolution is passed as a tuple
+        assert call_args.kwargs['target_resolution'] == (1920, 1080)
     
     def test_convert_sequence_custom_resolution(self, mock_video_processor, mock_metadata_extractor, temp_png_dir):
         """Test conversion with custom WxH resolution."""
@@ -203,10 +203,9 @@ class TestConvertSequenceCommand:
                 verbose=False
             )
         
-        # Verify standardize was called with custom resolution
+        # Verify standardize was called with custom resolution as tuple
         call_args = mock_video_processor.standardize_video.call_args
-        assert call_args.kwargs['target_width'] == 2560
-        assert call_args.kwargs['target_height'] == 1440
+        assert call_args.kwargs['target_resolution'] == (2560, 1440)
     
     def test_convert_sequence_invalid_directory(self, mock_video_processor, mock_metadata_extractor, capsys):
         """Test error handling for invalid directory."""
@@ -403,6 +402,40 @@ class TestConvertSequenceCommand:
                 # Check error message
                 captured = capsys.readouterr()
                 assert "[ERROR] PNG sequence conversion failed: Test exception" in captured.out
+    
+    def test_convert_sequence_no_unicode_emojis(self, mock_video_processor, mock_metadata_extractor, temp_png_dir, capsys):
+        """Test that output doesn't contain Unicode emojis (Windows compatibility)."""
+        # Setup mocks
+        mock_video_processor.validate_sequence.return_value = {
+            "valid": True,
+            "frame_count": 10,
+            "missing_frames": [],
+            "pattern": "frame_{:03d}.png",
+            "issues": []
+        }
+        mock_video_processor.create_video_from_frames.return_value = True
+        
+        # Run command
+        with patch('sys.exit'):
+            convert_png_sequence(
+                input_dir=str(temp_png_dir),
+                output_path=None,
+                fps=24,
+                resolution=None,
+                generate_metadata=False,
+                ai_analysis=False,
+                verbose=False
+            )
+        
+        # Check output doesn't contain emojis
+        captured = capsys.readouterr()
+        # Common emojis that might cause issues
+        emojis = ['🔍', '✅', '🎬', '📐', '📊', '📋', '✨', '💡', '⚠️', '❌']
+        for emoji in emojis:
+            assert emoji not in captured.out, f"Found emoji {emoji} in output"
+        
+        # Check that status messages are present with text labels
+        assert "[INFO]" in captured.out or "[SUCCESS]" in captured.out
 
 
 class TestCLIIntegration:

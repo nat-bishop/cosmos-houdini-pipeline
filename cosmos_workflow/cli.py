@@ -383,7 +383,7 @@ def convert_png_sequence(
         processor = VideoProcessor()
         
         # Step 1: Validate PNG sequence
-        print(f"\n🔍 Validating PNG sequence in: {input_dir}")
+        print(f"\n[INFO] Validating PNG sequence in: {input_dir}")
         validation = processor.validate_sequence(input_path)
         
         if not validation["valid"]:
@@ -394,7 +394,7 @@ def convert_png_sequence(
                 print(f"  - Missing frames: {validation['missing_frames'][:10]}{'...' if len(validation['missing_frames']) > 10 else ''}")
             sys.exit(1)
         
-        print(f"✅ Valid sequence found: {validation['frame_count']} frames")
+        print(f"[SUCCESS] Valid sequence found: {validation['frame_count']} frames")
         if validation["pattern"]:
             print(f"   Pattern: {validation['pattern']}")
         
@@ -408,7 +408,7 @@ def convert_png_sequence(
             video_output = input_path.parent / f"{input_path.name}_video.mp4"
         
         # Step 4: Convert to video
-        print(f"\n🎬 Converting {len(png_files)} frames to video...")
+        print(f"\n[INFO] Converting {len(png_files)} frames to video...")
         print(f"   Output: {video_output}")
         print(f"   FPS: {fps}")
         
@@ -422,11 +422,11 @@ def convert_png_sequence(
             print(f"[ERROR] Failed to create video")
             sys.exit(1)
         
-        print(f"✅ Video created successfully: {video_output}")
+        print(f"[SUCCESS] Video created successfully: {video_output}")
         
         # Step 5: Optional standardization
         if resolution:
-            print(f"\n📐 Standardizing video to {resolution}...")
+            print(f"\n[INFO] Standardizing video to {resolution}...")
             standardized_path = video_output.parent / f"{video_output.stem}_standardized.mp4"
             
             # Parse resolution
@@ -447,19 +447,18 @@ def convert_png_sequence(
                 input_path=video_output,
                 output_path=standardized_path,
                 target_fps=fps,
-                target_width=target_width,
-                target_height=target_height
+                target_resolution=(target_width, target_height)
             )
             
             if success:
                 video_output = standardized_path
-                print(f"✅ Video standardized to {resolution}")
+                print(f"[SUCCESS] Video standardized to {resolution}")
             else:
                 print(f"[WARNING] Standardization failed, using original video")
         
         # Step 6: Generate metadata if requested
         if generate_metadata:
-            print(f"\n📊 Generating metadata...")
+            print(f"\n[INFO] Generating metadata...")
             extractor = VideoMetadataExtractor(use_ai=ai_analysis)
             metadata = extractor.extract_metadata(video_output)
             
@@ -467,10 +466,10 @@ def convert_png_sequence(
             metadata_path = video_output.parent / f"{video_output.stem}_metadata.json"
             extractor.save_metadata(metadata, metadata_path)
             
-            print(f"✅ Metadata saved to: {metadata_path}")
+            print(f"[SUCCESS] Metadata saved to: {metadata_path}")
             
             if verbose:
-                print(f"\n📋 Video Metadata:")
+                print(f"\n[INFO] Video Metadata:")
                 print(f"   Duration: {metadata.duration:.2f} seconds")
                 print(f"   Resolution: {metadata.width}x{metadata.height}")
                 print(f"   FPS: {metadata.fps}")
@@ -480,13 +479,13 @@ def convert_png_sequence(
                 if metadata.ai_tags:
                     print(f"   AI Tags: {', '.join(metadata.ai_tags[:5])}")
         
-        print(f"\n✨ Conversion complete!")
+        print(f"\n[SUCCESS] Conversion complete!")
         print(f"   Video: {video_output}")
         if generate_metadata:
             print(f"   Metadata: {metadata_path}")
         
         # Suggest next steps
-        print(f"\n💡 Next steps:")
+        print(f"\n[INFO] Next steps:")
         print(f"   1. Use this video as input for Cosmos Transfer:")
         print(f"      python -m cosmos_workflow.cli create-spec \"my_scene\" \"Transform to cyberpunk style\" --video-path {video_output}")
         

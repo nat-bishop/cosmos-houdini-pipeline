@@ -41,6 +41,8 @@ class CosmosMetadata:
     frame_count: int
     fps: float
     modalities: List[str]
+    video_path: str  # Path to color.mp4
+    control_inputs: Dict[str, str]  # Paths to control videos (depth, seg, etc.)
     timestamp: str
     resolution: Tuple[int, int]  # width, height
 
@@ -380,6 +382,13 @@ class CosmosVideoConverter:
             else:
                 description = f"Sequence with {sequence_info.frame_count} frames"
         
+        # Build paths for video and control inputs
+        video_path = str(output_dir / "color.mp4")
+        control_inputs = {}
+        for modality in sequence_info.modalities.keys():
+            if modality != "color":
+                control_inputs[modality] = str(output_dir / f"{modality}.mp4")
+        
         # Create metadata
         metadata = CosmosMetadata(
             id=id_hash,
@@ -388,6 +397,8 @@ class CosmosVideoConverter:
             frame_count=sequence_info.frame_count,
             fps=float(self.fps),
             modalities=list(sequence_info.modalities.keys()),
+            video_path=video_path,
+            control_inputs=control_inputs,
             timestamp=datetime.now().isoformat() + "Z",
             resolution=resolution
         )
@@ -402,6 +413,8 @@ class CosmosVideoConverter:
                 "frame_count": metadata.frame_count,
                 "fps": metadata.fps,
                 "modalities": metadata.modalities,
+                "video_path": metadata.video_path,
+                "control_inputs": metadata.control_inputs,
                 "timestamp": metadata.timestamp,
                 "resolution": list(metadata.resolution)
             }, f, indent=2)

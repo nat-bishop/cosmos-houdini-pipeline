@@ -686,23 +686,15 @@ def prepare_inference(
         print(f"  - ID: {metadata.id}")
         print(f"  - Name: {metadata.name}")
         print(f"  - Description: {metadata.description}")
-        print(f"  - Modalities: {', '.join(metadata.modalities)}")
+        print(f"  - Frame count: {metadata.frame_count}")
+        print(f"  - FPS: {metadata.fps}")
+        print(f"  - Resolution: {metadata.resolution[0]}x{metadata.resolution[1]}")
         
-        # Step 4: Suggest next steps
-        print(f"\n[INFO] Next steps:")
-        print(f"  1. Create PromptSpec:")
-        color_video = output_dir / "color.mp4"
-        print(f'     python -m cosmos_workflow.cli create-spec "{name}" "your prompt" --video-path {color_video}')
-        
-        # Suggest control inputs based on available modalities
-        control_args = []
-        for modality in ["depth", "segmentation", "vis", "edge"]:
-            if modality in metadata.modalities:
-                control_args.extend([modality, str(output_dir / f"{modality}.mp4")])
-        
-        if control_args:
-            print(f"  2. Or with control inputs:")
-            print(f'     python -m cosmos_workflow.cli create-spec "{name}" "your prompt" --video-path {color_video} --control-inputs {" ".join(control_args)}')
+        print(f"\n[SUCCESS] Inference inputs prepared:")
+        print(f"  Output directory: {output_dir}")
+        print(f"  Video path: {metadata.video_path}")
+        if metadata.control_inputs:
+            print(f"  Control inputs detected: {', '.join(metadata.control_inputs.keys())}")
         
     except Exception as e:
         print(f"\n[ERROR] Failed to prepare inference: {e}")
@@ -836,7 +828,7 @@ Examples:
     
     # Add prepare-inference command (replaces convert-sequence)
     prepare_parser = subparsers.add_parser('prepare-inference', 
-                                          help='Prepare Cosmos control sequences for inference')
+                                          help='Prepare Houdini renders for Cosmos inference (validates & converts to videos)')
     prepare_parser.add_argument('input_dir', help='Directory containing control modality PNGs (color.XXXX.png, etc.)')
     prepare_parser.add_argument('--name', required=True, help='Name for the output directory and metadata')
     prepare_parser.add_argument('--fps', type=int, default=24, help='Frame rate for output videos (default: 24)')

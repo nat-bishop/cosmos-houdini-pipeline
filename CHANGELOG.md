@@ -7,15 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added - 2025-08-30 (Cosmos-Specific Inference Preparation)
-- **New prepare-inference command for strict Cosmos workflow**
+### Added - 2025-08-30 (Cosmos-Specific Inference Preparation with Auto-Detection)
+- **Enhanced prepare-inference command with automatic control input detection**
   - Command: `python -m cosmos_workflow.cli prepare-inference <input_dir> --name <name>`
   - Strict validation: Requires `color.XXXX.png`, optionally accepts `depth`, `segmentation`, `vis`, `edge`
   - Fails on unexpected files or naming patterns
   - Creates timestamped output directories to prevent conflicts
   - Outputs properly named videos: `color.mp4`, `depth.mp4`, etc.
-  - Simplified metadata focused on inference needs (id, name, description, modalities)
+  - **Auto-detects control inputs and includes paths in metadata**
+  - Metadata includes `video_path` and `control_inputs` dictionary
   - Example: `python -m cosmos_workflow.cli prepare-inference ./renders/v3 --name my_scene`
+
+- **Comprehensive test suite for CosmosSequenceValidator**
+  - 24 tests covering all corner cases
+  - Tests for valid scenarios (minimal, full modalities, partial)
+  - Tests for invalid scenarios (missing color, wrong naming, gaps)
+  - Tests for edge cases (single frame, large frame numbers, non-sequential start)
 
 - **CosmosSequenceValidator class**
   - Validates Cosmos control modality naming conventions

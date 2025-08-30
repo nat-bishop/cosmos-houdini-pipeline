@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-30 (CLI Convert-Sequence Command)
+- **New convert-sequence CLI command for PNG to video conversion**
+  - Command: `python -m cosmos_workflow.cli convert-sequence <input_dir>`
+  - Validates PNG sequences before conversion (detects gaps, naming patterns)
+  - Converts PNG frames to MP4 video with configurable FPS
+  - Optional resolution standardization (720p, 1080p, 4k, or custom WxH)
+  - Optional AI-powered metadata generation with scene analysis
+  - Generates both video file and metadata JSON
+  - Comprehensive error handling and verbose output
+  - Example: `python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p --generate-metadata`
+
+- **Comprehensive test suite for convert-sequence command**
+  - Created `tests/test_cli_convert_sequence.py` with 14 tests
+  - Tests cover all command options and error scenarios
+  - Mock-based testing for VideoProcessor and VideoMetadataExtractor
+  - Tests for validation failures, custom paths, resolution handling
+  - CLI integration tests for argument parsing
+  - All tests passing with good coverage
+
 ### Added - 2025-08-30 (PNG Sequence to Video Support)
 - **Restored and Enhanced VideoProcessor Class**
   - Restored VideoProcessor from commit d0e2607 to `cosmos_workflow/local_ai/video_metadata.py`

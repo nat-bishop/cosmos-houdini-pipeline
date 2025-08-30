@@ -346,6 +346,158 @@ def create_run_spec(
         sys.exit(1)
 
 
+def convert_png_sequence(
+    input_dir: str,
+    output_path: Optional[str],
+    fps: int,
+    resolution: Optional[str],
+    generate_metadata: bool,
+    ai_analysis: bool,
+    verbose: bool
+) -> None:
+    """
+    Convert a PNG sequence to video with optional AI metadata generation.
+    
+    Args:
+        input_dir: Directory containing PNG sequence
+        output_path: Output video path (optional)
+        fps: Frame rate for output video
+        resolution: Target resolution (720p, 1080p, 4k, or WxH)
+        generate_metadata: Whether to generate metadata JSON
+        ai_analysis: Whether to use AI for metadata generation
+        verbose: Enable verbose logging
+    """
+    setup_logging(verbose)
+    
+    try:
+        from cosmos_workflow.local_ai.video_metadata import VideoProcessor, VideoMetadataExtractor
+        from pathlib import Path
+        import json
+        
+        input_path = Path(input_dir)
+        if not input_path.exists() or not input_path.is_dir():
+            print(f"[ERROR] Input directory does not exist: {input_dir}")
+            sys.exit(1)
+        
+        # Initialize processor
+        processor = VideoProcessor()
+        
+        # Step 1: Validate PNG sequence
+        print(f"\n🔍 Validating PNG sequence in: {input_dir}")
+        validation = processor.validate_sequence(input_path)
+        
+        if not validation["valid"]:
+            print(f"[ERROR] Invalid PNG sequence:")
+            for issue in validation["issues"]:
+                print(f"  - {issue}")
+            if validation["missing_frames"]:
+                print(f"  - Missing frames: {validation['missing_frames'][:10]}{'...' if len(validation['missing_frames']) > 10 else ''}")
+            sys.exit(1)
+        
+        print(f"✅ Valid sequence found: {validation['frame_count']} frames")
+        if validation["pattern"]:
+            print(f"   Pattern: {validation['pattern']}")
+        
+        # Step 2: Get PNG files
+        png_files = sorted(input_path.glob("*.png"))
+        
+        # Step 3: Determine output path
+        if output_path:
+            video_output = Path(output_path)
+        else:
+            video_output = input_path.parent / f"{input_path.name}_video.mp4"
+        
+        # Step 4: Convert to video
+        print(f"\n🎬 Converting {len(png_files)} frames to video...")
+        print(f"   Output: {video_output}")
+        print(f"   FPS: {fps}")
+        
+        success = processor.create_video_from_frames(
+            frame_paths=png_files,
+            output_path=video_output,
+            fps=fps
+        )
+        
+        if not success:
+            print(f"[ERROR] Failed to create video")
+            sys.exit(1)
+        
+        print(f"✅ Video created successfully: {video_output}")
+        
+        # Step 5: Optional standardization
+        if resolution:
+            print(f"\n📐 Standardizing video to {resolution}...")
+            standardized_path = video_output.parent / f"{video_output.stem}_standardized.mp4"
+            
+            # Parse resolution
+            if resolution in processor.standard_resolutions:
+                target_width, target_height = processor.standard_resolutions[resolution]
+            else:
+                # Try to parse WxH format
+                try:
+                    parts = resolution.split('x')
+                    target_width = int(parts[0])
+                    target_height = int(parts[1])
+                except:
+                    print(f"[ERROR] Invalid resolution format: {resolution}")
+                    print("   Use 720p, 1080p, 4k, or WxH format (e.g., 1920x1080)")
+                    sys.exit(1)
+            
+            success = processor.standardize_video(
+                input_path=video_output,
+                output_path=standardized_path,
+                target_fps=fps,
+                target_width=target_width,
+                target_height=target_height
+            )
+            
+            if success:
+                video_output = standardized_path
+                print(f"✅ Video standardized to {resolution}")
+            else:
+                print(f"[WARNING] Standardization failed, using original video")
+        
+        # Step 6: Generate metadata if requested
+        if generate_metadata:
+            print(f"\n📊 Generating metadata...")
+            extractor = VideoMetadataExtractor(use_ai=ai_analysis)
+            metadata = extractor.extract_metadata(video_output)
+            
+            # Save metadata
+            metadata_path = video_output.parent / f"{video_output.stem}_metadata.json"
+            extractor.save_metadata(metadata, metadata_path)
+            
+            print(f"✅ Metadata saved to: {metadata_path}")
+            
+            if verbose:
+                print(f"\n📋 Video Metadata:")
+                print(f"   Duration: {metadata.duration:.2f} seconds")
+                print(f"   Resolution: {metadata.width}x{metadata.height}")
+                print(f"   FPS: {metadata.fps}")
+                print(f"   Frame Count: {metadata.frame_count}")
+                if metadata.ai_caption:
+                    print(f"   AI Caption: {metadata.ai_caption}")
+                if metadata.ai_tags:
+                    print(f"   AI Tags: {', '.join(metadata.ai_tags[:5])}")
+        
+        print(f"\n✨ Conversion complete!")
+        print(f"   Video: {video_output}")
+        if generate_metadata:
+            print(f"   Metadata: {metadata_path}")
+        
+        # Suggest next steps
+        print(f"\n💡 Next steps:")
+        print(f"   1. Use this video as input for Cosmos Transfer:")
+        print(f"      python -m cosmos_workflow.cli create-spec \"my_scene\" \"Transform to cyberpunk style\" --video-path {video_output}")
+        
+    except Exception as e:
+        print(f"\n[ERROR] PNG sequence conversion failed: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 def run_prompt_upsampling(
     input_path: str,
     preprocess_videos: bool = True,
@@ -474,6 +626,12 @@ Examples:
   
   # Create new RunSpec
   python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
+  
+  # Convert PNG sequence to video
+  python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p
+  
+  # Convert with AI metadata generation
+  python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
         """
     )
     
@@ -554,6 +712,18 @@ Examples:
     upsample_parser.add_argument('--save-dir', help='Directory to save upsampled prompts')
     upsample_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
+    # Add convert-sequence command
+    convert_parser = subparsers.add_parser('convert-sequence', help='Convert PNG sequence to video with metadata')
+    convert_parser.add_argument('input_dir', help='Directory containing PNG sequence')
+    convert_parser.add_argument('--output', help='Output video path (default: <input_dir>_video.mp4)')
+    convert_parser.add_argument('--fps', type=int, default=24, help='Frame rate for output video (default: 24)')
+    convert_parser.add_argument('--resolution', help='Target resolution (720p, 1080p, 4k, or WxH format)')
+    convert_parser.add_argument('--generate-metadata', action='store_true', 
+                               help='Generate metadata JSON for the video')
+    convert_parser.add_argument('--ai-analysis', action='store_true',
+                               help='Use AI models for metadata generation (requires transformers)')
+    convert_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -632,6 +802,17 @@ Examples:
                 num_gpu=args.num_gpu,
                 cuda_devices=args.cuda_devices,
                 save_dir=args.save_dir,
+                verbose=args.verbose
+            )
+        
+        elif args.command == 'convert-sequence':
+            convert_png_sequence(
+                input_dir=args.input_dir,
+                output_path=args.output,
+                fps=args.fps,
+                resolution=args.resolution,
+                generate_metadata=args.generate_metadata,
+                ai_analysis=args.ai_analysis,
                 verbose=args.verbose
             )
         

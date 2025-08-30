@@ -83,6 +83,33 @@ result = orchestrator.run(
 
 Convert PNG sequences (from Houdini renders, Nuke compositions, etc.) to videos with AI-generated metadata:
 
+#### CLI Usage (Recommended)
+
+```bash
+# Basic conversion
+python -m cosmos_workflow.cli convert-sequence ./renders/sequence/
+
+# With custom FPS and resolution
+python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p
+
+# With AI metadata generation
+python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
+
+# Custom output path and verbose logging
+python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --output ./videos/final.mp4 --verbose
+
+# Full example with all options
+python -m cosmos_workflow.cli convert-sequence ./art/houdini/renders/comp/ \
+    --output ./outputs/scene_001.mp4 \
+    --fps 24 \
+    --resolution 1920x1080 \
+    --generate-metadata \
+    --ai-analysis \
+    --verbose
+```
+
+#### Python API
+
 ```python
 from cosmos_workflow.local_ai import VideoProcessor, VideoMetadataExtractor
 

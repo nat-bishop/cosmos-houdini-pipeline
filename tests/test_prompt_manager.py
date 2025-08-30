@@ -213,6 +213,65 @@ class TestPromptManager:
                           "blur_strength": "medium", "canny_threshold": "medium", 
                           "fps": 24, "seed": 1}
             )
+    
+    def test_validate_run_spec(self):
+        """Test validating a RunSpec."""
+        # Create a PromptSpec and RunSpec
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
+        run_spec = self.prompt_manager.create_run_spec(prompt_spec)
+        
+        # Test validation with non-existent file
+        assert self.prompt_manager.validate_run_spec("non_existent.json") is False
+        
+        # Test with actual file path
+        run_files = list(self.prompt_manager.runs_dir.rglob("*.json"))
+        if run_files:
+            assert self.prompt_manager.validate_run_spec(run_files[0]) is True
+    
+    def test_list_runs(self):
+        """Test listing available runs."""
+        # Create some PromptSpecs and RunSpecs
+        prompt_spec1 = self.prompt_manager.create_prompt_spec("shot1", "Prompt 1")
+        prompt_spec2 = self.prompt_manager.create_prompt_spec("shot2", "Prompt 2")
+        
+        self.prompt_manager.create_run_spec(prompt_spec1)
+        self.prompt_manager.create_run_spec(prompt_spec2)
+        
+        # List all runs
+        runs = self.prompt_manager.list_runs()
+        assert len(runs) >= 2
+        
+        # List with pattern
+        filtered_runs = self.prompt_manager.list_runs("shot1")
+        assert len(filtered_runs) >= 1
+        assert any("shot1" in str(r) for r in filtered_runs)
+    
+    def test_get_run_info(self):
+        """Test getting run information."""
+        # Create a PromptSpec and RunSpec
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
+        run_spec = self.prompt_manager.create_run_spec(
+            prompt_spec=prompt_spec,
+            control_weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2}
+        )
+        
+        # Get info from the created file
+        run_files = list(self.prompt_manager.runs_dir.rglob("*.json"))
+        if run_files:
+            info = self.prompt_manager.get_run_info(run_files[0])
+            
+            assert info["name"] == "test_shot"
+            assert info["prompt_id"] == prompt_spec.id
+            assert info["id"].startswith("rs_")
+            assert info["control_weights"]["vis"] == 0.3
+            assert info["control_weights"]["edge"] == 0.3
+            assert info["execution_status"] == "pending"
 
 
 if __name__ == "__main__":

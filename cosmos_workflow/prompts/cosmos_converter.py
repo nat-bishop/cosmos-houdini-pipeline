@@ -38,12 +38,8 @@ class CosmosConverter:
             "input_video_path": prompt_spec.input_video_path
         }
         
-        # Add negative prompt if present (Cosmos doesn't use this directly, but we'll keep for reference)
-        # The negative prompt would typically be handled at a different level
-        if prompt_spec.negative_prompt:
-            # Note: Cosmos Transfer doesn't have a negative_prompt field in controlnet_specs
-            # This would be handled through prompt engineering or separate parameters
-            pass
+        # Note: negative_prompt is handled as a command-line parameter to the inference script,
+        # not as part of the controlnet_specs JSON
         
         # Process control inputs and weights
         if run_spec:
@@ -97,7 +93,7 @@ class CosmosConverter:
         return cosmos_spec
     
     @staticmethod
-    def run_spec_to_cosmos_params(run_spec: RunSpec) -> Dict[str, Any]:
+    def run_spec_to_cosmos_params(run_spec: RunSpec, prompt_spec: Optional[PromptSpec] = None) -> Dict[str, Any]:
         """
         Extract Cosmos Transfer inference parameters from RunSpec.
         
@@ -106,6 +102,7 @@ class CosmosConverter:
         
         Args:
             run_spec: The RunSpec containing parameters
+            prompt_spec: Optional PromptSpec for additional parameters like negative_prompt
             
         Returns:
             Dictionary of Cosmos Transfer inference parameters
@@ -130,6 +127,10 @@ class CosmosConverter:
         # Add execution-specific parameters
         params["output_dir"] = run_spec.output_path if run_spec.output_path else "outputs"
         params["video_save_name"] = f"{run_spec.name}_{run_spec.id}"
+        
+        # Add negative prompt if provided in PromptSpec
+        if prompt_spec and prompt_spec.negative_prompt:
+            params["negative_prompt"] = prompt_spec.negative_prompt
         
         return params
     
@@ -303,7 +304,7 @@ def main():
         
         # If RunSpec provided, also show inference parameters
         if run_spec:
-            params = converter.run_spec_to_cosmos_params(run_spec)
+            params = converter.run_spec_to_cosmos_params(run_spec, prompt_spec)
             print("\nInference parameters:")
             print(json.dumps(params, indent=2))
         

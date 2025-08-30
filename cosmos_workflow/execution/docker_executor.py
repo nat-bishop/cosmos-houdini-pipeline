@@ -8,8 +8,11 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, Any
 from cosmos_workflow.connection.ssh_manager import SSHManager
+from cosmos_workflow.execution.command_builder import (
+    DockerCommandBuilder,
+    RemoteCommandExecutor
+)
 import logging
-from shlex import quote as Q
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,7 @@ class DockerExecutor:
         self.ssh_manager = ssh_manager
         self.remote_dir = remote_dir
         self.docker_image = docker_image
+        self.remote_executor = RemoteCommandExecutor(ssh_manager)
     
     def run_inference(
         self, 
@@ -42,7 +46,7 @@ class DockerExecutor:
         
         # Create output directory
         remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
-        self.ssh_manager.execute_command_success(f"mkdir -p {remote_output_dir}")
+        self.remote_executor.create_directory(remote_output_dir)
         
         # Execute inference using bash script
         logger.info("Starting inference...")
@@ -72,12 +76,12 @@ class DockerExecutor:
         
         # Check if input video exists
         input_video_path = f"{self.remote_dir}/outputs/{prompt_name}/output.mp4"
-        if not self._check_remote_file_exists(input_video_path):
+        if not self.remote_executor.file_exists(input_video_path):
             raise FileNotFoundError(f"Input video not found: {input_video_path}")
         
         # Create upscaled output directory
         remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
-        self.ssh_manager.execute_command_success(f"mkdir -p {remote_output_dir}")
+        self.remote_executor.create_directory(remote_output_dir)
         
         # Create upscaler spec
         self._create_upscaler_spec(prompt_name, control_weight)
@@ -91,30 +95,32 @@ class DockerExecutor:
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
         """Run inference using the bash script."""
         
-        cmd = f"""sudo docker run --rm --gpus all \\
-  --ipc=host --shm-size=8g \\
-  -v {Q(self.remote_dir)}:/workspace \\
-  -v $HOME/.cache/huggingface:/root/.cache/huggingface \\
-  -w /workspace \\
-  {Q(self.docker_image)} \\
-  bash -lc "/workspace/bashscripts/inference.sh {Q(prompt_name)} {num_gpu} {Q(cuda_devices)}"
-"""
+        builder = DockerCommandBuilder(self.docker_image)
+        builder.with_gpu()
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(self.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+        builder.set_command(
+            f'bash -lc "/workspace/bashscripts/inference.sh {prompt_name} {num_gpu} {cuda_devices}"'
+        )
         
-        self.ssh_manager.execute_command_success(cmd, timeout=3600)  # 1 hour timeout
+        self.remote_executor.execute_docker(builder, timeout=3600)  # 1 hour timeout
     
     def _run_upscaling_script(self, prompt_name: str, control_weight: float, num_gpu: int, cuda_devices: str) -> None:
         """Run upscaling using the bash script."""
         
-        cmd = f"""sudo docker run --rm --gpus all \\
-  --ipc=host --shm-size=8g \\
-  -v {Q(self.remote_dir)}:/workspace \\
-  -v $HOME/.cache/huggingface:/root/.cache/huggingface \\
-  -w /workspace \\
-  {Q(self.docker_image)} \\
-  bash -lc "/workspace/bashscripts/upscale.sh {Q(prompt_name)} {control_weight} {num_gpu} {Q(cuda_devices)}"
-"""
+        builder = DockerCommandBuilder(self.docker_image)
+        builder.with_gpu()
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(self.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+        builder.set_command(
+            f'bash -lc "/workspace/bashscripts/upscale.sh {prompt_name} {control_weight} {num_gpu} {cuda_devices}"'
+        )
         
-        self.ssh_manager.execute_command_success(cmd, timeout=1800)  # 30 minute timeout
+        self.remote_executor.execute_docker(builder, timeout=1800)  # 30 minute timeout
     
     def _create_upscaler_spec(self, prompt_name: str, control_weight: float) -> None:
         """Create upscaler specification file on remote."""
@@ -130,19 +136,12 @@ class DockerExecutor:
         spec_content = json.dumps(upscaler_spec, indent=2)
         spec_path = f"{self.remote_dir}/outputs/{prompt_name}/upscaler_spec.json"
         
-        # Create spec file using echo command
-        spec_command = f"cat > {spec_path} << 'EOF'\n{spec_content}\nEOF"
-        self.ssh_manager.execute_command_success(spec_command)
-        
+        self.remote_executor.write_file(spec_path, spec_content)
         logger.info(f"Created upscaler spec: {spec_path}")
     
     def _check_remote_file_exists(self, remote_path: str) -> bool:
         """Check if a file exists on the remote system."""
-        try:
-            self.ssh_manager.execute_command_success(f"test -f {remote_path}")
-            return True
-        except RuntimeError:
-            return False
+        return self.remote_executor.file_exists(remote_path)
     
     def get_docker_status(self) -> Dict[str, Any]:
         """Get Docker status on remote instance."""

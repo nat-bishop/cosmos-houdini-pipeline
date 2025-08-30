@@ -1,190 +1,215 @@
-# Cosmos-Houdini-Experiments
+# Cosmos-Houdini Experiments
 
-A Python-based workflow system for running Nvidia Cosmos video generation experiments with Houdini integration.
+An advanced Python workflow orchestration system for NVIDIA Cosmos Transfer video generation, featuring AI-powered metadata extraction, modular architecture, and seamless remote GPU execution.
 
-## 🚀 **Features**
+## 🌟 Key Features
 
-- **Automated Workflow**: Complete pipeline from prompt to final video output
-- **Remote Execution**: Run experiments on remote GPU instances via SSH
-- **Docker Integration**: Containerized execution environment
-- **Batch Processing**: Handle multiple prompts and experiments
-- **Upscaling Support**: Built-in video upscaling capabilities
-- **Refactored Prompt Management**: Modern schema-based prompt system
+### Core Capabilities
+- **Automated Video Generation Pipeline**: End-to-end workflow from text prompts to high-quality video output
+- **Remote GPU Orchestration**: Execute computationally intensive tasks on remote GPU instances via SSH
+- **Docker-Based Execution**: Containerized environment for consistent, reproducible results
+- **AI-Enhanced Metadata**: Automatic frame tagging and captioning using transformer models
+- **Intelligent Prompt Management**: Schema-based system with validation and reusability
+- **4K Video Upscaling**: Built-in support for high-resolution video enhancement
 
-## 🏗️ **Architecture**
+### Technical Highlights
+- **Modular Architecture**: Clean separation of concerns with specialized service modules
+- **Comprehensive Testing**: 100+ unit and integration tests with high coverage
+- **Flexible Configuration**: TOML-based configuration with environment variable overrides
+- **Batch Processing**: Support for overnight batch jobs with parameter randomization
+- **Error Recovery**: Robust error handling with retry mechanisms and detailed logging
 
-The system is built with a modular, extensible architecture:
+## 🏗️ Architecture
 
 ```
-cosmos_workflow/
-├── config/          # Configuration management
-├── connection/      # SSH and remote connectivity
-├── execution/       # Docker execution engine
-├── prompts/         # Prompt management and schemas
-├── transfer/        # File transfer operations
-├── workflows/       # Workflow orchestration
-└── utils/          # Utility functions
+cosmos-houdini-experiments/
+├── cosmos_workflow/                 # Main Python package
+│   ├── config/                     # Configuration management (TOML-based)
+│   ├── connection/                 # SSH connectivity via Paramiko
+│   ├── execution/                  # Docker orchestration & command building
+│   ├── prompts/                    # Schema-based prompt management
+│   ├── transfer/                   # File synchronization (rsync)
+│   ├── workflows/                  # High-level workflow orchestration
+│   ├── local_ai/                   # AI-powered analysis tools
+│   └── utils/                      # Reusable utilities & abstractions
+├── tests/                          # Comprehensive test suite
+├── scripts/                        # Bash scripts for remote execution
+└── inputs/outputs/                 # Organized I/O directories
 ```
 
-## 🔧 **Installation**
+## 🚀 Quick Start
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd cosmos-houdini-experiments
-   ```
+### Installation
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/cosmos-houdini-experiments.git
+cd cosmos-houdini-experiments
 
-3. **Configure the system**:
-   ```bash
-   # Edit config/config.toml with your settings
-   cp cosmos_workflow/config/config.toml.example cosmos_workflow/config/config.toml
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-## ⚙️ **Configuration**
+# Configure the system
+cp cosmos_workflow/config/config.toml.example cosmos_workflow/config/config.toml
+# Edit config.toml with your remote GPU instance details
+```
 
-Create a `config.toml` file in `cosmos_workflow/config/`:
+### Basic Usage
+
+```python
+# Create a prompt specification
+from cosmos_workflow.prompts import PromptSpec
+
+prompt = PromptSpec.create(
+    name="cyberpunk_city",
+    prompt="Futuristic cyberpunk cityscape at night with neon lights",
+    negative_prompt="blurry, low quality, distorted"
+)
+
+# Run the workflow
+from cosmos_workflow.workflows import WorkflowOrchestrator
+
+orchestrator = WorkflowOrchestrator()
+result = orchestrator.run(
+    prompt_file=prompt.save(),
+    num_gpu=2,
+    cuda_devices="0,1"
+)
+```
+
+## 🎯 Advanced Features
+
+### AI-Powered Video Analysis
+
+The system includes sophisticated AI capabilities for video analysis:
+
+```python
+from cosmos_workflow.local_ai import VideoMetadataExtractor
+
+extractor = VideoMetadataExtractor(use_ai=True)
+metadata = extractor.extract_metadata("video.mp4")
+
+# Access AI-generated insights
+print(f"Caption: {metadata.ai_caption}")
+print(f"Tags: {metadata.ai_tags}")
+print(f"Detected Objects: {metadata.detected_objects}")
+```
+
+**Models Used:**
+- **BLIP** (Salesforce): Image captioning
+- **ViT** (Google): Image classification for tagging
+- **DETR** (Facebook): Object detection
+
+### Schema-Based Prompt Management
+
+The system uses a two-tier schema system for maximum flexibility:
+
+#### PromptSpec
+- Defines the creative intent (prompts, video paths, control inputs)
+- Reusable across multiple runs with different parameters
+- Hash-based unique IDs for version tracking
+
+#### RunSpec
+- Execution configuration (weights, inference parameters)
+- Tracks execution status (PENDING → RUNNING → SUCCESS/FAILED)
+- Links to parent PromptSpec for traceability
+
+### Command Builder Pattern
+
+Clean, maintainable command construction:
+
+```python
+from cosmos_workflow.execution import DockerCommandBuilder
+
+builder = DockerCommandBuilder("nvidia/cosmos:latest")
+builder.with_gpu()
+builder.add_volume("/data", "/workspace/data")
+builder.add_environment("CUDA_VISIBLE_DEVICES", "0,1")
+builder.set_command("python inference.py")
+
+command = builder.build()  # Returns properly formatted Docker command
+```
+
+## 🔧 Configuration
+
+### config.toml Structure
 
 ```toml
-[ssh]
-host = "your-remote-host.com"
-username = "ubuntu"
-key_path = "~/.ssh/id_rsa"
+[remote]
+host = "192.168.1.100"
+user = "ubuntu"
+ssh_key = "~/.ssh/gpu_key.pem"
 port = 22
 
 [paths]
-remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
+remote_dir = "/home/ubuntu/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
-local_runs_dir = "./inputs/runs"
-local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
-local_notes_dir = "./notes"
 
 [docker]
-image = "nvcr.io/nvidia/cosmos:latest"
-container_name = "cosmos-experiment"
+image = "nvcr.io/nvidia/cosmos-transfer1:latest"
+gpu_enabled = true
+shm_size = "8g"
 ```
 
-## 🎯 **Refactored Prompt Management System**
+## 📊 Testing
 
-The system now uses a modern, schema-based approach with two main components:
-
-### **PromptSpec** - Prompt Definition
-- **Purpose**: Defines a prompt without execution parameters
-- **Contains**: Text prompt, video paths, control inputs, metadata
-- **File Naming**: `{name}_{timestamp}_{hash}.json`
-- **Example**: `cyberpunk_city_neon_2025-08-29T21-57-55_ps_c2b411e4355b.json`
-
-### **RunSpec** - Execution Configuration
-- **Purpose**: Defines actual inference runs with all parameters
-- **Contains**: Control weights, inference parameters, execution status
-- **File Naming**: `{prompt_name}_{timestamp}_{hash}.json`
-- **Example**: `cyberpunk_city_neon_2025-08-29T21-57-55_rs_5d28ae21073e.json`
-
-### **Benefits**
-- **Separation of Concerns**: Prompts vs. execution parameters
-- **Reusability**: Use same prompt with different parameters
-- **Traceability**: Track which parameters produced which results
-- **Organization**: Date-based directory structure
-- **Uniqueness**: Hash-based IDs prevent conflicts
-
-## 🚀 **Usage**
-
-### **Basic Workflow**
-
-1. **Create a PromptSpec**:
-   ```bash
-   python -m cosmos_workflow.main create-spec "cyberpunk_city" "Cyberpunk city at night with neon lights"
-   ```
-
-2. **Create a RunSpec**:
-   ```bash
-   python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
-   ```
-
-3. **Run the experiment**:
-   ```bash
-   python -m cosmos_workflow.main run run_spec.json
-   ```
-
-### **Advanced Options**
-
-- **Custom control weights**: `--weights 0.3 0.4 0.2 0.1`
-- **Custom parameters**: `--num-steps 50 --guidance 8.5`
-- **Multiple GPUs**: `--num-gpu 2 --cuda-devices "0,1"`
-- **Skip upscaling**: `--no-upscale`
-- **Custom upscale weight**: `--upscale-weight 0.7`
-
-### **Modern Schema System**
-
-The system uses a modern, schema-based approach that provides better organization and reusability:
+The project includes comprehensive testing:
 
 ```bash
-# Create PromptSpec
-python -m cosmos_workflow.main create-spec "building_flythrough" "Aerial view of a modern building"
-
-# Create RunSpec from PromptSpec
-python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.25 0.25 0.25 0.25
-```
-
-## 📁 **Directory Structure**
-
-```
-inputs/
-├── prompts/         # PromptSpec files (date-organized)
-│   └── 2025-08-29/
-│       └── cyberpunk_city_neon_2025-08-29T21-57-55_ps_c2b411e4355b.json
-├── runs/            # RunSpec files (date-organized)
-│   └── 2025-08-29/
-│       └── cyberpunk_city_neon_2025-08-29T21-57-55_rs_5d28ae21073e.json
-└── videos/          # Input video files
-    └── cyberpunk_city_neon/
-        ├── color.mp4
-        ├── depth.mp4
-        └── segmentation.mp4
-
-outputs/             # Generated videos and results
-notes/               # Experiment logs and notes
-```
-
-## 🔍 **Monitoring and Status**
-
-Check remote instance status:
-```bash
-python -m cosmos_workflow.main status --verbose
-```
-
-## 🧪 **Testing**
-
-Run the test suite:
-```bash
+# Run all tests
 pytest tests/
-```
 
-Check code coverage:
-```bash
+# Run with coverage report
 pytest --cov=cosmos_workflow tests/
+
+# Run specific test modules
+pytest tests/test_workflow_orchestrator.py -v
 ```
 
-## 🤝 **Contributing**
+## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+Contributions are welcome! The codebase follows:
+- **PEP 8** style guidelines
+- **Type hints** throughout
+- **Comprehensive docstrings**
+- **Test-driven development**
 
-## 📝 **License**
+## 📝 Documentation
 
-[Add your license information here]
+- **README.md**: This file - project overview and usage
+- **REFERENCE.md**: Detailed technical documentation
+- **DEVELOPMENT_PLAN.md**: Roadmap and development guidelines
+- **CLAUDE.md**: AI assistant context and guidelines
 
-## 🆘 **Support**
+## 🚦 Project Status
 
-For issues and questions:
-1. Check the documentation
-2. Review existing issues
-3. Create a new issue with detailed information
+### Completed Features ✅
+- Core workflow orchestration
+- SSH/Docker integration
+- Schema-based prompt management
+- AI-powered metadata extraction
+- Comprehensive test suite
+- Refactored architecture with clean abstractions
+
+### In Development 🚧
+- Batch inference support
+- Prompt upsampling feature
+- Parameter randomization for testing
+- Web UI for monitoring
+
+## 📄 License
+
+This project is proprietary software. All rights reserved.
+
+## 🙏 Acknowledgments
+
+- NVIDIA for the Cosmos Transfer model
+- The open-source community for the excellent libraries used
+- Contributors and testers who helped improve the system
+
+---
+
+**Author**: [Your Name]  
+**Contact**: [Your Email]  
+**Last Updated**: August 2024

@@ -43,22 +43,28 @@ class WorkflowOrchestrator:
                 remote_config.docker_image
             )
     
-    def run_full_cycle(
-        self, 
-        prompt_file: Path, 
+    def run(
+        self,
+        prompt_file: Path,
         videos_subdir: Optional[str] = None,
-        no_upscale: bool = False,
+        inference: bool = True,
+        upscale: bool = False,
+        upload: bool = True,
+        download: bool = True,
         upscale_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0"
     ) -> Dict[str, Any]:
         """
-        Run complete workflow: upload → inference → upscaling → download.
+        Run workflow with configurable steps.
         
         Args:
             prompt_file: Path to prompt JSON file
             videos_subdir: Optional override for video directory
-            no_upscale: Skip upscaling step
+            inference: Run inference step
+            upscale: Run upscaling step
+            upload: Upload files before processing
+            download: Download results after processing
             upscale_weight: Control weight for upscaling
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
@@ -71,70 +77,75 @@ class WorkflowOrchestrator:
         start_time = datetime.now()
         prompt_name = prompt_file.stem
         
-        logger.info(f"Starting full cycle workflow for {prompt_name}")
-        print(f"🚀 Starting full cycle workflow for {prompt_name}")
+        # Determine workflow type for logging
+        workflow_type = self._get_workflow_type(inference, upscale, upload, download)
+        
+        logger.info(f"Starting {workflow_type} workflow for {prompt_name}")
+        print(f"🚀 Starting {workflow_type} workflow for {prompt_name}")
         
         try:
             with self.ssh_manager:
-                # Step 1: Upload files
-                print("\n📤 Step 1: Uploading prompt and videos...")
+                steps_performed = []
                 
-                # Determine video directories to upload
-                if videos_subdir:
-                    video_dirs = [Path(f"inputs/videos/{videos_subdir}")]
-                else:
-                    # Extract from prompt filename
-                    prompt_name = prompt_file.stem
-                    video_dirs = [Path(f"inputs/videos/{prompt_name}")]
+                # Step 1: Upload files (if needed)
+                if upload:
+                    print("\n📤 Uploading prompt and videos...")
+                    video_dirs = self._get_video_directories(prompt_file, videos_subdir)
+                    self.file_transfer.upload_prompt_and_videos(prompt_file, video_dirs)
+                    steps_performed.append("upload")
                 
-                self.file_transfer.upload_prompt_and_videos(prompt_file, video_dirs)
-                
-                # Step 2: Run inference
-                print(f"\n🎬 Step 2: Running inference with {num_gpu} GPU(s)...")
-                self.docker_executor.run_inference(
-                    prompt_file, 
-                    num_gpu, 
-                    cuda_devices
-                )
-                
-                # Step 3: Run upscaling (if enabled)
-                if not no_upscale:
-                    print(f"\n🔍 Step 3: Running 4K upscaling with weight {upscale_weight}...")
-                    self.docker_executor.run_upscaling(
-                        prompt_file, 
-                        upscale_weight, 
-                        num_gpu, 
+                # Step 2: Run inference (if needed)
+                if inference:
+                    print(f"\n🎬 Running inference with {num_gpu} GPU(s)...")
+                    self.docker_executor.run_inference(
+                        prompt_file,
+                        num_gpu,
                         cuda_devices
                     )
-                else:
-                    print("\n⏭️  Step 3: Skipping upscaling (--no-upscale flag used)")
+                    steps_performed.append("inference")
                 
-                # Step 4: Download results
-                print("\n📥 Step 4: Downloading results...")
-                self.file_transfer.download_results(prompt_file)
+                # Step 3: Run upscaling (if needed)
+                if upscale:
+                    print(f"\n🔍 Running 4K upscaling with weight {upscale_weight}...")
+                    self.docker_executor.run_upscaling(
+                        prompt_file,
+                        upscale_weight,
+                        num_gpu,
+                        cuda_devices
+                    )
+                    steps_performed.append("upscale")
                 
-                # Step 5: Log workflow completion
-                self._log_workflow_completion(
-                    prompt_file, 
-                    not no_upscale, 
-                    upscale_weight,
-                    num_gpu
-                )
+                # Step 4: Download results (if needed)
+                if download:
+                    print("\n📥 Downloading results...")
+                    self.file_transfer.download_results(prompt_file)
+                    steps_performed.append("download")
+                
+                # Log workflow completion
+                if inference or upscale:
+                    self._log_workflow_completion(
+                        prompt_file,
+                        upscale,
+                        upscale_weight,
+                        num_gpu
+                    )
                 
                 end_time = datetime.now()
                 duration = end_time - start_time
                 
-                print(f"\n✅ Full cycle workflow completed successfully!")
+                print(f"\n✅ {workflow_type} workflow completed successfully!")
                 print(f"⏱️  Total duration: {duration}")
                 
                 return {
                     "status": "success",
                     "prompt_name": prompt_name,
+                    "workflow_type": workflow_type,
+                    "steps_performed": steps_performed,
                     "start_time": start_time.isoformat(),
                     "end_time": end_time.isoformat(),
                     "duration_seconds": duration.total_seconds(),
-                    "upscaled": not no_upscale,
-                    "upscale_weight": upscale_weight,
+                    "upscaled": upscale,
+                    "upscale_weight": upscale_weight if upscale else None,
                     "num_gpu": num_gpu,
                     "cuda_devices": cuda_devices
                 }
@@ -142,15 +153,6 @@ class WorkflowOrchestrator:
         except Exception as e:
             end_time = datetime.now()
             duration = end_time - start_time
-            
-            error_result = {
-                "status": "failed",
-                "prompt_name": prompt_name,
-                "start_time": start_time.isoformat(),
-                "end_time": end_time.isoformat(),
-                "duration_seconds": duration.total_seconds(),
-                "error": str(e)
-            }
             
             logger.error(f"Workflow failed: {e}")
             print(f"\n❌ Workflow failed: {e}")
@@ -160,114 +162,93 @@ class WorkflowOrchestrator:
             
             raise RuntimeError(f"Workflow failed: {e}") from e
     
+    def run_full_cycle(
+        self,
+        prompt_file: Path,
+        videos_subdir: Optional[str] = None,
+        no_upscale: bool = False,
+        upscale_weight: float = 0.5,
+        num_gpu: int = 1,
+        cuda_devices: str = "0"
+    ) -> Dict[str, Any]:
+        """
+        Run complete workflow: upload → inference → upscaling → download.
+        Legacy method for backward compatibility.
+        """
+        return self.run(
+            prompt_file=prompt_file,
+            videos_subdir=videos_subdir,
+            inference=True,
+            upscale=not no_upscale,
+            upload=True,
+            download=True,
+            upscale_weight=upscale_weight,
+            num_gpu=num_gpu,
+            cuda_devices=cuda_devices
+        )
+    
     def run_inference_only(
-        self, 
+        self,
         prompt_file: Path,
         videos_subdir: Optional[str] = None,
         num_gpu: int = 1,
         cuda_devices: str = "0"
     ) -> Dict[str, Any]:
-        """Run only inference without upscaling."""
-        self._initialize_services()
-        
-        start_time = datetime.now()
-        prompt_name = prompt_file.stem
-        
-        logger.info(f"Running inference only for {prompt_name}")
-        print(f"🎬 Running inference only for {prompt_name}")
-        
-        try:
-            with self.ssh_manager:
-                # Upload files
-                print("\n📤 Uploading prompt and videos...")
-                
-                # Determine video directories to upload
-                if videos_subdir:
-                    video_dirs = [Path(f"inputs/videos/{videos_subdir}")]
-                else:
-                    # Extract from prompt filename
-                    prompt_name = prompt_file.stem
-                    video_dirs = [Path(f"inputs/videos/{prompt_name}")]
-                
-                self.file_transfer.upload_prompt_and_videos(prompt_file, video_dirs)
-                
-                # Run inference
-                print(f"\n🎬 Running inference with {num_gpu} GPU(s)...")
-                self.docker_executor.run_inference(prompt_file, num_gpu, cuda_devices)
-                
-                # Download results
-                print("\n📥 Downloading results...")
-                self.file_transfer.download_results(prompt_file)
-                
-                end_time = datetime.now()
-                duration = end_time - start_time
-                
-                print(f"\n✅ Inference completed successfully in {duration}")
-                
-                return {
-                    "status": "success",
-                    "prompt_name": prompt_name,
-                    "start_time": start_time.isoformat(),
-                    "end_time": end_time.isoformat(),
-                    "duration_seconds": duration.total_seconds(),
-                    "num_gpu": num_gpu,
-                    "cuda_devices": cuda_devices
-                }
-                
-        except Exception as e:
-            logger.error(f"Inference failed: {e}")
-            raise RuntimeError(f"Inference failed: {e}") from e
+        """
+        Run only inference without upscaling.
+        Legacy method for backward compatibility.
+        """
+        return self.run(
+            prompt_file=prompt_file,
+            videos_subdir=videos_subdir,
+            inference=True,
+            upscale=False,
+            upload=True,
+            download=True,
+            num_gpu=num_gpu,
+            cuda_devices=cuda_devices
+        )
     
     def run_upscaling_only(
-        self, 
+        self,
         prompt_file: Path,
         upscale_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0"
     ) -> Dict[str, Any]:
-        """Run only upscaling on existing inference output."""
-        self._initialize_services()
-        
-        start_time = datetime.now()
-        prompt_name = prompt_file.stem
-        
-        logger.info(f"Running upscaling only for {prompt_name}")
-        print(f"🔍 Running upscaling only for {prompt_name}")
-        
-        try:
-            with self.ssh_manager:
-                # Run upscaling
-                print(f"\n🔍 Running 4K upscaling with weight {upscale_weight}...")
-                self.docker_executor.run_upscaling(
-                    prompt_file, 
-                    upscale_weight, 
-                    num_gpu, 
-                    cuda_devices
-                )
-                
-                # Download results
-                print("\n📥 Downloading upscaled results...")
-                self.file_transfer.download_results(prompt_file)
-                
-                end_time = datetime.now()
-                duration = end_time - start_time
-                
-                print(f"\n✅ Upscaling completed successfully in {duration}")
-                
-                return {
-                    "status": "success",
-                    "prompt_name": prompt_name,
-                    "start_time": start_time.isoformat(),
-                    "end_time": end_time.isoformat(),
-                    "duration_seconds": duration.total_seconds(),
-                    "upscale_weight": upscale_weight,
-                    "num_gpu": num_gpu,
-                    "cuda_devices": cuda_devices
-                }
-                
-        except Exception as e:
-            logger.error(f"Upscaling failed: {e}")
-            raise RuntimeError(f"Upscaling failed: {e}") from e
+        """
+        Run only upscaling on existing inference output.
+        Legacy method for backward compatibility.
+        """
+        return self.run(
+            prompt_file=prompt_file,
+            inference=False,
+            upscale=True,
+            upload=False,
+            download=True,
+            upscale_weight=upscale_weight,
+            num_gpu=num_gpu,
+            cuda_devices=cuda_devices
+        )
+    
+    def _get_workflow_type(self, inference: bool, upscale: bool, upload: bool, download: bool) -> str:
+        """Determine workflow type based on enabled steps."""
+        if inference and upscale:
+            return "full cycle"
+        elif inference and not upscale:
+            return "inference only"
+        elif not inference and upscale:
+            return "upscaling only"
+        else:
+            return "custom"
+    
+    def _get_video_directories(self, prompt_file: Path, videos_subdir: Optional[str]) -> list:
+        """Get video directories to upload."""
+        if videos_subdir:
+            return [Path(f"inputs/videos/{videos_subdir}")]
+        else:
+            prompt_name = prompt_file.stem
+            return [Path(f"inputs/videos/{prompt_name}")]
     
     def check_remote_status(self) -> Dict[str, Any]:
         """Check remote instance and Docker status."""

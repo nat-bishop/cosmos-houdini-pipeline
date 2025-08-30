@@ -178,13 +178,25 @@ class VideoMetadataExtractor:
         indices = np.random.choice(len(pixels), sample_size, replace=False)
         sampled_pixels = pixels[indices]
         
-        # Simple k-means clustering
-        from sklearn.cluster import KMeans
-        kmeans = KMeans(n_clusters=n_colors, random_state=42, n_init=10)
-        kmeans.fit(sampled_pixels)
-        
-        # Get cluster centers (dominant colors)
-        colors = kmeans.cluster_centers_.astype(int)
+        try:
+            # Try to use sklearn for better clustering
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(n_clusters=n_colors, random_state=42, n_init=10)
+            kmeans.fit(sampled_pixels)
+            
+            # Get cluster centers (dominant colors)
+            colors = kmeans.cluster_centers_.astype(int)
+        except ImportError:
+            # Fallback: Use simple averaging of sampled pixels
+            # Divide samples into n_colors groups and average each
+            group_size = len(sampled_pixels) // n_colors
+            colors = []
+            for i in range(n_colors):
+                start = i * group_size
+                end = start + group_size if i < n_colors - 1 else len(sampled_pixels)
+                group_mean = np.mean(sampled_pixels[start:end], axis=0)
+                colors.append(group_mean.astype(int))
+            colors = np.array(colors)
         
         # Convert BGR to RGB
         colors = colors[:, [2, 1, 0]]

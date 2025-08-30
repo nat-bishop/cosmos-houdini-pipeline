@@ -162,10 +162,11 @@ class TestPromptManagerOrchestrator:
                 
                 # Verify delegation
                 mock_create.assert_called_once_with(
-                    prompt_spec=mock_prompt_spec,
+                    prompt_id="ps_test123",
+                    name="test_prompt",
                     control_weights={"vis": 0.5, "edge": 0.3, "depth": 0.1, "seg": 0.1},
                     parameters={"num_steps": 50, "guidance": 10.0, "sigma_max": 75.0},
-                    custom_output_path="custom/output"
+                    output_path="custom/output"
                 )
                 
                 assert result == mock_run_spec
@@ -178,6 +179,8 @@ class TestPromptManagerOrchestrator:
             prompt_manager = PromptManager("dummy_config.toml")
             
             mock_prompt_spec = Mock(spec=PromptSpec)
+            mock_prompt_spec.id = "ps_test123"
+            mock_prompt_spec.name = "test_prompt"
             mock_run_spec = Mock(spec=RunSpec)
             
             with patch.object(prompt_manager.run_spec_manager, 'create_run_spec') as mock_create:
@@ -187,10 +190,11 @@ class TestPromptManagerOrchestrator:
                 
                 # Verify delegation with defaults
                 mock_create.assert_called_once_with(
-                    prompt_spec=mock_prompt_spec,
+                    prompt_id="ps_test123",
+                    name="test_prompt",
                     control_weights=None,
                     parameters=None,
-                    custom_output_path=None
+                    output_path=None
                 )
                 
                 assert result == mock_run_spec
@@ -385,6 +389,8 @@ class TestPromptManagerOrchestrator:
             
             # Test error propagation from RunSpecManager
             mock_prompt_spec = Mock(spec=PromptSpec)
+            mock_prompt_spec.id = "ps_test123"
+            mock_prompt_spec.name = "test_prompt"
             with patch.object(prompt_manager.run_spec_manager, 'create_run_spec') as mock_create:
                 mock_create.side_effect = RuntimeError("Test runtime error")
                 

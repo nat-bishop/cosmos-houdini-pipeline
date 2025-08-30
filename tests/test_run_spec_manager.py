@@ -189,7 +189,8 @@ class TestRunSpecManager:
             self.mock_dir_manager.get_run_file_path.assert_called_once()
             call_args = self.mock_dir_manager.get_run_file_path.call_args
             assert call_args[0][0] == "test_run"  # name
-            assert call_args[0][1] == "ps_prompt123"  # prompt_id
+            # Second arg is timestamp (ISO format string)
+            assert isinstance(call_args[0][1], str)  # timestamp
             assert call_args[0][2] == "rs_test123"   # run_id
     
     def test_list_runs_empty_directory(self):

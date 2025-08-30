@@ -30,65 +30,80 @@
 - ✅ Fixed parameter passing bugs
 - ✅ Added 15 comprehensive tests
 
-### 🔄 REFACTOR NEEDED - Cosmos-Specific Workflow
+### ✅ COMPLETED - Cosmos-Specific Workflow Refactor
 
-**Current Issues:**
-- Generic PNG sequence handling instead of Cosmos control modalities
-- Wrong output structure (single video vs multiple control videos)
-- Unnecessary metadata (color histograms vs AI description)
-- No timestamped directories to prevent conflicts
-- Too permissive validation (should be strict)
+**What was done:**
+- ✅ Created prepare-inference command with strict Cosmos validation
+- ✅ Auto-detection of control inputs (depth, segmentation, vis, edge)
+- ✅ Timestamped directories (name_YYYYMMDD_HHMMSS format)
+- ✅ Metadata includes video_path and control_inputs dictionary
+- ✅ Comprehensive test suite with 24 tests covering all corner cases
+- ✅ Tested with real Houdini renders from v3 directory
 
-**Refactoring Plan:**
+## Phase 2: AI Description and Smart Naming
 
-#### Step 1: Create CosmosSequenceValidator
-Replace generic validation with Cosmos-specific:
-- **Required**: `color.XXXX.png` files
-- **Optional**: `depth.XXXX.png`, `segmentation.XXXX.png`, `vis.XXXX.png`, `edge.XXXX.png`
-- **Strict**: Fail if unexpected files exist
-- **Validation**: Ensure frame numbers match across all modalities
-- **Output**: Dict with found modalities and frame ranges
+### 🔄 NEXT TASKS - AI-Powered Metadata Enhancement
 
-#### Step 2: Create CosmosVideoConverter
-Replace single video creation with multi-modal:
-- Process each modality separately
-- Output exact names: `color.mp4`, `depth.mp4`, etc.
-- Create timestamped output directory: `{name}_{timestamp}/`
-- Handle all modalities in parallel for speed
+**Priority Tasks for Next Session:**
 
-#### Step 3: Simplify Metadata Generation
-Create focused metadata for inference:
-```json
-{
-  "id": "quick_hash",
-  "name": "short_name_from_ai",
-  "description": "AI generated description of the scene",
-  "frame_count": 48,
-  "fps": 24,
-  "modalities": ["color", "depth", "segmentation"],
-  "timestamp": "2025-08-30T16:00:00Z"
-}
-```
-
-#### Step 4: Refactor CLI Command
-New behavior:
+#### Task 1: Install Required Packages
+**FIRST PRIORITY** - Update requirements.txt and install:
 ```bash
-# Validate and convert Cosmos sequences
-cosmos-workflow prepare-inference ./renders/comp/v3 --name my_scene
+# Add to requirements.txt:
+transformers>=4.30.0
+torch>=2.0.0
+torchvision>=0.15.0
+pillow>=9.5.0
+accelerate>=0.20.0
 
-# Output structure:
-inputs/videos/my_scene_20250830_160000/
-├── color.mp4
-├── depth.mp4
-├── segmentation.mp4
-└── metadata.json
+# Install command:
+pip install -r requirements.txt
 ```
 
-#### Step 5: Update Tests
-- Test strict validation (reject bad directories)
-- Test multi-modal video creation
-- Test timestamped directory creation
-- Test simplified metadata generation
+#### Task 2: Implement AI Description Generation
+- Ensure BLIP model loads and generates descriptions from middle frame
+- Test with actual Houdini renders to get meaningful descriptions
+- Handle model downloading/caching properly
+- Add fallback for when transformers not available
+- **Test Cases Needed:**
+  - Test description generation with real frames
+  - Test fallback when AI not available
+  - Test caching of model weights
+  - Test different scene types (architectural, nature, abstract)
+
+#### Task 3: Smart Name Generation from Description
+- Generate short, meaningful names from AI descriptions
+- Algorithm: Extract key nouns/adjectives from description
+- Example: "modern staircase with dramatic lighting" → "modern_staircase"
+- Max length: 20 characters, lowercase, underscores
+- **Test Cases Needed:**
+  - Test name extraction from various descriptions
+  - Test length limits
+  - Test special character handling
+  - Test uniqueness (add hash if needed)
+
+#### Task 4: Verify Directory Naming Format
+- Ensure format is exactly: `{name}_{timestamp}`
+- Timestamp format: `YYYYMMDD_HHMMSS`
+- Example: `staircase_scene_20250830_163604`
+- **Already implemented but verify:**
+  - Check current implementation in CosmosVideoConverter
+  - Add tests for timestamp format
+  - Test directory uniqueness
+
+#### Task 5: Comprehensive Testing
+- Test AI description with real video frames
+- Test name generation from descriptions
+- Test full workflow end-to-end
+- Ensure all paths in metadata are correct
+- Performance testing with large sequences
+
+### Success Criteria
+- ✅ AI generates meaningful descriptions from video frames
+- ✅ Names are auto-generated from descriptions (short, meaningful)
+- ✅ Directory naming follows `{name}_{timestamp}` format exactly
+- ✅ All tests pass including AI functionality
+- ✅ Works with and without transformers installed (graceful fallback)
 
 ### 2. Test Full Cosmos Transfer Inference Pipeline
 **Goal**: Once PNG->video conversion works, test the full AI video generation pipeline.

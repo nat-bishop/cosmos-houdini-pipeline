@@ -79,33 +79,58 @@ result = orchestrator.run(
 
 ## 🎯 Advanced Features
 
-### PNG Sequence to Video Conversion
+### Cosmos Inference Preparation
 
-Convert PNG sequences (from Houdini renders, Nuke compositions, etc.) to videos with AI-generated metadata:
+Prepare Houdini renders for Cosmos Transfer inference with strict validation and automatic control input detection:
 
-#### CLI Usage (Recommended)
+#### prepare-inference Command
 
 ```bash
-# Basic conversion
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/
+# Basic usage - prepares all modalities found in directory
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene
 
-# With custom FPS and resolution
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p
+# With custom FPS
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --fps 30
 
-# With AI metadata generation
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
+# With custom description (otherwise AI-generated if transformers installed)
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --description "Architectural staircase scene"
 
-# Custom output path and verbose logging
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --output ./videos/final.mp4 --verbose
+# Verbose output for debugging
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --verbose
+```
 
-# Full example with all options
-python -m cosmos_workflow.cli convert-sequence ./art/houdini/renders/comp/ \
-    --output ./outputs/scene_001.mp4 \
-    --fps 24 \
-    --resolution 1920x1080 \
-    --generate-metadata \
-    --ai-analysis \
-    --verbose
+#### Features:
+- **Strict Validation**: Requires `color.XXXX.png`, optionally accepts `depth.XXXX.png`, `segmentation.XXXX.png`, `vis.XXXX.png`, `edge.XXXX.png`
+- **Auto-Detection**: Automatically detects and includes all control inputs in metadata
+- **Timestamped Output**: Creates `inputs/videos/{name}_{timestamp}/` to prevent conflicts
+- **Proper Naming**: Outputs `color.mp4`, `depth.mp4`, etc. for each modality
+- **Ready-to-Use Metadata**: Includes `video_path` and `control_inputs` dictionary with all paths
+
+#### Output Structure:
+```
+inputs/videos/my_scene_20250830_163604/
+├── color.mp4           # Main video (required)
+├── depth.mp4           # Depth control (if found)
+├── segmentation.mp4    # Segmentation control (if found)
+└── metadata.json       # Contains all paths and info
+```
+
+#### Metadata Format:
+```json
+{
+  "id": "0d9d4f53ff91",
+  "name": "my_scene",
+  "description": "AI-generated or custom description",
+  "frame_count": 48,
+  "fps": 24.0,
+  "modalities": ["color", "depth", "segmentation"],
+  "video_path": "inputs/videos/my_scene_20250830_163604/color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/my_scene_20250830_163604/depth.mp4",
+    "segmentation": "inputs/videos/my_scene_20250830_163604/segmentation.mp4"
+  },
+  "resolution": [1280, 704]
+}
 ```
 
 #### Python API

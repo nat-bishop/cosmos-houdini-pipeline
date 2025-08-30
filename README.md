@@ -79,6 +79,43 @@ result = orchestrator.run(
 
 ## 🎯 Advanced Features
 
+### PNG Sequence to Video Conversion
+
+Convert PNG sequences (from Houdini renders, Nuke compositions, etc.) to videos with AI-generated metadata:
+
+```python
+from cosmos_workflow.local_ai import VideoProcessor, VideoMetadataExtractor
+
+# Initialize processor
+processor = VideoProcessor()
+
+# Validate PNG sequence
+validation = processor.validate_sequence("art/houdini/renders/comp/sequence_001")
+if validation["valid"]:
+    print(f"Found {validation['frame_count']} frames")
+else:
+    print(f"Issues: {validation['issues']}")
+
+# Convert to video
+frame_paths = sorted(Path("sequence_001").glob("*.png"))
+success = processor.create_video_from_frames(
+    frame_paths=frame_paths,
+    output_path="output.mp4",
+    fps=24
+)
+
+# Generate AI metadata
+extractor = VideoMetadataExtractor(use_ai=True)
+metadata = extractor.extract_metadata("output.mp4")
+```
+
+**Features:**
+- Automatic gap detection in frame sequences
+- Support for multiple naming patterns (frame_000.png, image_0.png, etc.)
+- Mixed resolution handling
+- Video standardization (FPS, resolution adjustment)
+- Frame extraction from existing videos
+
 ### AI-Powered Video Analysis
 
 The system includes sophisticated AI capabilities for video analysis:

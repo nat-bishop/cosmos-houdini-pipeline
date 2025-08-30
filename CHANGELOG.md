@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-30 (PNG Sequence to Video Support)
+- **Restored and Enhanced VideoProcessor Class**
+  - Restored VideoProcessor from commit d0e2607 to `cosmos_workflow/local_ai/video_metadata.py`
+  - Added `validate_sequence()` method to validate PNG sequences
+    - Detects missing frames and gaps in sequence
+    - Validates PNG file integrity
+    - Supports multiple naming patterns (frame_000.png, image_0.png, etc.)
+    - Returns detailed validation report with issues
+  - Enhanced `create_video_from_frames()` for robust PNG to MP4 conversion
+    - Handles mixed resolutions by resizing to first frame size
+    - Continues processing even with some corrupted frames
+    - Proper error handling and logging
+  - Improved `standardize_video()` for FPS and resolution adjustments
+    - Supports upscaling and downscaling
+    - Handles edge cases in FPS conversion
+  - Added `extract_frame()` for frame extraction with optional save
+  
+- **Comprehensive Test Coverage for VideoProcessor**
+  - Created 24 comprehensive tests covering all methods
+  - Edge case testing: corrupted files, missing frames, large gaps
+  - Mixed resolution handling tests
+  - Video standardization and upscaling tests
+  - End-to-end workflow validation
+  - All tests passing with good coverage
+  
+- **Module Export Updates**
+  - Updated `cosmos_workflow/local_ai/__init__.py` to export VideoProcessor
+  - VideoProcessor now available from main module import
+
 ### Changed - 2025-08-30 (Config Refactoring)
 - **Removed backward compatibility from ConfigManager**
   - Removed deprecated `config` property that returned raw dictionary

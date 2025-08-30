@@ -198,9 +198,9 @@ class SchemaUtils:
         if not weights:
             return False
         
-        # Check that all required keys are present and no extra keys
-        required_keys = {"vis", "edge", "depth", "seg"}
-        if set(weights.keys()) != required_keys:
+        # Check that only valid keys are present
+        valid_keys = {"vis", "edge", "depth", "seg"}
+        if not set(weights.keys()).issubset(valid_keys):
             return False
         
         # Check that all weights are positive numbers

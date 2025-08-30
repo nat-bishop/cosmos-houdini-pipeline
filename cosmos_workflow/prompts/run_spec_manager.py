@@ -78,10 +78,10 @@ class RunSpecManager:
         )
         
         # Save to date-based directory
-        file_path = self.dir_manager.get_run_file_path(name, prompt_id, run_id)
+        file_path = self.dir_manager.get_run_file_path(name, timestamp, run_id)
         run_spec.save(file_path)
         
-        print(f"✅ Created RunSpec: {run_id}")
+        print(f"[CREATED] RunSpec: {run_id}")
         print(f"   Saved to: {file_path}")
         print(f"   Prompt: {prompt_id}")
         print(f"   Control Weights: {control_weights}")

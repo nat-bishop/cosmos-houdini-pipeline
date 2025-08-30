@@ -79,7 +79,7 @@ class PromptSpecManager:
         file_path = self.dir_manager.get_prompt_file_path(prompt_spec.name, timestamp, prompt_spec.id)
         prompt_spec.save(file_path)
         
-        print(f"✅ Created PromptSpec: {prompt_id}")
+        print(f"[CREATED] PromptSpec: {prompt_id}")
         print(f"   Saved to: {file_path}")
         print(f"   Name: {name}")
         print(f"   Video: {video_path}")

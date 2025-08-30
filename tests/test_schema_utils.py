@@ -250,7 +250,11 @@ class TestSchemaUtils:
             {"vis": 0.5, "edge": 0.3, "depth": 0.1, "seg": 0.1},
             {"vis": 1.0, "edge": 0.0, "depth": 0.0, "seg": 0.0},
             {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
-            {"vis": 0.0, "edge": 0.0, "depth": 0.5, "seg": 0.5}
+            {"vis": 0.0, "edge": 0.0, "depth": 0.5, "seg": 0.5},
+            # Partial weights are now valid
+            {"vis": 0.5, "edge": 0.3, "depth": 0.1},  # Missing seg
+            {"vis": 0.5},  # Single modality
+            {"edge": 0.75, "seg": 0.25},  # Two modalities
         ]
         
         for weights in valid_weights:
@@ -262,7 +266,6 @@ class TestSchemaUtils:
             {},  # Empty dict
             {"vis": -0.5, "edge": 0.3, "depth": 0.1, "seg": 0.1},  # Negative weight
             {"vis": "invalid", "edge": 0.3, "depth": 0.1, "seg": 0.1},  # Non-numeric
-            {"vis": 0.5, "edge": 0.3, "depth": 0.1},  # Missing key
             {"vis": 0.5, "edge": 0.3, "depth": 0.1, "seg": 0.1, "extra": 0.1},  # Extra key
             None  # None value
         ]
@@ -276,6 +279,8 @@ class TestSchemaUtils:
             {"vis": 0.0, "edge": 0.0, "depth": 0.0, "seg": 0.0},  # All zero
             {"vis": 0.999999, "edge": 0.000001, "depth": 0.0, "seg": 0.0},  # Very small
             {"vis": 1.0, "edge": 0.0, "depth": 0.0, "seg": 0.0},  # One weight = 1.0
+            {"vis": 0.0},  # Single zero weight
+            {"edge": 1.0},  # Single full weight
         ]
         
         for weights in edge_cases:

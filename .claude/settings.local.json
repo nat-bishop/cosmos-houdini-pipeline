@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(git show:*)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\scripts/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\examples/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\inference/**)",
+      "Bash(git checkout:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

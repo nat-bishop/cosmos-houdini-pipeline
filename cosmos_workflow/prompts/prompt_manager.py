@@ -76,10 +76,11 @@ class PromptManager:
     ) -> RunSpec:
         """Create a new RunSpec using the RunSpecManager."""
         return self.run_spec_manager.create_run_spec(
-            prompt_spec=prompt_spec,
+            prompt_id=prompt_spec.id,
+            name=prompt_spec.name,
             control_weights=control_weights,
             parameters=parameters,
-            custom_output_path=custom_output_path
+            output_path=custom_output_path
         )
     
     def validate_prompt_spec(self, prompt_path: Union[str, Path]) -> bool:
@@ -188,7 +189,7 @@ def main():
             # Load the PromptSpec
             prompt_spec_path = Path(args.prompt_spec_path)
             if not prompt_spec_path.exists():
-                print(f"❌ PromptSpec file not found: {prompt_spec_path}")
+                print(f"[ERROR] PromptSpec file not found: {prompt_spec_path}")
                 return
             
             prompt_spec = PromptSpec.load(prompt_spec_path)
@@ -254,9 +255,9 @@ def main():
             print(f"  Created: {info['created_time']}")
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    main() 

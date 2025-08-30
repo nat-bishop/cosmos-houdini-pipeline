@@ -152,6 +152,7 @@ class TestRunSpec:
         run_spec = RunSpec(
             id="rs_test123",
             prompt_id="ps_cyberpunk_city",
+            name="test_run",
             control_weights=control_weights,
             parameters=parameters,
             timestamp="2024-04-30T12:00:00Z",
@@ -172,6 +173,7 @@ class TestRunSpec:
         original = RunSpec(
             id="rs_test456",
             prompt_id="ps_test_prompt",
+            name="test_run",
             control_weights={"vis": 0.5, "edge": 0.5},
             parameters={"num_steps": 50, "guidance": 10.0},
             timestamp="2024-04-30T12:00:00Z",
@@ -202,6 +204,7 @@ class TestRunSpec:
             run_spec = RunSpec(
                 id="rs_test_save",
                 prompt_id="ps_test_prompt",
+                name="test_run",
                 control_weights={"vis": 0.25, "edge": 0.75},
                 parameters={"num_steps": 40, "guidance": 8.0},
                 timestamp="2024-04-30T12:00:00Z",

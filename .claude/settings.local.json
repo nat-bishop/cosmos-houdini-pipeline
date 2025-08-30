@@ -50,7 +50,16 @@
       "Bash(python -m pytest tests/test_command_builder.py::TestDockerCommandBuilder::test_build_complete_command -v --tb=short)",
       "Bash(python -m pytest tests/test_local_ai.py --tb=short)",
       "Bash(python -m pytest tests/test_local_ai.py -q --tb=no)",
-      "Bash(python -m pytest tests/test_cli.py tests/test_prompt_manager.py tests/test_workflow_orchestrator.py tests/test_workflow_utils.py tests/test_command_builder.py -q --tb=no)"
+      "Bash(python -m pytest tests/test_cli.py tests/test_prompt_manager.py tests/test_workflow_orchestrator.py tests/test_workflow_utils.py tests/test_command_builder.py -q --tb=no)",
+      "Bash(git push:*)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler\\inference/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler\\model/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\inference/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\utils/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\utils/**)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

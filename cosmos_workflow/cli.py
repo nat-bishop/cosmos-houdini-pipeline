@@ -344,6 +344,98 @@ def create_run_spec(
         sys.exit(1)
 
 
+def run_prompt_upsampling(
+    input_path: str,
+    preprocess_videos: bool = True,
+    max_resolution: int = 480,
+    num_frames: int = 2,
+    num_gpu: int = 1,
+    cuda_devices: str = "0",
+    save_dir: Optional[str] = None,
+    verbose: bool = False
+):
+    """Run prompt upsampling on one or more prompts."""
+    setup_logging(verbose)
+    
+    print("\n🚀 Starting prompt upsampling...")
+    orchestrator = WorkflowOrchestrator()
+    
+    try:
+        from pathlib import Path
+        input_path_obj = Path(input_path)
+        
+        if input_path_obj.is_file():
+            # Single file upsampling
+            print(f"📄 Upsampling single prompt: {input_path}")
+            from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
+            from cosmos_workflow.prompts.schemas import DirectoryManager
+            
+            # Load the prompt spec
+            dir_manager = DirectoryManager(
+                str(input_path_obj.parent),
+                str(input_path_obj.parent),
+                str(input_path_obj.parent)
+            )
+            spec_manager = PromptSpecManager(dir_manager)
+            prompt_spec = spec_manager.load(str(input_path_obj))
+            
+            # Run upsampling
+            result = orchestrator.run_single_prompt_upsampling(
+                prompt_spec=prompt_spec,
+                preprocess_videos=preprocess_videos,
+                max_resolution=max_resolution,
+                num_frames=num_frames,
+                num_gpu=num_gpu,
+                cuda_devices=cuda_devices
+            )
+            
+            if result["success"]:
+                updated_spec = result.get("updated_spec")
+                if updated_spec and save_dir:
+                    # Save the upsampled spec
+                    save_path = Path(save_dir) / f"upsampled_{input_path_obj.name}"
+                    spec_manager.save(updated_spec, str(save_path))
+                    print(f"✅ Saved upsampled prompt to: {save_path}")
+                print(f"✅ Successfully upsampled prompt")
+            else:
+                print(f"❌ Upsampling failed: {result.get('error')}")
+                
+        elif input_path_obj.is_dir():
+            # Directory batch upsampling
+            print(f"📁 Upsampling directory: {input_path}")
+            result = orchestrator.run_prompt_upsampling_from_directory(
+                prompts_dir=str(input_path_obj),
+                preprocess_videos=preprocess_videos,
+                max_resolution=max_resolution,
+                num_frames=num_frames,
+                num_gpu=num_gpu,
+                cuda_devices=cuda_devices
+            )
+            
+            if result["success"]:
+                print(f"✅ Successfully upsampled {result['num_upsampled']} prompts")
+                if save_dir and result.get("updated_specs"):
+                    # Save all upsampled specs
+                    save_path = Path(save_dir)
+                    save_path.mkdir(parents=True, exist_ok=True)
+                    for spec in result["updated_specs"]:
+                        spec_path = save_path / f"upsampled_{spec.name}.json"
+                        spec.save(str(spec_path))
+                    print(f"✅ Saved upsampled prompts to: {save_path}")
+            else:
+                print(f"❌ Upsampling failed: {result.get('error')}")
+        else:
+            print(f"❌ Invalid input path: {input_path}")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"\n❌ Failed to upsample prompts: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -446,6 +538,20 @@ Examples:
     create_run_parser.add_argument('--output-path', help='Custom output path')
     create_run_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
+    # Add upsample command
+    upsample_parser = subparsers.add_parser('upsample', help='Upsample prompts using Pixtral model')
+    upsample_parser.add_argument('input', help='PromptSpec file or directory of prompts')
+    upsample_parser.add_argument('--preprocess-videos', action='store_true', default=True,
+                                help='Preprocess videos to avoid vocab errors')
+    upsample_parser.add_argument('--max-resolution', type=int, default=480,
+                                help='Max resolution for video preprocessing')
+    upsample_parser.add_argument('--num-frames', type=int, default=2,
+                                help='Number of frames to extract')
+    upsample_parser.add_argument('--num-gpu', type=int, default=1, help='Number of GPUs')
+    upsample_parser.add_argument('--cuda-devices', default='0', help='CUDA device IDs')
+    upsample_parser.add_argument('--save-dir', help='Directory to save upsampled prompts')
+    upsample_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -512,6 +618,18 @@ Examples:
                 fps=args.fps,
                 seed=args.seed,
                 custom_output_path=args.output_path,
+                verbose=args.verbose
+            )
+        
+        elif args.command == 'upsample':
+            run_prompt_upsampling(
+                input_path=args.input,
+                preprocess_videos=args.preprocess_videos,
+                max_resolution=args.max_resolution,
+                num_frames=args.num_frames,
+                num_gpu=args.num_gpu,
+                cuda_devices=args.cuda_devices,
+                save_dir=args.save_dir,
                 verbose=args.verbose
             )
         

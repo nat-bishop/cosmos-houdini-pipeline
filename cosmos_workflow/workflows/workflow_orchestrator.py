@@ -12,16 +12,18 @@ from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.execution.docker_executor import DockerExecutor
+from cosmos_workflow.workflows.upsample_integration import UpsampleWorkflowMixin
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class WorkflowOrchestrator:
+class WorkflowOrchestrator(UpsampleWorkflowMixin):
     """Orchestrates complete Cosmos-Transfer1 workflows."""
     
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
         self.config_manager = ConfigManager(config_file)
+        self.config = self.config_manager.config  # Add config property for mixin
         self.ssh_manager: Optional[SSHManager] = None
         self.file_transfer: Optional[FileTransferService] = None
         self.docker_executor: Optional[DockerExecutor] = None

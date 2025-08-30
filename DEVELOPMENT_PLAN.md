@@ -21,40 +21,74 @@
   - Frame extraction tests
   - End-to-end workflow tests
 
-### 🔄 IN PROGRESS - CLI Integration
+### ✅ COMPLETED - Basic CLI Integration
+**What was done:**
+- ✅ Created convert-sequence CLI command
+- ✅ Basic PNG to video conversion working
+- ✅ Tested with real Houdini renders (v3 directory)
+- ✅ Fixed Unicode/emoji issues for Windows
+- ✅ Fixed parameter passing bugs
+- ✅ Added 15 comprehensive tests
 
-**Next Steps:**
-1. **Create CLI command for convert-sequence**
-   - File: `cosmos_workflow/cli.py`
-   - Add new subcommand that:
-     - Takes PNG directory as input
-     - Uses VideoProcessor.validate_sequence()
-     - Converts to video with VideoProcessor.create_video_from_frames()
-     - Generates AI metadata with VideoMetadataExtractor
-     - Saves video + metadata JSON
+### 🔄 REFACTOR NEEDED - Cosmos-Specific Workflow
 
-2. **Add comprehensive tests for CLI command**
-   - Unit tests for command parsing
-   - Integration tests for full workflow
-   - Mock external dependencies (VideoProcessor, VideoMetadataExtractor)
-   - Test error handling and edge cases
+**Current Issues:**
+- Generic PNG sequence handling instead of Cosmos control modalities
+- Wrong output structure (single video vs multiple control videos)
+- Unnecessary metadata (color histograms vs AI description)
+- No timestamped directories to prevent conflicts
+- Too permissive validation (should be strict)
 
-3. **Create integration tests**
-   - End-to-end test with real PNG sequences
-   - Test metadata generation accuracy
-   - Verify output compatibility with Cosmos Transfer
+**Refactoring Plan:**
 
-4. **Documentation updates**
-   - README.md: Add user guide for convert-sequence command
-   - REFERENCE.md: Document VideoProcessor API
-   - CHANGELOG.md: Log all changes made
+#### Step 1: Create CosmosSequenceValidator
+Replace generic validation with Cosmos-specific:
+- **Required**: `color.XXXX.png` files
+- **Optional**: `depth.XXXX.png`, `segmentation.XXXX.png`, `vis.XXXX.png`, `edge.XXXX.png`
+- **Strict**: Fail if unexpected files exist
+- **Validation**: Ensure frame numbers match across all modalities
+- **Output**: Dict with found modalities and frame ranges
 
-### Success Criteria
-- ✅ VideoProcessor implementation complete with 90%+ test coverage
-- [ ] CLI command integrated and working
-- [ ] Comprehensive test suite with good coverage
-- [ ] Integration tests passing
-- [ ] Documentation updated in all required files
+#### Step 2: Create CosmosVideoConverter
+Replace single video creation with multi-modal:
+- Process each modality separately
+- Output exact names: `color.mp4`, `depth.mp4`, etc.
+- Create timestamped output directory: `{name}_{timestamp}/`
+- Handle all modalities in parallel for speed
+
+#### Step 3: Simplify Metadata Generation
+Create focused metadata for inference:
+```json
+{
+  "id": "quick_hash",
+  "name": "short_name_from_ai",
+  "description": "AI generated description of the scene",
+  "frame_count": 48,
+  "fps": 24,
+  "modalities": ["color", "depth", "segmentation"],
+  "timestamp": "2025-08-30T16:00:00Z"
+}
+```
+
+#### Step 4: Refactor CLI Command
+New behavior:
+```bash
+# Validate and convert Cosmos sequences
+cosmos-workflow prepare-inference ./renders/comp/v3 --name my_scene
+
+# Output structure:
+inputs/videos/my_scene_20250830_160000/
+├── color.mp4
+├── depth.mp4
+├── segmentation.mp4
+└── metadata.json
+```
+
+#### Step 5: Update Tests
+- Test strict validation (reject bad directories)
+- Test multi-modal video creation
+- Test timestamped directory creation
+- Test simplified metadata generation
 
 ### 2. Test Full Cosmos Transfer Inference Pipeline
 **Goal**: Once PNG->video conversion works, test the full AI video generation pipeline.

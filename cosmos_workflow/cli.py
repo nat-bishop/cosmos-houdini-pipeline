@@ -226,7 +226,7 @@ def create_prompt_spec(
         print(f"   Name: {name}")
         print(f"   Video: {video_path}")
         print(f"   Control Inputs: {list(control_inputs_dict.keys())}")
-        print(f"\n💡 To create a RunSpec for this prompt:")
+        print(f"\n[INFO] To create a RunSpec for this prompt:")
         print(f"   python -m cosmos_workflow.main create-run {file_path}")
         
     except Exception as e:
@@ -405,7 +405,13 @@ def convert_png_sequence(
         if output_path:
             video_output = Path(output_path)
         else:
-            video_output = input_path.parent / f"{input_path.name}_video.mp4"
+            # Default to inputs/videos/ directory for inference workflow
+            from cosmos_workflow.config.config_manager import ConfigManager
+            config_manager = ConfigManager()
+            local_config = config_manager.get_local_config()
+            videos_dir = Path(local_config.videos_dir) / input_path.name
+            videos_dir.mkdir(parents=True, exist_ok=True)
+            video_output = videos_dir / "color.mp4"
         
         # Step 4: Convert to video
         print(f"\n[INFO] Converting {len(png_files)} frames to video...")
@@ -589,6 +595,123 @@ def run_prompt_upsampling(
         sys.exit(1)
 
 
+def prepare_inference(
+    input_dir: str,
+    name: str,
+    fps: int,
+    description: Optional[str],
+    use_ai: bool,
+    verbose: bool
+) -> None:
+    """
+    Prepare Cosmos sequences for inference by validating and converting to videos.
+    
+    Args:
+        input_dir: Directory containing control modality PNGs
+        name: Name for the output (used in directory name)
+        fps: Frame rate for videos
+        description: Optional description (AI-generated if not provided)
+        use_ai: Whether to use AI for description generation
+        verbose: Enable verbose logging
+    """
+    setup_logging(verbose)
+    
+    try:
+        from cosmos_workflow.local_ai.cosmos_sequence import (
+            CosmosSequenceValidator,
+            CosmosVideoConverter
+        )
+        from pathlib import Path
+        
+        input_path = Path(input_dir)
+        
+        # Step 1: Validate the sequence
+        print(f"\n[INFO] Validating Cosmos sequence in: {input_dir}")
+        validator = CosmosSequenceValidator()
+        sequence_info = validator.validate(input_path)
+        
+        if not sequence_info.valid:
+            print(f"[ERROR] Invalid Cosmos sequence:")
+            for issue in sequence_info.issues:
+                print(f"  - {issue}")
+            sys.exit(1)
+        
+        print(f"[SUCCESS] Valid Cosmos sequence found:")
+        print(f"  - Frame count: {sequence_info.frame_count}")
+        print(f"  - Modalities: {list(sequence_info.modalities.keys())}")
+        
+        if sequence_info.warnings:
+            print(f"[WARNING] Validation warnings:")
+            for warning in sequence_info.warnings:
+                print(f"  - {warning}")
+        
+        # Step 2: Convert to videos
+        print(f"\n[INFO] Converting sequences to videos...")
+        converter = CosmosVideoConverter(fps=fps)
+        
+        # Get output directory from config
+        from cosmos_workflow.config.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        local_config = config_manager.get_local_config()
+        videos_dir = Path(local_config.videos_dir)
+        
+        result = converter.convert_sequence(
+            sequence_info=sequence_info,
+            output_dir=videos_dir,
+            name=name
+        )
+        
+        if not result["success"]:
+            print(f"[ERROR] Conversion failed:")
+            for error in result.get("errors", []):
+                print(f"  - {error}")
+            sys.exit(1)
+        
+        output_dir = Path(result["output_dir"])
+        print(f"[SUCCESS] Videos created in: {output_dir}")
+        for modality, video_path in result["videos"].items():
+            print(f"  - {modality}.mp4")
+        
+        # Step 3: Generate metadata
+        print(f"\n[INFO] Generating metadata...")
+        metadata = converter.generate_metadata(
+            sequence_info=sequence_info,
+            output_dir=output_dir,
+            name=name,
+            description=description,
+            use_ai=use_ai
+        )
+        
+        print(f"[SUCCESS] Metadata generated:")
+        print(f"  - ID: {metadata.id}")
+        print(f"  - Name: {metadata.name}")
+        print(f"  - Description: {metadata.description}")
+        print(f"  - Modalities: {', '.join(metadata.modalities)}")
+        
+        # Step 4: Suggest next steps
+        print(f"\n[INFO] Next steps:")
+        print(f"  1. Create PromptSpec:")
+        color_video = output_dir / "color.mp4"
+        print(f'     python -m cosmos_workflow.cli create-spec "{name}" "your prompt" --video-path {color_video}')
+        
+        # Suggest control inputs based on available modalities
+        control_args = []
+        for modality in ["depth", "segmentation", "vis", "edge"]:
+            if modality in metadata.modalities:
+                control_args.extend([modality, str(output_dir / f"{modality}.mp4")])
+        
+        if control_args:
+            print(f"  2. Or with control inputs:")
+            print(f'     python -m cosmos_workflow.cli create-spec "{name}" "your prompt" --video-path {color_video} --control-inputs {" ".join(control_args)}')
+        
+    except Exception as e:
+        print(f"\n[ERROR] Failed to prepare inference: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -711,14 +834,26 @@ Examples:
     upsample_parser.add_argument('--save-dir', help='Directory to save upsampled prompts')
     upsample_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
-    # Add convert-sequence command
-    convert_parser = subparsers.add_parser('convert-sequence', help='Convert PNG sequence to video with metadata')
+    # Add prepare-inference command (replaces convert-sequence)
+    prepare_parser = subparsers.add_parser('prepare-inference', 
+                                          help='Prepare Cosmos control sequences for inference')
+    prepare_parser.add_argument('input_dir', help='Directory containing control modality PNGs (color.XXXX.png, etc.)')
+    prepare_parser.add_argument('--name', required=True, help='Name for the output directory and metadata')
+    prepare_parser.add_argument('--fps', type=int, default=24, help='Frame rate for output videos (default: 24)')
+    prepare_parser.add_argument('--description', help='Description for metadata (AI-generated if not provided)')
+    prepare_parser.add_argument('--no-ai', action='store_true', 
+                               help='Skip AI description generation')
+    prepare_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    
+    # Add convert-sequence command (deprecated, kept for backward compatibility)
+    convert_parser = subparsers.add_parser('convert-sequence', 
+                                          help='[DEPRECATED] Use prepare-inference instead')
     convert_parser.add_argument('input_dir', help='Directory containing PNG sequence')
     convert_parser.add_argument('--output', help='Output video path (default: <input_dir>_video.mp4)')
     convert_parser.add_argument('--fps', type=int, default=24, help='Frame rate for output video (default: 24)')
     convert_parser.add_argument('--resolution', help='Target resolution (720p, 1080p, 4k, or WxH format)')
-    convert_parser.add_argument('--generate-metadata', action='store_true', 
-                               help='Generate metadata JSON for the video')
+    convert_parser.add_argument('--no-metadata', action='store_true', 
+                               help='Skip metadata generation (generated by default)')
     convert_parser.add_argument('--ai-analysis', action='store_true',
                                help='Use AI models for metadata generation (requires transformers)')
     convert_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
@@ -804,13 +939,24 @@ Examples:
                 verbose=args.verbose
             )
         
+        elif args.command == 'prepare-inference':
+            prepare_inference(
+                input_dir=args.input_dir,
+                name=args.name,
+                fps=args.fps,
+                description=args.description,
+                use_ai=not args.no_ai,
+                verbose=args.verbose
+            )
+        
         elif args.command == 'convert-sequence':
+            print("[WARNING] convert-sequence is deprecated. Use prepare-inference instead.")
             convert_png_sequence(
                 input_dir=args.input_dir,
                 output_path=args.output,
                 fps=args.fps,
                 resolution=args.resolution,
-                generate_metadata=args.generate_metadata,
+                generate_metadata=not args.no_metadata,  # Default is True now
                 ai_analysis=args.ai_analysis,
                 verbose=args.verbose
             )

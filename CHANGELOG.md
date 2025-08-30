@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-30 (Cosmos-Specific Inference Preparation)
+- **New prepare-inference command for strict Cosmos workflow**
+  - Command: `python -m cosmos_workflow.cli prepare-inference <input_dir> --name <name>`
+  - Strict validation: Requires `color.XXXX.png`, optionally accepts `depth`, `segmentation`, `vis`, `edge`
+  - Fails on unexpected files or naming patterns
+  - Creates timestamped output directories to prevent conflicts
+  - Outputs properly named videos: `color.mp4`, `depth.mp4`, etc.
+  - Simplified metadata focused on inference needs (id, name, description, modalities)
+  - Example: `python -m cosmos_workflow.cli prepare-inference ./renders/v3 --name my_scene`
+
+- **CosmosSequenceValidator class**
+  - Validates Cosmos control modality naming conventions
+  - Ensures frame number consistency across modalities
+  - Strict validation with clear error messages
+  
+- **CosmosVideoConverter class**  
+  - Parallel conversion of multiple modalities
+  - Proper output naming for Cosmos Transfer
+  - Simplified metadata generation
+  - AI description generation (when transformers installed)
+
+### Changed - 2025-08-30
+- **Deprecated convert-sequence command** in favor of prepare-inference
+- **Refactored workflow** to be Cosmos-specific rather than generic
+
 ### Added - 2025-08-30 (CLI Convert-Sequence Command)
 - **New convert-sequence CLI command for PNG to video conversion**
   - Command: `python -m cosmos_workflow.cli convert-sequence <input_dir>`

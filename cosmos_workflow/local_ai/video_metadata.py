@@ -14,6 +14,7 @@ import json
 from dataclasses import dataclass, field
 import hashlib
 import logging
+import re
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -384,6 +385,322 @@ def analyze_video(video_path: Path, use_ai: bool = True) -> VideoMetadata:
     """
     extractor = VideoMetadataExtractor(use_ai=use_ai)
     return extractor.extract_metadata(video_path)
+
+
+class VideoProcessor:
+    """
+    Processes video files and PNG sequences for Cosmos Transfer workflows.
+    
+    This class handles video conversion, PNG sequence validation and conversion,
+    resizing, and preparation for use as input to Cosmos Transfer.
+    """
+    
+    def __init__(self):
+        """Initialize the video processor."""
+        self.standard_fps = 24
+        self.standard_resolutions = {
+            '720p': (1280, 720),
+            '1080p': (1920, 1080),
+            '4k': (3840, 2160)
+        }
+    
+    def validate_sequence(self, input_dir: Path) -> Dict[str, Any]:
+        """
+        Validate a PNG sequence before conversion.
+        
+        Args:
+            input_dir: Directory containing PNG files
+            
+        Returns:
+            Dictionary with validation results:
+                - valid: bool indicating if sequence is valid
+                - frame_count: number of frames found
+                - missing_frames: list of missing frame indices
+                - pattern: detected naming pattern
+                - issues: list of issue descriptions
+        """
+        input_dir = Path(input_dir)
+        
+        if not input_dir.exists() or not input_dir.is_dir():
+            return {
+                "valid": False,
+                "frame_count": 0,
+                "missing_frames": [],
+                "pattern": None,
+                "issues": [f"Directory does not exist: {input_dir}"]
+            }
+        
+        # Find all PNG files
+        png_files = sorted(input_dir.glob("*.png"))
+        
+        if not png_files:
+            return {
+                "valid": False,
+                "frame_count": 0,
+                "missing_frames": [],
+                "pattern": None,
+                "issues": ["No PNG files found in directory"]
+            }
+        
+        # Try to detect naming pattern
+        import re
+        issues = []
+        missing_frames = []
+        pattern = None
+        
+        # Common patterns
+        patterns = [
+            (r'frame_(\d{3,4})\.png', 'frame_{:03d}.png'),
+            (r'frame(\d{3,4})\.png', 'frame{:03d}.png'),
+            (r'image_(\d+)\.png', 'image_{}.png'),
+            (r'(\d{3,4})\.png', '{:03d}.png'),
+        ]
+        
+        frame_numbers = []
+        for png_file in png_files:
+            name = png_file.name
+            for regex, fmt in patterns:
+                match = re.match(regex, name)
+                if match:
+                    frame_numbers.append(int(match.group(1)))
+                    if pattern is None:
+                        pattern = fmt
+                    break
+        
+        # Check for gaps in sequence
+        if frame_numbers:
+            frame_numbers = sorted(frame_numbers)
+            expected_range = range(frame_numbers[0], frame_numbers[-1] + 1)
+            missing_frames = [i for i in expected_range if i not in frame_numbers]
+            
+            if missing_frames:
+                issues.append(f"Missing frames detected: {missing_frames[:10]}{'...' if len(missing_frames) > 10 else ''}")
+        
+        # Verify files are valid PNGs
+        sample_size = min(5, len(png_files))
+        for i in range(sample_size):
+            try:
+                img = cv2.imread(str(png_files[i]))
+                if img is None:
+                    issues.append(f"Invalid PNG file: {png_files[i].name}")
+            except Exception as e:
+                issues.append(f"Error reading {png_files[i].name}: {str(e)}")
+        
+        valid = len(issues) == 0
+        
+        return {
+            "valid": valid,
+            "frame_count": len(png_files),
+            "missing_frames": missing_frames,
+            "pattern": pattern,
+            "issues": issues
+        }
+    
+    def standardize_video(
+        self,
+        input_path: Path,
+        output_path: Path,
+        target_fps: int = 24,
+        target_resolution: Optional[Tuple[int, int]] = None
+    ) -> bool:
+        """
+        Standardize a video file for Cosmos Transfer.
+        
+        Args:
+            input_path: Path to input video
+            output_path: Path for output video
+            target_fps: Target frame rate
+            target_resolution: Target resolution (width, height)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        
+        # Ensure output directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Open input video
+        cap = cv2.VideoCapture(str(input_path))
+        
+        if not cap.isOpened():
+            logger.error(f"Cannot open video: {input_path}")
+            return False
+        
+        try:
+            # Get input properties
+            input_fps = cap.get(cv2.CAP_PROP_FPS)
+            input_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            input_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            
+            # Determine output properties
+            if target_resolution:
+                out_width, out_height = target_resolution
+            else:
+                out_width, out_height = input_width, input_height
+            
+            # Set up video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(
+                str(output_path),
+                fourcc,
+                target_fps,
+                (out_width, out_height)
+            )
+            
+            if not out.isOpened():
+                logger.error("Failed to open video writer")
+                return False
+            
+            # Process frames
+            frame_interval = input_fps / target_fps if input_fps > 0 else 1
+            frame_count = 0
+            written_frames = 0
+            
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # Skip frames to match target FPS
+                if frame_count % max(1, int(frame_interval)) == 0:
+                    # Resize if needed
+                    if (out_width, out_height) != (input_width, input_height):
+                        frame = cv2.resize(frame, (out_width, out_height))
+                    
+                    out.write(frame)
+                    written_frames += 1
+                
+                frame_count += 1
+            
+            logger.info(f"Standardized video: {written_frames} frames at {target_fps} FPS")
+            return written_frames > 0
+        
+        except Exception as e:
+            logger.error(f"Error standardizing video: {e}")
+            return False
+        
+        finally:
+            cap.release()
+            if 'out' in locals():
+                out.release()
+    
+    def extract_frame(
+        self,
+        video_path: Path,
+        frame_index: int,
+        output_path: Optional[Path] = None
+    ) -> Optional[np.ndarray]:
+        """
+        Extract a specific frame from a video.
+        
+        Args:
+            video_path: Path to video file
+            frame_index: Index of frame to extract
+            output_path: Optional path to save frame image
+            
+        Returns:
+            Frame as numpy array, or None if failed
+        """
+        cap = cv2.VideoCapture(str(video_path))
+        
+        if not cap.isOpened():
+            logger.error(f"Cannot open video: {video_path}")
+            return None
+        
+        try:
+            # Seek to frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            
+            ret, frame = cap.read()
+            if not ret:
+                logger.error(f"Cannot read frame {frame_index}")
+                return None
+            
+            # Save if output path provided
+            if output_path:
+                output_path = Path(output_path)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(output_path), frame)
+                logger.info(f"Saved frame to {output_path}")
+            
+            return frame
+        
+        finally:
+            cap.release()
+    
+    def create_video_from_frames(
+        self,
+        frame_paths: List[Path],
+        output_path: Path,
+        fps: int = 24
+    ) -> bool:
+        """
+        Create a video from a sequence of frame images.
+        
+        Args:
+            frame_paths: List of paths to frame images
+            output_path: Path for output video
+            fps: Frame rate for output video
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not frame_paths:
+            logger.error("No frame paths provided")
+            return False
+        
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read first frame to get dimensions
+        first_frame = cv2.imread(str(frame_paths[0]))
+        if first_frame is None:
+            logger.error(f"Cannot read first frame: {frame_paths[0]}")
+            return False
+        
+        height, width = first_frame.shape[:2]
+        
+        # Set up video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(
+            str(output_path),
+            fourcc,
+            fps,
+            (width, height)
+        )
+        
+        if not out.isOpened():
+            logger.error("Failed to open video writer")
+            return False
+        
+        try:
+            # Write first frame
+            out.write(first_frame)
+            frames_written = 1
+            
+            # Write remaining frames
+            for frame_path in frame_paths[1:]:
+                frame = cv2.imread(str(frame_path))
+                if frame is not None:
+                    # Resize if dimensions don't match
+                    if frame.shape[:2] != (height, width):
+                        frame = cv2.resize(frame, (width, height))
+                    out.write(frame)
+                    frames_written += 1
+                else:
+                    logger.warning(f"Cannot read frame: {frame_path}")
+            
+            logger.info(f"Created video with {frames_written} frames at {fps} FPS")
+            return frames_written > 0
+        
+        except Exception as e:
+            logger.error(f"Error creating video: {e}")
+            return False
+        
+        finally:
+            out.release()
 
 
 def main():

@@ -5,13 +5,15 @@ This module provides local AI functionality for:
 - Text-to-name generation (converting descriptions to short names)
 - Video metadata extraction and analysis
 - Video processing and standardization
+- PNG sequence to video conversion
 """
 
 from .text_to_name import TextToNameGenerator
-from .video_metadata import VideoMetadataExtractor, VideoMetadata
+from .video_metadata import VideoMetadataExtractor, VideoMetadata, VideoProcessor
 
 __all__ = [
     "TextToNameGenerator",
     "VideoMetadataExtractor",
-    "VideoMetadata"
+    "VideoMetadata",
+    "VideoProcessor"
 ]

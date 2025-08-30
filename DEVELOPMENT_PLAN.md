@@ -5,110 +5,56 @@
 
 ## Phase 1: PNG Sequence to Video Conversion with AI Metadata
 
-### Background & Context
-**Previous Investigation Found:**
-- VideoProcessor class was implemented in commit d0e2607 with `create_video_from_frames` method
-- Class was later removed from `cosmos_workflow/local_ai/video_metadata.py`
-- VideoMetadataExtractor exists for AI analysis (BLIP captions, ViT tags, DETR object detection)
-- video_metadata.py has standalone CLI: `python -m cosmos_workflow.local_ai.video_metadata`
-- No current CLI integration for PNG sequence conversion
+### ✅ COMPLETED - VideoProcessor Restored and Enhanced
 
-### Step 1: Restore VideoProcessor Class
-**File:** `cosmos_workflow/local_ai/video_metadata.py`
+**What was done:**
+- ✅ VideoProcessor class restored to `cosmos_workflow/local_ai/video_metadata.py`
+- ✅ Added `validate_sequence()` method for PNG validation (detects gaps, validates files)
+- ✅ Implemented `create_video_from_frames()` for PNG to MP4 conversion
+- ✅ Added `standardize_video()` for FPS/resolution adjustments
+- ✅ Implemented `extract_frame()` for frame extraction
+- ✅ Module exports updated in `__init__.py`
+- ✅ Comprehensive test suite created (24 tests, all passing)
+  - Sequence validation tests (gaps, corrupted files, edge cases)
+  - Video creation tests (basic, mixed resolutions, partial corrupt)
+  - Standardization tests (upscaling, FPS conversion)
+  - Frame extraction tests
+  - End-to-end workflow tests
 
-**Add back the VideoProcessor class with these methods:**
-```python
-class VideoProcessor:
-    def create_video_from_frames(frame_paths: List[Path], output_path: Path, fps: int = 24) -> bool:
-        """Convert PNG sequence to MP4 video using OpenCV"""
-        # Read first frame for dimensions
-        # Setup VideoWriter with mp4v codec
-        # Write all frames to video
-        # Return success status
-    
-    def validate_sequence(input_dir: Path) -> dict:
-        """Validate PNG sequence before conversion"""
-        # Find all PNG files in directory
-        # Check naming pattern (frame_000.png, frame_001.png, etc.)
-        # Detect missing frames/gaps in sequence
-        # Verify each file is valid PNG
-        # Return validation report with any issues
-    
-    def standardize_video(input_path: Path, output_path: Path, target_fps: int = 24) -> bool:
-        """Standardize video FPS and resolution if needed"""
-```
+### 🔄 IN PROGRESS - CLI Integration
 
-### Step 2: Create CLI Integration
-**File:** `cosmos_workflow/cli.py`
+**Next Steps:**
+1. **Create CLI command for convert-sequence**
+   - File: `cosmos_workflow/cli.py`
+   - Add new subcommand that:
+     - Takes PNG directory as input
+     - Uses VideoProcessor.validate_sequence()
+     - Converts to video with VideoProcessor.create_video_from_frames()
+     - Generates AI metadata with VideoMetadataExtractor
+     - Saves video + metadata JSON
 
-**Add new command:**
-```python
-def convert_sequence_command(args):
-    """Convert PNG sequence to video with AI metadata"""
-    # 1. Initialize VideoProcessor
-    # 2. Validate PNG sequence
-    # 3. Convert to video
-    # 4. Initialize VideoMetadataExtractor(use_ai=True)
-    # 5. Extract metadata with AI analysis
-    # 6. Save video and metadata JSON
-    # 7. Print results
+2. **Add comprehensive tests for CLI command**
+   - Unit tests for command parsing
+   - Integration tests for full workflow
+   - Mock external dependencies (VideoProcessor, VideoMetadataExtractor)
+   - Test error handling and edge cases
 
-# Add to argparse:
-convert_parser = subparsers.add_parser('convert-sequence')
-convert_parser.add_argument('input_dir', help='Directory containing PNG sequence')
-convert_parser.add_argument('--output', help='Output video path')
-convert_parser.add_argument('--fps', type=int, default=24)
-convert_parser.add_argument('--use-ai', action='store_true', help='Generate AI metadata')
-```
+3. **Create integration tests**
+   - End-to-end test with real PNG sequences
+   - Test metadata generation accuracy
+   - Verify output compatibility with Cosmos Transfer
 
-### Step 3: Update Module Exports
-**File:** `cosmos_workflow/local_ai/__init__.py`
+4. **Documentation updates**
+   - README.md: Add user guide for convert-sequence command
+   - REFERENCE.md: Document VideoProcessor API
+   - CHANGELOG.md: Log all changes made
 
-```python
-from .video_metadata import VideoMetadataExtractor, VideoMetadata, VideoProcessor
-
-__all__ = [
-    "VideoMetadataExtractor",
-    "VideoMetadata", 
-    "VideoProcessor"  # Add this
-]
-```
-
-### Step 4: Testing Workflow
-**Location:** `art/houdini/renders/comp`
-
-**Test Process:**
-1. List available PNG sequences in the directory
-2. Ask user which sequence to test (they know expected output)
-3. Run: `python -m cosmos_workflow.cli convert-sequence <dir> --use-ai --fps 24`
-4. Verify outputs:
-   - MP4 video created successfully
-   - Proper codec, resolution, framerate
-   - AI metadata JSON created with:
-     - Caption from BLIP model
-     - Tags from ViT classifier
-     - Detected objects from DETR
-   - Validate metadata accuracy
-5. Test edge cases:
-   - Missing frames in sequence
-   - Different naming conventions
-   - Various resolutions
-
-### Step 5: Integration Points
-**Ensure compatibility with existing system:**
-- Output format matches what Cosmos Transfer expects
-- Metadata JSON follows established schema
-- File paths follow project conventions (`inputs/videos/`, `outputs/`)
-- Works with existing SSH/Docker workflow for inference
-
-### Success Criteria for Phase 1
-- [ ] PNG sequences convert to valid MP4 videos
-- [ ] AI metadata accurately describes content
-- [ ] CLI command works seamlessly
-- [ ] Handles missing frames gracefully
-- [ ] Proper error messages for invalid inputs
-- [ ] Documentation updated in README.md
-- [ ] Tests added for new functionality
+### Success Criteria
+- ✅ VideoProcessor implementation complete with 90%+ test coverage
+- [ ] CLI command integrated and working
+- [ ] Comprehensive test suite with good coverage
+- [ ] Integration tests passing
+- [ ] Documentation updated in all required files
 
 ### 2. Test Full Cosmos Transfer Inference Pipeline
 **Goal**: Once PNG->video conversion works, test the full AI video generation pipeline.

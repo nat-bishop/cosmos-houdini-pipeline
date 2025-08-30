@@ -112,10 +112,11 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 
 ## Documentation Updates (REQUIRED)
 When making changes, update:
-- **CHANGELOG.md**: Log ALL code changes with date
+- **CHANGELOG.md**: Primary log of ALL changes (development history, completed phases, planned work)
 - **README.md**: User-facing features and usage
 - **REFERENCE.md**: Technical API documentation
 - **CLAUDE.md**: Only major workflow/structure changes
+- **docs/implementation/**: Detailed technical implementation docs for completed features
 
 ## Known Issues & Solutions
 - **Vocab out of range error**: Occurs with high-res videos + prompt upsampling

@@ -59,7 +59,10 @@
       "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler/**)",
       "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\utils/**)",
       "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\utils/**)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(find:*)",
+      "Bash(git log:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

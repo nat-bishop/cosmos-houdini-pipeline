@@ -1,216 +1,288 @@
-# Development Plan for Cosmos-Houdini Experiments
+# Development Plan - TODO List
 
-## Overview
-This document outlines the development plan for enhancing the Cosmos workflow orchestration system with new features and improvements.
+## Core Principle: Test Real Execution First
+**IMPORTANT**: Run the actual program first to confirm all steps work before focusing on tests. We need working functionality first, then tests that catch real issues.
 
-## Phase 2: Add Prompt Upsampling Feature ✅ COMPLETED (2025-08-30)
-**Goal**: Implement decoupled prompt upsampling that works with high-resolution videos.
+## Phase 1: PNG Sequence to Video Conversion with AI Metadata
 
-### Requirements:
-- Create a bash script for remote execution (similar to inference.sh) ✅
-- Support batch processing of prompts ✅
-- Keep model loaded between upsampling runs for efficiency ✅
-- Handle video resolution downsampling for prompt upsampling ✅
-- Support frame reduction options ✅
-- Create PromptSpecs with `upsampled=true` and original prompt stored ✅
+### Background & Context
+**Previous Investigation Found:**
+- VideoProcessor class was implemented in commit d0e2607 with `create_video_from_frames` method
+- Class was later removed from `cosmos_workflow/local_ai/video_metadata.py`
+- VideoMetadataExtractor exists for AI analysis (BLIP captions, ViT tags, DETR object detection)
+- video_metadata.py has standalone CLI: `python -m cosmos_workflow.local_ai.video_metadata`
+- No current CLI integration for PNG sequence conversion
 
-### Tasks COMPLETED:
-- [x] Research Cosmos Transfer prompt upsampling implementation
-- [x] Create `upsample_prompt.sh` script for remote execution
-- [x] Implement batch prompt upsampling with model persistence
-- [x] Add video preprocessing options:
-  - [x] Resolution downsampling (480p default)
-  - [x] Frame reduction (2 frames default)
-- [x] Update PromptSpec handling for upsampled prompts
-- [x] Create workflow integration for prompt upsampling
-- [x] Add CLI commands for prompt upsampling
-- [x] Write unit tests (8 passing tests in test_upsample_prompts.py)
+### Step 1: Restore VideoProcessor Class
+**File:** `cosmos_workflow/local_ai/video_metadata.py`
 
-### Implementation Completed:
-1. **Core Scripts**:
-   - `scripts/upsample_prompts.py` - Python batch upsampling with video preprocessing
-   - `scripts/upsample_prompt.sh` - Bash wrapper for Docker execution
+**Add back the VideoProcessor class with these methods:**
+```python
+class VideoProcessor:
+    def create_video_from_frames(frame_paths: List[Path], output_path: Path, fps: int = 24) -> bool:
+        """Convert PNG sequence to MP4 video using OpenCV"""
+        # Read first frame for dimensions
+        # Setup VideoWriter with mp4v codec
+        # Write all frames to video
+        # Return success status
+    
+    def validate_sequence(input_dir: Path) -> dict:
+        """Validate PNG sequence before conversion"""
+        # Find all PNG files in directory
+        # Check naming pattern (frame_000.png, frame_001.png, etc.)
+        # Detect missing frames/gaps in sequence
+        # Verify each file is valid PNG
+        # Return validation report with any issues
+    
+    def standardize_video(input_path: Path, output_path: Path, target_fps: int = 24) -> bool:
+        """Standardize video FPS and resolution if needed"""
+```
 
-2. **WorkflowOrchestrator Integration**:
-   - `cosmos_workflow/workflows/upsample_integration.py` - UpsampleWorkflowMixin
-   - Three main methods: batch, single, and directory upsampling
-   - Full SSH/Docker/FileTransfer integration
+### Step 2: Create CLI Integration
+**File:** `cosmos_workflow/cli.py`
 
-3. **CLI Command**:
-   - `python -m cosmos_workflow.main upsample <input> [options]`
-   - Supports single files and directories
-   - Video preprocessing options
-   - GPU configuration
+**Add new command:**
+```python
+def convert_sequence_command(args):
+    """Convert PNG sequence to video with AI metadata"""
+    # 1. Initialize VideoProcessor
+    # 2. Validate PNG sequence
+    # 3. Convert to video
+    # 4. Initialize VideoMetadataExtractor(use_ai=True)
+    # 5. Extract metadata with AI analysis
+    # 6. Save video and metadata JSON
+    # 7. Print results
 
-4. **Tests**:
-   - `tests/test_upsample_prompts.py` - 8 unit tests (all passing)
-   - Tests cover: video preprocessing, batch processing, error handling, CLI parsing
+# Add to argparse:
+convert_parser = subparsers.add_parser('convert-sequence')
+convert_parser.add_argument('input_dir', help='Directory containing PNG sequence')
+convert_parser.add_argument('--output', help='Output video path')
+convert_parser.add_argument('--fps', type=int, default=24)
+convert_parser.add_argument('--use-ai', action='store_true', help='Generate AI metadata')
+```
 
-### Tests Still Needed (for next session):
-- [ ] Fix integration tests in `test_upsample_integration.py` (API mismatches)
-- [ ] Fix workflow tests in `test_upsample_workflow.py` (API mismatches)
-- [ ] Add integration tests for WorkflowOrchestrator methods
-- [ ] Add end-to-end tests with mocked SSH/Docker
+### Step 3: Update Module Exports
+**File:** `cosmos_workflow/local_ai/__init__.py`
 
-### Implementation Notes:
-- Reference: `cosmos_transfer1/diffusion/inference/` for upsampling methods
-- Use `--offload_prompt_upsampler` flag for memory optimization
-- Model: `Cosmos-UpsamplePrompt1-12B-Transfer`
-- Current Docker execution approach (bash scripts) is sufficient for this phase
+```python
+from .video_metadata import VideoMetadataExtractor, VideoMetadata, VideoProcessor
 
-## Phase 3: Add Batch Inference Support
-**Goal**: Enable processing multiple PromptSpecs in a single inference run.
+__all__ = [
+    "VideoMetadataExtractor",
+    "VideoMetadata", 
+    "VideoProcessor"  # Add this
+]
+```
 
-### Requirements:
-- Support Cosmos Transfer's batch inference options
-- Handle multiple controlnet specs
-- Optimize GPU memory usage for batch processing
-- Track individual job status within batches
+### Step 4: Testing Workflow
+**Location:** `art/houdini/renders/comp`
 
-### Tasks:
-- [ ] Study Cosmos Transfer batch inference implementation
-- [ ] Modify inference.sh to support batch mode
-- [ ] Create batch job specification schema
-- [ ] Implement batch job orchestration
-- [ ] Add progress tracking for batch jobs
-- [ ] Handle partial failures in batch processing
-- [ ] Create CLI commands for batch operations
-- [ ] Write tests for batch inference
+**Test Process:**
+1. List available PNG sequences in the directory
+2. Ask user which sequence to test (they know expected output)
+3. Run: `python -m cosmos_workflow.cli convert-sequence <dir> --use-ai --fps 24`
+4. Verify outputs:
+   - MP4 video created successfully
+   - Proper codec, resolution, framerate
+   - AI metadata JSON created with:
+     - Caption from BLIP model
+     - Tags from ViT classifier
+     - Detected objects from DETR
+   - Validate metadata accuracy
+5. Test edge cases:
+   - Missing frames in sequence
+   - Different naming conventions
+   - Various resolutions
 
-### Implementation Notes:
-- Use `--batch_size` parameter in Cosmos Transfer
-- Consider memory constraints when setting batch sizes
-- Implement job queuing system
+### Step 5: Integration Points
+**Ensure compatibility with existing system:**
+- Output format matches what Cosmos Transfer expects
+- Metadata JSON follows established schema
+- File paths follow project conventions (`inputs/videos/`, `outputs/`)
+- Works with existing SSH/Docker workflow for inference
 
-## Phase 4: Add Support for Running Batches of Jobs
-**Goal**: Enable overnight batch processing with parameter randomization.
+### Success Criteria for Phase 1
+- [ ] PNG sequences convert to valid MP4 videos
+- [ ] AI metadata accurately describes content
+- [ ] CLI command works seamlessly
+- [ ] Handles missing frames gracefully
+- [ ] Proper error messages for invalid inputs
+- [ ] Documentation updated in README.md
+- [ ] Tests added for new functionality
 
-### Requirements:
-- Sequential job execution
-- Parameter randomization options
-- Support for testing single prompt with varied parameters
-- Job scheduling and queue management
-- Result aggregation and reporting
+### 2. Test Full Cosmos Transfer Inference Pipeline
+**Goal**: Once PNG->video conversion works, test the full AI video generation pipeline.
 
-### Tasks:
-- [ ] Design job queue system
-- [ ] Implement parameter randomization:
-  - [ ] Control weight variations
-  - [ ] Inference parameter variations
-  - [ ] Seed randomization
-  - [ ] Control input combinations
-- [ ] Create job scheduling system
-- [ ] Add job monitoring and status tracking
-- [ ] Implement result aggregation
-- [ ] Create reporting system for batch results
-- [ ] Add CLI commands for batch job management
-- [ ] Write comprehensive tests
+**Prerequisite**: PNG to video conversion must be working with proper metadata/tags
 
-### Randomization Options:
-- Control weights (vis, edge, depth, seg)
-- Inference parameters (num_steps, guidance, sigma_max)
-- Seeds for reproducibility testing
-- Control input combinations
-- Blur strength and canny threshold variations
+**Steps:**
+1. **Use the video from step 1 as input**
+   - Create PromptSpec with the converted video
+   - Add transformation prompt (e.g., "Transform to cyberpunk style")
+   - Set up RunSpec with production parameters
 
-## Development Guidelines
+2. **Execute inference in background**
+   ```bash
+   # Create specs and run
+   python -m cosmos_workflow.main create-spec "inference_test" "Transform to cyberpunk style" --input-video <video_from_step1>
+   python -m cosmos_workflow.main create-run <prompt_spec.json> --weights 0.3 0.4 0.2 0.1
+   python -m cosmos_workflow.main run <run_spec.json> --num-gpu 2 &
+   ```
 
-### Version Control:
-- Make regular, atomic commits
-- Use descriptive commit messages
-- Follow conventional commit format
-- Create feature branches for major changes
+3. **Monitor execution**
+   - SSH connection stability
+   - Docker container status
+   - GPU memory usage
+   - File transfer completion
+   - Error messages
 
-### Documentation (Continuous):
-- **ALWAYS** update README.md when adding user-facing features
-- **ALWAYS** update REFERENCE.md when adding technical components
-- **ALWAYS** update CLAUDE.md when changing core workflows
-- Add inline documentation for complex logic
-- Create usage examples for new features
-- Update documentation **BEFORE** committing code changes
+4. **Verify results**
+   - Output video generated
+   - Style transformation applied correctly
+   - Quality is acceptable
 
-### Testing (Continuous):
-- Write tests **AS YOU CODE**, not after
-- Add unit tests for all new functions
-- Add integration tests for workflows
-- Run tests before committing: `pytest tests/`
-- Maintain >80% code coverage
-- Test edge cases and error handling
-- Fix failing tests immediately
+### 3. Fix Issues and Update Tests
+**Goal**: When failures occur, fix code and ensure tests would catch the issue.
 
-### Code Quality:
-- Follow existing code patterns
-- Use type hints throughout
-- Implement proper error handling
-- Add logging for debugging
-- Follow PEP 8 style guidelines
+**Process for each failure:**
+1. **Analyze failure**
+   - Why did it fail?
+   - Why didn't existing tests catch this?
+   - What was the expected vs actual behavior?
 
-### Continuous Integration Workflow:
-1. Write/modify code
-2. Write/update tests
-3. Update documentation
-4. Run tests locally
-5. Commit changes
-6. Push to repository
+2. **Fix the code**
+   - Implement minimal fix to make it work
+   - Test the fix with real execution
+   - Verify fix doesn't break other functionality
 
-## Docker Execution Approach
+3. **Update tests**
+   - Write test that reproduces the failure
+   - Verify test fails without fix
+   - Verify test passes with fix
+   - Add edge cases around the failure mode
 
-### Current Implementation (Bash Scripts)
-The current approach of using bash scripts (inference.sh, upscale.sh) that are executed inside Docker containers via SSH is **perfectly adequate** for our needs:
+4. **Document the fix**
+   - Update CHANGELOG.md with the fix
+   - Add to known issues if partially resolved
+   - Update relevant documentation
 
-**Advantages:**
-- Simple and maintainable
-- Easy to debug and modify
-- Clear separation between orchestration and execution
-- Minimal overhead
-- Works well with the existing infrastructure
+### 4. Fix Integration Test API Mismatches
+**Current Issues:**
+- ConfigManager initialization using old API
+- PromptSpec metadata field removed but tests still reference it
+- DirectoryManager initialization needs updating
 
-**When to Consider Alternatives:**
-- If we need real-time streaming of results
-- If we need bidirectional communication during execution
-- If we implement a web UI requiring WebSocket connections
-- If we need to manage long-running persistent containers
+**Files to fix:**
+- `tests/test_upsample_integration.py`
+- Any other integration tests with API mismatches
 
-### Recommendation
-Continue with the bash script approach for Phase 2 (Prompt Upsampling). This maintains consistency with the existing system and avoids unnecessary complexity.
+## Future Phase Tasks
 
-## Progress Tracking
+### Phase 3: Batch Inference Support
+**Goal**: Process multiple PromptSpecs in single run
 
-### Phase 1: Refactoring ✅
-- Status: **COMPLETED** (2024-08-30)
+**Implementation steps:**
+1. Study `cosmos_transfer1/diffusion/inference/transfer.py` batch options
+2. Modify `scripts/inference.sh` for batch mode:
+   - Accept multiple controlnet specs
+   - Handle batch memory optimization
+   - Support partial failure recovery
+3. Create BatchJobSpec schema:
+   - List of PromptSpec IDs
+   - Shared execution parameters
+   - Individual overrides per job
+4. Update WorkflowOrchestrator:
+   - `run_batch_inference()` method
+   - Progress tracking per job
+   - Result aggregation
+5. CLI commands:
+   - `create-batch` command
+   - `run-batch` with progress display
+6. Tests for batch operations
 
-### Phase 2: Prompt Upsampling 🚧
-- Status: Ready to Start
-- Estimated Time: 3-4 days
-- Priority: High
+### Phase 4: Overnight Batch Processing with Randomization
+**Goal**: Test parameter variations automatically
 
-### Phase 3: Batch Inference 📋
-- Status: Not Started
-- Estimated Time: 2-3 days
-- Priority: Medium
+**Implementation:**
+1. Create parameter randomization system:
+   ```python
+   randomization_config = {
+       "control_weights": {"min": 0.1, "max": 0.9, "step": 0.1},
+       "num_steps": [1, 35, 50],
+       "guidance_scale": {"min": 5.0, "max": 12.0},
+       "seeds": "random" or [specific_seeds]
+   }
+   ```
+2. Job queue manager:
+   - Sequential execution
+   - Retry on failure (max 3 attempts)
+   - Resource monitoring
+   - Email/webhook notifications
+3. Result aggregation:
+   - Comparison grid generation
+   - Performance metrics
+   - Best parameter discovery
 
-### Phase 4: Batch Jobs 📋
-- Status: Not Started
-- Estimated Time: 3-4 days
-- Priority: Medium
+### Phase 5: Houdini Pipeline Integration
+**Goal**: Seamless Houdini to Cosmos workflow
 
-## Next Steps
+**Components:**
+1. File watcher service:
+   - Monitor `art/houdini/renders/comp`
+   - Detect complete sequences
+   - Auto-trigger conversion
+2. Houdini metadata extraction:
+   - Parse .hip files for scene info
+   - Extract camera data
+   - Get frame range and FPS
+3. PDG/TOPs integration:
+   - Custom Cosmos Transfer TOP node
+   - Parameter wedging support
+   - Distributed processing
 
-### Immediate (Next Session):
-1. Begin Phase 2: Prompt Upsampling
-   - Research upsampling implementation
-   - Create `upsample_prompt.sh` script
-   - Add batch processing support
-2. Continue with test-driven development
-3. Update documentation as features are added
+## Testing Requirements
 
-### Best Practices Going Forward:
-- **Documentation-Driven Development**: Write docs first, then code
-- **Test-Driven Development**: Write tests first, then implementation
-- **Continuous Integration**: Test and document with every change
-- **Regular Commits**: Commit working code frequently
-- **Code Reviews**: Review changes before major commits
+### For Each Feature:
+1. **Before writing tests:**
+   - Run the actual feature
+   - Document what breaks
+   - Fix the breaks
+   
+2. **Test must:**
+   - Reproduce the actual failure found
+   - Pass only with the fix applied
+   - Cover edge cases discovered during real use
 
----
+### Critical Test Coverage:
+- PNG sequence detection and validation
+- Video encoding parameters
+- SSH connection recovery
+- Docker container lifecycle
+- GPU memory management
+- File transfer integrity
+- Error message clarity
 
-*Last Updated: 2025-08-30*
+## Known Issues to Fix
+
+### High Priority:
+1. **Integration test API mismatches** - Blocking test suite
+2. **No real execution validation** - Core functionality unverified
+
+### Medium Priority:
+- Batch job scheduling
+- Parameter randomization system
+
+### Low Priority:
+- Performance optimizations
+- Additional output formats
+- Cloud storage integration
+
+## Success Criteria
+
+Each task is complete when:
+- [ ] Feature works in real execution
+- [ ] Tests would catch any bugs found
+- [ ] Documentation updated
+- [ ] No regression in existing features
+- [ ] Error messages are helpful
+- [ ] Performance is acceptable

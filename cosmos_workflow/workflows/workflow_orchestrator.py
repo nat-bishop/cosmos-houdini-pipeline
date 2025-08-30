@@ -23,7 +23,6 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
         self.config_manager = ConfigManager(config_file)
-        self.config = self.config_manager.config  # Add config property for mixin
         self.ssh_manager: Optional[SSHManager] = None
         self.file_transfer: Optional[FileTransferService] = None
         self.docker_executor: Optional[DockerExecutor] = None
@@ -83,7 +82,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         workflow_type = self._get_workflow_type(inference, upscale, upload, download)
         
         logger.info(f"Starting {workflow_type} workflow for {prompt_name}")
-        print(f"🚀 Starting {workflow_type} workflow for {prompt_name}")
+        print(f"[INFO] Starting {workflow_type} workflow for {prompt_name}")
         
         try:
             with self.ssh_manager:
@@ -91,14 +90,14 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 
                 # Step 1: Upload files (if needed)
                 if upload:
-                    print("\n📤 Uploading prompt and videos...")
+                    print("\n[UPLOAD] Uploading prompt and videos...")
                     video_dirs = self._get_video_directories(prompt_file, videos_subdir)
                     self.file_transfer.upload_prompt_and_videos(prompt_file, video_dirs)
                     steps_performed.append("upload")
                 
                 # Step 2: Run inference (if needed)
                 if inference:
-                    print(f"\n🎬 Running inference with {num_gpu} GPU(s)...")
+                    print(f"\n[INFERENCE] Running inference with {num_gpu} GPU(s)...")
                     self.docker_executor.run_inference(
                         prompt_file,
                         num_gpu,
@@ -108,7 +107,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 
                 # Step 3: Run upscaling (if needed)
                 if upscale:
-                    print(f"\n🔍 Running 4K upscaling with weight {upscale_weight}...")
+                    print(f"\n[UPSCALE] Running 4K upscaling with weight {upscale_weight}...")
                     self.docker_executor.run_upscaling(
                         prompt_file,
                         upscale_weight,
@@ -119,7 +118,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 
                 # Step 4: Download results (if needed)
                 if download:
-                    print("\n📥 Downloading results...")
+                    print("\n[DOWNLOAD] Downloading results...")
                     self.file_transfer.download_results(prompt_file)
                     steps_performed.append("download")
                 
@@ -135,8 +134,8 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 end_time = datetime.now()
                 duration = end_time - start_time
                 
-                print(f"\n✅ {workflow_type} workflow completed successfully!")
-                print(f"⏱️  Total duration: {duration}")
+                print(f"\n[SUCCESS] {workflow_type} workflow completed successfully!")
+                print(f"[TIME] Total duration: {duration}")
                 
                 return {
                     "status": "success",
@@ -157,7 +156,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
             duration = end_time - start_time
             
             logger.error(f"Workflow failed: {e}")
-            print(f"\n❌ Workflow failed: {e}")
+            print(f"\n[ERROR] Workflow failed: {e}")
             
             # Log failed workflow
             self._log_workflow_failure(prompt_file, str(e), duration)

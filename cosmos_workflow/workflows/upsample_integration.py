@@ -18,7 +18,13 @@ log = logging.getLogger(__name__)
 
 
 class UpsampleWorkflowMixin:
-    """Mixin class to add upsampling capabilities to WorkflowOrchestrator."""
+    """Mixin class to add upsampling capabilities to WorkflowOrchestrator.
+    
+    This mixin expects the parent class to have:
+    - config_manager: ConfigManager instance
+    - file_transfer: FileTransferService instance
+    - docker_executor: DockerExecutor instance
+    """
     
     def run_prompt_upsampling(
         self,
@@ -57,7 +63,8 @@ class UpsampleWorkflowMixin:
         
         # Create temporary batch file
         batch_filename = f"upsample_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        local_batch_path = Path(self.config["paths"]["local_prompts_dir"]) / batch_filename
+        local_config = self.config_manager.get_local_config()
+        local_batch_path = local_config.prompts_dir / batch_filename
         
         # Save batch file locally
         os.makedirs(local_batch_path.parent, exist_ok=True)
@@ -65,20 +72,21 @@ class UpsampleWorkflowMixin:
             json.dump(batch_data, f, indent=2)
         
         # Upload batch file to remote
-        remote_batch_path = f"{self.config['paths']['remote_dir']}/inputs/{batch_filename}"
+        remote_config = self.config_manager.get_remote_config()
+        remote_batch_path = f"{remote_config.remote_dir}/inputs/{batch_filename}"
         log.info(f"Uploading batch file to {remote_batch_path}")
         self.file_transfer.upload_file(str(local_batch_path), remote_batch_path)
         
         # Upload any associated videos
         for spec in prompt_specs:
             if spec.input_video_path and os.path.exists(spec.input_video_path):
-                remote_video_path = f"{self.config['paths']['remote_dir']}/inputs/videos/"
+                remote_video_path = f"{remote_config.remote_dir}/inputs/videos/"
                 log.info(f"Uploading video: {spec.input_video_path}")
                 self.file_transfer.upload_file(spec.input_video_path, remote_video_path)
         
         # Prepare output path
         output_filename = f"upsampled_{batch_filename}"
-        remote_output_path = f"{self.config['paths']['remote_dir']}/outputs/{output_filename}"
+        remote_output_path = f"{remote_config.remote_dir}/outputs/{output_filename}"
         
         # Build Docker command
         docker_cmd = [
@@ -100,7 +108,7 @@ class UpsampleWorkflowMixin:
         log.info("Executing prompt upsampling on remote GPU...")
         exit_code, stdout, stderr = self.docker_executor.execute(
             command=docker_cmd,
-            working_dir=self.config["paths"]["remote_dir"],
+            working_dir=remote_config.remote_dir,
             environment=environment
         )
         
@@ -114,7 +122,7 @@ class UpsampleWorkflowMixin:
             }
         
         # Download results
-        local_output_path = Path(self.config["paths"]["local_outputs_dir"]) / output_filename
+        local_output_path = local_config.outputs_dir / output_filename
         log.info(f"Downloading results to {local_output_path}")
         self.file_transfer.download_file(remote_output_path, str(local_output_path))
         

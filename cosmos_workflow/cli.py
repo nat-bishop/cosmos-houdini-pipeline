@@ -62,7 +62,7 @@ def run_full_cycle(
             print(json.dumps(result, indent=2))
         
     except Exception as e:
-        print(f"\n❌ Workflow failed: {e}")
+        print(f"\n[ERROR] Workflow failed: {e}")
         sys.exit(1)
 
 
@@ -90,7 +90,7 @@ def run_inference_only(
             print(json.dumps(result, indent=2))
         
     except Exception as e:
-        print(f"\n❌ Inference failed: {e}")
+        print(f"\n[ERROR] Inference failed: {e}")
         sys.exit(1)
 
 
@@ -118,7 +118,7 @@ def run_upscaling_only(
             print(json.dumps(result, indent=2))
         
     except Exception as e:
-        print(f"\n❌ Upscaling failed: {e}")
+        print(f"\n[ERROR] Upscaling failed: {e}")
         sys.exit(1)
 
 
@@ -150,7 +150,7 @@ def check_status(verbose: bool) -> None:
             print(f"  Error: {status['error']}")
         
     except Exception as e:
-        print(f"\n❌ Status check failed: {e}")
+        print(f"\n[ERROR] Status check failed: {e}")
         sys.exit(1)
 
 
@@ -221,7 +221,7 @@ def create_prompt_spec(
         file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_id)
         prompt_spec.save(file_path)
         
-        print(f"\n✅ Created PromptSpec: {prompt_id}")
+        print(f"\n[SUCCESS] Created PromptSpec: {prompt_id}")
         print(f"   Saved to: {file_path}")
         print(f"   Name: {name}")
         print(f"   Video: {video_path}")
@@ -230,7 +230,7 @@ def create_prompt_spec(
         print(f"   python -m cosmos_workflow.main create-run {file_path}")
         
     except Exception as e:
-        print(f"\n❌ Failed to create PromptSpec: {e}")
+        print(f"\n[ERROR] Failed to create PromptSpec: {e}")
         if verbose:
             import traceback
             traceback.print_exc()
@@ -257,7 +257,7 @@ def create_run_spec(
         # Load the PromptSpec
         prompt_spec_file = Path(prompt_spec_path)
         if not prompt_spec_file.exists():
-            print(f"❌ PromptSpec file not found: {prompt_spec_path}")
+            print(f"[ERROR] PromptSpec file not found: {prompt_spec_path}")
             sys.exit(1)
         
         prompt_spec = PromptSpec.load(prompt_spec_file)
@@ -286,11 +286,11 @@ def create_run_spec(
         
         # Validate inputs
         if not SchemaUtils.validate_control_weights(weights_dict):
-            print("❌ Invalid control weights")
+            print("[ERROR] Invalid control weights")
             sys.exit(1)
         
         if not SchemaUtils.validate_parameters(parameters):
-            print("❌ Invalid parameters")
+            print("[ERROR] Invalid parameters")
             sys.exit(1)
         
         # Generate unique run ID
@@ -304,14 +304,16 @@ def create_run_spec(
         
         # Create RunSpec
         from datetime import datetime
+        from cosmos_workflow.prompts.schemas import ExecutionStatus
         timestamp = datetime.now().isoformat() + "Z"
         run_spec = RunSpec(
             id=run_id,
             prompt_id=prompt_spec.id,
+            name=f"{prompt_spec.name}_{run_id}",
             control_weights=weights_dict,
             parameters=parameters,
             timestamp=timestamp,
-            execution_status="pending",
+            execution_status=ExecutionStatus.PENDING,
             output_path=output_path
         )
         
@@ -328,16 +330,16 @@ def create_run_spec(
         file_path = dir_manager.get_run_file_path(prompt_spec.name, timestamp, run_id)
         run_spec.save(file_path)
         
-        print(f"\n✅ Created RunSpec: {run_id}")
+        print(f"\n[SUCCESS] Created RunSpec: {run_id}")
         print(f"   Saved to: {file_path}")
         print(f"   Prompt: {prompt_spec.id}")
         print(f"   Control Weights: {weights_dict}")
         print(f"   Output: {output_path}")
-        print(f"\n🚀 To run this specification:")
-        print(f"   python -m cosmos_workflow.main run {file_path}")
+        print(f"\n[INFO] To run this specification:")
+        print(f"   python -m cosmos_workflow.cli run {file_path}")
         
     except Exception as e:
-        print(f"\n❌ Failed to create RunSpec: {e}")
+        print(f"\n[ERROR] Failed to create RunSpec: {e}")
         if verbose:
             import traceback
             traceback.print_exc()
@@ -357,7 +359,7 @@ def run_prompt_upsampling(
     """Run prompt upsampling on one or more prompts."""
     setup_logging(verbose)
     
-    print("\n🚀 Starting prompt upsampling...")
+    print("\n[INFO] Starting prompt upsampling...")
     orchestrator = WorkflowOrchestrator()
     
     try:
@@ -395,10 +397,10 @@ def run_prompt_upsampling(
                     # Save the upsampled spec
                     save_path = Path(save_dir) / f"upsampled_{input_path_obj.name}"
                     spec_manager.save(updated_spec, str(save_path))
-                    print(f"✅ Saved upsampled prompt to: {save_path}")
-                print(f"✅ Successfully upsampled prompt")
+                    print(f"[SUCCESS] Saved upsampled prompt to: {save_path}")
+                print(f"[SUCCESS] Successfully upsampled prompt")
             else:
-                print(f"❌ Upsampling failed: {result.get('error')}")
+                print(f"[ERROR] Upsampling failed: {result.get('error')}")
                 
         elif input_path_obj.is_dir():
             # Directory batch upsampling
@@ -413,7 +415,7 @@ def run_prompt_upsampling(
             )
             
             if result["success"]:
-                print(f"✅ Successfully upsampled {result['num_upsampled']} prompts")
+                print(f"[SUCCESS] Successfully upsampled {result['num_upsampled']} prompts")
                 if save_dir and result.get("updated_specs"):
                     # Save all upsampled specs
                     save_path = Path(save_dir)
@@ -421,15 +423,15 @@ def run_prompt_upsampling(
                     for spec in result["updated_specs"]:
                         spec_path = save_path / f"upsampled_{spec.name}.json"
                         spec.save(str(spec_path))
-                    print(f"✅ Saved upsampled prompts to: {save_path}")
+                    print(f"[SUCCESS] Saved upsampled prompts to: {save_path}")
             else:
-                print(f"❌ Upsampling failed: {result.get('error')}")
+                print(f"[ERROR] Upsampling failed: {result.get('error')}")
         else:
-            print(f"❌ Invalid input path: {input_path}")
+            print(f"[ERROR] Invalid input path: {input_path}")
             sys.exit(1)
             
     except Exception as e:
-        print(f"\n❌ Failed to upsample prompts: {e}")
+        print(f"\n[ERROR] Failed to upsample prompts: {e}")
         if verbose:
             import traceback
             traceback.print_exc()
@@ -641,7 +643,7 @@ Examples:
         print("\n\n⏹️  Workflow interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n[ERROR] Unexpected error: {e}")
         if args.verbose:
             import traceback
             traceback.print_exc()

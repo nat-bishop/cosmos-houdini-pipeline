@@ -1,0 +1,14 @@
+{
+  "id": "ps_b05b0cd5cc41",
+  "name": "drone_test",
+  "prompt": "A futuristic cyberpunk cityscape at night with neon lights and flying vehicles",
+  "negative_prompt": "blurry, low quality, distorted",
+  "input_video_path": "inputs/videos/BuildingDroneShot1_50F_v1/color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/drone_test/depth.mp4",
+    "seg": "inputs/videos/drone_test/segmentation.mp4"
+  },
+  "timestamp": "2025-08-30T12:44:33.946869Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

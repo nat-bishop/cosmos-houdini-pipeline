@@ -15,7 +15,7 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cosmos_workflow.prompts.schemas import PromptSpec
+from cosmos_workflow.prompts.schemas import PromptSpec, DirectoryManager
 from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
 
 
@@ -25,7 +25,16 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
-        self.manager = PromptSpecManager(base_dir=self.temp_dir)
+        self.prompts_dir = Path(self.temp_dir) / "prompts"
+        self.runs_dir = Path(self.temp_dir) / "runs"
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.dir_manager = DirectoryManager(
+            base_prompts_dir=self.prompts_dir,
+            base_runs_dir=self.runs_dir
+        )
+        self.manager = PromptSpecManager(self.dir_manager)
         
     def tearDown(self):
         """Clean up test fixtures."""
@@ -55,12 +64,18 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
             }
         )
         
+        # Generate file path using directory manager
+        timestamp = datetime.now()
+        file_path = self.dir_manager.get_prompt_file_path(
+            spec.name, timestamp, spec.id
+        )
+        
         # Save and verify
-        saved_path = self.manager.save(spec)
-        self.assertTrue(os.path.exists(saved_path))
+        spec.save(file_path)
+        self.assertTrue(file_path.exists())
         
         # Load and verify metadata
-        loaded_spec = self.manager.load(saved_path)
+        loaded_spec = PromptSpec.load(file_path)
         self.assertTrue(loaded_spec.metadata.get("needs_upsampling"))
         self.assertEqual(
             loaded_spec.metadata.get("upsampling_params", {}).get("max_resolution"),
@@ -78,8 +93,12 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
                 input_video_path=f"/path/to/video_{i}.mp4",
                 metadata={"needs_upsampling": True}
             )
-            saved_path = self.manager.save(spec)
-            specs.append((spec, saved_path))
+            timestamp = datetime.now()
+            file_path = self.dir_manager.get_prompt_file_path(
+                spec.name, timestamp, spec.id
+            )
+            spec.save(file_path)
+            specs.append((spec, file_path))
         
         # Prepare batch for upsampling
         batch_data = []
@@ -105,7 +124,11 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
             prompt="Short prompt",
             input_video_path="/path/to/video.mp4"
         )
-        saved_path = self.manager.save(original_spec)
+        timestamp = datetime.now()
+        file_path = self.dir_manager.get_prompt_file_path(
+            original_spec.name, timestamp, original_spec.id
+        )
+        original_spec.save(file_path)
         
         # Simulate upsampling result
         upsampled_result = {
@@ -116,7 +139,7 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         }
         
         # Load and update spec
-        spec = self.manager.load(saved_path)
+        spec = PromptSpec.load(file_path)
         
         # Create new spec with upsampled prompt
         upsampled_spec = PromptSpec(
@@ -134,10 +157,14 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         )
         
         # Save updated spec
-        updated_path = self.manager.save(upsampled_spec)
+        updated_timestamp = datetime.now()
+        updated_path = self.dir_manager.get_prompt_file_path(
+            upsampled_spec.name, updated_timestamp, upsampled_spec.id
+        )
+        upsampled_spec.save(updated_path)
         
         # Verify update
-        loaded_updated = self.manager.load(updated_path)
+        loaded_updated = PromptSpec.load(updated_path)
         self.assertIn("detailed and elaborate", loaded_updated.prompt)
         self.assertTrue(loaded_updated.metadata.get("upsampled"))
         self.assertEqual(loaded_updated.metadata.get("original_prompt"), "Short prompt")

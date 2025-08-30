@@ -26,6 +26,7 @@ class RemoteConfig:
 class LocalConfig:
     """Local paths configuration."""
     prompts_dir: Path
+    runs_dir: Path
     videos_dir: Path
     outputs_dir: Path
     notes_dir: Path
@@ -79,6 +80,8 @@ class ConfigManager:
         # Local paths overrides
         if 'LOCAL_PROMPTS_DIR' in os.environ:
             self._config_data['paths']['local_prompts_dir'] = os.environ['LOCAL_PROMPTS_DIR']
+        if 'LOCAL_RUNS_DIR' in os.environ:
+            self._config_data['paths']['local_runs_dir'] = os.environ['LOCAL_RUNS_DIR']
         if 'LOCAL_VIDEOS_DIR' in os.environ:
             self._config_data['paths']['local_videos_dir'] = os.environ['LOCAL_VIDEOS_DIR']
         if 'LOCAL_OUTPUTS_DIR' in os.environ:
@@ -128,6 +131,7 @@ class ConfigManager:
         # Create local config
         self._local_config = LocalConfig(
             prompts_dir=Path(paths['local_prompts_dir']),
+            runs_dir=Path(paths['local_runs_dir']),
             videos_dir=Path(paths['local_videos_dir']),
             outputs_dir=Path(paths['local_outputs_dir']),
             notes_dir=Path(paths['local_notes_dir'])

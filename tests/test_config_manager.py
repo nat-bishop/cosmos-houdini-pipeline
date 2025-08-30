@@ -33,6 +33,7 @@ ssh_key = "./test_ssh_key"
 [paths]
 remote_dir = "/home/ubuntu/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"
@@ -86,6 +87,7 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
         
         # Test local configuration (use Path objects to handle Windows/Linux path differences)
         assert local_config.prompts_dir == Path("inputs/prompts")
+        assert local_config.runs_dir == Path("inputs/runs")
         assert local_config.videos_dir == Path("inputs/videos")
         assert local_config.outputs_dir == Path("outputs")
         assert local_config.notes_dir == Path("notes")
@@ -177,6 +179,7 @@ remote_dir = "/home/ubuntu/cosmos-transfer1"
 
 [paths]
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"
@@ -202,6 +205,7 @@ ssh_key = "/nonexistent/key"
 [paths]
 remote_dir = "/home/ubuntu/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"
@@ -221,7 +225,7 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
         
         # Modify config file
         with open(self.config_path, 'w') as f:
-            f.write("""[remote]
+                f.write("""[remote]
 host = "192.168.1.200"
 user = "ubuntu"
 port = 22
@@ -230,6 +234,7 @@ ssh_key = "./test_ssh_key"
 [paths]
 remote_dir = "/home/ubuntu/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"

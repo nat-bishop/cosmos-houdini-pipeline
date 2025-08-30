@@ -1,214 +1,190 @@
-# Cosmos + Houdini Experiments
+# Cosmos-Houdini-Experiments
 
-A production-ready workflow for combining **Houdini/Nuke procedural outputs** with **NVIDIA Cosmos‑Transfer1** inference. This system maintains clear separation between procedural generation and AI processing while providing automated upload → run → download capabilities with comprehensive logging and reproducibility.
+A Python-based workflow system for running Nvidia Cosmos video generation experiments with Houdini integration.
 
----
+## 🚀 **Features**
 
-## Quick Start
+- **Automated Workflow**: Complete pipeline from prompt to final video output
+- **Remote Execution**: Run experiments on remote GPU instances via SSH
+- **Docker Integration**: Containerized execution environment
+- **Batch Processing**: Handle multiple prompts and experiments
+- **Upscaling Support**: Built-in video upscaling capabilities
+- **Refactored Prompt Management**: Modern schema-based prompt system
 
-1. **Clone and configure** the repository with your remote instance details
-2. **Install dependencies**: `pip install -r requirements.txt`
-3. **Configure remote settings** in `scripts/config.toml`
-4. **Build Docker image** on your remote instance: `docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest`
-5. **Convert PNG sequences** to MP4: `./scripts/convert_png_sequences.sh <input_dir> <output_name>`
-6. **Run inference**: `python -m cosmos_workflow.main run <prompt.json>`
+## 🏗️ **Architecture**
 
----
-
-## Repository Layout
+The system is built with a modular, extensible architecture:
 
 ```
-project-root/
-├─ art/                        # Houdini/Nuke sources (hip, caches, exr, nk, renders) – not fed to inference directly
-│  ├─ houdini/
-│  └─ nuke/
-│
-├─ inputs/                     # Finalized, ready-to-run AI inputs (small curated set)
-│  ├─ videos/                  # Per-shot folders (multi-modal MP4s)
-│  │  └─ building_flythrough_v1/
-│  │     ├─ color.mp4
-│  │     ├─ depth.mp4
-│  │     └─ segmentation.mp4
-│  └─ prompts/                 # Prompt JSONs (one per run)
-│
-├─ outputs/                    # Results fetched from remote runs (one folder per prompt)
-│  └─ building_flythrough_v1_20250821_143000/
-│     ├─ spec_used.json       # snapshot of the JSON actually used
-│     └─ *.mp4                # generated results
-│
-├─ cosmos_workflow/            # Python workflow system
-├─ scripts/                    # Helper automation (convert, config)
-└─ notes/
-   ├─ experiment_log.md        # human notes
-   └─ run_history.log          # auto-appended command/metadata log
+cosmos_workflow/
+├── config/          # Configuration management
+├── connection/      # SSH and remote connectivity
+├── execution/       # Docker execution engine
+├── prompts/         # Prompt management and schemas
+├── transfer/        # File transfer operations
+├── workflows/       # Workflow orchestration
+└── utils/          # Utility functions
 ```
 
-> Large binary assets (EXR caches, high-bitrate videos, .hip) should **not** be committed to Git. Store them in cloud storage and curate only needed MP4s into `inputs/videos/` for inference.
+## 🔧 **Installation**
 
----
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd cosmos-houdini-experiments
+   ```
 
-## Configuration
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-The system uses TOML configuration files for easy customization. Edit `cosmos_workflow/config/config.toml` to set your remote instance details:
+3. **Configure the system**:
+   ```bash
+   # Edit config/config.toml with your settings
+   cp cosmos_workflow/config/config.toml.example cosmos_workflow/config/config.toml
+   ```
+
+## ⚙️ **Configuration**
+
+Create a `config.toml` file in `cosmos_workflow/config/`:
 
 ```toml
-[remote]
-user = "ubuntu"
-host = "192.222.53.15"  # Your remote instance IP
+[ssh]
+host = "your-remote-host.com"
+username = "ubuntu"
+key_path = "~/.ssh/id_rsa"
 port = 22
-ssh_key = "~/.ssh/LambdaSSHkey.pem"
 
 [paths]
 remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"
 
 [docker]
-image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
+image = "nvcr.io/nvidia/cosmos:latest"
+container_name = "cosmos-experiment"
 ```
 
-Environment variables can override any setting (e.g., `export REMOTE_HOST="192.168.1.100"`).
+## 🎯 **Refactored Prompt Management System**
 
----
+The system now uses a modern, schema-based approach with two main components:
 
-## Multimodal Prompt Spec
+### **PromptSpec** - Prompt Definition
+- **Purpose**: Defines a prompt without execution parameters
+- **Contains**: Text prompt, video paths, control inputs, metadata
+- **File Naming**: `{name}_{timestamp}_{hash}.json`
+- **Example**: `cyberpunk_city_neon_2025-08-29T21-57-55_ps_c2b411e4355b.json`
 
-Example (`inputs/prompts/building_flythrough_v1.json`):
+### **RunSpec** - Execution Configuration
+- **Purpose**: Defines actual inference runs with all parameters
+- **Contains**: Control weights, inference parameters, execution status
+- **File Naming**: `{prompt_name}_{timestamp}_{hash}.json`
+- **Example**: `cyberpunk_city_neon_2025-08-29T21-57-55_rs_5d28ae21073e.json`
 
-```json
-{
-  "prompt": "A futuristic skyscraper interior flythrough with glowing neon signs...",
-  "input_video_path": "inputs/videos/building_flythrough_v1/color.mp4",
-  "vis":   { "control_weight": 0.25 },
-  "edge":  { "control_weight": 0.25 },
-  "depth": { "input_control": "inputs/videos/building_flythrough_v1/depth.mp4", "control_weight": 0.25 },
-  "seg":   { "input_control": "inputs/prompts/building_flythrough_v1/segmentation.mp4", "control_weight": 0.25 }
-}
-```
+### **Benefits**
+- **Separation of Concerns**: Prompts vs. execution parameters
+- **Reusability**: Use same prompt with different parameters
+- **Traceability**: Track which parameters produced which results
+- **Organization**: Date-based directory structure
+- **Uniqueness**: Hash-based IDs prevent conflicts
 
-Paths are **relative to the cosmos-transfer1 repository root inside the container** (`/workspace`).
+## 🚀 **Usage**
 
----
+### **Basic Workflow**
 
-## Python Workflow System
-
-The modern Python-based workflow system provides better error handling, cross-platform compatibility, and real-time progress tracking.
-
-### **Quick Start**
-```bash
-# Run complete workflow (upload → run → upscale → download)
-python -m cosmos_workflow.main run prompt.json
-
-# Run only inference
-python -m cosmos_workflow.main inference prompt.json
-
-# Run only upscaling
-python -m cosmos_workflow.main upscale prompt.json
-
-# Check remote status
-python -m cosmos_workflow.main status
-```
-
-### **Advanced Usage**
-```bash
-# Custom videos subdirectory
-python -m cosmos_workflow.main run prompt.json --videos-subdir custom_videos
-
-# Skip upscaling
-python -m cosmos_workflow.main run prompt.json --no-upscale
-
-# Custom upscale weight
-python -m cosmos_workflow.main run prompt.json --upscale-weight 0.7
-
-# Use multiple GPUs
-python -m cosmos_workflow.main run prompt.json --num-gpu 2 --cuda-devices "0,1"
-
-# Verbose logging
-python -m cosmos_workflow.main run prompt.json --verbose
-```
-
----
-
-## Example: End-to-End Workflow
-
-1. **Prepare inputs** (from Houdini/Nuke) into `inputs/videos/building_flythrough_v1/`:
-   ```text
-   inputs/videos/building_flythrough_v1/
-     ├─ color.mp4
-     ├─ depth.mp4
-     └─ segmentation.mp4
-   ```
-
-2. **Create a prompt JSON**:
+1. **Create a PromptSpec**:
    ```bash
-   ./scripts/new_prompt.sh building_flythrough_v1 "Cinematic night look with neon accents"
-   # -> inputs/prompts/building_flythrough_v1_<timestamp>.json
+   python -m cosmos_workflow.main create-spec "cyberpunk_city" "Cyberpunk city at night with neon lights"
    ```
 
-3. **Run complete workflow**:
+2. **Create a RunSpec**:
    ```bash
-   python -m cosmos_workflow.main run inputs/prompts/building_flythrough_v1_<timestamp>.json
+   python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
    ```
 
-4. **Output structure**:
-   ```text
-   outputs/building_flythrough_v1_<timestamp>/
-     ├─ spec_used.json          # full inference command + spec
-     ├─ prompt_spec.json        # original prompt used
-     ├─ run.log                 # environment + command + stdout/stderr
-     └─ output.mp4              # generated video
-   
-   outputs/building_flythrough_v1_<timestamp>_upscaled/
-     ├─ spec_used.json          # full upscaling command + spec
-     └─ output.mp4              # 4K upscaled video
+3. **Run the experiment**:
+   ```bash
+   python -m cosmos_workflow.main run run_spec.json
    ```
 
----
+### **Advanced Options**
 
-## PNG Sequence to MP4 Conversion
+- **Custom control weights**: `--weights 0.3 0.4 0.2 0.1`
+- **Custom parameters**: `--num-steps 50 --guidance 8.5`
+- **Multiple GPUs**: `--num-gpu 2 --cuda-devices "0,1"`
+- **Skip upscaling**: `--no-upscale`
+- **Custom upscale weight**: `--upscale-weight 0.7`
 
-The `convert_png_sequences.sh` script automates conversion of Houdini/Nuke PNG sequences to MP4 videos:
+### **Modern Schema System**
 
-```bash
-./scripts/convert_png_sequences.sh <input_directory> <output_name> [frame_count]
-```
-
-**Requirements**: ffmpeg must be installed and available in your PATH.
-
-**PNG naming convention**:
-- `color.####.png` (e.g., color.0001.png, color.0002.png, ...)
-- `depth.####.png` (e.g., depth.0001.png, depth.0002.png, ...)
-- `segmentation.####.png` (e.g., segmentation.0001.png, segmentation.0002.png, ...)
-
----
-
-## Docker Setup
-
-This workflow uses Docker containers for inference on remote instances. Build the custom Docker image on each new instance:
+The system uses a modern, schema-based approach that provides better organization and reusability:
 
 ```bash
-cd /path/to/cosmos-transfer1
-docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
+# Create PromptSpec
+python -m cosmos_workflow.main create-spec "building_flythrough" "Aerial view of a modern building"
+
+# Create RunSpec from PromptSpec
+python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.25 0.25 0.25 0.25
 ```
 
-**Requirements**:
-- Docker with NVIDIA Container Toolkit support
-- Sufficient disk space for the image (typically 10-20GB)
-- Access to model checkpoints and configuration files
+## 📁 **Directory Structure**
 
----
+```
+inputs/
+├── prompts/         # PromptSpec files (date-organized)
+│   └── 2025-08-29/
+│       └── cyberpunk_city_neon_2025-08-29T21-57-55_ps_c2b411e4355b.json
+├── runs/            # RunSpec files (date-organized)
+│   └── 2025-08-29/
+│       └── cyberpunk_city_neon_2025-08-29T21-57-55_rs_5d28ae21073e.json
+└── videos/          # Input video files
+    └── cyberpunk_city_neon/
+        ├── color.mp4
+        ├── depth.mp4
+        └── segmentation.mp4
 
-## Technical Notes
+outputs/             # Generated videos and results
+notes/               # Experiment logs and notes
+```
 
-- Model checkpoints should be located under `${REMOTE_DIR}/../checkpoints` or configured via `CHECKPOINT_DIR_REMOTE` environment variable
-- Gated models require `huggingface-cli login` authentication inside the container
-- Container user permissions may need adjustment with `-u $(id -u):$(id -g)` for proper file ownership
+## 🔍 **Monitoring and Status**
 
----
+Check remote instance status:
+```bash
+python -m cosmos_workflow.main status --verbose
+```
 
-## Documentation
+## 🧪 **Testing**
 
-- **Reference Guide**: See [REFERENCE.md](REFERENCE.md) for comprehensive details
-- **Python API**: See [cosmos_workflow/README.md](cosmos_workflow/README.md) for Python workflow documentation
+Run the test suite:
+```bash
+pytest tests/
+```
+
+Check code coverage:
+```bash
+pytest --cov=cosmos_workflow tests/
+```
+
+## 🤝 **Contributing**
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## 📝 **License**
+
+[Add your license information here]
+
+## 🆘 **Support**
+
+For issues and questions:
+1. Check the documentation
+2. Review existing issues
+3. Create a new issue with detailed information

@@ -3,7 +3,7 @@
 # ===== Remote instance =====
 [remote]
 user = "ubuntu"
-host = "192.222.53.15"  # <-- change this when the IP changes
+host = "192.222.52.92"  # <-- change this when the IP changes
 port = 22
 ssh_key = "~/.ssh/LambdaSSHkey.pem"
 
@@ -11,6 +11,7 @@ ssh_key = "~/.ssh/LambdaSSHkey.pem"
 [paths]
 remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
+local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
 local_outputs_dir = "./outputs"
 local_notes_dir = "./notes"

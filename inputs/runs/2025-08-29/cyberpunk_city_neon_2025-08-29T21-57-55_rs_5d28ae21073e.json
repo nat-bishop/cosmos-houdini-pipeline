@@ -1,0 +1,22 @@
+{
+  "id": "rs_5d28ae21073e",
+  "prompt_id": "ps_c2b411e4355b",
+  "control_weights": {
+    "vis": 0.3,
+    "edge": 0.4,
+    "depth": 0.2,
+    "seg": 0.1
+  },
+  "parameters": {
+    "num_steps": 50,
+    "guidance": 8.5,
+    "sigma_max": 75.0,
+    "blur_strength": "high",
+    "canny_threshold": "medium",
+    "fps": 30,
+    "seed": 42
+  },
+  "timestamp": "2025-08-29T21:57:55.549317Z",
+  "execution_status": "pending",
+  "output_path": "outputs/cyberpunk_city_neon_rs_5d28ae21073e"
+}

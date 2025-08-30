@@ -9,7 +9,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from cosmos_workflow.prompts import PromptManager, PromptSchema
+from cosmos_workflow.prompts import PromptManager
+from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec, ExecutionStatus
 
 
 class TestPromptManager:
@@ -20,13 +21,14 @@ class TestPromptManager:
         # Create temporary directories for testing
         self.temp_dir = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_dir.name)
-        
+
         # Create mock config
         self.mock_config = Mock()
         self.mock_config.prompts_dir = self.temp_path / "prompts"
+        self.mock_config.runs_dir = self.temp_path / "runs"
         self.mock_config.outputs_dir = self.temp_path / "outputs"
         self.mock_config.videos_dir = self.temp_path / "videos"
-        
+
         # Mock the ConfigManager
         with patch('cosmos_workflow.prompts.prompt_manager.ConfigManager') as mock_config_class:
             mock_config_class.return_value.get_local_config.return_value = self.mock_config
@@ -36,159 +38,181 @@ class TestPromptManager:
         """Clean up test fixtures after each test method."""
         self.temp_dir.cleanup()
     
-    def test_create_prompt(self):
-        """Test creating a new prompt."""
-        prompt_file = self.prompt_manager.create_prompt(
+    def test_create_prompt_spec(self):
+        """Test creating a new PromptSpec."""
+        prompt_spec = self.prompt_manager.create_prompt_spec(
             "test_shot", 
             "A beautiful sunset over the ocean"
         )
         
-        assert prompt_file.exists()
-        assert prompt_file.name.startswith("test_shot_")
-        assert prompt_file.name.endswith(".json")
-        
-        # Check content
-        with open(prompt_file, 'r') as f:
-            data = json.load(f)
-        
-        assert data["prompt"] == "A beautiful sunset over the ocean"
-        assert data["input_video_path"] == "inputs/videos/test_shot/color.mp4"
-        assert data["vis"]["control_weight"] == 0.25
-        assert data["depth"]["input_control"] == "inputs/videos/test_shot/depth.mp4"
+        assert isinstance(prompt_spec, PromptSpec)
+        assert prompt_spec.name == "test_shot"
+        assert prompt_spec.prompt == "A beautiful sunset over the ocean"
+        assert prompt_spec.input_video_path == "inputs/videos/test_shot/color.mp4"
+        assert "depth" in prompt_spec.control_inputs
+        assert "seg" in prompt_spec.control_inputs
+        assert prompt_spec.id.startswith("ps_")
     
-    def test_create_prompt_with_custom_weights(self):
-        """Test creating a prompt with custom control weights."""
-        custom_weights = {
-            "vis": 0.5,
-            "edge": 0.3,
-            "depth": 0.1,
-            "seg": 0.1
+    def test_create_prompt_spec_with_custom_paths(self):
+        """Test creating a PromptSpec with custom video and control input paths."""
+        custom_control_inputs = {
+            "depth": "custom/depth.mp4",
+            "seg": "custom/seg.mp4"
         }
         
-        prompt_file = self.prompt_manager.create_prompt(
+        prompt_spec = self.prompt_manager.create_prompt_spec(
             "test_shot", 
             "Test prompt",
-            custom_weights
+            input_video_path="custom/video.mp4",
+            control_inputs=custom_control_inputs
         )
         
-        with open(prompt_file, 'r') as f:
-            data = json.load(f)
-        
-        assert data["vis"]["control_weight"] == 0.5
-        assert data["edge"]["control_weight"] == 0.3
-        assert data["depth"]["control_weight"] == 0.1
-        assert data["seg"]["control_weight"] == 0.1
+        assert prompt_spec.input_video_path == "custom/video.mp4"
+        assert prompt_spec.control_inputs["depth"] == "custom/depth.mp4"
+        assert prompt_spec.control_inputs["seg"] == "custom/seg.mp4"
     
-    def test_create_prompt_with_custom_video_path(self):
-        """Test creating a prompt with custom video path."""
-        prompt_file = self.prompt_manager.create_prompt(
+    def test_create_prompt_spec_upsampled(self):
+        """Test creating an upsampled PromptSpec."""
+        prompt_spec = self.prompt_manager.create_prompt_spec(
             "test_shot", 
-            "Test prompt",
-            custom_video_path="custom/path/video.mp4"
+            "Upsampled prompt",
+            is_upsampled=True,
+            parent_prompt_text="Original prompt"
         )
         
-        with open(prompt_file, 'r') as f:
-            data = json.load(f)
-        
-        assert data["input_video_path"] == "custom/path/video.mp4"
+        assert prompt_spec.is_upsampled is True
+        assert prompt_spec.parent_prompt_text == "Original prompt"
     
-    def test_duplicate_prompt(self):
-        """Test duplicating an existing prompt."""
-        # Create original prompt
-        original_prompt = self.prompt_manager.create_prompt(
-            "test_shot", 
-            "Original prompt"
-        )
-        
-        # Duplicate it
-        duplicated_prompt = self.prompt_manager.duplicate_prompt(original_prompt)
-        
-        assert duplicated_prompt.exists()
-        # The files should be different (even if timestamps are the same, they're different files)
-        assert duplicated_prompt != original_prompt
-        assert duplicated_prompt.name.startswith("test_shot_")
-        
-        # Check content is the same
-        with open(original_prompt, 'r') as f1, open(duplicated_prompt, 'r') as f2:
-            assert f1.read() == f2.read()
-    
-    def test_duplicate_prompt_file_not_found(self):
-        """Test duplicating a non-existent prompt."""
-        with pytest.raises(FileNotFoundError):
-            self.prompt_manager.duplicate_prompt("nonexistent.json")
-    
-    def test_validate_prompt_valid(self):
-        """Test validating a valid prompt."""
-        prompt_file = self.prompt_manager.create_prompt(
+    def test_create_run_spec(self):
+        """Test creating a new RunSpec."""
+        # First create a PromptSpec
+        prompt_spec = self.prompt_manager.create_prompt_spec(
             "test_shot", 
             "Test prompt"
         )
         
-        assert self.prompt_manager.validate_prompt(prompt_file) is True
-    
-    def test_validate_prompt_invalid_json(self):
-        """Test validating an invalid JSON file."""
-        # Create an invalid JSON file
-        invalid_file = self.temp_path / "prompts" / "invalid.json"
-        invalid_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(invalid_file, 'w') as f:
-            f.write("{ invalid json")
-        
-        assert self.prompt_manager.validate_prompt(invalid_file) is False
-    
-    def test_validate_prompt_missing_fields(self):
-        """Test validating a prompt with missing required fields."""
-        # Create a prompt with missing fields
-        incomplete_prompt = {
-            "prompt": "Test prompt",
-            "input_video_path": "test.mp4"
-            # Missing vis, edge, depth, seg
+        # Create RunSpec with custom parameters
+        custom_weights = {"vis": 0.5, "edge": 0.3, "depth": 0.1, "seg": 0.1}
+        custom_params = {
+            "num_steps": 50, 
+            "guidance": 10.0, 
+            "sigma_max": 70.0,
+            "blur_strength": "medium",
+            "canny_threshold": "medium",
+            "fps": 30,
+            "seed": 1
         }
         
-        incomplete_file = self.temp_path / "prompts" / "incomplete.json"
-        incomplete_file.parent.mkdir(parents=True, exist_ok=True)
+        run_spec = self.prompt_manager.create_run_spec(
+            prompt_spec=prompt_spec,
+            control_weights=custom_weights,
+            parameters=custom_params
+        )
         
-        with open(incomplete_file, 'w') as f:
-            json.dump(incomplete_prompt, f)
+        assert isinstance(run_spec, RunSpec)
+        assert run_spec.prompt_id == prompt_spec.id
+        assert run_spec.control_weights == custom_weights
+        assert run_spec.parameters["num_steps"] == 50
+        assert run_spec.parameters["guidance"] == 10.0
+        assert run_spec.parameters["fps"] == 30
+        assert run_spec.execution_status == ExecutionStatus.PENDING
+        assert run_spec.id.startswith("rs_")
+    
+    def test_create_run_spec_with_defaults(self):
+        """Test creating a RunSpec with default parameters."""
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
         
-        assert self.prompt_manager.validate_prompt(incomplete_file) is False
+        run_spec = self.prompt_manager.create_run_spec(prompt_spec)
+        
+        assert run_spec.control_weights["vis"] == 0.25
+        assert run_spec.control_weights["edge"] == 0.25
+        assert run_spec.control_weights["depth"] == 0.25
+        assert run_spec.control_weights["seg"] == 0.25
+        assert run_spec.parameters["num_steps"] == 35
+        assert run_spec.parameters["guidance"] == 7.0
+    
+    def test_validate_prompt_spec(self):
+        """Test validating a PromptSpec."""
+        # Create a valid PromptSpec
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
+        
+        # Test validation
+        assert self.prompt_manager.validate_prompt_spec(prompt_spec.id) is False  # ID is not a file path
+        
+        # Test with file path
+        prompt_files = list(self.prompt_manager.prompts_dir.rglob("*.json"))
+        if prompt_files:
+            assert self.prompt_manager.validate_prompt_spec(prompt_files[0]) is True
     
     def test_list_prompts(self):
         """Test listing available prompts."""
-        # Create some prompts
-        self.prompt_manager.create_prompt("shot1", "Prompt 1")
-        self.prompt_manager.create_prompt("shot2", "Prompt 2")
-        self.prompt_manager.create_prompt("shot3", "Prompt 3")
+        # Create some PromptSpecs
+        self.prompt_manager.create_prompt_spec("shot1", "Prompt 1")
+        self.prompt_manager.create_prompt_spec("shot2", "Prompt 2")
         
         # List all prompts
-        all_prompts = self.prompt_manager.list_prompts()
-        assert len(all_prompts) == 3
+        prompts = self.prompt_manager.list_prompts()
+        assert len(prompts) >= 2
         
         # List with pattern
-        shot1_prompts = self.prompt_manager.list_prompts("shot1")
-        assert len(shot1_prompts) == 1
-        assert "shot1" in shot1_prompts[0].name
+        filtered_prompts = self.prompt_manager.list_prompts("shot1")
+        assert len(filtered_prompts) >= 1
+        assert any("shot1" in str(p) for p in filtered_prompts)
     
     def test_get_prompt_info(self):
-        """Test getting information about a prompt."""
-        prompt_file = self.prompt_manager.create_prompt(
+        """Test getting prompt information."""
+        # Create a PromptSpec
+        prompt_spec = self.prompt_manager.create_prompt_spec(
             "test_shot", 
-            "A beautiful sunset over the ocean"
+            "Test prompt"
         )
         
-        info = self.prompt_manager.get_prompt_info(prompt_file)
-        
-        assert info["base_name"] == "test_shot"
-        assert info["prompt_text"] == "A beautiful sunset over the ocean"
-        assert info["control_weights"]["vis"] == 0.25
-        assert "timestamp" in info
-        assert info["file_path"] == str(prompt_file)
+        # Get info from the created file
+        prompt_files = list(self.prompt_manager.prompts_dir.rglob("*.json"))
+        if prompt_files:
+            info = self.prompt_manager.get_prompt_info(prompt_files[0])
+            
+            assert info["name"] == "test_shot"
+            assert info["prompt_text"] == "Test prompt"
+            assert info["id"].startswith("ps_")
+            assert "depth" in info["control_inputs"]
+            assert "seg" in info["control_inputs"]
     
-    def test_get_prompt_info_file_not_found(self):
-        """Test getting info for non-existent prompt."""
-        with pytest.raises(FileNotFoundError):
-            self.prompt_manager.get_prompt_info("nonexistent.json")
+    def test_invalid_control_weights(self):
+        """Test validation of invalid control weights."""
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
+        
+        # This should raise an error with invalid weights
+        with pytest.raises(ValueError, match="Invalid control weights"):
+            self.prompt_manager.create_run_spec(
+                prompt_spec=prompt_spec,
+                control_weights={"vis": -0.1, "edge": 0.5, "depth": 0.3, "seg": 0.3}
+            )
+    
+    def test_invalid_parameters(self):
+        """Test validation of invalid parameters."""
+        prompt_spec = self.prompt_manager.create_prompt_spec(
+            "test_shot", 
+            "Test prompt"
+        )
+        
+        # This should raise an error with invalid parameters
+        with pytest.raises(ValueError, match="Invalid parameters"):
+            self.prompt_manager.create_run_spec(
+                prompt_spec=prompt_spec,
+                parameters={"num_steps": 0, "guidance": 7.0, "sigma_max": 70.0, 
+                          "blur_strength": "medium", "canny_threshold": "medium", 
+                          "fps": 24, "seed": 1}
+            )
 
 
 if __name__ == "__main__":

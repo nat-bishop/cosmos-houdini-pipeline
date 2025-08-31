@@ -92,7 +92,22 @@
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
-      "Read(F:\\Art\\cosmos-transfer1/**)"
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\inference/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler\\model/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\inference/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\inference/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\diffusion\\config/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\examples/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler/**)",
+      "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\utils/**)",
+      "Bash(pytest:*)"
     ],
     "deny": [],
     "ask": []

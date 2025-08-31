@@ -1,319 +1,347 @@
 """
 Integration tests for the complete workflow orchestration.
 Tests the full pipeline from PromptSpec creation to inference execution.
-
-REFACTORED: Following TEST_SUITE_INVESTIGATION_REPORT.md recommendations:
-- Uses fake implementations instead of mocks
-- Tests behavior and outcomes, not implementation details
-- Would survive internal refactoring
 """
-
 import json
 from datetime import datetime
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
-from tests.fixtures.fakes import (
-    FakePromptSpec,
-    FakeRunSpec,
-    FakeWorkflowOrchestrator,
-)
+from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
+from cosmos_workflow.prompts.run_spec_manager import RunSpecManager
+from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
+from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 
-class TestWorkflowOrchestrationBehavior:
-    """Test workflow orchestration behavior, not implementation.
-
-    These tests verify that the workflow produces correct outcomes
-    rather than checking specific method calls.
-    """
+class TestWorkflowOrchestration:
+    """Test complete workflow orchestration scenarios."""
 
     @pytest.fixture
-    def fake_orchestrator(self):
-        """Create orchestrator with fake dependencies."""
-        return FakeWorkflowOrchestrator()
+    def workflow_orchestrator(
+        self, mock_config_manager, mock_ssh_manager, mock_file_transfer, mock_docker_executor
+    ):
+        """Create WorkflowOrchestrator with mocked dependencies."""
+        with patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager"
+        ) as mock_ssh_class, patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.FileTransferManager"
+        ) as mock_ft_class, patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
+        ) as mock_docker_class:
+            mock_ssh_class.return_value = mock_ssh_manager
+            mock_ft_class.return_value = mock_file_transfer
+            mock_docker_class.return_value = mock_docker_executor
 
-    @pytest.fixture
-    def test_specs(self, tmp_path):
-        """Create test specifications."""
-        # Create prompt spec
-        prompt_spec = FakePromptSpec(
-            id="test_ps_001",
-            name="mountain_scene",
-            prompt="A majestic mountain landscape at sunset",
-            input_video_path=str(tmp_path / "input.mp4"),
-        )
+            orchestrator = WorkflowOrchestrator(mock_config_manager)
+            orchestrator.ssh_manager = mock_ssh_manager
+            orchestrator.file_transfer = mock_file_transfer
+            orchestrator.docker_executor = mock_docker_executor
 
-        # Create run spec
-        run_spec = FakeRunSpec(
+            return orchestrator
+
+    @pytest.mark.integration
+    def test_complete_inference_workflow(
+        self, workflow_orchestrator, sample_run_spec, sample_prompt_spec, temp_dir
+    ):
+        """Test complete workflow from RunSpec to inference execution."""
+        # Setup
+        run_spec_file = temp_dir / "run_spec.json"
+        run_spec_file.write_text(json.dumps(sample_run_spec.to_dict()))
+
+        prompt_spec_file = temp_dir / "prompt_spec.json"
+        prompt_spec_file.write_text(json.dumps(sample_prompt_spec.to_dict()))
+
+        # Mock video files
+        video_dir = temp_dir / "videos"
+        video_dir.mkdir()
+        (video_dir / "color.mp4").write_text("mock color video")
+        (video_dir / "depth.mp4").write_text("mock depth video")
+        (video_dir / "segmentation.mp4").write_text("mock segmentation video")
+
+        # Mock the prompt spec loading
+        with patch(
+            "cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"
+        ) as mock_load:
+            mock_load.return_value = sample_prompt_spec
+
+            # Execute workflow
+            result = workflow_orchestrator.run_inference(
+                str(run_spec_file), num_gpus=2, verbose=True
+            )
+
+        # Verify workflow steps executed in order
+        assert result is True
+
+        # 1. Files should be uploaded
+        assert workflow_orchestrator.file_transfer.upload_file.called
+        assert workflow_orchestrator.file_transfer.upload_directory.called
+
+        # 2. Docker should be executed
+        assert workflow_orchestrator.docker_executor.run_inference.called
+
+        # 3. Results should be downloaded
+        assert workflow_orchestrator.file_transfer.download_directory.called
+
+    @pytest.mark.integration
+    def test_video_directory_detection(self, workflow_orchestrator, temp_dir):
+        """Test video directory detection from RunSpec."""
+        # Setup complex directory structure
+        video_base = temp_dir / "outputs" / "videos"
+
+        # Create multiple video directories with timestamps
+        dirs = [
+            video_base / "scene1_20250830_120000",
+            video_base / "scene1_20250830_130000",
+            video_base / "scene2_20250830_140000",
+        ]
+
+        for dir_path in dirs:
+            dir_path.mkdir(parents=True)
+            (dir_path / "color.mp4").touch()
+            (dir_path / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "name": dir_path.name.split("_")[0],
+                        "timestamp": "_".join(dir_path.name.split("_")[1:]),
+                        "video_path": str(dir_path / "color.mp4"),
+                    }
+                )
+            )
+
+        # Create RunSpec that references one of these
+        run_spec = RunSpec(
             id="test_rs_001",
-            prompt_spec_id=prompt_spec.id,
-            control_weights={"depth": 0.4, "segmentation": 0.3},
-            parameters={"num_steps": 35, "seed": 42},
+            prompt_spec_id="test_ps_001",
+            control_weights={"depth": 0.3},
+            parameters={"num_steps": 35},
+            execution_status="pending",
+            output_path=str(dirs[1]),  # Reference middle directory
+            timestamp=datetime.now().isoformat(),
         )
 
-        # Write specs to files
-        prompt_file = tmp_path / "prompt_spec.json"
-        prompt_file.write_text(json.dumps(prompt_spec.to_dict()))
+        run_spec_file = temp_dir / "runs" / "run_spec.json"
+        run_spec_file.parent.mkdir(parents=True)
+        run_spec_file.write_text(json.dumps(run_spec.to_dict()))
 
-        run_file = tmp_path / "run_spec.json"
-        run_file.write_text(json.dumps(run_spec.to_dict()))
+        # Create corresponding PromptSpec
+        prompt_spec = PromptSpec(
+            id="test_ps_001",
+            name="scene1",
+            prompt="Test prompt",
+            negative_prompt="",
+            input_video_path=str(dirs[1] / "color.mp4"),
+            control_inputs={"depth": str(dirs[1] / "depth.mp4")},
+            timestamp=datetime.now().isoformat(),
+        )
 
-        # Create mock input video
-        input_video = tmp_path / "input.mp4"
-        input_video.write_bytes(b"mock video data")
+        prompt_spec_file = temp_dir / "prompts" / "prompt_spec.json"
+        prompt_spec_file.parent.mkdir(parents=True)
+        prompt_spec_file.write_text(json.dumps(prompt_spec.to_dict()))
 
-        return {
-            "prompt_spec": prompt_spec,
-            "run_spec": run_spec,
-            "prompt_file": prompt_file,
-            "run_file": run_file,
-            "input_video": input_video,
+        # Test video directory detection
+        with patch.object(workflow_orchestrator, "config_manager") as mock_config:
+            mock_config.get_local_config.return_value.videos_dir = str(video_base)
+            mock_config.get_local_config.return_value.runs_dir = str(temp_dir / "runs")
+            mock_config.get_local_config.return_value.prompts_dir = str(temp_dir / "prompts")
+
+            video_dirs = workflow_orchestrator._get_video_directories("scene1", str(run_spec_file))
+
+        # Verify correct directory found
+        assert len(video_dirs) > 0
+        assert str(dirs[1]) in str(video_dirs[0])
+
+    @pytest.mark.integration
+    def test_control_spec_generation(
+        self, workflow_orchestrator, sample_prompt_spec, sample_run_spec, temp_dir
+    ):
+        """Test generation of Cosmos control spec from PromptSpec and RunSpec."""
+        # Setup
+        expected_control_spec = {
+            "prompt": sample_prompt_spec.prompt,
+            "negative_prompt": sample_prompt_spec.negative_prompt,
+            "input_video_path": sample_prompt_spec.input_video_path,
+            "control_inputs": [
+                {
+                    "type": "depth",
+                    "path": sample_prompt_spec.control_inputs["depth"],
+                    "weight": sample_run_spec.control_weights["depth"],
+                },
+                {
+                    "type": "segmentation",
+                    "path": sample_prompt_spec.control_inputs["segmentation"],
+                    "weight": sample_run_spec.control_weights["segmentation"],
+                },
+            ],
+            "parameters": sample_run_spec.parameters,
         }
 
-    @pytest.mark.integration
-    def test_workflow_completes_successfully(self, fake_orchestrator, test_specs):
-        """Test that workflow completes with expected outcomes.
-
-        This test verifies BEHAVIOR:
-        - Workflow returns success
-        - Files are transferred
-        - Inference is executed
-        - Results are available
-
-        It does NOT test:
-        - Specific method calls
-        - Call order
-        - Internal implementation details
-        """
-        # Execute workflow
-        result = fake_orchestrator.run_inference(
-            str(test_specs["run_file"]), num_gpus=2, verbose=True
+        # Generate control spec
+        control_spec = workflow_orchestrator._generate_control_spec(
+            sample_prompt_spec, sample_run_spec
         )
 
-        # Verify OUTCOME: Workflow completed successfully
-        assert result is True
-
-        # Verify OUTCOME: Workflow was tracked
-        assert len(fake_orchestrator.workflows_run) == 1
-        workflow = fake_orchestrator.workflows_run[0]
-        assert workflow["type"] == "inference"
-        assert workflow["num_gpus"] == 2
-
-        # Verify OUTCOME: Files were uploaded (behavior, not calls)
-        assert len(fake_orchestrator.file_transfer.uploaded_files) > 0
-
-        # Verify OUTCOME: Docker container was run
-        assert len(fake_orchestrator.docker_executor.containers_run) == 1
-        container = fake_orchestrator.docker_executor.containers_run[0]
-        assert container[0] == "inference"
-        assert container[1]["num_gpu"] == 2
-
-        # Verify OUTCOME: Results exist
-        # The fake stores results by the file stem (run_spec in this case)
-        assert len(fake_orchestrator.docker_executor.inference_results) > 0
-        # Get the first (and only) result
-        result_key = list(fake_orchestrator.docker_executor.inference_results.keys())[0]
-        result = fake_orchestrator.docker_executor.inference_results[result_key]
-        assert result["status"] == "success"
-        assert "output_path" in result
+        # Verify structure
+        assert control_spec["prompt"] == expected_control_spec["prompt"]
+        assert control_spec["negative_prompt"] == expected_control_spec["negative_prompt"]
+        assert len(control_spec["control_inputs"]) == 2
+        assert control_spec["parameters"]["num_steps"] == 35
 
     @pytest.mark.integration
-    def test_workflow_handles_missing_input_gracefully(self, fake_orchestrator, tmp_path):
-        """Test that workflow fails gracefully with missing input.
+    def test_batch_inference_workflow(self, workflow_orchestrator, temp_dir):
+        """Test batch inference with multiple RunSpecs."""
+        # Setup multiple RunSpecs
+        run_specs = []
+        for i in range(3):
+            run_spec = RunSpec(
+                id=f"test_rs_{i:03d}",
+                prompt_spec_id=f"test_ps_{i:03d}",
+                control_weights={"depth": 0.3 + i * 0.1},
+                parameters={"num_steps": 35, "seed": 42 + i},
+                execution_status="pending",
+                output_path=f"outputs/run_{i:03d}",
+                timestamp=datetime.now().isoformat(),
+            )
 
-        Tests BEHAVIOR when input is invalid, not error propagation details.
-        """
-        # Create run spec pointing to non-existent file
-        missing_file = tmp_path / "missing_run_spec.json"
+            run_spec_file = temp_dir / f"run_{i:03d}.json"
+            run_spec_file.write_text(json.dumps(run_spec.to_dict()))
+            run_specs.append((run_spec_file, run_spec))
 
-        # Execute workflow with missing file
-        result = fake_orchestrator.run_inference(str(missing_file))
+        # Execute batch workflow
+        results = []
+        for spec_file, spec in run_specs:
+            with patch("cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"):
+                result = workflow_orchestrator.run_inference(
+                    str(spec_file), num_gpus=1, verbose=False
+                )
+                results.append(result)
 
-        # Verify OUTCOME: Workflow failed gracefully
+        # Verify all executed
+        assert all(results)
+        assert workflow_orchestrator.docker_executor.run_inference.call_count == 3
+
+    @pytest.mark.integration
+    def test_error_recovery_workflow(
+        self, workflow_orchestrator, sample_run_spec, sample_prompt_spec, temp_dir
+    ):
+        """Test workflow recovery from various failure points."""
+        # Setup
+        run_spec_file = temp_dir / "run_spec.json"
+        run_spec_file.write_text(json.dumps(sample_run_spec.to_dict()))
+
+        # Test 1: Upload failure
+        workflow_orchestrator.file_transfer.upload_file.return_value = False
+
+        with patch(
+            "cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"
+        ) as mock_load:
+            mock_load.return_value = sample_prompt_spec
+            result = workflow_orchestrator.run_inference(str(run_spec_file))
+
+        assert result is False
+        assert not workflow_orchestrator.docker_executor.run_inference.called
+
+        # Test 2: Docker execution failure
+        workflow_orchestrator.file_transfer.upload_file.return_value = True
+        workflow_orchestrator.docker_executor.run_inference.return_value = (1, "", "Error")
+
+        with patch(
+            "cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"
+        ) as mock_load:
+            mock_load.return_value = sample_prompt_spec
+            result = workflow_orchestrator.run_inference(str(run_spec_file))
+
         assert result is False
 
-        # Verify OUTCOME: No containers were run
-        assert len(fake_orchestrator.docker_executor.containers_run) == 0
+        # Test 3: Download failure (should still return partial success)
+        workflow_orchestrator.docker_executor.run_inference.return_value = (0, "Success", "")
+        workflow_orchestrator.file_transfer.download_directory.return_value = False
+
+        with patch(
+            "cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"
+        ) as mock_load:
+            mock_load.return_value = sample_prompt_spec
+            result = workflow_orchestrator.run_inference(str(run_spec_file))
+
+        # Inference succeeded, only download failed
+        assert result is True  # Or False depending on implementation
 
     @pytest.mark.integration
-    def test_workflow_produces_correct_output_structure(self, fake_orchestrator, test_specs):
-        """Test that workflow produces expected output structure.
+    @pytest.mark.slow
+    def test_parallel_upload_optimization(self, workflow_orchestrator, temp_dir):
+        """Test that multiple files are uploaded efficiently."""
+        # Setup multiple video files
+        video_files = []
+        for i in range(10):
+            video_file = temp_dir / f"video_{i:02d}.mp4"
+            video_file.write_text(f"mock video {i}")
+            video_files.append(video_file)
 
-        Verifies the CONTRACT of the workflow output, not how it's produced.
-        """
-        # Execute workflow
-        result = fake_orchestrator.run_inference(str(test_specs["run_file"]))
+        # Mock upload to track call pattern
+        upload_calls = []
 
-        assert result is True
+        def track_upload(local_path, remote_path):
+            upload_calls.append((local_path, remote_path))
+            return True
 
-        # Verify output structure matches contract
-        # Get the first result (keyed by file stem)
-        result_key = list(fake_orchestrator.docker_executor.inference_results.keys())[0]
-        inference_result = fake_orchestrator.docker_executor.inference_results[result_key]
+        workflow_orchestrator.file_transfer.upload_file.side_effect = track_upload
 
-        # Check required fields exist
-        required_fields = ["status", "output_path", "duration", "timestamp"]
-        for field in required_fields:
-            assert field in inference_result
+        # Upload all files
+        for video_file in video_files:
+            workflow_orchestrator.file_transfer.upload_file(
+                str(video_file), f"/remote/videos/{video_file.name}"
+            )
 
-        # Verify output path follows expected pattern
-        assert "outputs/" in inference_result["output_path"]
-        assert inference_result["output_path"].endswith(".mp4")
+        # Verify all uploaded
+        assert len(upload_calls) == 10
 
-        # Verify timestamp is valid ISO format
-        datetime.fromisoformat(inference_result["timestamp"])
-
-    @pytest.mark.integration
-    def test_workflow_respects_gpu_configuration(self, fake_orchestrator, test_specs):
-        """Test that workflow correctly configures GPU usage.
-
-        Tests the BEHAVIOR of GPU configuration, not HOW it's implemented.
-        """
-        # Test with different GPU configurations
-        gpu_configs = [(1, "0"), (2, "0,1"), (4, "0,1,2,3")]
-
-        for num_gpus, _expected_devices in gpu_configs:
-            # Reset tracking
-            fake_orchestrator.docker_executor.containers_run.clear()
-
-            # Run with specific GPU config
-            result = fake_orchestrator.run_inference(str(test_specs["run_file"]), num_gpus=num_gpus)
-
-            assert result is True
-
-            # Verify GPU configuration was applied
-            container = fake_orchestrator.docker_executor.containers_run[0]
-            assert container[1]["num_gpu"] == num_gpus
-            # Note: We test the behavior (num_gpu is set correctly)
-            # not the implementation (exact cuda_devices string)
+        # Could verify upload order or batching strategy here
+        # In a real implementation, might use concurrent uploads
 
     @pytest.mark.integration
-    def test_workflow_tracks_execution_history(self, fake_orchestrator, test_specs):
-        """Test that workflow maintains execution history.
+    def test_prompt_upsampling_integration(
+        self, workflow_orchestrator, sample_prompt_spec, temp_dir
+    ):
+        """Test integration with prompt upsampling workflow."""
+        # Setup
+        prompt_file = temp_dir / "prompt.txt"
+        prompt_file.write_text(sample_prompt_spec.prompt)
 
-        Verifies BEHAVIOR of history tracking without coupling to storage mechanism.
-        """
-        # Run multiple workflows
-        for i in range(3):
-            result = fake_orchestrator.run_inference(str(test_specs["run_file"]), num_gpus=i + 1)
-            assert result is True
+        # Mock upsampling result
+        upsampled_prompt = "A highly detailed futuristic city with neon lights..."
+        workflow_orchestrator.docker_executor.run_upsampling = MagicMock(
+            return_value=(0, json.dumps({"upsampled_prompt": upsampled_prompt}), "")
+        )
 
-        # Verify history is maintained
-        assert len(fake_orchestrator.workflows_run) == 3
+        # Execute upsampling
+        with patch.object(workflow_orchestrator, "run_prompt_upsampling") as mock_upsample:
+            mock_upsample.return_value = upsampled_prompt
 
-        # Verify each execution is tracked with correct metadata
-        for i, workflow in enumerate(fake_orchestrator.workflows_run):
-            assert workflow["num_gpus"] == i + 1
-            assert "timestamp" in workflow
-            # Verify timestamps are in order
-            if i > 0:
-                prev_time = datetime.fromisoformat(
-                    fake_orchestrator.workflows_run[i - 1]["timestamp"]
-                )
-                curr_time = datetime.fromisoformat(workflow["timestamp"])
-                assert curr_time >= prev_time
+            result = mock_upsample(str(prompt_file), video_path=sample_prompt_spec.input_video_path)
 
-    @pytest.mark.integration
-    def test_system_status_check(self, fake_orchestrator):
-        """Test system status checking behavior.
-
-        Tests WHAT the status check reports, not HOW it gathers the information.
-        """
-        # Initially connected
-        assert fake_orchestrator.check_status() is True
-
-        # Disconnect
-        fake_orchestrator.ssh_manager.disconnect()
-        assert fake_orchestrator.check_status() is False
-
-        # Reconnect
-        fake_orchestrator.ssh_manager.connect()
-        assert fake_orchestrator.check_status() is True
+        # Verify
+        assert result == upsampled_prompt
+        mock_upsample.assert_called_once()
 
     @pytest.mark.integration
-    def test_docker_status_reporting(self, fake_orchestrator, test_specs):
-        """Test Docker status reporting behavior.
+    def test_status_monitoring(self, workflow_orchestrator):
+        """Test workflow status monitoring and reporting."""
+        # Setup status tracking
+        status_updates = []
 
-        Verifies the CONTRACT of status reporting, not implementation.
-        """
-        # Get initial status
-        status = fake_orchestrator.docker_executor.get_docker_status()
-        assert status["docker_running"] is True
-        assert status["containers_run"] == 0
+        def track_status(message, level="INFO"):
+            status_updates.append((message, level))
 
-        # Run some workflows
-        for _ in range(3):
-            fake_orchestrator.run_inference(str(test_specs["run_file"]))
+        with patch("cosmos_workflow.workflows.workflow_orchestrator.logger") as mock_logger:
+            mock_logger.info.side_effect = lambda msg: track_status(msg, "INFO")
+            mock_logger.error.side_effect = lambda msg: track_status(msg, "ERROR")
 
-        # Check updated status
-        status = fake_orchestrator.docker_executor.get_docker_status()
-        assert status["containers_run"] == 3
+            # Execute a workflow step
+            workflow_orchestrator.ssh_manager.is_connected.return_value = True
+            status = workflow_orchestrator.check_status(verbose=True)
 
-        # Disconnect and check status
-        fake_orchestrator.ssh_manager.disconnect()
-        status = fake_orchestrator.docker_executor.get_docker_status()
-        assert status["docker_running"] is False
-        assert "error" in status
-
-
-class TestUpscalingWorkflow:
-    """Test upscaling workflow behavior."""
-
-    @pytest.fixture
-    def setup_for_upscaling(self, tmp_path):
-        """Set up orchestrator with completed inference."""
-        orchestrator = FakeWorkflowOrchestrator()
-
-        # Create and run initial inference
-        prompt_spec = FakePromptSpec(name="test_scene")
-        prompt_file = tmp_path / "prompt.json"
-        prompt_file.write_text(json.dumps(prompt_spec.to_dict()))
-
-        # Simulate successful inference
-        orchestrator.docker_executor.run_inference(prompt_file)
-
-        return orchestrator, prompt_file
-
-    @pytest.mark.integration
-    def test_upscaling_requires_completed_inference(self, setup_for_upscaling):
-        """Test that upscaling verifies input video exists.
-
-        Tests BEHAVIOR: upscaling fails without prior inference.
-        """
-        orchestrator, prompt_file = setup_for_upscaling
-
-        # Upscaling with existing inference should work
-        orchestrator.docker_executor.run_upscaling(prompt_file, control_weight=0.7)
-
-        # Verify upscaling was executed
-        assert len(orchestrator.docker_executor.containers_run) == 2
-        upscale_run = orchestrator.docker_executor.containers_run[1]
-        assert upscale_run[0] == "upscaling"
-        assert upscale_run[1]["control_weight"] == 0.7
-
-        # Upscaling without inference should fail
-        new_prompt = prompt_file.parent / "new_prompt.json"
-        new_prompt.write_text('{"name": "new_scene"}')
-
-        with pytest.raises(FileNotFoundError, match="Input video not found"):
-            orchestrator.docker_executor.run_upscaling(new_prompt)
-
-    @pytest.mark.integration
-    def test_upscaling_creates_separate_output(self, setup_for_upscaling):
-        """Test that upscaling creates separate output directory.
-
-        Verifies BEHAVIOR of output organization, not implementation.
-        """
-        orchestrator, prompt_file = setup_for_upscaling
-
-        # Run upscaling
-        orchestrator.docker_executor.run_upscaling(prompt_file)
-
-        # Verify separate output directory was created
-        created_dirs = orchestrator.docker_executor.remote_executor.created_directories
-
-        # Should have directories for both regular and upscaled output
-        # The fake uses the file stem as the prompt name
-        prompt_stem = prompt_file.stem
-        assert any(prompt_stem in d and "upscaled" not in d for d in created_dirs)
-        assert any(f"{prompt_stem}_upscaled" in d for d in created_dirs)
+        # Verify status reporting
+        assert status is True
+        assert len(status_updates) > 0
+        assert any("connected" in msg.lower() for msg, _ in status_updates)

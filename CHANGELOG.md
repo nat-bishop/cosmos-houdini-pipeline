@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-30 (PromptSpec Smart Naming Integration)
+- **Centralized Smart Naming Utility**
+  - Created `cosmos_workflow/utils/smart_naming.py` for shared naming algorithm
+  - Consistent naming across video preparation and prompt creation
+  - `generate_smart_name()` function extracts meaningful words from text
+  - `sanitize_name()` ensures filesystem-safe naming
+
+- **PromptSpec Auto-Naming from Prompts**
+  - PromptSpecManager now accepts optional name parameter
+  - Auto-generates names from prompt text when not provided
+  - CLI `create-spec` command supports optional `--name` parameter
+  - Examples: "Futuristic cyberpunk city" → "futuristic_cyberpunk_city"
+
+- **Integration Test Suite**
+  - Created `test_ai_integration.py` with 13 real model tests
+  - Tests use actual BLIP model (no mocking) for end-to-end validation
+  - Performance testing with multiple frames
+  - Scene type testing (urban, nature, abstract)
+
+- **PromptSpec Smart Naming Tests**
+  - Created `test_prompt_smart_naming.py` with 10 tests
+  - Tests for auto-naming, consistency, path generation
+  - CLI command testing with and without names
+  - All tests passing
+
+- **Documentation Updates**
+  - Created comprehensive Phase 2 implementation guide
+  - Updated DEVELOPMENT_PLAN.md with detailed Phase 3 plan
+  - Phase 3 focuses on manual testing before integration tests
+  - Three-part approach: Video Generation, PromptSpec, Full Inference
+
 ### Added - 2025-08-30 (Phase 2: AI Description and Smart Naming)
 - **AI-Powered Scene Description Generation**
   - Integrated BLIP model for automatic image captioning from video frames

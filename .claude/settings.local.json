@@ -65,7 +65,8 @@
       "Bash(grep:*)",
       "Bash(tree:*)",
       "Bash(dir:*)",
-      "Bash(ffprobe:*)"
+      "Bash(ffprobe:*)",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

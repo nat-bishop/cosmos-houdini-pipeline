@@ -93,6 +93,41 @@ result = orchestrator.run(
 
 ## 🎯 Advanced Features
 
+### PromptSpec Creation with Smart Naming
+
+Create prompt specifications with automatic smart naming from prompt text:
+
+#### create-spec Command
+
+```bash
+# Auto-generate name from prompt text
+python -m cosmos_workflow.cli create-spec \
+  "Transform this into a futuristic cyberpunk city with neon lights"
+# Creates: futuristic_cyberpunk_city
+
+# Provide explicit name
+python -m cosmos_workflow.cli create-spec \
+  "My custom transformation" \
+  --name my_custom_name
+
+# With video path and negative prompt
+python -m cosmos_workflow.cli create-spec \
+  "Transform to anime style" \
+  --video-path outputs/videos/scene_20250830/color.mp4 \
+  --negative-prompt "realistic, photographic"
+
+# With control inputs
+python -m cosmos_workflow.cli create-spec \
+  "Add dramatic lighting" \
+  --control-inputs depth inputs/videos/scene/depth.mp4 \
+                  seg inputs/videos/scene/segmentation.mp4
+```
+
+#### Smart Naming Examples:
+- "Futuristic cyberpunk city with neon lights" → `futuristic_cyberpunk_city`
+- "Transform into Van Gogh painting style" → `transform_van_gogh`
+- "A serene Japanese garden with cherry blossoms" → `serene_japanese_garden`
+
 ### Cosmos Inference Preparation
 
 Prepare Houdini renders for Cosmos Transfer inference with strict validation and automatic control input detection:
@@ -100,20 +135,25 @@ Prepare Houdini renders for Cosmos Transfer inference with strict validation and
 #### prepare-inference Command
 
 ```bash
-# Basic usage - prepares all modalities found in directory
+# Auto-generate name from AI scene analysis (requires transformers)
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3
+# AI analyzes scene and creates name like: modern_architectural
+
+# With explicit name
 python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene
 
 # With custom FPS
-python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --fps 30
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --fps 30
 
-# With custom description (otherwise AI-generated if transformers installed)
-python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --description "Architectural staircase scene"
+# Disable AI features
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --no-ai --name scene
 
 # Verbose output for debugging
-python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --name my_scene --verbose
+python -m cosmos_workflow.cli prepare-inference ./renders/comp/v3 --verbose
 ```
 
 #### Features:
+- **AI-Powered Naming**: Automatically generates descriptive names from scene content using BLIP model
 - **Strict Validation**: Requires `color.XXXX.png`, optionally accepts `depth.XXXX.png`, `segmentation.XXXX.png`, `vis.XXXX.png`, `edge.XXXX.png`
 - **Auto-Detection**: Automatically detects and includes all control inputs in metadata
 - **Timestamped Output**: Creates `inputs/videos/{name}_{timestamp}/` to prevent conflicts

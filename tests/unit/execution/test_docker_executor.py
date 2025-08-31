@@ -35,6 +35,11 @@ class TestDockerExecutor:
             docker_image=self.docker_image,
         )
 
+        # Mock the remote executor
+        self.docker_executor.remote_executor = MagicMock()
+        self.docker_executor.remote_executor.file_exists = MagicMock()
+        self.docker_executor.remote_executor.create_directory = MagicMock()
+
         # Create temporary test files
         self.temp_dir = tempfile.mkdtemp()
         self.test_prompt_file = Path(self.temp_dir) / "test_prompt.json"
@@ -85,38 +90,34 @@ class TestDockerExecutor:
             # Check that script was called with correct parameters
             mock_run_script.assert_called_once_with("test_prompt", 4, "0,1,2,3")
 
-    @pytest.mark.skip(reason="Method implementation changed, needs update")
     def test_run_upscaling_checks_input_video_exists(self):
         """Test that run_upscaling checks if input video exists before proceeding."""
-        # Mock file existence check
-        with patch.object(self.docker_executor, "_check_remote_file_exists") as mock_check:
-            mock_check.return_value = True
+        # Mock file existence check on remote executor
+        self.docker_executor.remote_executor.file_exists.return_value = True
 
-            # Mock successful operations
-            self.mock_ssh_manager.execute_command_success.return_value = None
+        # Mock successful operations
+        self.docker_executor.remote_executor.create_directory.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
-                with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
-                    # Run upscaling
-                    self.docker_executor.run_upscaling(
-                        self.test_prompt_file, control_weight=0.7, num_gpu=2, cuda_devices="0,1"
-                    )
+        with patch.object(self.docker_executor, "_create_upscaler_spec"):
+            with patch.object(self.docker_executor, "_run_upscaling_script"):
+                # Run upscaling
+                self.docker_executor.run_upscaling(
+                    self.test_prompt_file, control_weight=0.7, num_gpu=2, cuda_devices="0,1"
+                )
 
-                    # Check that input video existence was verified
-                    mock_check.assert_called_once_with(
-                        f"{self.remote_dir}/outputs/test_prompt/output.mp4"
-                    )
+                # Check that input video existence was verified
+                self.docker_executor.remote_executor.file_exists.assert_called_once_with(
+                    f"{self.remote_dir}/outputs/test_prompt/output.mp4"
+                )
 
-    @pytest.mark.skip(reason="Method implementation changed, needs update")
     def test_run_upscaling_raises_error_when_input_video_missing(self):
         """Test that run_upscaling raises error when input video doesn't exist."""
-        # Mock file existence check to return False
-        with patch.object(self.docker_executor, "_check_remote_file_exists") as mock_check:
-            mock_check.return_value = False
+        # Mock file existence check to return False on remote executor
+        self.docker_executor.remote_executor.file_exists.return_value = False
 
-            # Should raise FileNotFoundError
-            with pytest.raises(FileNotFoundError, match="Input video not found"):
-                self.docker_executor.run_upscaling(self.test_prompt_file)
+        # Should raise FileNotFoundError
+        with pytest.raises(FileNotFoundError, match="Input video not found"):
+            self.docker_executor.run_upscaling(self.test_prompt_file)
 
     def test_run_upscaling_creates_output_directory(self):
         """Test that run_upscaling creates the upscaled output directory."""
@@ -126,8 +127,8 @@ class TestDockerExecutor:
 
             self.mock_ssh_manager.execute_command_success.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
-                with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
+            with patch.object(self.docker_executor, "_create_upscaler_spec"):
+                with patch.object(self.docker_executor, "_run_upscaling_script"):
                     # Run upscaling
                     self.docker_executor.run_upscaling(self.test_prompt_file)
 
@@ -144,7 +145,7 @@ class TestDockerExecutor:
 
             self.mock_ssh_manager.execute_command_success.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
+            with patch.object(self.docker_executor, "_create_upscaler_spec"):
                 with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
                     # Run upscaling with custom parameters
                     self.docker_executor.run_upscaling(
@@ -175,7 +176,7 @@ class TestDockerExecutor:
         assert "--ipc=host" in cmd
         assert "--shm-size=8g" in cmd
         assert f"-v {self.remote_dir}:/workspace" in cmd
-        assert f"-w /workspace" in cmd
+        assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/inference.sh test_prompt 2 0,1" in cmd
         assert call_args[1]["timeout"] == 3600  # 1 hour timeout
@@ -201,7 +202,7 @@ class TestDockerExecutor:
         assert "--ipc=host" in cmd
         assert "--shm-size=8g" in cmd
         assert f"-v {self.remote_dir}:/workspace" in cmd
-        assert f"-w /workspace" in cmd
+        assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/upscale.sh test_prompt 0.6 2 0,1" in cmd
         assert call_args[1]["timeout"] == 1800  # 30 minute timeout

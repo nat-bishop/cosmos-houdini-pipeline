@@ -8,16 +8,11 @@ working together to execute complete workflows.
 import json
 import os
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
-from cosmos_workflow.config.config_manager import ConfigManager
-from cosmos_workflow.connection.ssh_manager import SSHManager
-from cosmos_workflow.execution.docker_executor import DockerExecutor
-from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 
@@ -267,7 +262,7 @@ image = "cosmos-transfer1:latest"
         assert log_file.exists()
 
         # Check log content for failure entry
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             log_content = f.read()
             assert "FAILED" in log_content
             assert "Network connection failed" in log_content
@@ -466,7 +461,7 @@ image = "cosmos-transfer1:latest"
         log_file = mock_local_config.notes_dir / "run_history.log"
         assert log_file.exists()
 
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             log_content = f.read()
             assert "upscaled=False" in log_content
 

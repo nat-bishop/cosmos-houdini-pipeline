@@ -4,7 +4,7 @@ Reusable mock objects for testing.
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from unittest.mock import MagicMock, Mock
 
 
@@ -27,7 +27,7 @@ class MockSSHManager:
     def disconnect(self):
         self.connected = False
 
-    def execute_command(self, command: str) -> Tuple[int, str, str]:
+    def execute_command(self, command: str) -> tuple[int, str, str]:
         """Mock command execution."""
         self.commands_executed.append(command)
 
@@ -91,7 +91,7 @@ class MockDockerExecutor:
 
     def run_inference(
         self, spec_path: str, num_gpus: int = 1, verbose: bool = False
-    ) -> Tuple[int, str, str]:
+    ) -> tuple[int, str, str]:
         """Mock inference execution."""
         self.containers_run.append(
             {"spec_path": spec_path, "num_gpus": num_gpus, "verbose": verbose}
@@ -108,7 +108,7 @@ Output saved to: output.mp4
         else:
             return (1, "", "CUDA out of memory")
 
-    def run_upsampling(self, prompts: List[str], video_path: str = None) -> Tuple[int, str, str]:
+    def run_upsampling(self, prompts: list[str], video_path: str | None = None) -> tuple[int, str, str]:
         """Mock prompt upsampling."""
         if self.success:
             upsampled = [f"Detailed and enhanced: {p}" for p in prompts]
@@ -124,7 +124,7 @@ class MockVideoProcessor:
         self.valid = valid
         self.videos_created = []
 
-    def validate_sequence(self, input_dir: str) -> Tuple[bool, List[str]]:
+    def validate_sequence(self, input_dir: str) -> tuple[bool, list[str]]:
         """Mock sequence validation."""
         if self.valid:
             return (True, [])
@@ -144,15 +144,15 @@ class MockVideoProcessor:
         self,
         input_path: str,
         output_path: str,
-        target_fps: int = None,
-        target_resolution: str = None,
+        target_fps: int | None = None,
+        target_resolution: str | None = None,
     ) -> bool:
         """Mock video standardization."""
         return self.valid
 
     def extract_frame(
-        self, video_path: str, frame_number: int, output_path: str = None
-    ) -> Optional[Any]:
+        self, video_path: str, frame_number: int, output_path: str | None = None
+    ) -> Any | None:
         """Mock frame extraction."""
         if self.valid:
             # Return mock frame data
@@ -195,7 +195,7 @@ class MockAIGenerator:
 class MockConfigManager:
     """Mock configuration manager."""
 
-    def __init__(self, base_dir: Path = None):
+    def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or Path("/tmp/test")
 
     def get_remote_config(self) -> Mock:
@@ -237,7 +237,7 @@ class MockPromptSpecManager:
         self.specs = {}
         self.next_id = 1
 
-    def create_prompt_spec(self, name: str, prompt: str, **kwargs) -> Tuple[str, Mock]:
+    def create_prompt_spec(self, name: str, prompt: str, **kwargs) -> tuple[str, Mock]:
         """Create mock PromptSpec."""
         spec = Mock()
         spec.id = f"ps_mock_{self.next_id:04d}"
@@ -254,7 +254,7 @@ class MockPromptSpecManager:
         spec_file = f"/prompts/{spec.id}.json"
         return (spec_file, spec)
 
-    def load_by_id(self, spec_id: str) -> Optional[Mock]:
+    def load_by_id(self, spec_id: str) -> Mock | None:
         """Load mock PromptSpec by ID."""
         return self.specs.get(spec_id)
 
@@ -266,7 +266,7 @@ class MockRunSpecManager:
         self.specs = {}
         self.next_id = 1
 
-    def create_run_spec(self, prompt_spec_id: str, **kwargs) -> Tuple[str, Mock]:
+    def create_run_spec(self, prompt_spec_id: str, **kwargs) -> tuple[str, Mock]:
         """Create mock RunSpec."""
         spec = Mock()
         spec.id = f"rs_mock_{self.next_id:04d}"
@@ -285,7 +285,7 @@ class MockRunSpecManager:
         spec_file = f"/runs/{spec.id}.json"
         return (spec_file, spec)
 
-    def load(self, spec_path: str) -> Optional[Mock]:
+    def load(self, spec_path: str) -> Mock | None:
         """Load mock RunSpec."""
         # Extract ID from path
         spec_id = Path(spec_path).stem

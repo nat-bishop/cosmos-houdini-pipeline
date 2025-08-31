@@ -6,7 +6,7 @@ import json
 import statistics
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -34,7 +34,7 @@ class TestPerformanceBenchmarks:
                     {"duration": duration, "timestamp": time.time(), **kwargs}
                 )
 
-            def get_stats(self, operation: str) -> Dict[str, float]:
+            def get_stats(self, operation: str) -> dict[str, float]:
                 if operation not in self.metrics:
                     return {}
 
@@ -80,7 +80,6 @@ class TestPerformanceBenchmarks:
                 # Simulate 10 MB/s transfer speed
                 delay = file_size / (10 * 1024 * 1024)
                 time.sleep(min(delay, 0.1))  # Cap at 100ms for testing
-                return None
 
             mock_sftp.put.side_effect = simulate_transfer
 
@@ -124,7 +123,7 @@ class TestPerformanceBenchmarks:
 
                 start_time = time.time()
                 mock_processor_instance.create_video_from_frames(
-                    input_pattern=f"frame_%04d.png",
+                    input_pattern="frame_%04d.png",
                     output_path=str(temp_dir / f"output_{frame_count}.mp4"),
                     fps=24,
                 )
@@ -182,7 +181,7 @@ class TestPerformanceBenchmarks:
                 per_spec_ms=(duration * 1000 / count) if count > 0 else 0,
             )
 
-        stats = performance_tracker.get_stats("prompt_spec_creation")
+        performance_tracker.get_stats("prompt_spec_creation")
         # Should create 100 specs in under 1 second
         assert all(
             m["per_spec_ms"] < 10 for m in performance_tracker.metrics["prompt_spec_creation"]
@@ -265,7 +264,7 @@ class TestPerformanceBenchmarks:
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = [executor.submit(process_item, i) for i in range(item_count)]
-                results = [f.result() for f in concurrent.futures.as_completed(futures)]
+                [f.result() for f in concurrent.futures.as_completed(futures)]
 
             duration = time.time() - start_time
 
@@ -346,7 +345,7 @@ class TestPerformanceBenchmarks:
 
         for op_name, operation in operations:
             start_time = time.time()
-            result = operation()
+            operation()
             duration = time.time() - start_time
 
             performance_tracker.record(
@@ -396,7 +395,7 @@ class TestPerformanceBenchmarks:
         import concurrent.futures
         import random
 
-        def stress_operation(op_id: int) -> Dict[str, Any]:
+        def stress_operation(op_id: int) -> dict[str, Any]:
             """Perform a stress test operation."""
             start = time.time()
 

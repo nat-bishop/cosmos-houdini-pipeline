@@ -126,7 +126,7 @@ class TestPromptSpecManager:
 
             # Mock the save method
             with patch.object(PromptSpec, "save") as mock_save:
-                prompt_spec = self.prompt_spec_manager.create_prompt_spec(
+                self.prompt_spec_manager.create_prompt_spec(
                     "test_prompt", "Test prompt"
                 )
 
@@ -138,7 +138,7 @@ class TestPromptSpecManager:
         with patch("cosmos_workflow.prompts.schemas.SchemaUtils") as mock_schema_utils:
             mock_schema_utils.generate_prompt_id.return_value = "ps_test123"
 
-            prompt_spec = self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
+            self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
 
             # Verify directory manager was called
             self.mock_dir_manager.get_prompt_file_path.assert_called_once()

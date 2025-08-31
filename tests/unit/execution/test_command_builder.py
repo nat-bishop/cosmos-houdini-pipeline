@@ -3,9 +3,7 @@
 Test command builder module.
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from cosmos_workflow.execution.command_builder import (
     BashScriptBuilder,

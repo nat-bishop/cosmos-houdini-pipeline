@@ -3,10 +3,10 @@ System-level end-to-end tests for the complete Cosmos Transfer pipeline.
 These tests simulate real user workflows from PNG sequences to final video output.
 Note: These tests may require actual resources or extensive mocking.
 """
-import json
+
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +14,6 @@ from cosmos_workflow.cli import (
     create_prompt_spec,
     create_run_spec,
     prepare_inference,
-    run_inference,
 )
 from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 
@@ -49,7 +48,9 @@ class TestEndToEndPipeline:
     def create_test_frames(self, temp_dir):
         """Create test PNG frame sequences."""
 
-        def _create_frames(base_dir, modalities=["color", "depth", "segmentation"], frame_count=10):
+        def _create_frames(base_dir, modalities=None, frame_count=10):
+            if modalities is None:
+                modalities = ["color", "depth", "segmentation"]
             base_dir = Path(base_dir)
             base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -78,15 +79,13 @@ class TestEndToEndPipeline:
             frame_count=48,
         )
 
-        with patch("cosmos_workflow.cli.VideoProcessor") as mock_processor, patch(
-            "cosmos_workflow.cli.DirectoryManager"
-        ) as mock_dir_manager, patch(
-            "cosmos_workflow.cli.PromptSpecManager"
-        ) as mock_prompt_manager, patch(
-            "cosmos_workflow.cli.RunSpecManager"
-        ) as mock_run_manager, patch(
-            "cosmos_workflow.cli.WorkflowOrchestrator"
-        ) as mock_orchestrator:
+        with (
+            patch("cosmos_workflow.cli.VideoProcessor") as mock_processor,
+            patch("cosmos_workflow.cli.DirectoryManager") as mock_dir_manager,
+            patch("cosmos_workflow.cli.PromptSpecManager") as mock_prompt_manager,
+            patch("cosmos_workflow.cli.RunSpecManager") as mock_run_manager,
+            patch("cosmos_workflow.cli.WorkflowOrchestrator") as mock_orchestrator,
+        ):
             # Configure mocks
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
@@ -191,9 +190,10 @@ class TestEndToEndPipeline:
             frame_count=24,
         )
 
-        with patch("cosmos_workflow.cli.VideoMetadataExtractor") as mock_extractor, patch(
-            "cosmos_workflow.cli.generate_smart_name"
-        ) as mock_name_gen:
+        with (
+            patch("cosmos_workflow.cli.VideoMetadataExtractor") as mock_extractor,
+            patch("cosmos_workflow.cli.generate_smart_name") as mock_name_gen,
+        ):
             # Mock AI description generation
             mock_extractor_instance = MagicMock()
             mock_extractor.return_value = mock_extractor_instance
@@ -238,7 +238,7 @@ class TestEndToEndPipeline:
 
             # Process each scene
             results = []
-            for i, (scene, render_dir) in enumerate(zip(scenes, render_dirs)):
+            for i, (scene, render_dir) in enumerate(zip(scenes, render_dirs, strict=False)):
                 # Mock the complete workflow for each scene
                 mock_orchestrator_instance.run_inference.return_value = True
 
@@ -261,7 +261,7 @@ class TestEndToEndPipeline:
     def test_error_recovery_and_retry(self, mock_environment, create_test_frames):
         """Test system recovery from various failure scenarios."""
 
-        render_dir = create_test_frames(
+        create_test_frames(
             mock_environment["renders"] / "test_recovery", modalities=["color"], frame_count=10
         )
 
@@ -288,12 +288,12 @@ class TestEndToEndPipeline:
 
             for attempt in range(max_retries):
                 try:
-                    result = mock_orchestrator_instance.run_inference(
+                    mock_orchestrator_instance.run_inference(
                         run_spec_path="test.json", num_gpus=1
                     )
                     success = True
                     break
-                except ConnectionError as e:
+                except ConnectionError:
                     if attempt < max_retries - 1:
                         time.sleep(1)  # Wait before retry
                         continue
@@ -306,7 +306,7 @@ class TestEndToEndPipeline:
     def test_performance_monitoring(self, mock_environment, create_test_frames):
         """Test performance monitoring and metrics collection."""
 
-        render_dir = create_test_frames(
+        create_test_frames(
             mock_environment["renders"] / "perf_test",
             modalities=["color", "depth", "segmentation"],
             frame_count=100,  # Larger dataset for performance testing
@@ -358,7 +358,7 @@ class TestEndToEndPipeline:
     def test_resource_cleanup(self, mock_environment, create_test_frames):
         """Test proper cleanup of resources after pipeline execution."""
 
-        render_dir = create_test_frames(
+        create_test_frames(
             mock_environment["renders"] / "cleanup_test", modalities=["color"], frame_count=5
         )
 

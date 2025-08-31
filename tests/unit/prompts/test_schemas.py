@@ -6,7 +6,6 @@ This module tests the PromptSpec, RunSpec, and related utility classes
 for the refactored prompt management system.
 """
 
-import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -14,8 +13,6 @@ from pathlib import Path
 import pytest
 
 from cosmos_workflow.prompts.schemas import (
-    BlurStrength,
-    CannyThreshold,
     DirectoryManager,
     ExecutionStatus,
     PromptSpec,

@@ -8,7 +8,6 @@ Tests AI description generation, smart naming, and fallback behavior.
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-import cv2
 import numpy as np
 import pytest
 

@@ -182,7 +182,7 @@ class TestRunSpecManager:
 
             # Mock the save method
             with patch.object(RunSpec, "save") as mock_save:
-                run_spec = self.run_spec_manager.create_run_spec("ps_prompt123", "test_run")
+                self.run_spec_manager.create_run_spec("ps_prompt123", "test_run")
 
                 # Verify save was called
                 mock_save.assert_called_once()
@@ -207,7 +207,7 @@ class TestRunSpecManager:
                 "seed": 1,
             }
 
-            run_spec = self.run_spec_manager.create_run_spec("ps_prompt123", "test_run")
+            self.run_spec_manager.create_run_spec("ps_prompt123", "test_run")
 
             # Verify directory manager was called
             self.mock_dir_manager.get_run_file_path.assert_called_once()

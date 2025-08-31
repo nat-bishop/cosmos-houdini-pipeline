@@ -5,8 +5,7 @@ This module tests the SSH connection management functionality
 that handles connections to remote instances using paramiko.
 """
 
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -246,7 +245,7 @@ class TestSSHManager:
     def test_context_manager_exit_with_exception(self):
         """Test SSHManager context manager exit method even with exceptions."""
         # Mock connect and disconnect methods
-        with patch.object(self.ssh_manager, "connect") as mock_connect:
+        with patch.object(self.ssh_manager, "connect"):
             with patch.object(self.ssh_manager, "disconnect") as mock_disconnect:
                 try:
                     with self.ssh_manager:

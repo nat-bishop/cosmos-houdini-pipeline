@@ -7,9 +7,6 @@ Tests all methods, edge cases, and error conditions.
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
-
-import pytest
 
 from cosmos_workflow.prompts.schemas import DirectoryManager
 
@@ -264,7 +261,7 @@ class TestDirectoryManager:
         ]
 
         for date in edge_cases:
-            assert not self.dir_manager._is_valid_date_format(date), f"Failed for {repr(date)}"
+            assert not self.dir_manager._is_valid_date_format(date), f"Failed for {date!r}"
 
     def test_file_path_creation_with_special_characters(self):
         """Test file path creation handles special characters in names."""
@@ -315,8 +312,8 @@ class TestDirectoryManager:
         run_hash = "rs_def456"
 
         # Get file paths
-        prompt_path = self.dir_manager.get_prompt_file_path(prompt_name, timestamp, prompt_hash)
-        run_path = self.dir_manager.get_run_file_path(prompt_name, timestamp, run_hash)
+        self.dir_manager.get_prompt_file_path(prompt_name, timestamp, prompt_hash)
+        self.dir_manager.get_run_file_path(prompt_name, timestamp, run_hash)
 
         # Ensure base directories exist
         self.dir_manager.ensure_directories_exist()

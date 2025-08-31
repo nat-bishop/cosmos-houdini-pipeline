@@ -6,10 +6,9 @@ Tests that PromptSpecs can auto-generate names from prompt text
 using the same smart naming algorithm.
 """
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -70,7 +69,7 @@ class TestSmartNamingUtility:
             ("name   with   spaces", "name___with___spaces"),
         ]
 
-        for input_name, expected in test_cases:
+        for input_name, _expected in test_cases:
             sanitized = sanitize_name(input_name)
             assert all(
                 c.isalnum() or c in "_-" for c in sanitized
@@ -155,7 +154,7 @@ class TestPromptSpecSmartNaming:
         assert spec.name in spec.input_video_path
 
         # Verify control inputs use the auto-generated name
-        for modality, path in spec.control_inputs.items():
+        for path in spec.control_inputs.values():
             assert spec.name in path
 
     def test_upsampled_prompt_with_auto_name(self, dir_manager):

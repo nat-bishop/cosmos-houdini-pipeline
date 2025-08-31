@@ -4,9 +4,9 @@ Test helper utilities for common testing operations.
 import json
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def create_mock_video_file(path: Path, size_mb: float = 1.0) -> Path:
@@ -37,7 +37,7 @@ def create_mock_png_sequence(
     start_frame: int = 1,
     width: int = 1920,
     height: int = 1080,
-) -> List[Path]:
+) -> list[Path]:
     """
     Create a sequence of mock PNG files.
 
@@ -68,11 +68,11 @@ def create_mock_png_sequence(
 
 
 def create_test_prompt_spec(
-    name: str = None,
-    prompt: str = None,
-    video_path: str = None,
-    control_inputs: Dict[str, str] = None,
-) -> Dict[str, Any]:
+    name: str | None = None,
+    prompt: str | None = None,
+    video_path: str | None = None,
+    control_inputs: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """
     Create a test PromptSpec dictionary.
 
@@ -109,11 +109,11 @@ def create_test_prompt_spec(
 
 
 def create_test_run_spec(
-    prompt_spec_id: str = None,
-    control_weights: Dict[str, float] = None,
-    parameters: Dict[str, Any] = None,
+    prompt_spec_id: str | None = None,
+    control_weights: dict[str, float] | None = None,
+    parameters: dict[str, Any] | None = None,
     status: str = "pending",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a test RunSpec dictionary.
 
@@ -211,7 +211,7 @@ def assert_files_equal(file1: Path, file2: Path, binary: bool = False):
     assert content1 == content2, f"Files {file1} and {file2} have different content"
 
 
-def assert_json_files_equal(file1: Path, file2: Path, ignore_keys: List[str] = None):
+def assert_json_files_equal(file1: Path, file2: Path, ignore_keys: list[str] | None = None):
     """
     Assert that two JSON files have equivalent content.
 
@@ -233,7 +233,7 @@ def assert_json_files_equal(file1: Path, file2: Path, ignore_keys: List[str] = N
 
 def create_mock_ssh_response(
     return_code: int = 0, stdout: str = "Success", stderr: str = ""
-) -> Tuple[int, str, str]:
+) -> tuple[int, str, str]:
     """
     Create a mock SSH command response.
 
@@ -250,7 +250,7 @@ def create_mock_ssh_response(
 
 def simulate_file_transfer_progress(
     total_size: int, chunk_size: int = 1024 * 1024, callback=None
-) -> List[int]:
+) -> list[int]:
     """
     Simulate file transfer progress.
 
@@ -343,7 +343,7 @@ def wait_for_condition(
     raise TimeoutError(error_msg)
 
 
-def compare_specs(spec1: Dict, spec2: Dict, ignore_fields: List[str] = None) -> bool:
+def compare_specs(spec1: dict, spec2: dict, ignore_fields: list[str] | None = None) -> bool:
     """
     Compare two spec dictionaries.
 

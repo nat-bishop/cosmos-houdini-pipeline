@@ -5,7 +5,6 @@ Tests for the CosmosConverter module.
 
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -148,7 +147,7 @@ class TestCosmosConverter:
             assert saved_path == output_path
 
             # Load and verify content
-            with open(saved_path, "r") as f:
+            with open(saved_path) as f:
                 loaded_spec = json.load(f)
 
             assert loaded_spec["prompt"] == cosmos_spec["prompt"]
@@ -258,7 +257,7 @@ class TestCosmosConverter:
 
     def test_spatiotemporal_weights_string(self):
         """Test that string weights (for .pt files) are handled correctly."""
-        run_spec = RunSpec(
+        RunSpec(
             id="rs_test",
             prompt_id="ps_test",
             name="test",
@@ -274,7 +273,7 @@ class TestCosmosConverter:
         # Note: This would require modifying the RunSpec to accept string weights
         # For now, this test documents the expected behavior
         # The actual implementation would need to handle this in the schema
-        pass  # TODO: Implement when spatiotemporal weights support is added
+        # TODO: Implement when spatiotemporal weights support is added
 
 
 if __name__ == "__main__":

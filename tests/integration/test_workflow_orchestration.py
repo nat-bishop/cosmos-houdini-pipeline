@@ -2,15 +2,13 @@
 Integration tests for the complete workflow orchestration.
 Tests the full pipeline from PromptSpec creation to inference execution.
 """
+
 import json
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.run_spec_manager import RunSpecManager
 from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
@@ -23,13 +21,15 @@ class TestWorkflowOrchestration:
         self, mock_config_manager, mock_ssh_manager, mock_file_transfer, mock_docker_executor
     ):
         """Create WorkflowOrchestrator with mocked dependencies."""
-        with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager"
-        ) as mock_ssh_class, patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.FileTransferManager"
-        ) as mock_ft_class, patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
-        ) as mock_docker_class:
+        with (
+            patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager") as mock_ssh_class,
+            patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService"
+            ) as mock_ft_class,
+            patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
+            ) as mock_docker_class,
+        ):
             mock_ssh_class.return_value = mock_ssh_manager
             mock_ft_class.return_value = mock_file_transfer
             mock_docker_class.return_value = mock_docker_executor
@@ -210,7 +210,7 @@ class TestWorkflowOrchestration:
 
         # Execute batch workflow
         results = []
-        for spec_file, spec in run_specs:
+        for spec_file, _spec in run_specs:
             with patch("cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"):
                 result = workflow_orchestrator.run_inference(
                     str(spec_file), num_gpus=1, verbose=False

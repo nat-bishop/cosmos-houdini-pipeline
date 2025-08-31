@@ -11,8 +11,11 @@ import numpy as np
 import pytest
 
 from cosmos_workflow.local_ai.text_to_name import TextToNameGenerator
-from cosmos_workflow.local_ai.video_metadata import VideoProcessor  # Re-adding VideoProcessor
-from cosmos_workflow.local_ai.video_metadata import VideoMetadata, VideoMetadataExtractor
+from cosmos_workflow.local_ai.video_metadata import (
+    VideoMetadata,
+    VideoMetadataExtractor,
+    VideoProcessor,  # Re-adding VideoProcessor
+)
 
 
 class TestTextToNameGenerator:

@@ -6,11 +6,10 @@ Tests PNG sequence validation, video conversion, metadata generation,
 and error handling for the CLI interface.
 """
 
-import json
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import cv2
 import numpy as np
@@ -407,25 +406,24 @@ class TestConvertSequenceCommand:
         # Make validate_sequence raise an exception
         mock_video_processor.validate_sequence.side_effect = Exception("Test exception")
 
-        with patch("sys.exit") as mock_exit:
-            with patch("traceback.print_exc") as mock_traceback:
-                convert_png_sequence(
-                    input_dir="/some/dir",
-                    output_path=None,
-                    fps=24,
-                    resolution=None,
-                    generate_metadata=False,
-                    ai_analysis=False,
-                    verbose=True,  # Enable verbose for traceback
-                )
+        with patch("sys.exit") as mock_exit, patch("traceback.print_exc") as mock_traceback:
+            convert_png_sequence(
+                input_dir="/some/dir",
+                output_path=None,
+                fps=24,
+                resolution=None,
+                generate_metadata=False,
+                ai_analysis=False,
+                verbose=True,  # Enable verbose for traceback
+            )
 
-                # Verify exit and traceback
-                mock_exit.assert_called_with(1)
-                mock_traceback.assert_called_once()
+            # Verify exit and traceback
+            mock_exit.assert_called_with(1)
+            mock_traceback.assert_called_once()
 
-                # Check error message
-                captured = capsys.readouterr()
-                assert "[ERROR] PNG sequence conversion failed: Test exception" in captured.out
+            # Check error message
+            captured = capsys.readouterr()
+            assert "[ERROR] PNG sequence conversion failed: Test exception" in captured.out
 
     def test_convert_sequence_no_unicode_emojis(
         self, mock_video_processor, mock_metadata_extractor, temp_png_dir, capsys

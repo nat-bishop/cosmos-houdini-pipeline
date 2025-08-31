@@ -8,7 +8,6 @@ that reads TOML files and converts them to Python values.
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import mock_open, patch
 
 import pytest
 

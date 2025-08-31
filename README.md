@@ -6,6 +6,8 @@ An advanced Python workflow orchestration system for NVIDIA Cosmos Transfer vide
 
 ### Core Capabilities
 - **Automated Video Generation Pipeline**: End-to-end workflow from text prompts to high-quality video output
+- **AI-Powered Scene Analysis**: Automatic scene description using BLIP vision-language model
+- **Smart Auto-Naming**: Intelligent directory naming based on AI-analyzed content
 - **Remote GPU Orchestration**: Execute computationally intensive tasks on remote GPU instances via SSH
 - **Docker-Based Execution**: Containerized environment for consistent, reproducible results
 - **AI-Enhanced Metadata**: Automatic frame tagging and captioning using transformer models
@@ -56,6 +58,18 @@ cp cosmos_workflow/config/config.toml.example cosmos_workflow/config/config.toml
 
 ### Basic Usage
 
+#### AI-Powered Video Preparation (New in Phase 2)
+```bash
+# Prepare Houdini renders with automatic AI naming
+python -m cosmos_workflow.cli prepare-inference ./renders/sequence/
+
+# Output:
+# AI Description: "a modern architectural interior with stairs"
+# Smart Name: "modern_architectural"
+# Output Directory: ./outputs/modern_architectural_20250830_163604/
+```
+
+#### Traditional Workflow
 ```python
 # Create a prompt specification
 from cosmos_workflow.prompts import PromptSpec

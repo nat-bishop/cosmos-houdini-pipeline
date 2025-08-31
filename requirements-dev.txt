@@ -1,0 +1,36 @@
+# Development dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# Include base requirements
+-r requirements.txt
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-timeout>=2.1.0
+pytest-xdist>=3.3.0
+
+# Linting and formatting (Ruff replaces black, isort, flake8, etc.)
+ruff>=0.8.4
+
+# Type checking
+mypy>=1.11.0
+types-paramiko>=3.0.0
+types-toml>=0.10.0
+types-pyyaml>=6.0.0
+
+# Security scanning
+bandit[toml]>=1.7.5
+safety>=3.0.0
+
+# Pre-commit hooks
+pre-commit>=3.5.0
+
+# Code quality
+pyupgrade>=3.19.0
+
+# Documentation (optional)
+# sphinx>=7.0.0
+# sphinx-rtd-theme>=2.0.0
+# sphinx-autodoc-typehints>=2.0.0

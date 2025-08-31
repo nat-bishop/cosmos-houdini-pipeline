@@ -1,40 +1,185 @@
-# Ignore big/binary stuff
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv/
+.env
+
+# Testing & Coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Project Specific
+# Config with secrets (keep template)
+cosmos_workflow/config/config.toml
+!cosmos_workflow/config/config.toml.example
+
+# Large media files
 *.mp4
 *.mov
 *.avi
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+
+# Houdini files
 *.hip
 *.hiplc
 *.hipnc
 *.bgeo
 *.cache
 *.sim
+
+# Image files (large)
 *.exr
-art/
+*.hdr
+*.tiff
+*.psd
 
-# Ignore hidden system files
-.DS_Store
-Thumbs.db
+# Model weights and checkpoints
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.onnx
 
-# Ignore HuggingFace / model caches
-.cache/
-
-# Ignore reference documentation
-REFERENCE.md
-
-# Ignore old python directory (renamed to cosmos_workflow)
-python/
-
-# Ignore personal notes and logs
-notes/
-*.log
-
-# Ignore large input files but allow directory structure
+# Outputs and generated files
+outputs/
 inputs/videos/*/
 inputs/prompts/*.json
+inputs/runs/*.json
+!inputs/prompts/.gitkeep
+!inputs/runs/.gitkeep
+!inputs/videos/.gitkeep
 
-# Ignore Python cache files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.pid
+run_history.log
+
+# HuggingFace / model caches
+.cache/
+huggingface/
+.huggingface/
+
+# Personal notes (except docs/)
+notes/
+!docs/
+
+# Old/deprecated directories
+python/
+art/
+
+# Helper scripts (temporary)
+fix_all_linting.py
+lint.py
+
+# Performance profiling
+*.prof
+*.lprof
+.benchmarks/
+
+# Jupyter Notebooks (if temporary)
+.ipynb_checkpoints/
+*.ipynb
+
+# Security
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Package managers
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+site/
+
+# Temporary files
+*.pid
+*.seed
+*.pid.lock
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# System
+$RECYCLE.BIN/
+.Trash-*
+.nfs*

@@ -1,39 +1,37 @@
 #!/usr/bin/env python3
-"""
-Deploy and test the working upsampler on remote GPU.
-"""
+"""Deploy and test the working upsampler on remote GPU."""
 
 import json
-import os
 import sys
 from pathlib import Path
 
 # Add parent dir to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.config.config_manager import ConfigManager
+from cosmos_workflow.connection.ssh_manager import SSHManager
+
 
 def main():
     # Initialize configuration
     config_manager = ConfigManager()
     remote_config = config_manager.get_remote_config()
     ssh_options = config_manager.get_ssh_options()
-    
+
     print("[INFO] Connecting to remote GPU server...")
-    
+
     with SSHManager(ssh_options) as ssh:
         # Create scripts directory on remote
         scripts_dir = f"{remote_config.remote_dir}/scripts"
         ssh.execute_command_success(f"mkdir -p {scripts_dir}")
-        
+
         # Upload the working upsampler script
         local_script = Path("scripts/working_prompt_upsampler.py")
         print(f"[INFO] Uploading {local_script} to remote...")
         with ssh.get_sftp() as sftp:
             remote_script_path = f"{scripts_dir}/working_prompt_upsampler.py"
             sftp.put(str(local_script), remote_script_path)
-        
+
         # Upload test batch file
         local_batch = Path("inputs/test_upsample_batch.json")
         inputs_dir = f"{remote_config.remote_dir}/inputs"
@@ -42,12 +40,12 @@ def main():
         with ssh.get_sftp() as sftp:
             remote_batch_path = f"{inputs_dir}/test_upsample_batch.json"
             sftp.put(str(local_batch), remote_batch_path)
-        
+
         # Check if video exists on remote
         video_check = ssh.execute_command_success(
             f"ls -la {remote_config.remote_dir}/inputs/videos/city_scene_20250830_203504/color.mp4 2>/dev/null || echo 'NOT_FOUND'"
         )
-        
+
         if "NOT_FOUND" in video_check:
             print("[WARNING] Video file not found on remote. Uploading...")
             # Upload video if it exists locally
@@ -70,10 +68,10 @@ def main():
                     inputs/videos/city_scene_20250830_203504/color.mp4
                 """
                 ssh.execute_command_success(create_test_video)
-        
+
         # Create output directory
         ssh.execute_command_success(f"mkdir -p {remote_config.remote_dir}/outputs/upsampled")
-        
+
         # Build Docker command
         docker_cmd = f"""
         cd {remote_config.remote_dir}
@@ -103,23 +101,23 @@ def main():
                 --output-dir /workspace/outputs/upsampled \\
                 --checkpoint-dir /workspace/checkpoints
         """
-        
+
         print("\n[INFO] Running upsampler in Docker container...")
         print("[INFO] This may take a few minutes on first run while loading the model...")
-        
+
         try:
             output = ssh.execute_command_success(docker_cmd, timeout=600)
             print("\n[SUCCESS] Upsampler completed successfully!")
             print("\nOutput:")
             print(output)
-            
+
             # Check for results
             results_check = ssh.execute_command_success(
                 f"ls -la {remote_config.remote_dir}/outputs/upsampled/"
             )
             print("\nResults files:")
             print(results_check)
-            
+
             # Try to read the batch results
             try:
                 batch_results = ssh.execute_command_success(
@@ -137,11 +135,11 @@ def main():
                         print(f"Error: {result.get('error', 'Unknown error')}")
             except Exception as e:
                 print(f"[INFO] Could not parse results: {e}")
-            
+
         except Exception as e:
             print(f"\n[ERROR] Upsampler failed: {e}")
             print("\nTrying a simpler test with a single prompt...")
-            
+
             # Try single prompt mode
             simple_cmd = f"""
             cd {remote_config.remote_dir}
@@ -168,13 +166,14 @@ except Exception as e:
     print(f'[ERROR] Import failed: {{e}}')
 "
             """
-            
+
             try:
                 test_output = ssh.execute_command_success(simple_cmd, timeout=60)
                 print("\nSimple import test output:")
                 print(test_output)
             except Exception as e2:
                 print(f"Simple test also failed: {e2}")
+
 
 if __name__ == "__main__":
     main()

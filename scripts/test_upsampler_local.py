@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""
-Test script to verify the upsampler approach works locally.
+"""Test script to verify the upsampler approach works locally.
 This simulates what would run inside the Docker container.
 """
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -46,23 +44,24 @@ try:
     if cosmos_path.exists() and str(cosmos_path) not in sys.path:
         sys.path.insert(0, str(cosmos_path))
         print(f"[TEST] Added to Python path: {cosmos_path}")
-    
+
     from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
+
     print("[SUCCESS] Import successful!")
-    
+
     # Try to check if the class has the expected methods
     print("\n[TEST] Checking class methods...")
-    methods = [m for m in dir(PixtralPromptUpsampler) if not m.startswith('_')]
+    methods = [m for m in dir(PixtralPromptUpsampler) if not m.startswith("_")]
     print(f"  Public methods: {methods}")
-    
+
     # Check for the key methods we need
-    required_methods = ['_prompt_upsample', '_prompt_upsample_with_offload']
+    required_methods = ["_prompt_upsample", "_prompt_upsample_with_offload"]
     for method in required_methods:
         if hasattr(PixtralPromptUpsampler, method):
             print(f"  ✓ Found method: {method}")
         else:
             print(f"  ✗ Missing method: {method}")
-    
+
 except ImportError as e:
     print(f"[ERROR] Import failed: {e}")
     print("\nMake sure you have:")

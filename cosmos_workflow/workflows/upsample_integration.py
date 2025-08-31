@@ -46,9 +46,9 @@ class UpsampleWorkflowMixin:
             Dictionary with upsampling results and metadata
         """
         # Initialize services if not already done
-        if hasattr(self, '_initialize_services'):
+        if hasattr(self, "_initialize_services"):
             self._initialize_services()
-        
+
         log.info(f"Starting prompt upsampling for {len(prompt_specs)} prompts")
 
         # Prepare batch data
@@ -96,11 +96,12 @@ class UpsampleWorkflowMixin:
         test_spec = prompt_specs[0] if prompt_specs else None
         if not test_spec:
             return {"success": False, "error": "No prompt specs provided"}
-        
+
         # Escape the prompt text for shell
         import shlex
+
         escaped_prompt = shlex.quote(test_spec.prompt)
-        
+
         # Build Docker command for upsampling
         # Use the actual Python command since the bash script doesn't exist
         # Set all required distributed training environment variables

@@ -11,9 +11,10 @@ from pathlib import Path
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Add cosmos_transfer1 to path
-sys.path.append('/workspace')
+sys.path.append("/workspace")
 
 import torch
+
 torch.enable_grad(False)  # Disable gradients for inference
 
 from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
@@ -21,12 +22,12 @@ from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUp
 
 def save_and_clear_dist_env():
     """Save and clear distributed training environment variables.
-    
+
     This follows NVIDIA's pattern from world_generation_pipeline.py
     """
     dist_keys = [
         "RANK",
-        "LOCAL_RANK", 
+        "LOCAL_RANK",
         "WORLD_SIZE",
         "LOCAL_WORLD_SIZE",
         "GROUP_RANK",
@@ -39,15 +40,15 @@ def save_and_clear_dist_env():
         "TORCHELASTIC_MAX_RESTARTS",
         "TORCHELASTIC_RUN_ID",
         "TORCH_NCCL_ASYNC_ERROR_HANDLING",
-        "TORCHELASTIC_ERROR_FILE"
+        "TORCHELASTIC_ERROR_FILE",
     ]
-    
+
     saved_env = {}
     for key in dist_keys:
         if key in os.environ:
             saved_env[key] = os.environ[key]
             del os.environ[key]
-    
+
     return saved_env
 
 
@@ -59,82 +60,87 @@ def restore_dist_env(saved_env):
 
 def main():
     parser = argparse.ArgumentParser(description="NVIDIA-style prompt upsampler")
-    parser.add_argument("--prompt", type=str, required=True,
-                        help="Text prompt to upsample")
-    parser.add_argument("--input_video", type=str, required=True,
-                        help="Path to input video file")
-    parser.add_argument("--checkpoint_dir", type=str, default="/workspace/checkpoints",
-                        help="Directory containing model checkpoints")
-    parser.add_argument("--offload_prompt_upsampler", action="store_true",
-                        help="Offload prompt upsampler model after inference")
-    parser.add_argument("--output_file", type=str, default="/workspace/outputs/upsampled_prompt.txt",
-                        help="Output file for upsampled prompt")
-    
+    parser.add_argument("--prompt", type=str, required=True, help="Text prompt to upsample")
+    parser.add_argument("--input_video", type=str, required=True, help="Path to input video file")
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default="/workspace/checkpoints",
+        help="Directory containing model checkpoints",
+    )
+    parser.add_argument(
+        "--offload_prompt_upsampler",
+        action="store_true",
+        help="Offload prompt upsampler model after inference",
+    )
+    parser.add_argument(
+        "--output_file",
+        type=str,
+        default="/workspace/outputs/upsampled_prompt.txt",
+        help="Output file for upsampled prompt",
+    )
+
     args = parser.parse_args()
-    
+
     # Check if we're in distributed mode
     is_distributed = "RANK" in os.environ
     rank = int(os.environ.get("RANK", 0))
-    
+
     # Only run on rank 0 (following NVIDIA's pattern)
     if rank != 0:
         print(f"Rank {rank}: Skipping prompt upsampling (only runs on rank 0)")
         return
-    
-    print(f"Initializing prompt upsampler...")
+
+    print("Initializing prompt upsampler...")
     print(f"Checkpoint dir: {args.checkpoint_dir}")
     print(f"Input video: {args.input_video}")
-    
+
     # Save and clear distributed environment (NVIDIA's workaround)
     saved_env = {}
     if is_distributed:
         print("Saving and clearing distributed training environment...")
         saved_env = save_and_clear_dist_env()
-    
+
     try:
         # Initialize the upsampler
         upsampler = PixtralPromptUpsampler(
             checkpoint_dir=args.checkpoint_dir,
-            offload_prompt_upsampler=args.offload_prompt_upsampler
+            offload_prompt_upsampler=args.offload_prompt_upsampler,
         )
-        
-        print(f"Upsampling prompt...")
+
+        print("Upsampling prompt...")
         print(f"Original: {args.prompt[:100]}...")
-        
+
         # Upsample the prompt
         if args.offload_prompt_upsampler:
             upsampled = upsampler._prompt_upsample_with_offload(
-                prompt=args.prompt,
-                video_path=args.input_video
+                prompt=args.prompt, video_path=args.input_video
             )
         else:
-            upsampled = upsampler._prompt_upsample(
-                prompt=args.prompt,
-                video_path=args.input_video
-            )
-        
+            upsampled = upsampler._prompt_upsample(prompt=args.prompt, video_path=args.input_video)
+
         print(f"Upsampled: {upsampled[:100]}...")
-        
+
         # Save result
         output_path = Path(args.output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         result = {
             "original_prompt": args.prompt,
             "upsampled_prompt": upsampled,
-            "input_video": args.input_video
+            "input_video": args.input_video,
         }
-        
-        with open(output_path, 'w') as f:
+
+        with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
-        
+
         print(f"Result saved to: {args.output_file}")
-        
+
         # Also print just the upsampled text for easy capture
         print("\n=== UPSAMPLED PROMPT ===")
         print(upsampled)
         print("========================\n")
-        
+
     finally:
         # Restore distributed environment
         if saved_env:

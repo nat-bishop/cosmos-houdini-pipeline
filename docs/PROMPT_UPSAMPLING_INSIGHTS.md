@@ -27,7 +27,7 @@ Investigation into running NVIDIA Cosmos-Transfer1 prompt upsampling on remote G
 
 ### CUDA Fork Error
 ```
-RuntimeError: Cannot re-initialize CUDA in forked subprocess. 
+RuntimeError: Cannot re-initialize CUDA in forked subprocess.
 To use CUDA with multiprocessing, you must use the 'spawn' start method
 ```
 
@@ -62,11 +62,11 @@ for key, value in saved_env.items():
 ```python
 if __name__ == "__main__":
     rank = int(os.environ["RANK"])  # REQUIRES this to exist
-    
+
     # Delete all distributed training vars
     for dist_key in dist_keys:
         del os.environ[dist_key]  # Fails if not present
-    
+
     if rank == 0:
         main()  # Only runs on rank 0
 ```

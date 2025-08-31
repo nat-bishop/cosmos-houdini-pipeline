@@ -58,20 +58,20 @@ python -m cosmos_workflow.cli upsample \
 # Test each resolution
 for res in 360p 480p 720p 1080p 1440p 4k; do
   echo "Testing resolution: $res"
-  
+
   # Create prompt spec with video at this resolution
   python -m cosmos_workflow.cli create-spec \
     "test_${res}" \
     "Test prompt for ${res} video" \
     --video-path inputs/videos/test_${res}.mp4
-  
+
   # Attempt upsampling WITHOUT preprocessing
   python -m cosmos_workflow.cli upsample \
     inputs/prompts/*/test_${res}_ps_*.json \
     --preprocess-videos false \
     --save-dir outputs/upsampled/${res}_raw \
     --verbose
-  
+
   # Attempt upsampling WITH preprocessing
   python -m cosmos_workflow.cli upsample \
     inputs/prompts/*/test_${res}_ps_*.json \
@@ -92,10 +92,10 @@ done
 for height in 480 540 600 660 720 780 840 900 960; do
   width=$((height * 16 / 9))
   echo "Testing ${width}x${height}"
-  
+
   # Create test video at this resolution
   # (Use ffmpeg to resize existing video)
-  
+
   python -m cosmos_workflow.cli upsample \
     test_prompt_${height}p.json \
     --preprocess-videos false \
@@ -108,7 +108,7 @@ done
 # Test if number of frames affects vocab error
 for frames in 1 2 4 8 16; do
   echo "Testing with $frames frames"
-  
+
   python -m cosmos_workflow.cli upsample \
     test_prompt_720p.json \
     --num-frames $frames \
@@ -124,10 +124,10 @@ done
 # Create test batches of different sizes
 for batch_size in 1 5 10 20 50 100; do
   echo "Testing batch size: $batch_size"
-  
+
   # Create directory with N prompt specs
   mkdir -p inputs/batch_test_${batch_size}
-  
+
   # Copy/create prompt specs
   for i in $(seq 1 $batch_size); do
     python -m cosmos_workflow.cli create-spec \
@@ -135,7 +135,7 @@ for batch_size in 1 5 10 20 50 100; do
       "Test prompt number ${i}" \
       --video-path inputs/videos/test_480p.mp4
   done
-  
+
   # Time the batch processing
   time python -m cosmos_workflow.cli upsample \
     inputs/batch_test_${batch_size}/ \
@@ -149,7 +149,7 @@ done
 # Test multi-GPU performance
 for num_gpu in 1 2; do
   echo "Testing with $num_gpu GPUs"
-  
+
   time python -m cosmos_workflow.cli upsample \
     inputs/batch_test_20/ \
     --num-gpu $num_gpu \

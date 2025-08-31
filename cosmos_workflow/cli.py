@@ -726,7 +726,6 @@ Examples:
   # Convert with AI metadata generation
   python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
         """,
-
     )
 
     # Subcommands

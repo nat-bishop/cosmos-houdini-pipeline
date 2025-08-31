@@ -85,36 +85,243 @@
 - ✅ All tests pass including AI functionality (12/14 passing)
 - ✅ Works with and without transformers installed (graceful fallback)
 
-### 2. Test Full Cosmos Transfer Inference Pipeline
-**Goal**: Once PNG->video conversion works, test the full AI video generation pipeline.
+## Phase 3: End-to-End Inference Pipeline Testing (Manual First, Then Tests)
 
-**Prerequisite**: PNG to video conversion must be working with proper metadata/tags
+### CRITICAL: Manual Testing Before Integration Tests
+**Rationale**: We need to verify the actual workflow works before writing tests. Many issues only appear during real execution (SSH timeouts, Docker permissions, GPU memory, file paths, etc.)
 
-**Steps:**
-1. **Use the video from step 1 as input**
-   - Create PromptSpec with the converted video
-   - Add transformation prompt (e.g., "Transform to cyberpunk style")
-   - Set up RunSpec with production parameters
+### Part 1: Video Generation Testing and Inspection
+**Goal**: Verify PNG sequence to video conversion works perfectly for Cosmos inference
 
-2. **Execute inference in background**
-   ```bash
-   # Create specs and run
-   python -m cosmos_workflow.main create-spec "inference_test" "Transform to cyberpunk style" --input-video <video_from_step1>
-   python -m cosmos_workflow.main create-run <prompt_spec.json> --weights 0.3 0.4 0.2 0.1
-   python -m cosmos_workflow.main run <run_spec.json> --num-gpu 2 &
-   ```
+#### Step 1.1: Prepare Test Sequence
+```bash
+# Use existing Houdini renders or create test sequence
+cd inputs/renders/v3  # or your test directory
+ls -la *.png  # Verify we have sequences
+```
 
-3. **Monitor execution**
-   - SSH connection stability
-   - Docker container status
-   - GPU memory usage
-   - File transfer completion
-   - Error messages
+**Inspect Each Aspect:**
+- [ ] **Frame Detection**: Verify all frames detected correctly
+  - Check frame numbering (0001, 0002, etc.)
+  - Verify no gaps in sequence
+  - Confirm all modalities present (color, depth, etc.)
 
-4. **Verify results**
-   - Output video generated
-   - Style transformation applied correctly
-   - Quality is acceptable
+#### Step 1.2: Run Video Conversion
+```bash
+python -m cosmos_workflow.cli prepare-inference ./inputs/renders/v3/test_sequence --verbose
+```
+
+**Inspect Output:**
+- [ ] **Directory Structure**: Check created directory follows format
+  - Directory name: `{smart_name}_{YYYYMMDD_HHMMSS}`
+  - Contains: color.mp4, depth.mp4, segmentation.mp4 (as detected)
+  
+- [ ] **Video Files**: Verify each video
+  ```bash
+  ffprobe outputs/videos/{dir}/color.mp4  # Check resolution, fps, duration
+  ffplay outputs/videos/{dir}/color.mp4   # Visual inspection
+  ```
+  - Resolution matches source PNGs
+  - FPS is correct (24 or 30)
+  - Duration = frame_count / fps
+  - No corruption or artifacts
+
+- [ ] **Metadata File**: Inspect metadata.json
+  ```python
+  import json
+  with open('outputs/videos/{dir}/metadata.json') as f:
+      meta = json.load(f)
+      print(json.dumps(meta, indent=2))
+  ```
+  - Verify all fields present
+  - Check video_path is absolute and correct
+  - Confirm control_inputs dictionary accurate
+  - AI description makes sense
+
+#### Step 1.3: Document Issues Found
+Create a checklist of any issues:
+- [ ] Issue 1: (describe)
+- [ ] Issue 2: (describe)
+- [ ] Fix each issue before proceeding
+
+### Part 2: PromptSpec Workflow Testing
+**Goal**: Create and validate PromptSpec for the generated video
+
+#### Step 2.1: Create PromptSpec with Auto-Naming
+```bash
+# Test auto-naming from prompt
+python -m cosmos_workflow.cli create-spec \
+  "Transform this architectural visualization into a futuristic cyberpunk style with neon lights" \
+  --video-path outputs/videos/{from_part1}/color.mp4 \
+  --verbose
+```
+
+**Inspect PromptSpec:**
+- [ ] **Auto-Generated Name**: Verify smart naming worked
+  - Should extract key words: "futuristic_cyberpunk" or similar
+  - Check name in filename and JSON content
+
+- [ ] **File Location**: Verify saved correctly
+  ```bash
+  ls inputs/prompts/2025-*/*.json
+  cat inputs/prompts/2025-*/{latest}.json | python -m json.tool
+  ```
+
+- [ ] **JSON Structure**: Validate all fields
+  ```python
+  from cosmos_workflow.prompts.schemas import PromptSpec
+  spec = PromptSpec.load('inputs/prompts/2025-*/{latest}.json')
+  print(f"ID: {spec.id}")
+  print(f"Name: {spec.name}")
+  print(f"Video: {spec.input_video_path}")
+  print(f"Controls: {spec.control_inputs}")
+  ```
+
+#### Step 2.2: Create RunSpec with Control Weights
+```bash
+python -m cosmos_workflow.cli create-run \
+  inputs/prompts/2025-*/{latest}.json \
+  --weights 0.3 0.4 0.2 0.1 \
+  --num-steps 35 \
+  --guidance 8.0 \
+  --verbose
+```
+
+**Inspect RunSpec:**
+- [ ] **Control Weights**: Verify mapping
+  - Check weights assigned to correct modalities
+  - Confirm values match command input
+
+- [ ] **Execution Parameters**: Validate settings
+  - num_steps, guidance_scale, seed
+  - Output path configuration
+  - GPU settings
+
+#### Step 2.3: Document Issues
+- [ ] Issue with PromptSpec: (describe)
+- [ ] Issue with RunSpec: (describe)
+- [ ] Fix before proceeding to Part 3
+
+### Part 3: Full Inference Workflow (Remote Execution)
+**Goal**: Execute complete inference pipeline on remote GPU
+
+#### Step 3.1: Pre-Flight Checks
+```bash
+# Test SSH connection
+python -m cosmos_workflow.cli status --verbose
+
+# Check remote directory
+ssh ubuntu@remote "ls -la /home/ubuntu/NatsFS/cosmos-transfer1"
+
+# Verify Docker image
+ssh ubuntu@remote "docker images | grep cosmos"
+```
+
+#### Step 3.2: Execute Inference in Background
+```bash
+# Run in background with nohup for disconnection safety
+nohup python -m cosmos_workflow.cli run \
+  inputs/runs/2025-*/{latest}.json \
+  --num-gpu 2 \
+  --verbose > inference.log 2>&1 &
+
+# Get process ID
+echo $!
+```
+
+#### Step 3.3: Monitor Execution (Progressive Inspection)
+
+**Stage 1: File Upload (0-5 minutes)**
+```bash
+tail -f inference.log  # Watch upload progress
+ssh ubuntu@remote "ls -la /home/ubuntu/NatsFS/cosmos-transfer1/inputs/"
+```
+- [ ] Files uploaded successfully
+- [ ] Permissions correct (readable by Docker)
+
+**Stage 2: Docker Execution (5-30 minutes)**
+```bash
+# Monitor Docker container
+ssh ubuntu@remote "docker ps"  # Should see cosmos container
+ssh ubuntu@remote "docker logs -f {container_id}"
+
+# Check GPU usage
+ssh ubuntu@remote "nvidia-smi"
+```
+- [ ] Container started
+- [ ] GPU memory allocated
+- [ ] No CUDA errors
+
+**Stage 3: Inference Progress (30-60 minutes)**
+```bash
+# Check inference logs
+ssh ubuntu@remote "tail -f /home/ubuntu/NatsFS/cosmos-transfer1/outputs/*/inference.log"
+
+# Monitor checkpoint saves
+ssh ubuntu@remote "ls -la /home/ubuntu/NatsFS/cosmos-transfer1/outputs/*/*.mp4"
+```
+- [ ] Progress messages appearing
+- [ ] No errors in log
+- [ ] Intermediate files being created
+
+**Stage 4: Download Results (60-65 minutes)**
+```bash
+tail -f inference.log  # Watch download progress
+ls -la outputs/  # Check local files appearing
+```
+- [ ] Download started
+- [ ] Files arriving locally
+- [ ] Transfer speed reasonable
+
+#### Step 3.4: Verify Final Results
+```bash
+# Check output video
+ffplay outputs/{run_id}/output.mp4
+
+# Compare with input
+ffplay outputs/videos/{original}/color.mp4  # Original
+ffplay outputs/{run_id}/output.mp4          # Transformed
+```
+
+**Quality Checks:**
+- [ ] Video plays without errors
+- [ ] Style transformation visible
+- [ ] Resolution maintained
+- [ ] No major artifacts
+- [ ] Duration matches input
+
+#### Step 3.5: Document Complete Pipeline Issues
+- [ ] SSH/connection issues: (describe)
+- [ ] Docker/GPU issues: (describe)
+- [ ] File path issues: (describe)
+- [ ] Quality issues: (describe)
+
+### After Manual Testing: Create Integration Tests
+
+Once manual testing succeeds, create tests that would catch the issues found:
+
+1. **Video Generation Tests**
+   - Test for issues found in Part 1
+   - Mock file system operations
+   - Verify metadata generation
+
+2. **PromptSpec Tests**
+   - Test for issues found in Part 2
+   - Validate auto-naming edge cases
+   - Check path resolution
+
+3. **Inference Tests**
+   - Mock SSH/Docker operations
+   - Test error handling for issues found
+   - Verify retry mechanisms
+
+### Success Criteria for Phase 3
+- [ ] Manual video generation works without errors
+- [ ] PromptSpec creation with auto-naming works
+- [ ] Full inference pipeline completes successfully
+- [ ] Output video shows style transformation
+- [ ] All issues documented and fixed
+- [ ] Integration tests written to catch found issues
 
 ### 3. Fix Issues and Update Tests
 **Goal**: When failures occur, fix code and ensure tests would catch the issue.

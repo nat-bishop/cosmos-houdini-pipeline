@@ -6,6 +6,13 @@ paramiko>=3.0.0
 # Configuration management
 toml>=0.10.0
 
+# AI and image processing (optional, for AI descriptions)
+transformers>=4.30.0
+torch>=2.0.0
+torchvision>=0.15.0
+pillow>=9.5.0
+accelerate>=0.20.0
+
 # Note: All other dependencies are Python standard library modules:
 # - argparse, json, subprocess, sys, pathlib, typing, datetime
 # - logging, contextlib, dataclasses

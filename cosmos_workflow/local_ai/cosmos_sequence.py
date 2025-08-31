@@ -209,7 +209,8 @@ class CosmosVideoConverter:
         self,
         sequence_info: CosmosSequenceInfo,
         output_dir: Path,
-        name: str = "sequence"
+        name: Optional[str] = None,
+        use_ai_naming: bool = True
     ) -> Dict[str, Any]:
         """
         Convert validated sequences to videos.
@@ -217,7 +218,8 @@ class CosmosVideoConverter:
         Args:
             sequence_info: Validated sequence information
             output_dir: Base output directory
-            name: Name for the output directory
+            name: Name for the output directory (will be AI-generated if not provided)
+            use_ai_naming: Whether to use AI for automatic naming
             
         Returns:
             Dict with conversion results
@@ -228,6 +230,17 @@ class CosmosVideoConverter:
                 "error": "Invalid sequence",
                 "issues": sequence_info.issues
             }
+        
+        # Generate AI-based name if not provided
+        if name is None and use_ai_naming:
+            # Generate description first to derive name
+            if "color" in sequence_info.modalities:
+                description = self._generate_ai_description(sequence_info.modalities["color"])
+                name = self._generate_smart_name(description)
+            else:
+                name = "sequence"
+        elif name is None:
+            name = "sequence"
         
         # Create timestamped output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -344,7 +357,7 @@ class CosmosVideoConverter:
         self,
         sequence_info: CosmosSequenceInfo,
         output_dir: Path,
-        name: str,
+        name: Optional[str] = None,
         description: Optional[str] = None,
         use_ai: bool = True
     ) -> CosmosMetadata:
@@ -354,13 +367,29 @@ class CosmosVideoConverter:
         Args:
             sequence_info: Validated sequence information
             output_dir: Directory containing videos
-            name: Short name for the sequence
+            name: Short name for the sequence (will be AI-generated if not provided)
             description: Description (will be AI-generated if not provided)
-            use_ai: Whether to use AI for description generation
+            use_ai: Whether to use AI for description and name generation
             
         Returns:
             CosmosMetadata object
         """
+        # Generate AI description if needed and possible
+        if description is None:
+            if use_ai and "color" in sequence_info.modalities:
+                description = self._generate_ai_description(
+                    sequence_info.modalities["color"]
+                )
+            else:
+                description = f"Sequence with {sequence_info.frame_count} frames"
+        
+        # Generate smart name from description if not provided
+        if name is None:
+            if use_ai and description and description != f"Sequence with {sequence_info.frame_count} frames":
+                name = self._generate_smart_name(description)
+            else:
+                name = "sequence"
+        
         # Generate quick hash ID
         hash_input = f"{name}_{datetime.now().isoformat()}_{sequence_info.frame_count}"
         id_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
@@ -372,15 +401,6 @@ class CosmosVideoConverter:
             if first_frame is not None:
                 height, width = first_frame.shape[:2]
                 resolution = (width, height)
-        
-        # Generate AI description if needed and possible
-        if description is None:
-            if use_ai and "color" in sequence_info.modalities:
-                description = self._generate_ai_description(
-                    sequence_info.modalities["color"]
-                )
-            else:
-                description = f"Sequence with {sequence_info.frame_count} frames"
         
         # Build paths for video and control inputs
         video_path = str(output_dir / "color.mp4")
@@ -465,3 +485,91 @@ class CosmosVideoConverter:
         except Exception as e:
             logger.warning(f"Could not generate AI description: {e}")
             return f"Sequence with {len(color_frames)} frames"
+    
+    def _generate_smart_name(self, description: str, max_length: int = 20) -> str:
+        """
+        Generate a short, meaningful name from an AI description.
+        
+        Args:
+            description: AI-generated description
+            max_length: Maximum length for the name (default 20)
+            
+        Returns:
+            Smart name derived from description
+            
+        Examples:
+            "a modern staircase with dramatic lighting" -> "modern_staircase"
+            "a red car driving on a highway" -> "red_car_highway"
+            "a person walking in a park" -> "person_walking_park"
+        """
+        import re
+        
+        # Convert to lowercase
+        text = description.lower()
+        
+        # Remove common filler words
+        stop_words = {
+            'a', 'an', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+            'by', 'from', 'is', 'are', 'was', 'were', 'been', 'being',
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+            'could', 'should', 'may', 'might', 'must', 'can', 'very',
+            'and', 'or', 'but', 'there', 'here', 'that', 'this'
+        }
+        
+        # Extract meaningful words
+        words = re.findall(r'\b[a-z]+\b', text)
+        meaningful_words = [w for w in words if w not in stop_words and len(w) > 2]
+        
+        if not meaningful_words:
+            # Fallback to first few words if no meaningful words found
+            meaningful_words = words[:3]
+        
+        # Prioritize nouns and adjectives (heuristic approach)
+        # Words ending in common noun/adjective suffixes get priority
+        priority_suffixes = ['ing', 'tion', 'ment', 'ness', 'ity', 'er', 'or', 'ist']
+        priority_words = []
+        other_words = []
+        
+        for word in meaningful_words:
+            if any(word.endswith(suffix) for suffix in priority_suffixes):
+                priority_words.append(word)
+            else:
+                other_words.append(word)
+        
+        # Combine priority words first, then others
+        final_words = (priority_words + other_words)[:3]  # Take up to 3 words
+        
+        # Special handling for common patterns
+        if len(final_words) >= 2:
+            # If we have adjective + noun pattern, keep both
+            # e.g., "modern staircase", "red car", "wooden door"
+            pass
+        
+        # Join words with underscores
+        name = '_'.join(final_words)
+        
+        # Truncate if too long
+        if len(name) > max_length:
+            # Try to keep whole words
+            parts = name.split('_')
+            truncated = []
+            current_length = 0
+            
+            for part in parts:
+                if current_length + len(part) + (1 if truncated else 0) <= max_length:
+                    truncated.append(part)
+                    current_length += len(part) + (1 if len(truncated) > 1 else 0)
+                else:
+                    break
+            
+            name = '_'.join(truncated) if truncated else name[:max_length]
+        
+        # Ensure name is valid (alphanumeric and underscores only)
+        name = re.sub(r'[^a-z0-9_]', '', name)
+        
+        # Default fallback
+        if not name:
+            name = "sequence"
+        
+        logger.info(f"Generated smart name: '{name}' from description: '{description}'")
+        return name

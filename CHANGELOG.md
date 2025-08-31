@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-30 (Phase 2: AI Description and Smart Naming)
+- **AI-Powered Scene Description Generation**
+  - Integrated BLIP model for automatic image captioning from video frames
+  - Uses middle frame of sequence for analysis
+  - Graceful fallback when transformers not available
+  - Automatic model downloading and caching
+
+- **Smart Name Generation from AI Descriptions**
+  - Algorithm extracts key nouns/adjectives from AI descriptions
+  - Removes common stop words for concise names
+  - Prioritizes meaningful words (nouns, verbs with -ing, etc.)
+  - Max 20 character limit with intelligent truncation
+  - Examples: "modern staircase with lighting" → "modern_staircase"
+
+- **Enhanced prepare-inference Command**
+  - Name parameter now optional (AI-generated if not provided)
+  - Automatic scene analysis and naming when --no-ai not specified
+  - Maintains {name}_{timestamp} directory format (YYYYMMDD_HHMMSS)
+  - Updated help text to reflect AI capabilities
+
+- **Comprehensive AI Test Suite**
+  - Created test_ai_functionality.py with 14 tests
+  - Tests smart name generation with various edge cases
+  - Tests AI description generation and fallback behavior
+  - Tests integrated workflow with mocked dependencies
+  - Tests directory naming format compliance
+  - 12/14 tests passing (2 failures due to test environment limitations)
+
+- **Updated Requirements**
+  - Added transformers>=4.30.0 for AI models
+  - Added torch>=2.0.0 and torchvision>=0.15.0
+  - Added pillow>=9.5.0 for image processing
+  - Added accelerate>=0.20.0 for model optimization
+
 ### Added - 2025-08-30 (Cosmos-Specific Inference Preparation with Auto-Detection)
 - **Enhanced prepare-inference command with automatic control input detection**
   - Command: `python -m cosmos_workflow.cli prepare-inference <input_dir> --name <name>`

@@ -597,7 +597,7 @@ def run_prompt_upsampling(
 
 def prepare_inference(
     input_dir: str,
-    name: str,
+    name: Optional[str],
     fps: int,
     description: Optional[str],
     use_ai: bool,
@@ -608,10 +608,10 @@ def prepare_inference(
     
     Args:
         input_dir: Directory containing control modality PNGs
-        name: Name for the output (used in directory name)
+        name: Name for the output (AI-generated if not provided and use_ai is True)
         fps: Frame rate for videos
         description: Optional description (AI-generated if not provided)
-        use_ai: Whether to use AI for description generation
+        use_ai: Whether to use AI for description and name generation
         verbose: Enable verbose logging
     """
     setup_logging(verbose)
@@ -830,11 +830,11 @@ Examples:
     prepare_parser = subparsers.add_parser('prepare-inference', 
                                           help='Prepare Houdini renders for Cosmos inference (validates & converts to videos)')
     prepare_parser.add_argument('input_dir', help='Directory containing control modality PNGs (color.XXXX.png, etc.)')
-    prepare_parser.add_argument('--name', required=True, help='Name for the output directory and metadata')
+    prepare_parser.add_argument('--name', help='Name for the output directory (AI-generated if not provided)')
     prepare_parser.add_argument('--fps', type=int, default=24, help='Frame rate for output videos (default: 24)')
     prepare_parser.add_argument('--description', help='Description for metadata (AI-generated if not provided)')
     prepare_parser.add_argument('--no-ai', action='store_true', 
-                               help='Skip AI description generation')
+                               help='Skip AI description and name generation')
     prepare_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
     # Add convert-sequence command (deprecated, kept for backward compatibility)

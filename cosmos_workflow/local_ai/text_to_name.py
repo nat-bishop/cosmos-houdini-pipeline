@@ -63,6 +63,10 @@ class TextToNameGenerator:
         Returns:
             A filesystem-safe name of 2-4 words
         """
+        # Handle empty input
+        if not text.strip():
+            return "untitled"
+        
         # Clean and tokenize the text
         words = self._tokenize(text.lower())
         
@@ -174,12 +178,15 @@ class TextToNameGenerator:
         
         # Ensure minimum words
         while len(selected) < self.min_words and sorted_words:
+            added = False
             for word, _ in sorted_words:
                 if word not in selected:
                     selected.append(word)
+                    added = True
                     break
-                if len(selected) >= self.min_words:
-                    break
+            # If no words were added, we can't add more
+            if not added:
+                break
         
         return selected
     

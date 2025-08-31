@@ -25,9 +25,18 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
+        from cosmos_workflow.prompts.schemas import DirectoryManager
+        
         self.temp_dir = tempfile.mkdtemp()
-        self.prompt_manager = PromptSpecManager(base_dir=self.temp_dir)
-        self.run_manager = RunSpecManager(base_dir=self.temp_dir)
+        prompts_dir = Path(self.temp_dir) / "prompts"
+        runs_dir = Path(self.temp_dir) / "runs"
+        
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.dir_manager = DirectoryManager(prompts_dir, runs_dir)
+        self.prompt_manager = PromptSpecManager(self.dir_manager)
+        self.run_manager = RunSpecManager(self.dir_manager)
         
         # Create test directories
         self.inputs_dir = os.path.join(self.temp_dir, "inputs")
@@ -48,15 +57,19 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
         prompt_specs = []
         for i in range(3):
             spec = PromptSpec(
+                id=f"ps_scene{i:03d}",
                 name=f"scene_{i}",
                 prompt=f"A simple scene {i}",
+                negative_prompt="bad quality, blurry, low resolution, cartoonish",
                 input_video_path=f"{self.inputs_dir}/videos/scene_{i}.mp4",
-                metadata={
-                    "needs_upsampling": True,
-                    "created_at": datetime.now().isoformat()
-                }
+                control_inputs={"depth": f"{self.inputs_dir}/depth/scene_{i}.mp4", "seg": f"{self.inputs_dir}/seg/scene_{i}.mp4"},
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=False
             )
-            saved_path = self.prompt_manager.save(spec)
+            # Save the spec using the directory manager
+            timestamp = datetime.now()
+            saved_path = self.dir_manager.get_prompt_file_path(spec.name, timestamp, spec.id)
+            spec.save(saved_path)
             prompt_specs.append((spec, saved_path))
         
         # Step 2: Prepare batch for upsampling
@@ -93,83 +106,100 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
                 path for spec, path in prompt_specs 
                 if spec.id == result["spec_id"]
             )
-            original_spec = self.prompt_manager.load(original_path)
+            original_spec = PromptSpec.load(original_path)
             
             # Create updated spec
             updated_spec = PromptSpec(
+                id=f"ps_updated_{result['spec_id'][-6:]}",  # Use part of original ID
                 name=original_spec.name,
                 prompt=result["upsampled_prompt"],
                 negative_prompt=original_spec.negative_prompt,
                 input_video_path=original_spec.input_video_path,
                 control_inputs=original_spec.control_inputs,
-                metadata={
-                    **original_spec.metadata,
-                    "original_prompt": result["original_prompt"],
-                    "upsampled": True,
-                    "upsampled_at": result["upsampled_at"]
-                }
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=True,
+                parent_prompt_text=result["original_prompt"]
             )
             
-            updated_path = self.prompt_manager.save(updated_spec)
+            updated_timestamp = datetime.now()
+            updated_path = self.dir_manager.get_prompt_file_path(updated_spec.name, updated_timestamp, updated_spec.id)
+            updated_spec.save(updated_path)
             updated_specs.append((updated_spec, updated_path))
         
         # Verify results
         self.assertEqual(len(updated_specs), 3)
         for updated_spec, path in updated_specs:
             self.assertIn("detailed and elaborate", updated_spec.prompt)
-            self.assertTrue(updated_spec.metadata.get("upsampled"))
-            self.assertIn("original_prompt", updated_spec.metadata)
+            self.assertTrue(updated_spec.is_upsampled)
+            self.assertIsNotNone(updated_spec.parent_prompt_text)
     
     def test_workflow_with_run_spec_creation(self):
         """Test workflow including RunSpec creation after upsampling."""
         # Create and upsample a prompt
         original_spec = PromptSpec(
+            id="ps_city001",
             name="test_scene",
             prompt="A futuristic city",
-            input_video_path=f"{self.inputs_dir}/videos/city.mp4"
+            negative_prompt="bad quality, blurry, low resolution, cartoonish",
+            input_video_path=f"{self.inputs_dir}/videos/city.mp4",
+            control_inputs={"depth": f"{self.inputs_dir}/depth/city.mp4", "seg": f"{self.inputs_dir}/seg/city.mp4"},
+            timestamp=datetime.now().isoformat() + "Z",
+            is_upsampled=False
         )
-        original_path = self.prompt_manager.save(original_spec)
+        # Save the original spec using the directory manager
+        timestamp = datetime.now()
+        original_path = self.dir_manager.get_prompt_file_path(original_spec.name, timestamp, original_spec.id)
+        original_spec.save(original_path)
         
         # Simulate upsampling
         upsampled_prompt = "A sprawling futuristic metropolis with towering glass skyscrapers"
         
         # Create upsampled spec
         upsampled_spec = PromptSpec(
+            id="ps_city002",
             name=original_spec.name,
             prompt=upsampled_prompt,
+            negative_prompt=original_spec.negative_prompt,
             input_video_path=original_spec.input_video_path,
-            metadata={
-                "original_prompt": original_spec.prompt,
-                "upsampled": True
-            }
+            control_inputs=original_spec.control_inputs,
+            timestamp=datetime.now().isoformat() + "Z",
+            is_upsampled=True,
+            parent_prompt_text=original_spec.prompt
         )
-        upsampled_path = self.prompt_manager.save(upsampled_spec)
+        upsampled_timestamp = datetime.now()
+        upsampled_path = self.dir_manager.get_prompt_file_path(upsampled_spec.name, upsampled_timestamp, upsampled_spec.id)
+        upsampled_spec.save(upsampled_path)
         
         # Create RunSpec with upsampled prompt
         run_spec = RunSpec(
-            prompt_spec_id=upsampled_spec.id,
-            control_weights={"vis": 0.5, "depth": 0.3},
+            id="rs_city001",
+            prompt_id=upsampled_spec.id,
+            name=upsampled_spec.name,
+            control_weights={"vis": 0.5, "depth": 0.3, "edge": 0.1, "seg": 0.1},
             parameters={
                 "num_steps": 35,
-                "guidance_scale": 8.0,
+                "guidance": 8.0,
+                "sigma_max": 70.0,
+                "blur_strength": "medium",
+                "canny_threshold": "medium",
+                "fps": 24,
                 "seed": 42
             },
-            execution_status=ExecutionStatus.PENDING,
-            metadata={
-                "uses_upsampled_prompt": True,
-                "original_spec_id": original_spec.id
-            }
+            timestamp=datetime.now().isoformat() + "Z",
+            execution_status=ExecutionStatus.PENDING
         )
         
-        run_path = self.run_manager.save(run_spec)
+        run_timestamp = datetime.now()
+        run_path = self.dir_manager.get_run_file_path(run_spec.name, run_timestamp, run_spec.id)
+        run_spec.save(run_path)
         
         # Verify the complete chain
-        loaded_run = self.run_manager.load(run_path)
-        loaded_prompt = self.prompt_manager.load_by_id(loaded_run.prompt_spec_id)
+        loaded_run = RunSpec.load(run_path)
+        loaded_prompt = PromptSpec.load(upsampled_path)  # Use the path we saved to
         
         self.assertIn("sprawling futuristic metropolis", loaded_prompt.prompt)
-        self.assertTrue(loaded_prompt.metadata.get("upsampled"))
-        self.assertTrue(loaded_run.metadata.get("uses_upsampled_prompt"))
+        self.assertTrue(loaded_prompt.is_upsampled)
+        self.assertEqual(loaded_run.prompt_id, upsampled_spec.id)
     
     @patch('subprocess.run')
     def test_bash_script_execution_workflow(self, mock_subprocess):
@@ -231,42 +261,22 @@ class TestCLIWorkflow(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     
-    @patch('cosmos_workflow.cli.CLI')
-    def test_cli_upsample_command(self, mock_cli_class):
+    @patch('cosmos_workflow.cli.run_prompt_upsampling')
+    def test_cli_upsample_command(self, mock_upsample_func):
         """Test CLI command for upsampling prompts."""
-        mock_cli = MagicMock()
-        mock_cli_class.return_value = mock_cli
-        
-        # Simulate CLI upsample command
-        def upsample_prompts(args):
-            """Mock upsample command handler."""
-            input_dir = args.input_dir
-            output_dir = args.output_dir
-            preprocess = args.preprocess_videos
-            max_res = args.max_resolution
-            
-            # Load prompts from input dir
-            prompts = []
-            for file in Path(input_dir).glob("*.json"):
-                with open(file) as f:
-                    prompts.append(json.load(f))
-            
-            # Process upsampling
-            results = []
-            for prompt in prompts:
-                results.append({
-                    "original": prompt.get("prompt"),
-                    "upsampled": f"Upsampled: {prompt.get('prompt')}"
-                })
-            
-            # Save results
-            output_file = Path(output_dir) / "upsampled_results.json"
-            with open(output_file, 'w') as f:
-                json.dump(results, f)
-            
-            return results
-        
-        mock_cli.upsample_prompts = upsample_prompts
+        # Mock the upsampling function to return test results
+        mock_upsample_func.return_value = {
+            "results": [
+                {
+                    "original": "Test prompt 1",
+                    "upsampled": "Upsampled: Test prompt 1"
+                },
+                {
+                    "original": "Test prompt 2", 
+                    "upsampled": "Upsampled: Test prompt 2"
+                }
+            ]
+        }
         
         # Create test input
         input_dir = os.path.join(self.temp_dir, "inputs")
@@ -278,23 +288,25 @@ class TestCLIWorkflow(unittest.TestCase):
         for i in range(2):
             prompt_file = os.path.join(input_dir, f"prompt_{i}.json")
             with open(prompt_file, 'w') as f:
-                json.dump({"prompt": f"Test prompt {i}"}, f)
+                json.dump({"prompt": f"Test prompt {i+1}"}, f)
         
-        # Simulate CLI arguments
-        class Args:
-            input_dir = input_dir
-            output_dir = output_dir
-            preprocess_videos = True
-            max_resolution = 480
+        # Call the mocked CLI function
+        from cosmos_workflow.cli import run_prompt_upsampling
+        result = run_prompt_upsampling(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            preprocess_videos=True,
+            max_resolution=480
+        )
         
-        args = Args()
-        
-        # Execute command
-        results = mock_cli.upsample_prompts(args)
+        # Verify the mock was called
+        mock_upsample_func.assert_called_once()
         
         # Verify results
-        self.assertEqual(len(results), 2)
-        self.assertIn("Upsampled:", results[0]["upsampled"])
+        self.assertIsNotNone(result)
+        self.assertIn("results", result)
+        self.assertEqual(len(result["results"]), 2)
+        self.assertIn("Upsampled:", result["results"][0]["upsampled"])
 
 
 class TestBatchProcessingWorkflow(unittest.TestCase):

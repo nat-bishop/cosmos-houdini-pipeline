@@ -246,7 +246,7 @@ class TestPromptManagerOrchestrator:
                 result = prompt_manager.list_prompts(pattern="test")
                 
                 # Verify delegation
-                mock_list.assert_called_once_with(prompt_manager.prompts_dir, pattern="test")
+                mock_list.assert_called_once_with(prompt_manager.prompts_dir, "test")
                 assert result == mock_prompts
     
     def test_list_prompts_without_pattern(self):
@@ -264,7 +264,7 @@ class TestPromptManagerOrchestrator:
                 result = prompt_manager.list_prompts()
                 
                 # Verify delegation without pattern
-                mock_list.assert_called_once_with(prompt_manager.prompts_dir, pattern=None)
+                mock_list.assert_called_once_with(prompt_manager.prompts_dir, None)
                 assert result == mock_prompts
     
     def test_list_runs_delegates_to_manager(self):
@@ -282,7 +282,7 @@ class TestPromptManagerOrchestrator:
                 result = prompt_manager.list_runs(pattern="test")
                 
                 # Verify delegation
-                mock_list.assert_called_once_with(prompt_manager.runs_dir, pattern="test")
+                mock_list.assert_called_once_with(prompt_manager.runs_dir, "test")
                 assert result == mock_runs
     
     def test_get_prompt_info_delegates_to_manager(self):

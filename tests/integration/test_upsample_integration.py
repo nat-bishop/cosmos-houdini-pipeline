@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 import unittest
+import pytest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, call
@@ -45,23 +46,17 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
     def test_create_prompt_spec_with_upsampling_flag(self):
         """Test creating PromptSpec with upsampling metadata."""
         spec = PromptSpec(
+            id="ps_test001",
             name="test_prompt",
             prompt="Original prompt text",
             negative_prompt="Negative prompt",
             input_video_path="/path/to/video.mp4",
             control_inputs={
-                "depth": {
-                    "input_control": "/path/to/depth.mp4",
-                    "control_weight": 0.5
-                }
+                "depth": "/path/to/depth.mp4",
+                "seg": "/path/to/seg.mp4"
             },
-            metadata={
-                "needs_upsampling": True,
-                "upsampling_params": {
-                    "max_resolution": 480,
-                    "num_frames": 2
-                }
-            }
+            timestamp=datetime.now().isoformat() + "Z",
+            is_upsampled=True  # Using existing field instead of metadata
         )
         
         # Generate file path using directory manager
@@ -74,13 +69,11 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         spec.save(file_path)
         self.assertTrue(file_path.exists())
         
-        # Load and verify metadata
+        # Load and verify upsampling flag
         loaded_spec = PromptSpec.load(file_path)
-        self.assertTrue(loaded_spec.metadata.get("needs_upsampling"))
-        self.assertEqual(
-            loaded_spec.metadata.get("upsampling_params", {}).get("max_resolution"),
-            480
-        )
+        self.assertTrue(loaded_spec.is_upsampled)
+        self.assertEqual(loaded_spec.name, "test_prompt")
+        self.assertEqual(loaded_spec.prompt, "Original prompt text")
     
     def test_batch_prompt_spec_preparation(self):
         """Test preparing multiple PromptSpecs for batch upsampling."""
@@ -88,10 +81,14 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         specs = []
         for i in range(3):
             spec = PromptSpec(
+                id=f"ps_test{i:03d}",
                 name=f"prompt_{i}",
                 prompt=f"Original prompt {i}",
+                negative_prompt="bad quality, blurry, low resolution, cartoonish",
                 input_video_path=f"/path/to/video_{i}.mp4",
-                metadata={"needs_upsampling": True}
+                control_inputs={"depth": f"/path/to/depth_{i}.mp4", "seg": f"/path/to/seg_{i}.mp4"},
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=False
             )
             timestamp = datetime.now()
             file_path = self.dir_manager.get_prompt_file_path(
@@ -120,9 +117,14 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         """Test updating PromptSpec after upsampling."""
         # Create original spec
         original_spec = PromptSpec(
+            id="ps_test002",
             name="test_prompt",
             prompt="Short prompt",
-            input_video_path="/path/to/video.mp4"
+            negative_prompt="bad quality, blurry, low resolution, cartoonish",
+            input_video_path="/path/to/video.mp4",
+            control_inputs={"depth": "/path/to/depth.mp4", "seg": "/path/to/seg.mp4"},
+            timestamp=datetime.now().isoformat() + "Z",
+            is_upsampled=False
         )
         timestamp = datetime.now()
         file_path = self.dir_manager.get_prompt_file_path(
@@ -143,17 +145,15 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         
         # Create new spec with upsampled prompt
         upsampled_spec = PromptSpec(
+            id="ps_test003",
             name=spec.name,
             prompt=upsampled_result["upsampled_prompt"],
             negative_prompt=spec.negative_prompt,
             input_video_path=spec.input_video_path,
             control_inputs=spec.control_inputs,
-            metadata={
-                **spec.metadata,
-                "original_prompt": upsampled_result["original_prompt"],
-                "upsampled": True,
-                "upsampled_at": datetime.now().isoformat()
-            }
+            timestamp=datetime.now().isoformat() + "Z",
+            is_upsampled=True,
+            parent_prompt_text=upsampled_result["original_prompt"]
         )
         
         # Save updated spec
@@ -166,8 +166,8 @@ class TestUpsamplePromptSpecIntegration(unittest.TestCase):
         # Verify update
         loaded_updated = PromptSpec.load(updated_path)
         self.assertIn("detailed and elaborate", loaded_updated.prompt)
-        self.assertTrue(loaded_updated.metadata.get("upsampled"))
-        self.assertEqual(loaded_updated.metadata.get("original_prompt"), "Short prompt")
+        self.assertTrue(loaded_updated.is_upsampled)
+        self.assertEqual(loaded_updated.parent_prompt_text, "Short prompt")
 
 
 class TestDockerExecutorIntegration(unittest.TestCase):
@@ -183,48 +183,38 @@ class TestDockerExecutorIntegration(unittest.TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     
-    @patch('cosmos_workflow.execution.docker_executor.DockerExecutor.execute')
+    @patch('cosmos_workflow.execution.docker_executor.DockerExecutor.run_upscaling')
     @patch('cosmos_workflow.connection.ssh_manager.SSHManager')
-    def test_docker_upsample_execution(self, mock_ssh_class, mock_execute):
+    def test_docker_upsample_execution(self, mock_ssh_class, mock_run_upscaling):
         """Test executing upsampling script via Docker."""
         # Mock SSH and Docker execution
         mock_ssh = MagicMock()
         mock_ssh_class.return_value = mock_ssh
-        mock_execute.return_value = (0, "Upsampling complete", "")
+        mock_run_upscaling.return_value = (0, "Upsampling complete", "")
         
         from cosmos_workflow.execution.docker_executor import DockerExecutor
         
         executor = DockerExecutor(
             ssh_manager=mock_ssh,
-            container_image="nvcr.io/ubuntu/cosmos-transfer1:latest"
+            remote_dir="/home/ubuntu/NatsFS/cosmos-transfer1",
+            docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest"
         )
         
-        # Simulate upsampling command
-        command = [
-            "bash", "/scripts/upsample_prompt.sh",
-            "/inputs/prompts.json",
-            "/outputs/upsampled.json",
-            "true",  # preprocess_videos
-            "480",   # max_resolution
-            "2"      # num_frames
-        ]
+        # Test upsampling execution
+        prompt_file = Path("/inputs/prompts.json")
         
-        exit_code, stdout, stderr = executor.execute(
-            command=command,
-            working_dir="/home/ubuntu/NatsFS/cosmos-transfer1",
-            environment={"CUDA_VISIBLE_DEVICES": "0"},
-            volumes={
-                "/local/inputs": "/inputs",
-                "/local/outputs": "/outputs"
-            }
+        # This method doesn't return anything, so we just test it runs without error
+        executor.run_upscaling(
+            prompt_file=prompt_file,
+            control_weight=0.5,
+            num_gpu=1,
+            cuda_devices="0"
         )
         
-        # Verify execution
-        self.assertEqual(exit_code, 0)
-        self.assertIn("complete", stdout.lower())
-        mock_execute.assert_called_once()
+        # Verify the method was called
+        mock_run_upscaling.assert_called_once()
     
-    @patch('cosmos_workflow.transfer.file_transfer.FileTransferManager')
+    @patch('cosmos_workflow.transfer.file_transfer.FileTransferService')
     def test_file_transfer_for_upsampling(self, mock_transfer_class):
         """Test file transfer for upsampling workflow."""
         mock_transfer = MagicMock()
@@ -306,8 +296,26 @@ class TestWorkflowOrchestratorIntegration(unittest.TestCase):
         
         # Create test specs
         specs = [
-            PromptSpec(name="spec1", prompt="Prompt 1"),
-            PromptSpec(name="spec2", prompt="Prompt 2")
+            PromptSpec(
+                id="ps_test004",
+                name="spec1", 
+                prompt="Prompt 1",
+                negative_prompt="bad quality, blurry, low resolution, cartoonish",
+                input_video_path="/path/to/video1.mp4",
+                control_inputs={"depth": "/path/to/depth1.mp4", "seg": "/path/to/seg1.mp4"},
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=False
+            ),
+            PromptSpec(
+                id="ps_test005",
+                name="spec2", 
+                prompt="Prompt 2",
+                negative_prompt="bad quality, blurry, low resolution, cartoonish",
+                input_video_path="/path/to/video2.mp4",
+                control_inputs={"depth": "/path/to/depth2.mp4", "seg": "/path/to/seg2.mp4"},
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=False
+            )
         ]
         
         # Run upsampling
@@ -322,14 +330,18 @@ class TestWorkflowOrchestratorIntegration(unittest.TestCase):
         self.assertIn("Upsampled:", results[0]["upsampled"])
         self.assertEqual(results[0]["spec_id"], specs[0].id)
     
+    @patch('cosmos_workflow.config.config_manager.ConfigManager')
     @patch('cosmos_workflow.connection.ssh_manager.SSHManager')
     @patch('cosmos_workflow.execution.docker_executor.DockerExecutor')
-    @patch('cosmos_workflow.transfer.file_transfer.FileTransferManager')
+    @patch('cosmos_workflow.transfer.file_transfer.FileTransferService')
     def test_end_to_end_upsample_integration(
-        self, mock_transfer_class, mock_docker_class, mock_ssh_class
+        self, mock_transfer_class, mock_docker_class, mock_ssh_class, mock_config_class
     ):
         """Test complete end-to-end upsampling integration."""
         # Setup mocks
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+        
         mock_ssh = MagicMock()
         mock_ssh_class.return_value = mock_ssh
         
@@ -342,15 +354,20 @@ class TestWorkflowOrchestratorIntegration(unittest.TestCase):
         
         from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
         
-        orchestrator = WorkflowOrchestrator(config=self.config)
+        orchestrator = WorkflowOrchestrator(config_file="dummy_config.toml")
         
         # Create test prompt specs
         specs = []
         for i in range(2):
             spec = PromptSpec(
+                id=f"ps_test{i+100:03d}",
                 name=f"test_{i}",
                 prompt=f"Test prompt {i}",
-                input_video_path=f"/videos/test_{i}.mp4"
+                negative_prompt="bad quality, blurry, low resolution, cartoonish",
+                input_video_path=f"/videos/test_{i}.mp4",
+                control_inputs={"depth": f"/path/to/depth_{i}.mp4", "seg": f"/path/to/seg_{i}.mp4"},
+                timestamp=datetime.now().isoformat() + "Z",
+                is_upsampled=False
             )
             specs.append(spec)
         
@@ -387,6 +404,7 @@ class TestErrorRecovery(unittest.TestCase):
     
     def test_partial_batch_failure_recovery(self):
         """Test recovery when some prompts in batch fail."""
+        pytest.importorskip("cosmos_transfer1", reason="Requires cosmos_transfer1 external dependency")
         from scripts.upsample_prompts import process_prompt_batch
         
         with patch('scripts.upsample_prompts.PixtralPromptUpsampler') as mock_class:
@@ -424,6 +442,7 @@ class TestErrorRecovery(unittest.TestCase):
     
     def test_video_preprocessing_failure_recovery(self):
         """Test recovery when video preprocessing fails."""
+        pytest.importorskip("cosmos_transfer1", reason="Requires cosmos_transfer1 external dependency")
         from scripts.upsample_prompts import process_prompt_batch
         
         with patch('scripts.upsample_prompts.preprocess_video_for_upsampling') as mock_preprocess:

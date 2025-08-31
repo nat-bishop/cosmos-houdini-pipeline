@@ -35,11 +35,9 @@ class TestSFTPWorkflow:
     @pytest.fixture
     def file_transfer_manager(self, mock_ssh_manager, mock_config_manager):
         """Create FileTransferService with mocked dependencies."""
-        with patch('cosmos_workflow.transfer.file_transfer.SSHManager') as mock_ssh_class:
-            mock_ssh_class.return_value = mock_ssh_manager
-            manager = FileTransferService(mock_config_manager)
-            manager.ssh_manager = mock_ssh_manager
-            return manager
+        remote_config = mock_config_manager.get_remote_config()
+        manager = FileTransferService(mock_ssh_manager, remote_config.remote_dir)
+        return manager
     
     @pytest.mark.integration
     def test_upload_single_file(self, file_transfer_manager, mock_ssh_manager, 

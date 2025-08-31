@@ -1,0 +1,14 @@
+{
+  "id": "ps_57fa7bcedf1e",
+  "name": "test",
+  "prompt": "test prompt",
+  "negative_prompt": "bad quality, blurry, low resolution, cartoonish",
+  "input_video_path": "inputs/videos/test/color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/test/depth.mp4",
+    "seg": "inputs/videos/test/segmentation.mp4"
+  },
+  "timestamp": "2025-08-30T22:48:19.403237Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

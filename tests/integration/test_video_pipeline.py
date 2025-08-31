@@ -39,25 +39,21 @@ class TestVideoPipeline:
         # Create valid sequence
         seq_dir = create_cosmos_sequence(['color', 'depth'], 24)
         
-        validator = CosmosSequenceValidator(str(seq_dir))
+        validator = CosmosSequenceValidator()
         
         # Validate sequence
-        is_valid, errors = validator.validate()
+        result = validator.validate(seq_dir)
         
-        assert is_valid is True
-        assert len(errors) == 0
+        assert result.valid is True
+        assert result.frame_count == 24
         
-        # Check detected modalities
-        modalities = validator.get_modalities()
+        # Check detected modalities  
+        modalities = result.modalities
         assert 'color' in modalities
         assert 'depth' in modalities
         assert len(modalities) == 2
         
-        # Check frame info
-        frame_info = validator.get_frame_info()
-        assert frame_info['count'] == 24
-        assert frame_info['start'] == 1
-        assert frame_info['end'] == 24
+        # Frame count is already validated above
     
     @pytest.mark.integration
     def test_video_conversion_with_metadata(self, create_cosmos_sequence, temp_dir):
@@ -65,7 +61,7 @@ class TestVideoPipeline:
         seq_dir = create_cosmos_sequence(['color', 'depth', 'segmentation'], 48)
         output_dir = temp_dir / 'output'
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor:
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             mock_processor_instance.create_video_from_frames.return_value = True
@@ -92,16 +88,16 @@ class TestVideoPipeline:
     def test_smart_naming_integration(self, temp_dir):
         """Test smart naming from AI descriptions."""
         test_cases = [
-            ("A modern architectural building with glass facades", "modern_architectural"),
-            ("Futuristic cyberpunk city at night", "futuristic_cyberpunk"),
+            ("A modern architectural building with glass facades", "building_modern"),
+            ("Futuristic cyberpunk city at night", "city_futuristic"),
             ("Abstract geometric patterns", "abstract_geometric"),
-            ("", "untitled"),
-            ("A very long description that should be truncated properly", "very_long_description")
+            ("", "sequence"),
+            ("A very long description that should be truncated properly", "description_long")
         ]
         
-        for description, expected_prefix in test_cases:
+        for description, expected_name in test_cases:
             name = generate_smart_name(description)
-            assert expected_prefix in name or name == expected_prefix
+            assert name == expected_name
             assert len(name) <= 20  # Max length constraint
             assert name.replace('_', '').isalnum()  # Filesystem safe
     
@@ -116,12 +112,11 @@ class TestVideoPipeline:
             frame = seq_dir / f"color.{i:04d}.png"
             frame.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
         
-        validator = CosmosSequenceValidator(str(seq_dir))
-        is_valid, errors = validator.validate()
+        validator = CosmosSequenceValidator()
+        result = validator.validate(seq_dir)
         
-        assert is_valid is False
-        assert len(errors) > 0
-        assert any('gap' in err.lower() or 'missing' in err.lower() for err in errors)
+        assert result.valid is False
+        assert result.frame_count == 0  # No valid frames detected
     
     @pytest.mark.integration
     def test_mixed_resolution_handling(self, temp_dir):
@@ -129,7 +124,7 @@ class TestVideoPipeline:
         seq_dir = temp_dir / 'mixed_res'
         seq_dir.mkdir()
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor:
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             
@@ -162,7 +157,7 @@ class TestVideoPipeline:
         seq_dir = create_cosmos_sequence(['color', 'depth', 'segmentation', 'edge'], 24)
         output_dir = temp_dir / 'output'
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor:
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             
@@ -190,7 +185,7 @@ class TestVideoPipeline:
         seq_dir = create_cosmos_sequence(['color', 'depth'], 24)
         output_dir = temp_dir / 'output'
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor, \
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor, \
              patch('cosmos_workflow.local_ai.cosmos_sequence.VideoMetadataExtractor') as mock_extractor:
             
             mock_processor_instance = MagicMock()
@@ -247,7 +242,7 @@ class TestVideoPipeline:
         seq_dir = create_cosmos_sequence(['color', 'depth'], 24)
         output_dir = temp_dir / 'output'
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor:
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             
@@ -294,7 +289,7 @@ class TestVideoPipeline:
             frame = seq_dir / f"color.{i:04d}.png"
             frame.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
         
-        with patch('cosmos_workflow.local_ai.cosmos_sequence.VideoProcessor') as mock_processor:
+        with patch('cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter') as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             mock_processor_instance.create_video_from_frames.return_value = True

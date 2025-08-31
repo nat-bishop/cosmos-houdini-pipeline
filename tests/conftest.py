@@ -32,16 +32,17 @@ def mock_config_manager(temp_dir):
         port=22,
         user="test-user",
         ssh_key=str(temp_dir / "test_key.pem"),
-        remote_dir="/remote/test"
+        remote_dir="/remote/test",
+        docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest"
     )
     
     # Mock local config
     local_config = LocalConfig(
-        local_dir=str(temp_dir),
-        prompts_dir=str(temp_dir / "prompts"),
-        runs_dir=str(temp_dir / "runs"),
-        outputs_dir=str(temp_dir / "outputs"),
-        videos_dir=str(temp_dir / "videos")
+        prompts_dir=temp_dir / "prompts",
+        runs_dir=temp_dir / "runs",
+        outputs_dir=temp_dir / "outputs",
+        videos_dir=temp_dir / "videos",
+        notes_dir=temp_dir / "notes"
     )
     
     config_manager.get_remote_config.return_value = remote_config

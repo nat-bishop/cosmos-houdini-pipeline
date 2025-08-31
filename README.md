@@ -353,6 +353,6 @@ This project is proprietary software. All rights reserved.
 
 ---
 
-**Author**: [Your Name]  
-**Contact**: [Your Email]  
+**Author**: [Your Name]
+**Contact**: [Your Email]
 **Last Updated**: August 2024

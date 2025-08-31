@@ -43,7 +43,7 @@ Phase 2 introduces AI-powered scene analysis and intelligent naming capabilities
 ```python
 def _generate_smart_name(self, description: str, max_length: int = 20) -> str:
     """Generate a short, meaningful name from an AI description."""
-    
+
 def generate_metadata(self, sequence_info, output_dir, name=None, description=None, use_ai=True):
     """Generate metadata with optional AI-powered naming."""
 ```
@@ -285,10 +285,10 @@ Future configuration file support planned for:
 def _generate_ai_description(self, color_frames: List[Path]) -> str:
     """
     Generate AI description from color frames.
-    
+
     Args:
         color_frames: List of paths to color frames
-        
+
     Returns:
         Generated description or fallback
     """
@@ -296,11 +296,11 @@ def _generate_ai_description(self, color_frames: List[Path]) -> str:
 def _generate_smart_name(self, description: str, max_length: int = 20) -> str:
     """
     Generate a short, meaningful name from an AI description.
-    
+
     Args:
         description: AI-generated description
         max_length: Maximum length for the name
-        
+
     Returns:
         Smart name derived from description
     """
@@ -315,14 +315,14 @@ def generate_metadata(
 ) -> CosmosMetadata:
     """
     Generate metadata for the sequence with optional AI.
-    
+
     Args:
         sequence_info: Validated sequence information
         output_dir: Directory containing videos
         name: Optional name (AI-generated if None)
         description: Optional description (AI-generated if None)
         use_ai: Whether to use AI features
-        
+
     Returns:
         CosmosMetadata object with all information
     """

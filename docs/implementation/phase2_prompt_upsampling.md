@@ -95,7 +95,7 @@ def upsample_prompts_batch(
     "video_path": "/path/to/video.mp4"
   },
   {
-    "name": "nature_prompt", 
+    "name": "nature_prompt",
     "prompt": "Serene forest landscape",
     "video_path": "/path/to/nature.mp4"
   }

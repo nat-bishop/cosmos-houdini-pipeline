@@ -14,21 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created test utilities and mock objects in fixtures/
   - Added sample test data in fixtures/sample_data/
   - Created pytest.ini with test markers and configuration
-  
+
 - **Integration Test Suite**
   - test_sftp_workflow.py - SFTP file transfer testing
   - test_workflow_orchestration.py - Complete pipeline testing
   - test_video_pipeline.py - Video processing integration
-  
-- **System Test Suite**  
+
+- **System Test Suite**
   - test_end_to_end_pipeline.py - Full user workflow tests
   - test_performance.py - Performance benchmarks
-  
+
 - **CI/CD Configuration**
   - GitHub Actions workflow (.github/workflows/test.yml)
   - Pre-commit hooks configuration (.pre-commit-config.yaml)
   - Multi-stage testing pipeline with coverage reporting
-  
+
 - **Test Documentation**
   - tests/README.md - Comprehensive testing guide
   - tests/TEST_STATUS.md - Current test status and metrics
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated convert-sequence test for new default metadata generation
   - Fixed SFTP test imports (FileTransferManager → FileTransferService)
   - Marked outdated Docker executor tests as skipped
-  
+
 - **Test Coverage Baseline**
   - 239 unit tests passing
   - 2 tests skipped (need refactoring)
@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Windows-Compatible SFTP File Transfer System**
   - Complete replacement of rsync with SFTP in `cosmos_workflow/transfer/file_transfer.py`
   - Added `_sftp_upload_file()` for single file uploads
-  - Added `_sftp_upload_dir()` for recursive directory uploads  
+  - Added `_sftp_upload_dir()` for recursive directory uploads
   - Added `_sftp_download_dir()` for downloading results
   - Full Windows path handling with backslash to forward slash conversion
   - Removed subprocess dependency for file transfers
@@ -67,11 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Applied control inputs: depth (0.3 weight) and segmentation (0.4 weight)
   - Output video successfully downloaded via SFTP
 
-### Fixed - 2025-08-30 
+### Fixed - 2025-08-30
 - **Windows Encoding Issues**
   - Replaced Unicode arrows (→) with ASCII arrows (->) in all logging
   - Fixed encoding errors in SSH output streaming
-  
+
 - **Control Spec Format Issues**
   - Inference script now receives proper Cosmos controlnet spec format
   - Fixed control weight mapping from RunSpec to inference format
@@ -168,8 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Validates Cosmos control modality naming conventions
   - Ensures frame number consistency across modalities
   - Strict validation with clear error messages
-  
-- **CosmosVideoConverter class**  
+
+- **CosmosVideoConverter class**
   - Parallel conversion of multiple modalities
   - Proper output naming for Cosmos Transfer
   - Simplified metadata generation
@@ -214,7 +214,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Supports upscaling and downscaling
     - Handles edge cases in FPS conversion
   - Added `extract_frame()` for frame extraction with optional save
-  
+
 - **Comprehensive Test Coverage for VideoProcessor**
   - Created 24 comprehensive tests covering all methods
   - Edge case testing: corrupted files, missing frames, large gaps
@@ -222,7 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Video standardization and upscaling tests
   - End-to-end workflow validation
   - All tests passing with good coverage
-  
+
 - **Module Export Updates**
   - Updated `cosmos_workflow/local_ai/__init__.py` to export VideoProcessor
   - VideoProcessor now available from main module import
@@ -232,12 +232,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed deprecated `config` property that returned raw dictionary
   - All code now uses typed `RemoteConfig` and `LocalConfig` dataclasses
   - Cleaner, more maintainable configuration access pattern
-  
+
 - **Refactored UpsampleWorkflowMixin configuration access**
   - Updated to use `config_manager.get_remote_config()` and `get_local_config()`
   - Removed all raw dictionary access patterns (`self.config["paths"][...]`)
   - Improved type safety and IDE support
-  
+
 - **Updated test fixtures for new API**
   - Fixed `test_upsample_integration.py` to use correct DirectoryManager initialization
   - Updated PromptSpec usage to match current API (no metadata field)

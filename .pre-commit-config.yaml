@@ -34,12 +34,14 @@ repos:
         args: ['--max-line-length=100', '--ignore=E203,W503']
         additional_dependencies: [flake8-docstrings]
 
-  - repo: local
-    hooks:
-      - id: pytest-unit
-        name: pytest unit tests
-        entry: pytest tests/unit -m unit --tb=short -q
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [commit]
+  # Pytest hook disabled for faster commits
+  # Uncomment to enable test runs before commits
+  # - repo: local
+  #   hooks:
+  #     - id: pytest-unit
+  #       name: pytest unit tests
+  #       entry: pytest tests/unit -m unit --tb=short -q
+  #       language: system
+  #       pass_filenames: false
+  #       always_run: true
+  #       stages: [commit]

@@ -9,7 +9,7 @@
 
 #### 1. **Connection Tests** (25/25 passing)
 - **Fixed**: All file transfer tests updated from rsync to SFTP methods
-- **Changes**: 
+- **Changes**:
   - Replaced `_rsync_file`, `_rsync_dir`, `_rsync_pull` with SFTP equivalents
   - Updated all mocks and assertions to match SFTP implementation
   - Removed obsolete rsync command tests

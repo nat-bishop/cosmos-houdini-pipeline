@@ -9,11 +9,6 @@ This module provides local AI functionality for:
 """
 
 from .text_to_name import TextToNameGenerator
-from .video_metadata import VideoMetadataExtractor, VideoMetadata, VideoProcessor
+from .video_metadata import VideoMetadata, VideoMetadataExtractor, VideoProcessor
 
-__all__ = [
-    "TextToNameGenerator",
-    "VideoMetadataExtractor",
-    "VideoMetadata",
-    "VideoProcessor"
-]
+__all__ = ["TextToNameGenerator", "VideoMetadataExtractor", "VideoMetadata", "VideoProcessor"]

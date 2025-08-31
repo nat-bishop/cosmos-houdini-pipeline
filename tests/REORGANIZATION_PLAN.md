@@ -97,8 +97,8 @@ markers =
     slow: Tests that take > 1 second
     gpu: Tests that require GPU
     ssh: Tests that require SSH connection
-    
-addopts = 
+
+addopts =
     --strict-markers
     -ra
     --cov=cosmos_workflow

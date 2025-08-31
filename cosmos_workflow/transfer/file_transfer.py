@@ -5,11 +5,12 @@ Windows implementation using SFTP for file transfers.
 """
 
 from __future__ import annotations
+
+import logging
 import os
+import stat
 from pathlib import Path
 from typing import List, Optional
-import logging
-import stat
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
 
@@ -37,7 +38,7 @@ class FileTransferService:
             raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
 
         remote_prompts_dir = f"{self.remote_dir}/inputs/prompts"
-        remote_videos_dir  = f"{self.remote_dir}/inputs/videos"
+        remote_videos_dir = f"{self.remote_dir}/inputs/videos"
         remote_scripts_dir = f"{self.remote_dir}/bashscripts"
 
         # Ensure required remote directories exist
@@ -148,7 +149,7 @@ class FileTransferService:
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
             logger.info(f"Uploading directory: {local_dir} -> {remote_abs_dir}")
-            
+
             for item in local_dir.iterdir():
                 if item.is_file():
                     remote_path = f"{remote_abs_dir}/{item.name}"
@@ -167,18 +168,18 @@ class FileTransferService:
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
             logger.info(f"Downloading directory: {remote_abs_dir} -> {local_dir}")
-            
+
             # List remote directory contents
             try:
                 items = sftp.listdir_attr(remote_abs_dir)
             except Exception as e:
                 logger.error(f"Failed to list directory {remote_abs_dir}: {e}")
                 return
-            
+
             for item in items:
                 remote_path = f"{remote_abs_dir}/{item.filename}"
                 local_path = local_dir / item.filename
-                
+
                 if stat.S_ISDIR(item.st_mode):
                     # Recursively download subdirectories
                     local_path.mkdir(parents=True, exist_ok=True)

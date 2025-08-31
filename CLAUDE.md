@@ -69,7 +69,7 @@ torchrun --nproc_per_node=$NUM_GPU cosmos_transfer1/diffusion/inference/transfer
 
 ## Control Modalities
 - **vis/blur**: Visual blur control
-- **edge**: Canny edge detection  
+- **edge**: Canny edge detection
 - **depth**: Depth estimation
 - **segmentation**: Semantic segmentation
 - **lidar/hdmap**: AV-specific controls

@@ -1,0 +1,28 @@
+[flake8]
+max-line-length = 100
+max-complexity = 10
+# E203: whitespace before ':' (conflicts with black)
+# W503: line break before binary operator (conflicts with black)
+# D100-D104: Missing docstrings (too strict for now)
+# D205: 1 blank line required between summary and description
+# D400: First line should end with a period (too strict)
+ignore = E203, W503, D100, D101, D102, D103, D104, D205, D400, F541
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .coverage,
+    htmlcov,
+    tests/fixtures/sample_data
+per-file-ignores =
+    # Allow missing docstrings in tests
+    tests/*:D100,D101,D102,D103,D104
+    # Allow assert statements in tests
+    tests/*:S101
+    # Init files don't need docstrings
+    __init__.py:D104

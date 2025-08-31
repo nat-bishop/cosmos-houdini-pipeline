@@ -10,7 +10,7 @@ Tests have been reorganized into a clear structure:
 ```
 tests/
 ├── unit/           # 241 tests - Fast, isolated unit tests
-├── integration/    # 180+ tests - Component interaction tests  
+├── integration/    # 180+ tests - Component interaction tests
 ├── system/         # 20+ tests - End-to-end and performance tests
 ├── fixtures/       # Test data and mock objects
 └── utils/          # Test utilities and helpers

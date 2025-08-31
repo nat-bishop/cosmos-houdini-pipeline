@@ -13,6 +13,20 @@ torchvision>=0.15.0
 pillow>=9.5.0
 accelerate>=0.20.0
 
+# Development tools (optional, for code quality)
+pre-commit>=3.0.0
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+flake8-docstrings>=1.7.0
+mypy>=1.0.0
+pylint>=2.17.0
+
+# Testing (optional, for running tests)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-timeout>=2.1.0
+
 # Note: All other dependencies are Python standard library modules:
 # - argparse, json, subprocess, sys, pathlib, typing, datetime
 # - logging, contextlib, dataclasses

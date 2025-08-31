@@ -70,7 +70,8 @@
       "Bash(timeout 30 python -m cosmos_workflow.cli run:*)",
       "Bash(pre-commit:*)",
       "Bash(ruff check:*)",
-      "Bash(ruff format:*)"
+      "Bash(ruff format:*)",
+      "Read(C:\\Users\\17143\\Downloads/**)"
     ],
     "deny": [],
     "ask": []

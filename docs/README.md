@@ -14,6 +14,7 @@ Welcome to the Cosmos Workflow documentation. This guide will help you navigate 
 - [Architecture](development/architecture.md) - System design
 - [API Reference](api/) - Module documentation
 - [Testing Guide](development/testing.md) - How to test
+- [Testing Results](TESTING_RESULTS.md) - Performance benchmarks & findings
 - [Code Style](development/code-style.md) - Coding standards
 
 ### For AI Assistants
@@ -49,6 +50,7 @@ docs/
 | Run my first workflow            | [getting-started/quickstart.md]     |
 | Understand CLI commands          | [user-guide/cli-commands.md]        |
 | Debug an issue                   | [user-guide/troubleshooting.md]     |
+| View performance benchmarks      | [TESTING_RESULTS.md]                |
 | Understand the architecture      | [development/architecture.md]       |
 | Contribute code                  | [development/code-style.md]         |
 | Deploy to production             | [deployment/]                       |

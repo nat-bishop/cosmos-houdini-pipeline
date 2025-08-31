@@ -41,6 +41,22 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 ## 🟡 Priority 2: Feature Enhancements
 
+### Testing & Benchmarking
+- [ ] **Complete upsampling performance testing**
+  - Test maximum batch sizes without OOM
+  - Test GPU RAM usage patterns with large batches
+  - Identify exact resolution thresholds for vocab errors
+  - Test impact of prompt text length on tokens
+  - Document findings in `docs/TESTING_RESULTS.md`
+  - *Effort: 2-3 days*
+  - *Reference: docs/TESTING_RESULTS.md*
+
+- [ ] **Fix Unicode encoding error in SSH output**
+  - Affects upsampling output capture
+  - Does not impact functionality but causes errors
+  - Update SSHManager to handle Unicode properly
+  - *Effort: 1 day*
+
 ### Workflow Improvements
 - [ ] **Revamp cursor workflow using TDD and subagents**
   - Design new cursor workflow architecture

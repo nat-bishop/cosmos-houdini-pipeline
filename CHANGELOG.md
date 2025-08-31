@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-31 (Testing & Documentation)
+- **Comprehensive Testing Documentation**
+  - Created `docs/TESTING_RESULTS.md` with performance benchmarks
+  - Documented batch processing performance (45% speedup without offloading)
+  - Identified resolution limits and token usage patterns
+  - Added GPU memory usage profiles
+  - Established testing framework for future models
+
+- **Upsampling Batch Processing Verified**
+  - Confirmed batch processing works with safe resolution videos
+  - Tested with/without offloading performance differences
+  - Documented optimal strategies for different use cases
+
+### Fixed - 2025-08-31
+- **Resolution Token Limits Identified**
+  - Maximum safe resolution: 320×180 @ 2 frames (1,992 tokens)
+  - Token formula verified: `tokens = width × height × frames × 0.0173`
+  - Videos above 426×240 will fail with vocab errors
+
+## [Unreleased]
+
 ### Added - 2024-12-30 (Modern Linting & Code Quality)
 - **Comprehensive Linting Setup**
   - Integrated Ruff (v0.12.11) - Fast, all-in-one Python linter replacing black, isort, flake8, pylint

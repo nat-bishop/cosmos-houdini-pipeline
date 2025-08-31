@@ -1,0 +1,17 @@
+[
+  {
+    "name": "golden_hour",
+    "prompt": "Warm low-angle sunlight grazing facades; gentle rim light on metal trims",
+    "video_path": "/workspace/inputs/videos/city_scene_320x180.mp4"
+  },
+  {
+    "name": "blue_hour",
+    "prompt": "Deep blue twilight sky with city lights beginning to glow; soft ambient lighting",
+    "video_path": "/workspace/inputs/videos/city_scene_320x180.mp4"
+  },
+  {
+    "name": "overcast",
+    "prompt": "Soft diffused lighting from cloudy sky; minimal shadows; even illumination",
+    "video_path": "/workspace/inputs/videos/city_scene_320x180.mp4"
+  }
+]

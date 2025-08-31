@@ -169,6 +169,7 @@ See `config.toml.example` for all available options:
 
 - **[Documentation Index](docs/README.md)** - Complete documentation guide
 - [Quick Start](#-quick-start) - Get started immediately
+- [Testing Results](docs/TESTING_RESULTS.md) - Performance benchmarks & testing
 - [API Reference](REFERENCE.md) - Detailed API documentation
 - [Changelog](CHANGELOG.md) - Version history
 - [AI Context](docs/ai-context/PROJECT_STATE.md) - Current project state

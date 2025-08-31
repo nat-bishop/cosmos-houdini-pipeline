@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from cosmos_workflow.execution.command_builder import DockerCommandBuilder
 from cosmos_workflow.prompts.schemas import PromptSpec
 
 log = logging.getLogger(__name__)
@@ -91,52 +92,62 @@ class UpsampleWorkflowMixin:
         output_filename = f"upsampled_{batch_filename}"
         remote_output_path = f"{remote_config.remote_dir}/outputs/{output_filename}"
 
-        # For now, just use the first prompt spec for testing
-        # In production, this would process the batch JSON file
-        test_spec = prompt_specs[0] if prompt_specs else None
-        if not test_spec:
-            return {"success": False, "error": "No prompt specs provided"}
+        # First, upload the working upsampler script
+        scripts_dir = f"{remote_config.remote_dir}/scripts"
+        self.ssh_manager.execute_command_success(f"mkdir -p {scripts_dir}")
 
-        # Escape the prompt text for shell
-        import shlex
+        # Upload the working upsampler script
+        local_script = (
+            Path(__file__).parent.parent.parent / "scripts" / "working_prompt_upsampler.py"
+        )
+        if local_script.exists():
+            remote_script_path = f"{scripts_dir}/working_prompt_upsampler.py"
+            log.info(f"Uploading upsampler script to {remote_script_path}")
+            self.file_transfer.upload_file(local_script, scripts_dir)
+        else:
+            log.error(f"Working upsampler script not found at {local_script}")
+            return {"success": False, "error": "Working upsampler script not found"}
 
-        escaped_prompt = shlex.quote(test_spec.prompt)
+        # Create output directory on remote
+        remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
+        self.ssh_manager.execute_command_success(f"mkdir -p {remote_outputs_dir}")
 
-        # Build Docker command for upsampling
-        # Use the actual Python command since the bash script doesn't exist
-        # Set all required distributed training environment variables
-        docker_cmd = f"""
-        sudo docker run --rm --gpus all \\
-            -v {remote_config.remote_dir}:/workspace \\
-            -w /workspace \\
-            -e CUDA_VISIBLE_DEVICES={cuda_devices or "0"} \\
-            -e RANK=0 \\
-            -e LOCAL_RANK=0 \\
-            -e WORLD_SIZE=1 \\
-            -e LOCAL_WORLD_SIZE=1 \\
-            -e GROUP_RANK=0 \\
-            -e ROLE_RANK=0 \\
-            -e ROLE_NAME=default \\
-            -e OMP_NUM_THREADS=1 \\
-            -e MASTER_ADDR=localhost \\
-            -e MASTER_PORT=29500 \\
-            -e TORCHELASTIC_USE_AGENT_STORE=False \\
-            -e TORCHELASTIC_MAX_RESTARTS=0 \\
-            -e TORCHELASTIC_RUN_ID=none \\
-            -e TORCH_NCCL_ASYNC_ERROR_HANDLING=1 \\
-            -e TORCHELASTIC_ERROR_FILE=/tmp/torch_error.log \\
-            {self.docker_executor.docker_image} \\
-            python -m cosmos_transfer1.auxiliary.upsampler.inference.upsampler_pipeline \\
-                --prompt {escaped_prompt} \\
-                --input_video /workspace/inputs/videos/color.mp4 \\
-                --checkpoint_dir /workspace/checkpoints \\
-                --offload_prompt_upsampler
-        """
+        # Build Docker command using the same pattern as inference
+        docker_image = remote_config.docker_image
+
+        # Build command using DockerCommandBuilder
+        builder = DockerCommandBuilder(docker_image)
+        builder.with_gpu(cuda_devices or "0")
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(remote_config.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+
+        # Set environment for VLLM
+        builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+        builder.add_environment("CUDA_VISIBLE_DEVICES", cuda_devices or "0")
+
+        # Build the command to run the upsampler
+        upsample_cmd = (
+            f"python /workspace/scripts/working_prompt_upsampler.py "
+            f"--batch /workspace/inputs/{batch_filename} "
+            f"--output-dir /workspace/outputs "
+            f"--checkpoint-dir /workspace/checkpoints "
+            f"--offload"
+        )
+        builder.set_command(upsample_cmd)
+
+        # Get the full Docker command
+        cmd = builder.build()
 
         # Execute upsampling
         log.info("Executing prompt upsampling on remote GPU...")
         try:
-            output = self.ssh_manager.execute_command_success(docker_cmd, timeout=600)
+            # Add sudo prefix for Docker command
+            full_cmd = f"sudo {cmd}"
+            output = self.ssh_manager.execute_command_success(
+                full_cmd, timeout=1200
+            )  # 20 min timeout
             exit_code = 0
             stdout = output
             stderr = ""
@@ -150,10 +161,17 @@ class UpsampleWorkflowMixin:
             log.error(f"Error output: {stderr}")
             return {"success": False, "error": stderr, "exit_code": exit_code}
 
-        # Download results
-        local_output_path = local_config.outputs_dir / output_filename
-        log.info(f"Downloading results to {local_output_path}")
-        self.file_transfer.download_file(remote_output_path, str(local_output_path))
+        # Download results JSON file
+        remote_results_file = f"{remote_outputs_dir}/batch_results.json"
+        local_output_path = local_config.outputs_dir / f"upsampled_{batch_filename}"
+        os.makedirs(local_output_path.parent, exist_ok=True)
+
+        log.info(f"Downloading results from {remote_results_file}")
+        try:
+            self.file_transfer.download_file(remote_results_file, str(local_output_path))
+        except Exception as e:
+            log.error(f"Failed to download results: {e}")
+            return {"success": False, "error": f"Failed to download results: {e}"}
 
         # Load and process results
         with open(local_output_path) as f:

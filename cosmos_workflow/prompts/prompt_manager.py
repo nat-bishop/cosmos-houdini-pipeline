@@ -48,8 +48,8 @@ class PromptManager:
     
     def create_prompt_spec(
         self, 
-        name: str, 
-        prompt_text: str,
+        name: Optional[str] = None, 
+        prompt_text: str = "",
         negative_prompt: str = "bad quality, blurry, low resolution, cartoonish",
         input_video_path: Optional[str] = None,
         control_inputs: Optional[Dict[str, str]] = None,

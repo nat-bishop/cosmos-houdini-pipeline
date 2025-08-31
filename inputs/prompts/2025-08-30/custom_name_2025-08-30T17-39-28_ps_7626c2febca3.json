@@ -1,0 +1,14 @@
+{
+  "id": "ps_7626c2febca3",
+  "name": "custom_name",
+  "prompt": "A test prompt",
+  "negative_prompt": "bad",
+  "input_video_path": "inputs/videos/custom_name/color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/custom_name/depth.mp4",
+    "seg": "inputs/videos/custom_name/segmentation.mp4"
+  },
+  "timestamp": "2025-08-30T17:39:28.271368Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

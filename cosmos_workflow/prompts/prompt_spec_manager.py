@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 
 from .schemas import PromptSpec, DirectoryManager
+from ..utils.smart_naming import generate_smart_name
 
 
 class PromptSpecManager:
@@ -21,8 +22,8 @@ class PromptSpecManager:
     
     def create_prompt_spec(
         self, 
-        name: str, 
-        prompt_text: str,
+        name: Optional[str] = None, 
+        prompt_text: str = "",
         negative_prompt: str = "bad quality, blurry, low resolution, cartoonish",
         input_video_path: Optional[str] = None,
         control_inputs: Optional[Dict[str, str]] = None,
@@ -33,7 +34,7 @@ class PromptSpecManager:
         Create a new PromptSpec using the new schema system.
         
         Args:
-            name: Name for the prompt (e.g., 'cyberpunk_city_neon')
+            name: Name for the prompt (auto-generated from prompt_text if not provided)
             prompt_text: The text prompt for generation
             negative_prompt: Negative prompt for improved quality
             input_video_path: Optional custom video path override
@@ -44,6 +45,10 @@ class PromptSpecManager:
         Returns:
             PromptSpec object
         """
+        # Auto-generate name from prompt text if not provided
+        if name is None:
+            name = generate_smart_name(prompt_text, max_length=30)
+        
         # Build video path
         if input_video_path:
             video_path = input_video_path

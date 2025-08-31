@@ -155,7 +155,7 @@ def check_status(verbose: bool) -> None:
 
 
 def create_prompt_spec(
-    name: str,
+    name: Optional[str],
     prompt_text: str,
     negative_prompt: str,
     input_video_path: Optional[str],
@@ -164,10 +164,15 @@ def create_prompt_spec(
     parent_prompt_text: Optional[str],
     verbose: bool
 ) -> None:
-    """Create a new PromptSpec using the new schema system."""
+    """Create a new PromptSpec using the new schema system with optional smart naming."""
     setup_logging(verbose)
     
     try:
+        # Auto-generate name if not provided
+        if name is None:
+            from cosmos_workflow.utils.smart_naming import generate_smart_name
+            name = generate_smart_name(prompt_text, max_length=30)
+        
         # Parse control inputs
         control_inputs_dict = {}
         if control_inputs:
@@ -783,9 +788,9 @@ Examples:
     status_parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
     
     # Create PromptSpec command
-    create_spec_parser = subparsers.add_parser('create-spec', help='Create a new PromptSpec (new format)')
-    create_spec_parser.add_argument('name', help='Name for the prompt')
+    create_spec_parser = subparsers.add_parser('create-spec', help='Create a new PromptSpec with optional smart naming')
     create_spec_parser.add_argument('prompt_text', help='The text prompt for generation')
+    create_spec_parser.add_argument('--name', help='Name for the prompt (auto-generated from prompt if not provided)')
     create_spec_parser.add_argument('--negative-prompt', default='bad quality, blurry, low resolution, cartoonish',
                                   help='Negative prompt for improved quality')
     create_spec_parser.add_argument('--video-path', help='Custom video path override')

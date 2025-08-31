@@ -247,9 +247,36 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         """Get video directories to upload."""
         if videos_subdir:
             return [Path(f"inputs/videos/{videos_subdir}")]
-        else:
-            prompt_name = prompt_file.stem
-            return [Path(f"inputs/videos/{prompt_name}")]
+        
+        # Check if this is a RunSpec file
+        if prompt_file.stem.endswith('_rs_') or '_rs_' in prompt_file.stem:
+            # This is a RunSpec, load it to get the PromptSpec
+            try:
+                from cosmos_workflow.prompts.schemas import RunSpec, PromptSpec
+                run_spec = RunSpec.load(prompt_file)
+                
+                # Find the corresponding PromptSpec
+                prompt_spec_files = list(Path("inputs/prompts").rglob(f"*{run_spec.prompt_id}*.json"))
+                if prompt_spec_files:
+                    prompt_spec = PromptSpec.load(prompt_spec_files[0])
+                    
+                    # Extract video directory from the video path
+                    if prompt_spec.input_video_path:
+                        video_path = Path(prompt_spec.input_video_path)
+                        if video_path.parent.exists():
+                            return [video_path.parent]
+                        
+                        # Try to find the video directory by name
+                        video_dir_name = video_path.parent.name
+                        video_dir = Path(f"inputs/videos/{video_dir_name}")
+                        if video_dir.exists():
+                            return [video_dir]
+            except Exception as e:
+                logger.warning(f"Could not load RunSpec/PromptSpec to find videos: {e}")
+        
+        # Default behavior: use prompt file stem
+        prompt_name = prompt_file.stem
+        return [Path(f"inputs/videos/{prompt_name}")]
     
     def check_remote_status(self) -> Dict[str, Any]:
         """Check remote instance and Docker status."""

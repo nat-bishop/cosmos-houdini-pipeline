@@ -496,7 +496,7 @@ class TestCLIIntegration:
                         output_path=None,
                         fps=24,  # Default
                         resolution=None,
-                        generate_metadata=False,
+                        generate_metadata=True,  # Default is True now
                         ai_analysis=False,
                         verbose=False
                     )

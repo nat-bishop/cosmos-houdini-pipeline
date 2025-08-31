@@ -1,0 +1,134 @@
+{
+  "prompt_specs": [
+    {
+      "id": "ps_sample_001",
+      "name": "cyberpunk_city",
+      "prompt": "A futuristic cyberpunk city with neon lights and flying cars",
+      "negative_prompt": "blurry, low quality, dark, distorted",
+      "input_video_path": "/samples/city/color.mp4",
+      "control_inputs": {
+        "depth": "/samples/city/depth.mp4",
+        "segmentation": "/samples/city/segmentation.mp4",
+        "edge": "/samples/city/edge.mp4"
+      },
+      "timestamp": "2025-08-30T10:00:00"
+    },
+    {
+      "id": "ps_sample_002",
+      "name": "nature_scene",
+      "prompt": "A serene natural landscape with mountains and a lake",
+      "negative_prompt": "urban, artificial, polluted",
+      "input_video_path": "/samples/nature/color.mp4",
+      "control_inputs": {
+        "depth": "/samples/nature/depth.mp4"
+      },
+      "timestamp": "2025-08-30T11:00:00"
+    },
+    {
+      "id": "ps_sample_003",
+      "name": "abstract_art",
+      "prompt": "Abstract geometric patterns with vibrant colors",
+      "negative_prompt": "realistic, photographic, dull",
+      "input_video_path": "/samples/abstract/color.mp4",
+      "control_inputs": {
+        "edge": "/samples/abstract/edge.mp4",
+        "segmentation": "/samples/abstract/segmentation.mp4"
+      },
+      "timestamp": "2025-08-30T12:00:00"
+    }
+  ],
+  "run_specs": [
+    {
+      "id": "rs_sample_001",
+      "prompt_spec_id": "ps_sample_001",
+      "control_weights": {
+        "depth": 0.3,
+        "segmentation": 0.4,
+        "edge": 0.3
+      },
+      "parameters": {
+        "num_steps": 35,
+        "guidance_scale": 8.0,
+        "seed": 42,
+        "sigma_max": 80.0,
+        "sigma_min": 0.1,
+        "rho": 7.0
+      },
+      "execution_status": "completed",
+      "output_path": "/outputs/cyberpunk_city_001",
+      "timestamp": "2025-08-30T10:30:00"
+    },
+    {
+      "id": "rs_sample_002",
+      "prompt_spec_id": "ps_sample_001",
+      "control_weights": {
+        "depth": 0.5,
+        "segmentation": 0.3,
+        "edge": 0.2
+      },
+      "parameters": {
+        "num_steps": 50,
+        "guidance_scale": 10.0,
+        "seed": 123,
+        "sigma_max": 100.0,
+        "sigma_min": 0.05,
+        "rho": 8.0
+      },
+      "execution_status": "pending",
+      "output_path": "/outputs/cyberpunk_city_002",
+      "timestamp": "2025-08-30T11:30:00"
+    },
+    {
+      "id": "rs_sample_003",
+      "prompt_spec_id": "ps_sample_002",
+      "control_weights": {
+        "depth": 0.7
+      },
+      "parameters": {
+        "num_steps": 1,
+        "guidance_scale": 5.0,
+        "seed": 999,
+        "distilled": true
+      },
+      "execution_status": "running",
+      "output_path": "/outputs/nature_scene_001",
+      "timestamp": "2025-08-30T12:30:00"
+    }
+  ],
+  "control_specs": [
+    {
+      "prompt": "A futuristic cyberpunk city with neon lights and flying cars",
+      "negative_prompt": "blurry, low quality, dark, distorted",
+      "input_video_path": "/samples/city/color.mp4",
+      "control_inputs": [
+        {
+          "type": "depth",
+          "path": "/samples/city/depth.mp4",
+          "weight": 0.3
+        },
+        {
+          "type": "segmentation",
+          "path": "/samples/city/segmentation.mp4",
+          "weight": 0.4
+        },
+        {
+          "type": "edge",
+          "path": "/samples/city/edge.mp4",
+          "weight": 0.3
+        }
+      ],
+      "parameters": {
+        "num_steps": 35,
+        "guidance_scale": 8.0,
+        "seed": 42,
+        "sigma_max": 80.0,
+        "sigma_min": 0.1,
+        "rho": 7.0,
+        "offload_prompt_upsampler": true,
+        "offload_encoder": false,
+        "offload_diffusion": false,
+        "offload_decoder": false
+      }
+    }
+  ]
+}

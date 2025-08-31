@@ -1,0 +1,14 @@
+{
+  "id": "ps_5d1d8628673b",
+  "name": "visualization_transform",
+  "prompt": "Transform this architectural visualization into a futuristic cyberpunk style with neon lights and holographic displays",
+  "negative_prompt": "bad quality, blurry, low resolution, cartoonish",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/visualization_transform/depth.mp4",
+    "seg": "inputs/videos/visualization_transform/segmentation.mp4"
+  },
+  "timestamp": "2025-08-30T20:38:02.974094Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

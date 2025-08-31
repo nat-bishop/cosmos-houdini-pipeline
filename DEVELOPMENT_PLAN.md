@@ -85,12 +85,12 @@
 - ✅ All tests pass including AI functionality (12/14 passing)
 - ✅ Works with and without transformers installed (graceful fallback)
 
-## Phase 3: End-to-End Inference Pipeline Testing (Manual First, Then Tests)
+## Phase 3: End-to-End Inference Pipeline Testing ✅ COMPLETED
 
-### CRITICAL: Manual Testing Before Integration Tests
-**Rationale**: We need to verify the actual workflow works before writing tests. Many issues only appear during real execution (SSH timeouts, Docker permissions, GPU memory, file paths, etc.)
+### Manual Testing Results (2025-08-30)
+**Status**: ✅ Successfully completed full inference pipeline with GPU generation
 
-### Part 1: Video Generation Testing and Inspection
+### Part 1: Video Generation Testing and Inspection ✅ COMPLETED
 **Goal**: Verify PNG sequence to video conversion works perfectly for Cosmos inference
 
 #### Step 1.1: Prepare Test Sequence
@@ -309,6 +309,31 @@ ffplay outputs/{run_id}/output.mp4          # Transformed
 - [ ] File path issues: (describe)
 - [ ] Quality issues: (describe)
 
+### Issues Found and Fixed During Manual Testing
+
+1. **✅ FIXED: Windows File Transfer System**
+   - **Problem**: rsync not available on Windows
+   - **Solution**: Implemented complete SFTP-based file transfer in `cosmos_workflow/transfer/file_transfer.py`
+   - **Changes**: Replaced all rsync methods with SFTP equivalents (_sftp_upload_file, _sftp_upload_dir, _sftp_download_dir)
+
+2. **✅ FIXED: Video Directory Detection**
+   - **Problem**: WorkflowOrchestrator looked for videos in RunSpec-named directory instead of actual location
+   - **Solution**: Updated `_get_video_directories()` in `workflow_orchestrator.py` to detect RunSpec files and load PromptSpec to find correct paths
+
+3. **✅ FIXED: Unicode Encoding Issues**
+   - **Problem**: Unicode arrows (→) caused Windows encoding errors
+   - **Solution**: Replaced with ASCII arrows (->) in all logging messages
+
+4. **✅ FIXED: Control Spec Format**
+   - **Problem**: Inference script expected different JSON format than RunSpec provided
+   - **Solution**: Created proper Cosmos controlnet spec format with correct field structure
+
+### Successful Inference Results
+- **Generated Video**: 336 KB, 2 seconds (48 frames at 24 FPS)
+- **Resolution**: 1280x704
+- **Control Inputs**: Applied depth (weight 0.3) and segmentation (weight 0.4)
+- **Output Location**: `outputs/cosmos_test_inference/output.mp4`
+
 ### After Manual Testing: Create Integration Tests
 
 Once manual testing succeeds, create tests that would catch the issues found:
@@ -328,13 +353,13 @@ Once manual testing succeeds, create tests that would catch the issues found:
    - Test error handling for issues found
    - Verify retry mechanisms
 
-### Success Criteria for Phase 3
-- [ ] Manual video generation works without errors
-- [ ] PromptSpec creation with auto-naming works
-- [ ] Full inference pipeline completes successfully
-- [ ] Output video shows style transformation
-- [ ] All issues documented and fixed
-- [ ] Integration tests written to catch found issues
+### Success Criteria for Phase 3 ✅ ALL COMPLETED
+- ✅ Manual video generation works without errors
+- ✅ PromptSpec creation with auto-naming works
+- ✅ Full inference pipeline completes successfully
+- ✅ Output video shows style transformation
+- ✅ All issues documented and fixed
+- ⏳ Integration tests written to catch found issues (Next Phase)
 
 ### 3. Fix Issues and Update Tests
 **Goal**: When failures occur, fix code and ensure tests would catch the issue.
@@ -371,9 +396,47 @@ Once manual testing succeeds, create tests that would catch the issues found:
 - `tests/test_upsample_integration.py`
 - Any other integration tests with API mismatches
 
+## Phase 4: Integration Testing Based on Manual Testing Results
+
+### Priority Integration Tests to Create
+
+Based on the successful manual testing, create comprehensive integration tests:
+
+1. **Test SFTP File Transfer (test_sftp_transfer.py)**
+   - Test file upload functionality
+   - Test directory upload with recursion
+   - Test download functionality
+   - Mock SFTP for CI/CD compatibility
+   - Verify Windows path handling
+
+2. **Test Video Directory Detection (test_video_detection.py)**
+   - Test RunSpec to PromptSpec resolution
+   - Test video directory finding logic
+   - Test fallback mechanisms
+   - Mock file system operations
+
+3. **Test Full Workflow Integration (test_workflow_integration.py)**
+   - Test complete pipeline from PromptSpec to output
+   - Mock SSH/Docker execution
+   - Verify proper spec format generation
+   - Test error handling and recovery
+
+4. **Test Control Spec Generation (test_control_spec.py)**
+   - Test conversion from RunSpec/PromptSpec to Cosmos format
+   - Verify control weight mapping
+   - Test path normalization
+   - Validate all required fields
+
+### Integration Test Requirements
+- Use pytest fixtures for common setup
+- Mock external dependencies (SSH, SFTP, Docker)
+- Test both success and failure paths
+- Ensure Windows compatibility
+- Maintain >80% code coverage
+
 ## Future Phase Tasks
 
-### Phase 3: Batch Inference Support
+### Phase 5: Batch Inference Support
 **Goal**: Process multiple PromptSpecs in single run
 
 **Implementation steps:**

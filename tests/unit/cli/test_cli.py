@@ -269,7 +269,7 @@ class TestMainFunction:
         
         mock_status.assert_called_once_with(True)
     
-    @patch('sys.argv', ['cli.py', 'create-spec', 'test_shot', 'Test prompt'])
+    @patch('sys.argv', ['cli.py', 'create-spec', 'Test prompt', '--name', 'test_shot'])
     @patch('cosmos_workflow.cli.create_prompt_spec')
     def test_main_create_spec_command(self, mock_create):
         """Test main with create-spec command."""

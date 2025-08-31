@@ -230,32 +230,41 @@ class TestPerformanceRegression:
 
         Simulates a complete workflow to catch performance regressions.
         """
-        from tests.fixtures.fakes import FakeWorkflowOrchestrator
+        from unittest.mock import Mock, patch
+        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
-        orchestrator = FakeWorkflowOrchestrator()
+        # Use REAL orchestrator with mocked external dependencies
+        with patch('cosmos_workflow.workflows.workflow_orchestrator.SSHManager'):
+            orchestrator = WorkflowOrchestrator()
+            # Mock only external services
+            orchestrator.ssh_manager = Mock()
+            orchestrator.file_transfer = Mock()
+            orchestrator.file_transfer.upload_file.return_value = True
+            orchestrator.docker_executor = Mock()
+            orchestrator.docker_executor.run_inference.return_value = True
 
-        # Create test specs
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
+            # Create test specs
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmpdir = Path(tmpdir)
 
-            # Measure workflow execution
-            start = time.perf_counter()
+                # Measure workflow execution
+                start = time.perf_counter()
 
-            for i in range(10):
-                spec_file = tmpdir / f"spec_{i}.json"
-                spec_file.write_text(f'{{"id": "test_{i}"}}')
+                for i in range(10):
+                    spec_file = tmpdir / f"spec_{i}.json"
+                    spec_file.write_text(f'{{"id": "test_{i}"}}')
 
-                # Run workflow
-                result = orchestrator.run_inference(str(spec_file))
-                assert result is True
+                    # Run workflow
+                    result = orchestrator.run_inference(str(spec_file))
+                    assert result is True
 
-            elapsed = time.perf_counter() - start
+                elapsed = time.perf_counter() - start
 
-        # 10 workflows should complete in < 2 seconds with fakes
-        assert elapsed < 2.0, f"Workflow simulation too slow: {elapsed:.2f}s"
+            # 10 workflows should complete in < 2 seconds with mocks
+            assert elapsed < 2.0, f"Workflow simulation too slow: {elapsed:.2f}s"
 
-        # Verify all workflows completed
-        assert len(orchestrator.workflows_run) == 10
+            # Verify all workflows completed (check mock was called)
+            assert orchestrator.docker_executor.run_inference.call_count >= 10
 
 
 class TestResourceCleanup:

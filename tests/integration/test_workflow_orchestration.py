@@ -26,7 +26,7 @@ class TestWorkflowOrchestration:
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager"
         ) as mock_ssh_class, patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.FileTransferManager"
+            "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService"
         ) as mock_ft_class, patch(
             "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
         ) as mock_docker_class:
@@ -34,7 +34,10 @@ class TestWorkflowOrchestration:
             mock_ft_class.return_value = mock_file_transfer
             mock_docker_class.return_value = mock_docker_executor
 
-            orchestrator = WorkflowOrchestrator(mock_config_manager)
+            # Create orchestrator with default config file
+            orchestrator = WorkflowOrchestrator()
+            # Override with mocked dependencies
+            orchestrator.config_manager = mock_config_manager
             orchestrator.ssh_manager = mock_ssh_manager
             orchestrator.file_transfer = mock_file_transfer
             orchestrator.docker_executor = mock_docker_executor

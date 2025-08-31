@@ -96,20 +96,21 @@
 #### Step 1.1: Prepare Test Sequence
 ```bash
 # Use the v3 directory which contains real Houdini renders
-cd inputs/renders/v3  # THIS IS THE PRIMARY TEST DIRECTORY
+cd F:/Art/houdini/render/CosmosRenders2/comp/v3/  # THIS IS THE PRIMARY TEST DIRECTORY
 ls -la *.png  # Verify we have sequences
 
 # The v3 directory structure should be:
-# inputs/renders/v3/
+# F:/Art/houdini/render/CosmosRenders2/comp/v3/
 #   ├── color.0001.png
 #   ├── color.0002.png
 #   ├── ...
-#   ├── depth.0001.png (if available)
+#   ├── depth.0001.png
 #   ├── depth.0002.png
+#   ├── segmentation.0001.png
 #   └── ...
 ```
 
-**IMPORTANT**: The `inputs/renders/v3` directory is the designated test directory containing actual Houdini render outputs that should be used for all manual testing.
+**IMPORTANT**: The `F:/Art/houdini/render/CosmosRenders2/comp/v3/` directory is the designated test directory containing actual Houdini render outputs that should be used for all manual testing.
 
 **Inspect Each Aspect:**
 - [ ] **Frame Detection**: Verify all frames detected correctly
@@ -120,7 +121,7 @@ ls -la *.png  # Verify we have sequences
 #### Step 1.2: Run Video Conversion
 ```bash
 # Run the conversion on the v3 directory
-python -m cosmos_workflow.cli prepare-inference ./inputs/renders/v3 --verbose
+python -m cosmos_workflow.cli prepare-inference F:/Art/houdini/render/CosmosRenders2/comp/v3/ --verbose
 ```
 
 **Inspect Output:**

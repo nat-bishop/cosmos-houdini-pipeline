@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-Schema validation system for Cosmos-Transfer1 workflow.
+"""Schema validation system for Cosmos-Transfer1 workflow.
 Handles validation of PromptSpec and RunSpec objects.
 """
 
 import json
 from pathlib import Path
-from typing import Union
 
 from .schemas import SchemaUtils
 
@@ -15,9 +13,8 @@ class SchemaValidator:
     """Validates PromptSpec and RunSpec schemas."""
 
     @staticmethod
-    def validate_prompt_spec(prompt_path: Union[str, Path]) -> bool:
-        """
-        Validate a PromptSpec JSON file.
+    def validate_prompt_spec(prompt_path: str | Path) -> bool:
+        """Validate a PromptSpec JSON file.
 
         Args:
             prompt_path: Path to PromptSpec JSON file
@@ -28,7 +25,7 @@ class SchemaValidator:
         prompt_path = Path(prompt_path)
 
         try:
-            with open(prompt_path, "r") as f:
+            with open(prompt_path) as f:
                 prompt_data = json.load(f)
 
             # Check required fields
@@ -50,7 +47,7 @@ class SchemaValidator:
                 print(f"[ERROR] Invalid ID format: {prompt_data['id']}")
                 return False
 
-            print(f"[SUCCESS] PromptSpec validation passed")
+            print("[SUCCESS] PromptSpec validation passed")
             return True
 
         except json.JSONDecodeError as e:
@@ -61,9 +58,8 @@ class SchemaValidator:
             return False
 
     @staticmethod
-    def validate_run_spec(run_path: Union[str, Path]) -> bool:
-        """
-        Validate a RunSpec JSON file.
+    def validate_run_spec(run_path: str | Path) -> bool:
+        """Validate a RunSpec JSON file.
 
         Args:
             run_path: Path to RunSpec JSON file
@@ -74,7 +70,7 @@ class SchemaValidator:
         run_path = Path(run_path)
 
         try:
-            with open(run_path, "r") as f:
+            with open(run_path) as f:
                 run_data = json.load(f)
 
             # Check required fields
@@ -118,7 +114,7 @@ class SchemaValidator:
                 print(f"[ERROR] Invalid parameters: {run_data['parameters']}")
                 return False
 
-            print(f"[SUCCESS] RunSpec validation passed")
+            print("[SUCCESS] RunSpec validation passed")
             return True
 
         except json.JSONDecodeError as e:
@@ -130,8 +126,7 @@ class SchemaValidator:
 
     @staticmethod
     def validate_control_weights(weights: dict) -> bool:
-        """
-        Validate control weights dictionary.
+        """Validate control weights dictionary.
 
         Args:
             weights: Control weights dictionary
@@ -143,8 +138,7 @@ class SchemaValidator:
 
     @staticmethod
     def validate_parameters(parameters: dict) -> bool:
-        """
-        Validate parameters dictionary.
+        """Validate parameters dictionary.
 
         Args:
             parameters: Parameters dictionary

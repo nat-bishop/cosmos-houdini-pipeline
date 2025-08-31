@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Smart naming utility for generating meaningful names from descriptions.
+"""Smart naming utility for generating meaningful names from descriptions.
 
 This module provides the core algorithm for converting AI-generated descriptions
 or user prompts into concise, filesystem-friendly names.
@@ -8,14 +7,12 @@ or user prompts into concise, filesystem-friendly names.
 
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 def generate_smart_name(text: str, max_length: int = 20) -> str:
-    """
-    Generate a short, meaningful name from a text description or prompt.
+    """Generate a short, meaningful name from a text description or prompt.
 
     This is the centralized smart naming algorithm used throughout the system
     for converting descriptions, prompts, or other text into concise names.
@@ -128,13 +125,12 @@ def generate_smart_name(text: str, max_length: int = 20) -> str:
     if not name:
         name = "sequence"
 
-    logger.debug(f"Generated smart name: '{name}' from text: '{text}'")
+    logger.debug("Generated smart name: '%s' from text: '{text}'", name)
     return name
 
 
 def sanitize_name(name: str) -> str:
-    """
-    Sanitize a name to be filesystem-friendly.
+    """Sanitize a name to be filesystem-friendly.
 
     Args:
         name: Input name to sanitize

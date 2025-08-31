@@ -1,5 +1,4 @@
-"""
-Upsampling integration for WorkflowOrchestrator.
+"""Upsampling integration for WorkflowOrchestrator.
 Adds prompt upsampling capabilities to the workflow system.
 """
 
@@ -8,11 +7,9 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.prompts.schemas import PromptSpec
-from cosmos_workflow.transfer.file_transfer import FileTransferService
 
 log = logging.getLogger(__name__)
 
@@ -28,15 +25,14 @@ class UpsampleWorkflowMixin:
 
     def run_prompt_upsampling(
         self,
-        prompt_specs: List[PromptSpec],
+        prompt_specs: list[PromptSpec],
         preprocess_videos: bool = True,
         max_resolution: int = 480,
         num_frames: int = 2,
         num_gpu: int = 1,
-        cuda_devices: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Run batch prompt upsampling on remote GPU.
+        cuda_devices: str | None = None,
+    ) -> dict[str, Any]:
+        """Run batch prompt upsampling on remote GPU.
 
         Args:
             prompt_specs: List of PromptSpec objects to upsample
@@ -124,7 +120,7 @@ class UpsampleWorkflowMixin:
         self.file_transfer.download_file(remote_output_path, str(local_output_path))
 
         # Load and process results
-        with open(local_output_path, "r") as f:
+        with open(local_output_path) as f:
             upsampled_results = json.load(f)
 
         # Update PromptSpecs with upsampled prompts
@@ -164,9 +160,8 @@ class UpsampleWorkflowMixin:
             "num_upsampled": len(updated_specs),
         }
 
-    def run_single_prompt_upsampling(self, prompt_spec: PromptSpec, **kwargs) -> Dict[str, Any]:
-        """
-        Convenience method to upsample a single prompt.
+    def run_single_prompt_upsampling(self, prompt_spec: PromptSpec, **kwargs) -> dict[str, Any]:
+        """Convenience method to upsample a single prompt.
 
         Args:
             prompt_spec: Single PromptSpec to upsample
@@ -184,9 +179,8 @@ class UpsampleWorkflowMixin:
 
     def run_prompt_upsampling_from_directory(
         self, prompts_dir: str, pattern: str = "*.json", **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Upsample all prompts from a directory.
+    ) -> dict[str, Any]:
+        """Upsample all prompts from a directory.
 
         Args:
             prompts_dir: Directory containing PromptSpec JSON files

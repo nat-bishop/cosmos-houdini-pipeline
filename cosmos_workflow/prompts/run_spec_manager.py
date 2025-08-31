@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""
-RunSpec management system for Cosmos-Transfer1 workflow.
+"""RunSpec management system for Cosmos-Transfer1 workflow.
 Handles RunSpec creation, validation, and file operations.
 """
 
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
-from .schemas import DirectoryManager, ExecutionStatus, PromptSpec, RunSpec
+from .schemas import DirectoryManager, ExecutionStatus, RunSpec
 
 
 class RunSpecManager:
@@ -23,12 +22,11 @@ class RunSpecManager:
         self,
         prompt_id: str,
         name: str,
-        control_weights: Optional[Dict[str, float]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
-        output_path: Optional[str] = None,
+        control_weights: dict[str, float] | None = None,
+        parameters: dict[str, Any] | None = None,
+        output_path: str | None = None,
     ) -> RunSpec:
-        """
-        Create a new RunSpec for executing a prompt.
+        """Create a new RunSpec for executing a prompt.
 
         Args:
             prompt_id: The PromptSpec ID to execute
@@ -60,10 +58,7 @@ class RunSpecManager:
         run_id = SchemaUtils.generate_run_id(prompt_id, control_weights, parameters)
 
         # Build output path
-        if output_path:
-            final_output_path = output_path
-        else:
-            final_output_path = f"outputs/{name}"
+        final_output_path = output_path or f"outputs/{name}"
 
         # Create RunSpec
         timestamp = datetime.now().isoformat() + "Z"
@@ -90,9 +85,8 @@ class RunSpecManager:
 
         return run_spec
 
-    def list_runs(self, runs_dir: Path, pattern: Optional[str] = None) -> list[Path]:
-        """
-        List available RunSpec files.
+    def list_runs(self, runs_dir: Path, pattern: str | None = None) -> list[Path]:
+        """List available RunSpec files.
 
         Args:
             runs_dir: Directory containing runs
@@ -112,9 +106,8 @@ class RunSpecManager:
 
         return sorted(run_files, key=lambda x: x.stat().st_mtime, reverse=True)
 
-    def get_run_info(self, run_path: Union[str, Path]) -> Dict[str, Any]:
-        """
-        Get information about a RunSpec file.
+    def get_run_info(self, run_path: str | Path) -> dict[str, Any]:
+        """Get information about a RunSpec file.
 
         Args:
             run_path: Path to RunSpec JSON file
@@ -127,7 +120,7 @@ class RunSpecManager:
         if not run_path.exists():
             raise FileNotFoundError(f"RunSpec file not found: {run_path}")
 
-        with open(run_path, "r") as f:
+        with open(run_path) as f:
             run_data = json.load(f)
 
         return {

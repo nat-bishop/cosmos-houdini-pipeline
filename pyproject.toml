@@ -1,35 +1,134 @@
-[tool.black]
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cosmos-workflow"
+version = "0.1.0"
+description = "Python workflow orchestration for Nvidia Cosmos Transfer"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "paramiko>=3.0.0",
+    "toml>=0.10.2",
+    "pyyaml>=6.0",
+    "click>=8.0.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-xdist>=3.3.0",
+    "ruff>=0.8.4",
+    "mypy>=1.11.0",
+    "bandit[toml]>=1.7.5",
+    "safety>=3.0.0",
+    "pre-commit>=3.5.0",
+    "types-paramiko>=3.0.0",
+    "types-toml>=0.10.0",
+    "types-pyyaml>=6.0.0",
+]
+
+# Ruff - Modern Python linter (replaces flake8, isort, pylint, and more)
+[tool.ruff]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.venv
-  | venv
-  | build
-  | dist
-  | \.egg-info
-  | __pycache__
-)/
-'''
+target-version = "py310"
+fix = true
 
-[tool.isort]
-profile = "black"
-line_length = 100
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-skip_gitignore = true
-skip = [".venv", "venv", "__pycache__"]
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "D",     # pydocstyle
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # Ruff-specific rules
+    "PT",    # flake8-pytest-style
+    "Q",     # flake8-quotes
+    "TID",   # flake8-tidy-imports
+    "ARG",   # flake8-unused-arguments
+    "DTZ",   # flake8-datetimez
+    "ERA",   # eradicate (commented code)
+    "PD",    # pandas-vet
+    "PGH",   # pygrep-hooks
+    "PL",    # pylint
+    "PIE",   # flake8-pie
+    "COM",   # flake8-commas
+    "INP",   # flake8-no-pep420
+    "EXE",   # flake8-executable
+    "S",     # flake8-bandit (security)
+    "T20",   # flake8-print
+    "G",     # flake8-logging-format
+    "ISC",   # flake8-implicit-str-concat
+    "LOG",   # flake8-logging
+    "ASYNC", # flake8-async
+    "PERF",  # perflint
+]
 
+ignore = [
+    "D100",   # Missing docstring in public module
+    "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "D103",   # Missing docstring in public function
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "D107",   # Missing docstring in __init__
+    "D203",   # 1 blank line required before class docstring
+    "D213",   # Multi-line docstring summary should start at the second line
+    "D401",   # First line should be in imperative mood
+    "D406",   # Section name should end with a newline
+    "D407",   # Missing dashed underline after section
+    "D413",   # Missing blank line after last section
+    "COM812", # Trailing comma missing (conflicts with formatter)
+    "ISC001", # Implicit string concatenation (conflicts with formatter)
+    "T201",   # Print statements (allow for CLI)
+    "S101",   # Use of assert (needed for tests)
+    "PLR0913", # Too many arguments (sometimes needed)
+    "PLR2004", # Magic value used in comparison
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",    # assert statements are fine in tests
+    "ARG",     # unused arguments are fine in tests
+    "PLR2004", # magic values are fine in tests
+    "D",       # no docstrings needed in tests
+    "S105",    # hardcoded passwords fine in tests
+    "S106",    # hardcoded passwords fine in tests
+]
+"cosmos_workflow/cli.py" = ["T201"]  # Allow print in CLI
+"**/__init__.py" = ["D104", "F401"]  # Allow missing docstring and unused imports
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["cosmos_workflow"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+# MyPy - Static type checking
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false  # Start lenient
+disallow_untyped_defs = false  # Start lenient, can make stricter later
+disallow_any_generics = false
 ignore_missing_imports = true
 follow_imports = "silent"
 warn_redundant_casts = true
@@ -37,26 +136,33 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_incomplete_stub = true
+pretty = true
+show_error_context = true
+show_column_numbers = true
+show_error_codes = true
 exclude = [
     "tests/",
     "build/",
     "dist/",
+    ".venv/",
+    "venv/",
 ]
 
-[tool.pylint.messages_control]
-max-line-length = 100
-disable = [
-    "C0111",  # missing-docstring
-    "C0103",  # invalid-name
-    "R0903",  # too-few-public-methods
-    "R0913",  # too-many-arguments
-    "W0212",  # protected-access
-    "C0301",  # line-too-long (handled by black)
-]
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = false
 
-[tool.pylint.similarities]
-min-similarity-lines = 10
+# Bandit - Security linting
+[tool.bandit]
+targets = ["cosmos_workflow"]
+exclude_dirs = ["tests", ".venv", "venv", "build", "dist"]
+skips = ["B101"]  # assert_used - needed for tests
 
+# Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -71,22 +177,52 @@ markers = [
     "ssh: Tests that require SSH connection",
     "docker: Tests that require Docker",
 ]
-addopts = "--strict-markers -ra"
+addopts = """
+    --strict-markers
+    -ra
+    --cov=cosmos_workflow
+    --cov-report=term-missing:skip-covered
+    --cov-report=html
+    --cov-report=xml
+    --cov-fail-under=80
+"""
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
 
+# Coverage configuration
 [tool.coverage.run]
 source = ["cosmos_workflow"]
+branch = true
+parallel = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/test_*.py",
+    ".venv/*",
+    "venv/*",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
+    "def __str__",
     "raise AssertionError",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "pass",
+    "@abstractmethod",
 ]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"

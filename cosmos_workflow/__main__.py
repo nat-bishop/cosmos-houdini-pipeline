@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""
-Main entry point for cosmos_workflow module.
-This allows running: python -m cosmos_workflow.main
+"""Main entry point for cosmos_workflow module.
+This allows running: python -m cosmos_workflow.main.
 """
 
 from .cli import main

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
-Docker execution service for Cosmos-Transfer1 workflows.
+"""Docker execution service for Cosmos-Transfer1 workflows.
 Handles running Docker commands on remote instances with proper logging and error handling.
 """
 
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
@@ -25,8 +24,7 @@ class DockerExecutor:
         self.remote_executor = RemoteCommandExecutor(ssh_manager)
 
     def run_inference(self, prompt_file: Path, num_gpu: int = 1, cuda_devices: str = "0") -> None:
-        """
-        Run Cosmos-Transfer1 inference on remote instance.
+        """Run Cosmos-Transfer1 inference on remote instance.
 
         Args:
             prompt_file: Name of prompt file (without path)
@@ -35,7 +33,7 @@ class DockerExecutor:
         """
         prompt_name = prompt_file.stem
 
-        logger.info(f"Running inference for {prompt_name} with {num_gpu} GPU(s)")
+        logger.info("Running inference for %s with {num_gpu} GPU(s)", prompt_name)
 
         # Create output directory
         remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
@@ -45,7 +43,7 @@ class DockerExecutor:
         logger.info("Starting inference...")
         self._run_inference_script(prompt_name, num_gpu, cuda_devices)
 
-        logger.info(f"Inference completed successfully for {prompt_name}")
+        logger.info("Inference completed successfully for %s", prompt_name)
 
     def run_upscaling(
         self,
@@ -54,8 +52,7 @@ class DockerExecutor:
         num_gpu: int = 1,
         cuda_devices: str = "0",
     ) -> None:
-        """
-        Run 4K upscaling on remote instance.
+        """Run 4K upscaling on remote instance.
 
         Args:
             prompt_file: Name of prompt file (without path)
@@ -65,7 +62,7 @@ class DockerExecutor:
         """
         prompt_name = prompt_file.stem
 
-        logger.info(f"Running upscaling for {prompt_name} with weight {control_weight}")
+        logger.info("Running upscaling for %s with weight {control_weight}", prompt_name)
 
         # Check if input video exists
         input_video_path = f"{self.remote_dir}/outputs/{prompt_name}/output.mp4"
@@ -83,11 +80,10 @@ class DockerExecutor:
         logger.info("Starting upscaling...")
         self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
 
-        logger.info(f"Upscaling completed successfully for {prompt_name}")
+        logger.info("Upscaling completed successfully for %s", prompt_name)
 
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
         """Run inference using the bash script."""
-
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -104,7 +100,6 @@ class DockerExecutor:
         self, prompt_name: str, control_weight: float, num_gpu: int, cuda_devices: str
     ) -> None:
         """Run upscaling using the bash script."""
-
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -119,7 +114,6 @@ class DockerExecutor:
 
     def _create_upscaler_spec(self, prompt_name: str, control_weight: float) -> None:
         """Create upscaler specification file on remote."""
-
         upscaler_spec = {
             "input_video_path": f"outputs/{prompt_name}/output.mp4",
             "upscale": {"control_weight": control_weight},
@@ -130,13 +124,13 @@ class DockerExecutor:
         spec_path = f"{self.remote_dir}/outputs/{prompt_name}/upscaler_spec.json"
 
         self.remote_executor.write_file(spec_path, spec_content)
-        logger.info(f"Created upscaler spec: {spec_path}")
+        logger.info("Created upscaler spec: %s", spec_path)
 
     def _check_remote_file_exists(self, remote_path: str) -> bool:
         """Check if a file exists on the remote system."""
         return self.remote_executor.file_exists(remote_path)
 
-    def get_docker_status(self) -> Dict[str, Any]:
+    def get_docker_status(self) -> dict[str, Any]:
         """Get Docker status on remote instance."""
         try:
             # Check if Docker is running
@@ -172,7 +166,7 @@ class DockerExecutor:
             )
             logger.info("Cleaned up stopped containers")
         except Exception as e:
-            logger.warning(f"Failed to cleanup containers: {e}")
+            logger.warning("Failed to cleanup containers: %s", e)
 
     def get_container_logs(self, container_id: str) -> str:
         """Get logs from a specific container."""
@@ -181,5 +175,5 @@ class DockerExecutor:
                 f"sudo docker logs {container_id}", stream_output=False
             )
         except Exception as e:
-            logger.error(f"Failed to get container logs: {e}")
+            logger.error("Failed to get container logs: %s", e)
             return f"Error retrieving logs: {e}"

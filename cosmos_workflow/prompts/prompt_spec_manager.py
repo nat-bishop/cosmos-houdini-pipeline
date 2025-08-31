@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""
-PromptSpec management system for Cosmos-Transfer1 workflow.
+"""PromptSpec management system for Cosmos-Transfer1 workflow.
 Handles PromptSpec creation, validation, and file operations.
 """
 
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from ..utils.smart_naming import generate_smart_name
+from cosmos_workflow.utils.smart_naming import generate_smart_name
+
 from .schemas import DirectoryManager, PromptSpec
 
 
@@ -22,16 +22,15 @@ class PromptSpecManager:
 
     def create_prompt_spec(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         prompt_text: str = "",
         negative_prompt: str = "bad quality, blurry, low resolution, cartoonish",
-        input_video_path: Optional[str] = None,
-        control_inputs: Optional[Dict[str, str]] = None,
+        input_video_path: str | None = None,
+        control_inputs: dict[str, str] | None = None,
         is_upsampled: bool = False,
-        parent_prompt_text: Optional[str] = None,
+        parent_prompt_text: str | None = None,
     ) -> PromptSpec:
-        """
-        Create a new PromptSpec using the new schema system.
+        """Create a new PromptSpec using the new schema system.
 
         Args:
             name: Name for the prompt (auto-generated from prompt_text if not provided)
@@ -50,10 +49,7 @@ class PromptSpecManager:
             name = generate_smart_name(prompt_text, max_length=30)
 
         # Build video path
-        if input_video_path:
-            video_path = input_video_path
-        else:
-            video_path = f"inputs/videos/{name}/color.mp4"
+        video_path = input_video_path or f"inputs/videos/{name}/color.mp4"
 
         # Default control inputs
         if control_inputs is None:
@@ -95,9 +91,8 @@ class PromptSpecManager:
 
         return prompt_spec
 
-    def list_prompts(self, prompts_dir: Path, pattern: Optional[str] = None) -> List[Path]:
-        """
-        List available PromptSpec files.
+    def list_prompts(self, prompts_dir: Path, pattern: str | None = None) -> list[Path]:
+        """List available PromptSpec files.
 
         Args:
             prompts_dir: Directory containing prompts
@@ -117,9 +112,8 @@ class PromptSpecManager:
 
         return sorted(prompt_files, key=lambda x: x.stat().st_mtime, reverse=True)
 
-    def get_prompt_info(self, prompt_path: Union[str, Path]) -> Dict[str, Any]:
-        """
-        Get information about a PromptSpec file.
+    def get_prompt_info(self, prompt_path: str | Path) -> dict[str, Any]:
+        """Get information about a PromptSpec file.
 
         Args:
             prompt_path: Path to PromptSpec JSON file
@@ -132,7 +126,7 @@ class PromptSpecManager:
         if not prompt_path.exists():
             raise FileNotFoundError(f"PromptSpec file not found: {prompt_path}")
 
-        with open(prompt_path, "r") as f:
+        with open(prompt_path) as f:
             prompt_data = json.load(f)
 
         return {

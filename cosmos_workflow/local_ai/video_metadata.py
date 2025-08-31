@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Video metadata extraction and processing module with AI-powered frame tagging.
+"""Video metadata extraction and processing module with AI-powered frame tagging.
 
 Handles video file analysis, frame extraction, and metadata generation
 using transformer models for automatic tagging of video content.
@@ -10,9 +9,10 @@ import hashlib
 import json
 import logging
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -34,15 +34,14 @@ class VideoMetadata:
     codec: str
     file_size: int  # bytes
     hash: str  # file hash for verification
-    middle_frame_stats: Dict[str, Any]  # Statistics from middle frame
-    ai_tags: List[str] = field(default_factory=list)  # AI-generated tags
+    middle_frame_stats: dict[str, Any]  # Statistics from middle frame
+    ai_tags: list[str] = field(default_factory=list)  # AI-generated tags
     ai_caption: str = ""  # AI-generated caption
-    detected_objects: List[Dict[str, Any]] = field(default_factory=list)  # Detected objects
+    detected_objects: list[dict[str, Any]] = field(default_factory=list)  # Detected objects
 
 
 class VideoMetadataExtractor:
-    """
-    Extracts metadata from video files with AI-powered analysis.
+    """Extracts metadata from video files with AI-powered analysis.
 
     This class provides functionality to analyze video files and extract
     relevant metadata for Cosmos Transfer workflows, including AI-generated
@@ -50,8 +49,7 @@ class VideoMetadataExtractor:
     """
 
     def __init__(self, use_ai: bool = True, device: str = "cpu"):
-        """
-        Initialize the video metadata extractor.
+        """Initialize the video metadata extractor.
 
         Args:
             use_ai: Whether to use AI models for tagging
@@ -101,17 +99,16 @@ class VideoMetadataExtractor:
             logger.info("AI models loaded successfully")
 
         except ImportError as e:
-            logger.warning(f"Could not load AI models: {e}")
+            logger.warning("Could not load AI models: %s", e)
             logger.warning("Install transformers and torch for AI features:")
             logger.warning("pip install transformers torch pillow")
             self.use_ai = False
         except Exception as e:
-            logger.error(f"Error initializing AI models: {e}")
+            logger.error("Error initializing AI models: %s", e)
             self.use_ai = False
 
     def extract_metadata(self, video_path: Path) -> VideoMetadata:
-        """
-        Extract metadata from a video file.
+        """Extract metadata from a video file.
 
         Args:
             video_path: Path to the video file
@@ -189,9 +186,8 @@ class VideoMetadataExtractor:
 
     def _analyze_frame_with_ai(
         self, frame: np.ndarray
-    ) -> Tuple[List[str], str, List[Dict[str, Any]]]:
-        """
-        Analyze a frame using AI models.
+    ) -> tuple[list[str], str, list[dict[str, Any]]]:
+        """Analyze a frame using AI models.
 
         Args:
             frame: Frame as numpy array (BGR format from OpenCV)
@@ -213,13 +209,13 @@ class VideoMetadataExtractor:
                 inputs = self.caption_processor(pil_image, return_tensors="pt").to(self.device)
                 out = self.caption_model.generate(**inputs, max_length=50)
                 caption = self.caption_processor.decode(out[0], skip_special_tokens=True)
-                logger.info(f"Generated caption: {caption}")
+                logger.info("Generated caption: %s", caption)
 
             # Generate tags from classification
             if self.image_classifier:
                 classifications = self.image_classifier(pil_image, top_k=5)
                 tags = [item["label"] for item in classifications if item["score"] > 0.1]
-                logger.info(f"Generated tags: {tags}")
+                logger.info("Generated tags: %s", tags)
 
             # Detect objects
             if self.object_detector:
@@ -229,18 +225,17 @@ class VideoMetadataExtractor:
                     for det in detections
                     if det["score"] > 0.5
                 ]
-                logger.info(f"Detected {len(detected_objects)} objects")
+                logger.info("Detected %s objects", len(detected_objects))
 
         except Exception as e:
-            logger.error(f"Error during AI analysis: {e}")
+            logger.error("Error during AI analysis: %s", e)
 
         return tags, caption, detected_objects
 
     def _analyze_middle_frame(
         self, cap: cv2.VideoCapture, frame_count: int
-    ) -> Tuple[Dict[str, Any], Optional[np.ndarray]]:
-        """
-        Analyze the middle frame of the video.
+    ) -> tuple[dict[str, Any], np.ndarray | None]:
+        """Analyze the middle frame of the video.
 
         Args:
             cap: OpenCV VideoCapture object
@@ -287,8 +282,7 @@ class VideoMetadataExtractor:
         return stats, frame
 
     def _calculate_file_hash(self, file_path: Path, chunk_size: int = 1024 * 1024) -> str:
-        """
-        Calculate SHA256 hash of file (first chunk only for speed).
+        """Calculate SHA256 hash of file (first chunk only for speed).
 
         Args:
             file_path: Path to file
@@ -303,9 +297,8 @@ class VideoMetadataExtractor:
             sha256.update(chunk)
         return sha256.hexdigest()
 
-    def extract_frame(self, video_path: Path, frame_number: int) -> Optional[np.ndarray]:
-        """
-        Extract a specific frame from video.
+    def extract_frame(self, video_path: Path, frame_number: int) -> np.ndarray | None:
+        """Extract a specific frame from video.
 
         Args:
             video_path: Path to video file
@@ -327,8 +320,7 @@ class VideoMetadataExtractor:
             cap.release()
 
     def save_metadata(self, metadata: VideoMetadata, output_path: Path) -> None:
-        """
-        Save metadata to JSON file.
+        """Save metadata to JSON file.
 
         Args:
             metadata: VideoMetadata object
@@ -358,8 +350,7 @@ class VideoMetadataExtractor:
             json.dump(metadata_dict, f, indent=2)
 
     def load_metadata(self, metadata_path: Path) -> VideoMetadata:
-        """
-        Load metadata from JSON file.
+        """Load metadata from JSON file.
 
         Args:
             metadata_path: Path to JSON file
@@ -367,15 +358,14 @@ class VideoMetadataExtractor:
         Returns:
             VideoMetadata object
         """
-        with open(metadata_path, "r") as f:
+        with open(metadata_path) as f:
             data = json.load(f)
 
         return VideoMetadata(**data)
 
 
 def analyze_video(video_path: Path, use_ai: bool = True) -> VideoMetadata:
-    """
-    Convenience function to analyze a video file.
+    """Convenience function to analyze a video file.
 
     Args:
         video_path: Path to video file
@@ -389,8 +379,7 @@ def analyze_video(video_path: Path, use_ai: bool = True) -> VideoMetadata:
 
 
 class VideoProcessor:
-    """
-    Processes video files and PNG sequences for Cosmos Transfer workflows.
+    """Processes video files and PNG sequences for Cosmos Transfer workflows.
 
     This class handles video conversion, PNG sequence validation and conversion,
     resizing, and preparation for use as input to Cosmos Transfer.
@@ -401,9 +390,8 @@ class VideoProcessor:
         self.standard_fps = 24
         self.standard_resolutions = {"720p": (1280, 720), "1080p": (1920, 1080), "4k": (3840, 2160)}
 
-    def validate_sequence(self, input_dir: Path) -> Dict[str, Any]:
-        """
-        Validate a PNG sequence before conversion.
+    def validate_sequence(self, input_dir: Path) -> dict[str, Any]:
+        """Validate a PNG sequence before conversion.
 
         Args:
             input_dir: Directory containing PNG files
@@ -440,7 +428,6 @@ class VideoProcessor:
             }
 
         # Try to detect naming pattern
-        import re
 
         issues = []
         missing_frames = []
@@ -484,7 +471,7 @@ class VideoProcessor:
                 if img is None:
                     issues.append(f"Invalid PNG file: {png_files[i].name}")
             except Exception as e:
-                issues.append(f"Error reading {png_files[i].name}: {str(e)}")
+                issues.append(f"Error reading {png_files[i].name}: {e!s}")
 
         valid = len(issues) == 0
 
@@ -501,10 +488,9 @@ class VideoProcessor:
         input_path: Path,
         output_path: Path,
         target_fps: int = 24,
-        target_resolution: Optional[Tuple[int, int]] = None,
+        target_resolution: tuple[int, int] | None = None,
     ) -> bool:
-        """
-        Standardize a video file for Cosmos Transfer.
+        """Standardize a video file for Cosmos Transfer.
 
         Args:
             input_path: Path to input video
@@ -525,7 +511,7 @@ class VideoProcessor:
         cap = cv2.VideoCapture(str(input_path))
 
         if not cap.isOpened():
-            logger.error(f"Cannot open video: {input_path}")
+            logger.error("Cannot open video: %s", input_path)
             return False
 
         try:
@@ -569,11 +555,11 @@ class VideoProcessor:
 
                 frame_count += 1
 
-            logger.info(f"Standardized video: {written_frames} frames at {target_fps} FPS")
+            logger.info("Standardized video: %s frames at {target_fps} FPS", written_frames)
             return written_frames > 0
 
         except Exception as e:
-            logger.error(f"Error standardizing video: {e}")
+            logger.error("Error standardizing video: %s", e)
             return False
 
         finally:
@@ -582,10 +568,9 @@ class VideoProcessor:
                 out.release()
 
     def extract_frame(
-        self, video_path: Path, frame_index: int, output_path: Optional[Path] = None
-    ) -> Optional[np.ndarray]:
-        """
-        Extract a specific frame from a video.
+        self, video_path: Path, frame_index: int, output_path: Path | None = None
+    ) -> np.ndarray | None:
+        """Extract a specific frame from a video.
 
         Args:
             video_path: Path to video file
@@ -598,7 +583,7 @@ class VideoProcessor:
         cap = cv2.VideoCapture(str(video_path))
 
         if not cap.isOpened():
-            logger.error(f"Cannot open video: {video_path}")
+            logger.error("Cannot open video: %s", video_path)
             return None
 
         try:
@@ -607,7 +592,7 @@ class VideoProcessor:
 
             ret, frame = cap.read()
             if not ret:
-                logger.error(f"Cannot read frame {frame_index}")
+                logger.error("Cannot read frame %s", frame_index)
                 return None
 
             # Save if output path provided
@@ -615,7 +600,7 @@ class VideoProcessor:
                 output_path = Path(output_path)
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 cv2.imwrite(str(output_path), frame)
-                logger.info(f"Saved frame to {output_path}")
+                logger.info("Saved frame to %s", output_path)
 
             return frame
 
@@ -623,10 +608,9 @@ class VideoProcessor:
             cap.release()
 
     def create_video_from_frames(
-        self, frame_paths: List[Path], output_path: Path, fps: int = 24
+        self, frame_paths: list[Path], output_path: Path, fps: int = 24
     ) -> bool:
-        """
-        Create a video from a sequence of frame images.
+        """Create a video from a sequence of frame images.
 
         Args:
             frame_paths: List of paths to frame images
@@ -646,7 +630,7 @@ class VideoProcessor:
         # Read first frame to get dimensions
         first_frame = cv2.imread(str(frame_paths[0]))
         if first_frame is None:
-            logger.error(f"Cannot read first frame: {frame_paths[0]}")
+            logger.error("Cannot read first frame: %s", frame_paths[0])
             return False
 
         height, width = first_frame.shape[:2]
@@ -674,13 +658,13 @@ class VideoProcessor:
                     out.write(frame)
                     frames_written += 1
                 else:
-                    logger.warning(f"Cannot read frame: {frame_path}")
+                    logger.warning("Cannot read frame: %s", frame_path)
 
-            logger.info(f"Created video with {frames_written} frames at {fps} FPS")
+            logger.info("Created video with %s frames at {fps} FPS", frames_written)
             return frames_written > 0
 
         except Exception as e:
-            logger.error(f"Error creating video: {e}")
+            logger.error("Error creating video: %s", e)
             return False
 
         finally:
@@ -712,7 +696,7 @@ def main():
         print(f"FPS: {metadata.fps}")
         print(f"Frame Count: {metadata.frame_count}")
         print(f"Codec: {metadata.codec}")
-        print(f"File Size: {metadata.file_size / (1024*1024):.2f} MB")
+        print(f"File Size: {metadata.file_size / (1024 * 1024):.2f} MB")
 
         if metadata.ai_caption:
             print(f"\nAI Caption: {metadata.ai_caption}")
@@ -721,7 +705,7 @@ def main():
             print(f"AI Tags: {', '.join(metadata.ai_tags)}")
 
         if metadata.detected_objects:
-            print(f"\nDetected Objects:")
+            print("\nDetected Objects:")
             for obj in metadata.detected_objects:
                 print(f"  - {obj['label']}: {obj['score']:.2%}")
 
@@ -738,4 +722,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

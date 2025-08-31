@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Text-to-name generation module.
+"""Text-to-name generation module.
 
 Converts descriptive text into short, filesystem-safe names (3-4 words).
 Uses lightweight NLP techniques for fast local processing.
@@ -9,12 +8,10 @@ Uses lightweight NLP techniques for fast local processing.
 import re
 import string
 from collections import Counter
-from typing import List, Optional
 
 
 class TextToNameGenerator:
-    """
-    Generates short, descriptive names from text descriptions.
+    """Generates short, descriptive names from text descriptions.
 
     This class uses simple NLP techniques to extract key words from
     descriptions and create filesystem-safe names suitable for prompts
@@ -47,7 +44,6 @@ class TextToNameGenerator:
         "was",
         "will",
         "with",
-        "the",
         "this",
         "these",
         "those",
@@ -63,11 +59,9 @@ class TextToNameGenerator:
         "so",
         "than",
         "too",
-        "very",
         "s",
         "t",
         "can",
-        "will",
     }
 
     # Words that are often important in video generation contexts
@@ -120,8 +114,7 @@ class TextToNameGenerator:
     }
 
     def __init__(self, max_words: int = 4, min_words: int = 2):
-        """
-        Initialize the text-to-name generator.
+        """Initialize the text-to-name generator.
 
         Args:
             max_words: Maximum number of words in the generated name
@@ -130,9 +123,8 @@ class TextToNameGenerator:
         self.max_words = max_words
         self.min_words = min_words
 
-    def generate_name(self, text: str, context: Optional[str] = None) -> str:
-        """
-        Generate a short name from descriptive text.
+    def generate_name(self, text: str, context: str | None = None) -> str:
+        """Generate a short name from descriptive text.
 
         Args:
             text: The descriptive text to convert
@@ -169,9 +161,8 @@ class TextToNameGenerator:
 
         return name
 
-    def _tokenize(self, text: str) -> List[str]:
-        """
-        Tokenize text into words.
+    def _tokenize(self, text: str) -> list[str]:
+        """Tokenize text into words.
 
         Args:
             text: Text to tokenize
@@ -188,9 +179,8 @@ class TextToNameGenerator:
 
         return words
 
-    def _score_words(self, words: List[str], context_words: List[str]) -> dict:
-        """
-        Score words based on importance.
+    def _score_words(self, words: list[str], context_words: list[str]) -> dict:
+        """Score words based on importance.
 
         Args:
             words: Main text words
@@ -230,9 +220,8 @@ class TextToNameGenerator:
 
         return scores
 
-    def _select_top_words(self, word_scores: dict) -> List[str]:
-        """
-        Select the top scoring words.
+    def _select_top_words(self, word_scores: dict) -> list[str]:
+        """Select the top scoring words.
 
         Args:
             word_scores: Dictionary of word scores
@@ -268,9 +257,8 @@ class TextToNameGenerator:
 
         return selected
 
-    def _create_name(self, words: List[str]) -> str:
-        """
-        Create a filesystem-safe name from words.
+    def _create_name(self, words: list[str]) -> str:
+        """Create a filesystem-safe name from words.
 
         Args:
             words: List of words to use
@@ -290,8 +278,7 @@ class TextToNameGenerator:
         return name
 
     def _make_filesystem_safe(self, name: str) -> str:
-        """
-        Make a name filesystem-safe.
+        """Make a name filesystem-safe.
 
         Args:
             name: Name to make safe
@@ -322,9 +309,8 @@ class TextToNameGenerator:
 
         return name.lower()
 
-    def batch_generate(self, texts: List[str]) -> List[str]:
-        """
-        Generate names for multiple texts.
+    def batch_generate(self, texts: list[str]) -> list[str]:
+        """Generate names for multiple texts.
 
         Args:
             texts: List of descriptive texts

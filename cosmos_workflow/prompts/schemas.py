@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Schema definitions for the refactored prompt management system.
+"""Schema definitions for the refactored prompt management system.
 Defines PromptSpec and RunSpec data structures and utilities.
 """
 
@@ -11,7 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 
 class ExecutionStatus(Enum):
@@ -53,17 +52,17 @@ class PromptSpec:
     prompt: str
     negative_prompt: str
     input_video_path: str
-    control_inputs: Dict[str, str]  # modality -> file_path
+    control_inputs: dict[str, str]  # modality -> file_path
     timestamp: str  # ISO format
     is_upsampled: bool = False
-    parent_prompt_text: Optional[str] = None
+    parent_prompt_text: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PromptSpec":
+    def from_dict(cls, data: dict[str, Any]) -> "PromptSpec":
         """Create PromptSpec from dictionary."""
         return cls(**data)
 
@@ -76,7 +75,7 @@ class PromptSpec:
     @classmethod
     def load(cls, file_path: Path) -> "PromptSpec":
         """Load PromptSpec from JSON file."""
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -88,20 +87,20 @@ class RunSpec:
     id: str
     prompt_id: str
     name: str  # Run name (e.g., prompt_name_timestamp)
-    control_weights: Dict[str, float]  # modality -> weight
-    parameters: Dict[str, Any]  # All other parameters
+    control_weights: dict[str, float]  # modality -> weight
+    parameters: dict[str, Any]  # All other parameters
     timestamp: str  # ISO format
     execution_status: ExecutionStatus = ExecutionStatus.PENDING
-    output_path: Optional[str] = None
+    output_path: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         data = asdict(self)
         data["execution_status"] = self.execution_status.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RunSpec":
+    def from_dict(cls, data: dict[str, Any]) -> "RunSpec":
         """Create RunSpec from dictionary."""
         # Convert execution_status string back to enum
         if "execution_status" in data and isinstance(data["execution_status"], str):
@@ -117,7 +116,7 @@ class RunSpec:
     @classmethod
     def load(cls, file_path: Path) -> "RunSpec":
         """Load RunSpec from JSON file."""
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -127,10 +126,9 @@ class SchemaUtils:
 
     @staticmethod
     def generate_prompt_id(
-        prompt_text: str, input_video_path: str, control_inputs: Dict[str, str]
+        prompt_text: str, input_video_path: str, control_inputs: dict[str, str]
     ) -> str:
-        """
-        Generate unique ID for PromptSpec.
+        """Generate unique ID for PromptSpec.
 
         Args:
             prompt_text: The text prompt
@@ -151,10 +149,9 @@ class SchemaUtils:
 
     @staticmethod
     def generate_run_id(
-        prompt_id: str, control_weights: Dict[str, float], parameters: Dict[str, Any]
+        prompt_id: str, control_weights: dict[str, float], parameters: dict[str, Any]
     ) -> str:
-        """
-        Generate unique ID for RunSpec.
+        """Generate unique ID for RunSpec.
 
         Args:
             prompt_id: The PromptSpec ID
@@ -177,7 +174,7 @@ class SchemaUtils:
         return f"rs_{hash_hex}"
 
     @staticmethod
-    def get_default_parameters() -> Dict[str, Any]:
+    def get_default_parameters() -> dict[str, Any]:
         """Get default parameters for inference runs."""
         return {
             "num_steps": 35,
@@ -190,12 +187,12 @@ class SchemaUtils:
         }
 
     @staticmethod
-    def get_default_control_weights() -> Dict[str, float]:
+    def get_default_control_weights() -> dict[str, float]:
         """Get default control weights."""
         return {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
 
     @staticmethod
-    def validate_control_weights(weights: Dict[str, float]) -> bool:
+    def validate_control_weights(weights: dict[str, float]) -> bool:
         """Validate that control weights are valid."""
         if not weights:
             return False
@@ -207,13 +204,13 @@ class SchemaUtils:
 
         # Check that all weights are positive numbers
         for weight in weights.values():
-            if not isinstance(weight, (int, float)) or weight < 0:
+            if not isinstance(weight, int | float) or weight < 0:
                 return False
 
         return True
 
     @staticmethod
-    def validate_parameters(parameters: Dict[str, Any]) -> bool:
+    def validate_parameters(parameters: dict[str, Any]) -> bool:
         """Validate that parameters are within valid ranges."""
         if parameters is None:
             return False
@@ -221,7 +218,7 @@ class SchemaUtils:
         defaults = SchemaUtils.get_default_parameters()
 
         # Check required parameters
-        for param in defaults.keys():
+        for param in defaults:
             if param not in parameters:
                 return False
 
@@ -232,12 +229,12 @@ class SchemaUtils:
             ):
                 return False
 
-            if not isinstance(parameters["guidance"], (int, float)) or not (
+            if not isinstance(parameters["guidance"], int | float) or not (
                 1.0 <= parameters["guidance"] <= 20.0
             ):
                 return False
 
-            if not isinstance(parameters["sigma_max"], (int, float)) or not (
+            if not isinstance(parameters["sigma_max"], int | float) or not (
                 0.0 <= parameters["sigma_max"] <= 80.0
             ):
                 return False
@@ -255,12 +252,9 @@ class SchemaUtils:
             if not isinstance(parameters["fps"], int) or not (1 <= parameters["fps"] <= 60):
                 return False
 
-            if not isinstance(parameters["seed"], int) or not (
-                1 <= parameters["seed"] <= 2**32 - 1
-            ):
-                return False
-
-            return True
+            return not (
+                not isinstance(parameters["seed"], int) or not 1 <= parameters["seed"] <= 2**32 - 1
+            )
         except (KeyError, TypeError):
             return False
 
@@ -269,8 +263,7 @@ class DirectoryManager:
     """Manages date-based directory structure for prompts and runs."""
 
     def __init__(self, base_prompts_dir: Path, base_runs_dir: Path):
-        """
-        Initialize directory manager.
+        """Initialize directory manager.
 
         Args:
             base_prompts_dir: Base directory for prompts
@@ -307,7 +300,7 @@ class DirectoryManager:
 
         return filename
 
-    def get_date_subdirectory(self, timestamp: Union[str, datetime]) -> str:
+    def get_date_subdirectory(self, timestamp: str | datetime) -> str:
         """Get date subdirectory name from timestamp."""
         if isinstance(timestamp, str):
             # Parse ISO format timestamp
@@ -318,7 +311,7 @@ class DirectoryManager:
         return dt.strftime("%Y-%m-%d")
 
     def get_prompt_file_path(
-        self, prompt_name: str, timestamp: Union[str, datetime], prompt_hash: str
+        self, prompt_name: str, timestamp: str | datetime, prompt_hash: str
     ) -> Path:
         """Get file path for a PromptSpec."""
         date_dir = self.get_date_subdirectory(timestamp)
@@ -341,9 +334,7 @@ class DirectoryManager:
 
         return self.base_prompts_dir / date_dir / filename
 
-    def get_run_file_path(
-        self, prompt_name: str, timestamp: Union[str, datetime], run_hash: str
-    ) -> Path:
+    def get_run_file_path(self, prompt_name: str, timestamp: str | datetime, run_hash: str) -> Path:
         """Get file path for a RunSpec."""
         date_dir = self.get_date_subdirectory(timestamp)
 
@@ -370,7 +361,7 @@ class DirectoryManager:
         self.base_prompts_dir.mkdir(parents=True, exist_ok=True)
         self.base_runs_dir.mkdir(parents=True, exist_ok=True)
 
-    def ensure_date_directories_exist(self, timestamp: Union[str, datetime]) -> None:
+    def ensure_date_directories_exist(self, timestamp: str | datetime) -> None:
         """Ensure date subdirectories exist for a given timestamp."""
         date_dir = self.get_date_subdirectory(timestamp)
 
@@ -380,7 +371,7 @@ class DirectoryManager:
         prompt_date_dir.mkdir(parents=True, exist_ok=True)
         run_date_dir.mkdir(parents=True, exist_ok=True)
 
-    def list_date_directories(self, base_dir: Path) -> List[str]:
+    def list_date_directories(self, base_dir: Path) -> list[str]:
         """List all date subdirectories in a base directory."""
         if not base_dir.exists():
             return []

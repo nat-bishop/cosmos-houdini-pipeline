@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""
-Workflow orchestrator for Cosmos-Transfer1.
+"""Workflow orchestrator for Cosmos-Transfer1.
 Coordinates all services to run complete workflows with proper error handling and logging.
 """
 
-import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.connection.ssh_manager import SSHManager
@@ -24,9 +22,9 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
 
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
         self.config_manager = ConfigManager(config_file)
-        self.ssh_manager: Optional[SSHManager] = None
-        self.file_transfer: Optional[FileTransferService] = None
-        self.docker_executor: Optional[DockerExecutor] = None
+        self.ssh_manager: SSHManager | None = None
+        self.file_transfer: FileTransferService | None = None
+        self.docker_executor: DockerExecutor | None = None
 
     def _initialize_services(self):
         """Initialize all workflow services."""
@@ -43,7 +41,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     def run(
         self,
         prompt_file: Path,
-        videos_subdir: Optional[str] = None,
+        videos_subdir: str | None = None,
         inference: bool = True,
         upscale: bool = False,
         upload: bool = True,
@@ -51,9 +49,8 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         upscale_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> Dict[str, Any]:
-        """
-        Run workflow with configurable steps.
+    ) -> dict[str, Any]:
+        """Run workflow with configurable steps.
 
         Args:
             prompt_file: Path to prompt JSON file
@@ -71,13 +68,13 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         """
         self._initialize_services()
 
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         prompt_name = prompt_file.stem
 
         # Determine workflow type for logging
         workflow_type = self._get_workflow_type(inference, upscale, upload, download)
 
-        logger.info(f"Starting {workflow_type} workflow for {prompt_name}")
+        logger.info("Starting %s workflow for {prompt_name}", workflow_type)
         print(f"[INFO] Starting {workflow_type} workflow for {prompt_name}")
 
         try:
@@ -115,7 +112,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 if inference or upscale:
                     self._log_workflow_completion(prompt_file, upscale, upscale_weight, num_gpu)
 
-                end_time = datetime.now()
+                end_time = datetime.now(timezone.utc)
                 duration = end_time - start_time
 
                 print(f"\n[SUCCESS] {workflow_type} workflow completed successfully!")
@@ -136,10 +133,10 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                 }
 
         except Exception as e:
-            end_time = datetime.now()
+            end_time = datetime.now(timezone.utc)
             duration = end_time - start_time
 
-            logger.error(f"Workflow failed: {e}")
+            logger.error("Workflow failed: %s", e)
             print(f"\n[ERROR] Workflow failed: {e}")
 
             # Log failed workflow
@@ -150,14 +147,14 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     def run_full_cycle(
         self,
         prompt_file: Path,
-        videos_subdir: Optional[str] = None,
+        videos_subdir: str | None = None,
         no_upscale: bool = False,
         upscale_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> Dict[str, Any]:
-        """
-        Run complete workflow: upload → inference → upscaling → download.
+    ) -> dict[str, Any]:
+        """Run complete workflow: upload → inference → upscaling → download.
+
         Legacy method for backward compatibility.
         """
         return self.run(
@@ -175,12 +172,12 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     def run_inference_only(
         self,
         prompt_file: Path,
-        videos_subdir: Optional[str] = None,
+        videos_subdir: str | None = None,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> Dict[str, Any]:
-        """
-        Run only inference without upscaling.
+    ) -> dict[str, Any]:
+        """Run only inference without upscaling.
+
         Legacy method for backward compatibility.
         """
         return self.run(
@@ -200,9 +197,9 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         upscale_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> Dict[str, Any]:
-        """
-        Run only upscaling on existing inference output.
+    ) -> dict[str, Any]:
+        """Run only upscaling on existing inference output.
+
         Legacy method for backward compatibility.
         """
         return self.run(
@@ -229,7 +226,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         else:
             return "custom"
 
-    def _get_video_directories(self, prompt_file: Path, videos_subdir: Optional[str]) -> list:
+    def _get_video_directories(self, prompt_file: Path, videos_subdir: str | None) -> list:
         """Get video directories to upload."""
         if videos_subdir:
             return [Path(f"inputs/videos/{videos_subdir}")]
@@ -261,13 +258,13 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
                         if video_dir.exists():
                             return [video_dir]
             except Exception as e:
-                logger.warning(f"Could not load RunSpec/PromptSpec to find videos: {e}")
+                logger.warning("Could not load RunSpec/PromptSpec to find videos: %s", e)
 
         # Default behavior: use prompt file stem
         prompt_name = prompt_file.stem
         return [Path(f"inputs/videos/{prompt_name}")]
 
-    def check_remote_status(self) -> Dict[str, Any]:
+    def check_remote_status(self) -> dict[str, Any]:
         """Check remote instance and Docker status."""
         self._initialize_services()
 
@@ -304,7 +301,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         local_config.notes_dir.mkdir(parents=True, exist_ok=True)
 
         # Create log entry
-        timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         prompt_name = prompt_file.stem
 
         log_entry = (
@@ -319,7 +316,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         with open(run_history_file, "a") as f:
             f.write(log_entry)
 
-        logger.info(f"Workflow logged to {run_history_file}")
+        logger.info("Workflow logged to %s", run_history_file)
 
     def _log_workflow_failure(self, prompt_file: Path, error: str, duration) -> None:
         """Log failed workflow."""
@@ -329,8 +326,7 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         local_config.notes_dir.mkdir(parents=True, exist_ok=True)
 
         # Create failure log entry
-        timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        prompt_name = prompt_file.stem
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
         log_entry = (
             f"{timestamp} | FAILED | prompt={prompt_file.name} | "
@@ -342,4 +338,4 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
         with open(run_history_file, "a") as f:
             f.write(log_entry)
 
-        logger.info(f"Workflow failure logged to {run_history_file}")
+        logger.info("Workflow failure logged to %s", run_history_file)

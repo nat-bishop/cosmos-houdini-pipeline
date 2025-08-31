@@ -1,47 +1,129 @@
+default_language_version:
+  python: python3.10
+
 repos:
+  # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        args: ['--allow-multiple-documents']
       - id: check-json
+      - id: check-toml
+      - id: check-xml
       - id: check-added-large-files
         args: ['--maxkb=1000']
+      - id: check-case-conflict
       - id: check-merge-conflict
-      - id: check-toml
+      - id: check-symlinks
+      - id: check-docstring-first
       - id: debug-statements
       - id: mixed-line-ending
         args: ['--fix=lf']
+      - id: name-tests-test
+        args: ['--pytest-test-first']
+      - id: requirements-txt-fixer
+      - id: fix-byte-order-marker
+      - id: detect-private-key
+      - id: check-ast
 
-  - repo: https://github.com/psf/black
-    rev: 23.3.0
+  # Ruff - Fast Python linter and formatter (replaces black, isort, flake8, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
     hooks:
-      - id: black
-        language_version: python3.10
-        args: ['--line-length=100']
+      # Run the linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      # Run the formatter
+      - id: ruff-format
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+  # MyPy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
     hooks:
-      - id: isort
-        args: ['--profile', 'black', '--line-length=100']
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - types-paramiko
+          - types-toml
+          - types-pyyaml
+        exclude: ^tests/
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+  # Bandit - Security linting
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
     hooks:
-      - id: flake8
-        args: ['--max-line-length=100', '--ignore=E203,W503']
-        additional_dependencies: [flake8-docstrings]
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        exclude: ^tests/
 
-  # Pytest hook disabled for faster commits
-  # Uncomment to enable test runs before commits
-  # - repo: local
+  # Safety - Check for known security vulnerabilities
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.3
+    hooks:
+      - id: python-safety-dependencies-check
+        files: pyproject.toml
+
+  # Validate pyproject.toml
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.23
+    hooks:
+      - id: validate-pyproject
+
+  # Check for outdated Python syntax
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.0
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]
+
+  # Spell checking (optional, can be noisy)
+  # - repo: https://github.com/codespell-project/codespell
+  #   rev: v2.3.0
   #   hooks:
-  #     - id: pytest-unit
-  #       name: pytest unit tests
-  #       entry: pytest tests/unit -m unit --tb=short -q
-  #       language: system
-  #       pass_filenames: false
-  #       always_run: true
-  #       stages: [commit]
+  #     - id: codespell
+  #       args: [--ignore-words-list=crate,nd,strack,datas,ags]
+  #       exclude: >
+  #         (?x)^(
+  #           .*\.json|
+  #           .*\.md|
+  #           .*\.toml|
+  #           .*\.lock
+  #         )$
+
+  # Local hooks
+  - repo: local
+    hooks:
+      # Check for print statements (except in CLI)
+      - id: no-print-statements
+        name: Check for print statements
+        entry: '(?<!#.*)print\('
+        language: pygrep
+        types: [python]
+        exclude: ^(cosmos_workflow/cli\.py|tests/|scripts/)
+
+      # Ensure no hardcoded secrets
+      - id: no-hardcoded-secrets
+        name: Check for hardcoded secrets
+        entry: "(password|secret|token|api_key)\\s*=\\s*[\"'][^\"']+[\"']"
+        language: pygrep
+        types: [python]
+        exclude: ^tests/
+
+      # Run tests (disabled by default for speed, uncomment to enable)
+      # - id: pytest-unit
+      #   name: pytest unit tests
+      #   entry: pytest tests/ -m unit --tb=short -q
+      #   language: system
+      #   pass_filenames: false
+      #   always_run: false
+      #   stages: [push]
+
+ci:
+  autofix_prs: true
+  autofix_commit_msg: '[pre-commit.ci] auto fixes from hooks'
+  autoupdate_schedule: monthly
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  skip: [python-safety-dependencies-check]  # May have false positives in CI

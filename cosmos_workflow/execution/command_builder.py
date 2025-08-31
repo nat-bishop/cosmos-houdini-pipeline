@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""
-Command builder for Docker and shell commands.
+"""Command builder for Docker and shell commands.
 Provides abstractions for building complex commands with proper escaping.
 """
 
-from pathlib import Path
 from shlex import quote
-from typing import Any, Dict, List, Optional
 
 
 class DockerCommandBuilder:
@@ -15,11 +12,11 @@ class DockerCommandBuilder:
     def __init__(self, image: str, workspace: str = "/workspace"):
         self.image = image
         self.workspace = workspace
-        self.volumes: List[str] = []
-        self.environment: Dict[str, str] = {}
+        self.volumes: list[str] = []
+        self.environment: dict[str, str] = {}
         self.gpu_enabled = False
-        self.options: List[str] = []
-        self.command: Optional[str] = None
+        self.options: list[str] = []
+        self.command: str | None = None
 
     def with_gpu(self, enabled: bool = True) -> "DockerCommandBuilder":
         """Enable GPU support."""
@@ -86,15 +83,15 @@ class BashScriptBuilder:
     """Builds bash script commands with proper error handling."""
 
     def __init__(self):
-        self.lines: List[str] = []
-        self.variables: Dict[str, str] = {}
+        self.lines: list[str] = []
+        self.variables: dict[str, str] = {}
 
     def add_shebang(self, shell: str = "/bin/bash") -> "BashScriptBuilder":
         """Add shebang line."""
         self.lines.append(f"#!{shell}")
         return self
 
-    def add_options(self, options: List[str]) -> "BashScriptBuilder":
+    def add_options(self, options: list[str]) -> "BashScriptBuilder":
         """Add shell options (e.g., set -e)."""
         self.lines.append(f"set {' '.join(options)}")
         return self
@@ -125,7 +122,7 @@ class BashScriptBuilder:
         return self
 
     def add_conditional(
-        self, condition: str, then_commands: List[str], else_commands: Optional[List[str]] = None
+        self, condition: str, then_commands: list[str], else_commands: list[str] | None = None
     ) -> "BashScriptBuilder":
         """Add a conditional block."""
         self.lines.append(f"if {condition}; then")
@@ -190,7 +187,7 @@ class RemoteCommandExecutor:
         """Read content from a file on the remote system."""
         return self.ssh_manager.execute_command_success(f"cat {path}")
 
-    def list_directory(self, path: str) -> List[str]:
+    def list_directory(self, path: str) -> list[str]:
         """List files in a directory on the remote system."""
         output = self.ssh_manager.execute_command_success(f"ls -1 {path}")
         return output.strip().split("\n") if output.strip() else []

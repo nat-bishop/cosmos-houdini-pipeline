@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""
-Converter for transforming PromptSpec and RunSpec to NVIDIA Cosmos Transfer format.
+"""Converter for transforming PromptSpec and RunSpec to NVIDIA Cosmos Transfer format.
 
 This module handles the conversion from our internal schema to the controlnet_specs
 format expected by NVIDIA Cosmos Transfer inference.
 """
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from .schemas import PromptSpec, RunSpec
 
@@ -19,10 +17,9 @@ class CosmosConverter:
 
     @staticmethod
     def prompt_spec_to_cosmos(
-        prompt_spec: PromptSpec, run_spec: Optional[RunSpec] = None
-    ) -> Dict[str, Any]:
-        """
-        Convert PromptSpec (and optionally RunSpec) to Cosmos Transfer controlnet_specs format.
+        prompt_spec: PromptSpec, run_spec: RunSpec | None = None
+    ) -> dict[str, Any]:
+        """Convert PromptSpec (and optionally RunSpec) to Cosmos Transfer controlnet_specs format.
 
         Args:
             prompt_spec: The PromptSpec containing prompt and control inputs
@@ -84,10 +81,9 @@ class CosmosConverter:
 
     @staticmethod
     def run_spec_to_cosmos_params(
-        run_spec: RunSpec, prompt_spec: Optional[PromptSpec] = None
-    ) -> Dict[str, Any]:
-        """
-        Extract Cosmos Transfer inference parameters from RunSpec.
+        run_spec: RunSpec, prompt_spec: PromptSpec | None = None
+    ) -> dict[str, Any]:
+        """Extract Cosmos Transfer inference parameters from RunSpec.
 
         These are parameters that would be passed to the inference script
         rather than included in the controlnet_specs JSON.
@@ -127,9 +123,8 @@ class CosmosConverter:
         return params
 
     @staticmethod
-    def save_cosmos_spec(cosmos_spec: Dict[str, Any], output_path: Union[str, Path]) -> Path:
-        """
-        Save Cosmos Transfer controlnet_specs to JSON file.
+    def save_cosmos_spec(cosmos_spec: dict[str, Any], output_path: str | Path) -> Path:
+        """Save Cosmos Transfer controlnet_specs to JSON file.
 
         Args:
             cosmos_spec: The Cosmos format specification
@@ -147,9 +142,8 @@ class CosmosConverter:
         return output_path
 
     @staticmethod
-    def validate_cosmos_spec(cosmos_spec: Dict[str, Any]) -> bool:
-        """
-        Validate that a specification meets Cosmos Transfer requirements.
+    def validate_cosmos_spec(cosmos_spec: dict[str, Any]) -> bool:
+        """Validate that a specification meets Cosmos Transfer requirements.
 
         Args:
             cosmos_spec: The specification to validate
@@ -188,7 +182,7 @@ class CosmosConverter:
 
                 # Check weight is valid (number or path to .pt file)
                 weight = control["control_weight"]
-                if not isinstance(weight, (int, float, str)):
+                if not isinstance(weight, int | float | str):
                     print(f"[ERROR] {modality} control_weight must be number or string")
                     return False
 
@@ -198,9 +192,8 @@ class CosmosConverter:
         return True
 
     @staticmethod
-    def create_upscaler_spec(input_video_path: str, upscale_weight: float = 0.7) -> Dict[str, Any]:
-        """
-        Create a Cosmos Transfer upscaler specification.
+    def create_upscaler_spec(input_video_path: str, upscale_weight: float = 0.7) -> dict[str, Any]:
+        """Create a Cosmos Transfer upscaler specification.
 
         Args:
             input_video_path: Path to video to upscale
@@ -212,9 +205,8 @@ class CosmosConverter:
         return {"input_video_path": input_video_path, "upscale": {"control_weight": upscale_weight}}
 
     @staticmethod
-    def merge_specs(base_spec: Dict[str, Any], override_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merge two Cosmos specifications, with override taking precedence.
+    def merge_specs(base_spec: dict[str, Any], override_spec: dict[str, Any]) -> dict[str, Any]:
+        """Merge two Cosmos specifications, with override taking precedence.
 
         Useful for combining base specs with run-specific overrides.
 

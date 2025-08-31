@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
-Configuration manager for Cosmos-Transfer1 workflow system.
+"""Configuration manager for Cosmos-Transfer1 workflow system.
 Loads configuration from TOML files with environment variable overrides.
 """
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import toml
 
@@ -40,9 +39,9 @@ class ConfigManager:
 
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
         self.config_file = Path(config_file)
-        self._config_data: Optional[Dict[str, Any]] = None
-        self._remote_config: Optional[RemoteConfig] = None
-        self._local_config: Optional[LocalConfig] = None
+        self._config_data: dict[str, Any] | None = None
+        self._remote_config: RemoteConfig | None = None
+        self._local_config: LocalConfig | None = None
 
         if not self.config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {self.config_file}")
@@ -52,7 +51,7 @@ class ConfigManager:
     def _load_config(self) -> None:
         """Load configuration from TOML file with environment variable overrides."""
         # Load base TOML configuration
-        with open(self.config_file, "r") as f:
+        with open(self.config_file) as f:
             self._config_data = toml.load(f)
 
         # Apply environment variable overrides
@@ -152,7 +151,7 @@ class ConfigManager:
             raise RuntimeError("Configuration not loaded")
         return self._local_config
 
-    def get_ssh_options(self) -> Dict[str, Any]:
+    def get_ssh_options(self) -> dict[str, Any]:
         """Get SSH connection options in the format expected by paramiko."""
         remote_config = self.get_remote_config()
 

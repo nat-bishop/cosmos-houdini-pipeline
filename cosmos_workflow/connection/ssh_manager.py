@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""
-SSH connection management for Cosmos-Transfer1 workflows.
+"""SSH connection management for Cosmos-Transfer1 workflows.
 Handles remote connections with proper error handling and connection pooling.
 """
 
 import logging
 from contextlib import contextmanager
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import paramiko
 
@@ -16,10 +15,10 @@ logger = logging.getLogger(__name__)
 class SSHManager:
     """Manages SSH connections to remote instances."""
 
-    def __init__(self, ssh_options: Dict[str, Any]):
+    def __init__(self, ssh_options: dict[str, Any]):
         self.ssh_options = ssh_options
-        self.ssh_client: Optional[paramiko.SSHClient] = None
-        self.sftp_client: Optional[paramiko.SFTPClient] = None
+        self.ssh_client: paramiko.SSHClient | None = None
+        self.sftp_client: paramiko.SFTPClient | None = None
 
     def connect(self) -> None:
         """Establish SSH connection to remote instance."""
@@ -27,13 +26,13 @@ class SSHManager:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            logger.info(f"Connecting to {self.ssh_options['hostname']}:{self.ssh_options['port']}")
+            logger.info("Connecting to %s:{self.ssh_options['port']}", self.ssh_options["hostname"])
             self.ssh_client.connect(**self.ssh_options)
 
             logger.info("SSH connection established successfully")
 
         except Exception as e:
-            logger.error(f"Failed to establish SSH connection: {e}")
+            logger.error("Failed to establish SSH connection: %s", e)
             raise ConnectionError(f"SSH connection failed: {e}")
 
     def disconnect(self) -> None:
@@ -82,9 +81,8 @@ class SSHManager:
 
     def execute_command(
         self, command: str, timeout: int = 300, stream_output: bool = True
-    ) -> Tuple[int, str, str]:
-        """
-        Execute command on remote instance.
+    ) -> tuple[int, str, str]:
+        """Execute command on remote instance.
 
         Args:
             command: Command to execute
@@ -96,7 +94,7 @@ class SSHManager:
         """
         self.ensure_connected()
 
-        logger.info(f"Executing command: {command}")
+        logger.info("Executing command: %s", command)
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
@@ -133,19 +131,18 @@ class SSHManager:
             # Wait for command completion
             exit_code = stdout.channel.recv_exit_status()
 
-            logger.info(f"Command completed with exit code: {exit_code}")
+            logger.info("Command completed with exit code: %s", exit_code)
 
             return exit_code, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
         except Exception as e:
-            logger.error(f"Command execution failed: {e}")
+            logger.error("Command execution failed: %s", e)
             raise RuntimeError(f"Command execution failed: {e}")
 
     def execute_command_success(
         self, command: str, timeout: int = 300, stream_output: bool = True
     ) -> str:
-        """
-        Execute command and raise exception on non-zero exit code.
+        """Execute command and raise exception on non-zero exit code.
 
         Args:
             command: Command to execute

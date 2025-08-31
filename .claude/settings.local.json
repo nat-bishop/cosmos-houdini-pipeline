@@ -68,7 +68,9 @@
       "Bash(ffprobe:*)",
       "Bash(test:*)",
       "Bash(timeout 30 python -m cosmos_workflow.cli run:*)",
-      "Bash(pre-commit:*)"
+      "Bash(pre-commit:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""
-File transfer service for Cosmos-Transfer1 workflows.
+"""File transfer service for Cosmos-Transfer1 workflows.
 Windows implementation using SFTP for file transfers.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import stat
 from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING
 
-from cosmos_workflow.connection.ssh_manager import SSHManager
+if TYPE_CHECKING:
+    from cosmos_workflow.connection.ssh_manager import SSHManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,7 @@ class FileTransferService:
     # ------------------------------------------------------------------ #
 
     def upload_prompt_and_videos(self, prompt_file: Path, video_dirs: list[Path]) -> None:
-        """
-        Upload prompt file, video directories, and scripts/ via SFTP.
+        """Upload prompt file, video directories, and scripts/ via SFTP.
         Creates remote directories if missing and uploads all files.
         """
         if not prompt_file.exists():
@@ -51,7 +49,7 @@ class FileTransferService:
         # 2) Videos → inputs/videos/<dir_name>/...
         for vd in video_dirs:
             if not vd.exists():
-                logger.warning(f"Video directory missing: {vd} (skipping)")
+                logger.warning("Video directory missing: %s (skipping)", vd)
                 continue
             remote_video_path = f"{remote_videos_dir}/{vd.name}"
             self._remote_mkdirs([remote_video_path])
@@ -80,10 +78,9 @@ class FileTransferService:
         self._sftp_upload_file(local_path, f"{remote_dir}/{local_path.name}")
 
     def download_results(self, prompt_file: Path) -> None:
-        """
-        Download results from remote:
-          remote: <remote>/outputs/<prompt_name>[ _upscaled]
-          local : outputs/<prompt_name>[ _upscaled]
+        """Download results from remote:
+        remote: <remote>/outputs/<prompt_name>[ _upscaled]
+        local : outputs/<prompt_name>[ _upscaled].
         """
         prompt_name = prompt_file.stem
 
@@ -94,7 +91,7 @@ class FileTransferService:
         if self.file_exists_remote(remote_out):
             self._sftp_download_dir(remote_out, local_out)
         else:
-            logger.info(f"No remote outputs found at {remote_out}")
+            logger.info("No remote outputs found at %s", remote_out)
 
         # Upscaled outputs (optional)
         remote_up = f"{remote_out}_upscaled"
@@ -118,13 +115,13 @@ class FileTransferService:
         except FileNotFoundError:
             return False
 
-    def list_remote_directory(self, remote_dir: str) -> List[str]:
+    def list_remote_directory(self, remote_dir: str) -> list[str]:
         """List contents of a remote directory."""
         try:
             with self.ssh_manager.get_sftp() as sftp:
                 return sftp.listdir(remote_dir)
-        except Exception as e:
-            logger.error(f"Failed to list remote directory {remote_dir}: {e}")
+        except Exception:
+            logger.error("Failed to list remote directory %s: {e}", remote_dir)
             return []
 
     # ------------------------------------------------------------------ #
@@ -132,29 +129,26 @@ class FileTransferService:
     # ------------------------------------------------------------------ #
 
     def _sftp_upload_file(self, local_file: Path, remote_abs_file: str) -> None:
-        """
-        Upload a single file via SFTP to a specific remote absolute path.
-        """
+        """Upload a single file via SFTP to a specific remote absolute path."""
         remote_abs_file = remote_abs_file.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info(f"Uploading file: {local_file} -> {remote_abs_file}")
+            logger.info("Uploading file: %s -> {remote_abs_file}", local_file)
             sftp.put(str(local_file), remote_abs_file)
-            logger.debug(f"Successfully uploaded {local_file.name}")
+            logger.debug("Successfully uploaded %s", local_file.name)
 
     def _sftp_upload_dir(self, local_dir: Path, remote_abs_dir: str) -> None:
-        """
-        Upload a directory to a remote absolute directory via SFTP.
+        """Upload a directory to a remote absolute directory via SFTP.
         Copies all files in the directory recursively.
         """
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info(f"Uploading directory: {local_dir} -> {remote_abs_dir}")
+            logger.info("Uploading directory: %s -> {remote_abs_dir}", local_dir)
 
             for item in local_dir.iterdir():
                 if item.is_file():
                     remote_path = f"{remote_abs_dir}/{item.name}"
                     sftp.put(str(item), remote_path)
-                    logger.debug(f"Uploaded {item.name}")
+                    logger.debug("Uploaded %s", item.name)
                 elif item.is_dir():
                     # Recursively handle subdirectories
                     remote_subdir = f"{remote_abs_dir}/{item.name}"
@@ -162,18 +156,16 @@ class FileTransferService:
                     self._sftp_upload_dir(item, remote_subdir)
 
     def _sftp_download_dir(self, remote_abs_dir: str, local_dir: Path) -> None:
-        """
-        Download a remote directory to a local directory via SFTP.
-        """
+        """Download a remote directory to a local directory via SFTP."""
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info(f"Downloading directory: {remote_abs_dir} -> {local_dir}")
+            logger.info("Downloading directory: %s -> {local_dir}", remote_abs_dir)
 
             # List remote directory contents
             try:
                 items = sftp.listdir_attr(remote_abs_dir)
-            except Exception as e:
-                logger.error(f"Failed to list directory {remote_abs_dir}: {e}")
+            except Exception:
+                logger.error("Failed to list directory %s: {e}", remote_abs_dir)
                 return
 
             for item in items:
@@ -187,7 +179,7 @@ class FileTransferService:
                 else:
                     # Download file
                     sftp.get(remote_path, str(local_path))
-                    logger.debug(f"Downloaded {item.filename}")
+                    logger.debug("Downloaded %s", item.filename)
 
     # ------------------------------------------------------------------ #
     # Misc helpers

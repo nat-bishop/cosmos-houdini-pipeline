@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""
-Common utilities for workflow operations.
+"""Common utilities for workflow operations.
 Provides reusable functions and abstractions for workflow orchestration.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class WorkflowStep:
     """Represents a single step in a workflow."""
 
     def __init__(
-        self, name: str, function: Callable, emoji: str = "➡️", description: Optional[str] = None
+        self, name: str, function: Callable, emoji: str = "➡️", description: str | None = None
     ):
         self.name = name
         self.function = function
@@ -26,7 +26,7 @@ class WorkflowStep:
 
     def execute(self, *args, **kwargs) -> Any:
         """Execute the workflow step with logging."""
-        logger.info(f"Executing step: {self.name}")
+        logger.info("Executing step: %s", self.name)
         print(f"\n{self.emoji} {self.description}")
         return self.function(*args, **kwargs)
 
@@ -36,18 +36,17 @@ class WorkflowExecutor:
 
     def __init__(self, name: str = "workflow"):
         self.name = name
-        self.steps: List[WorkflowStep] = []
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
+        self.steps: list[WorkflowStep] = []
+        self.start_time: datetime | None = None
+        self.end_time: datetime | None = None
 
     def add_step(self, step: WorkflowStep) -> "WorkflowExecutor":
         """Add a step to the workflow."""
         self.steps.append(step)
         return self
 
-    def execute(self, context: Dict[str, Any], stop_on_error: bool = True) -> Dict[str, Any]:
-        """
-        Execute all workflow steps.
+    def execute(self, context: dict[str, Any], stop_on_error: bool = True) -> dict[str, Any]:
+        """Execute all workflow steps.
 
         Args:
             context: Shared context passed between steps
@@ -70,7 +69,7 @@ class WorkflowExecutor:
                         context.update(result)
 
                 except Exception as e:
-                    logger.error(f"Step {step.name} failed: {e}")
+                    logger.error("Step %s failed: {e}", step.name)
                     if stop_on_error:
                         raise
                     else:
@@ -106,8 +105,7 @@ class WorkflowExecutor:
 
 
 def with_retry(max_attempts: int = 3, delay: float = 1.0):
-    """
-    Decorator to retry a function on failure.
+    """Decorator to retry a function on failure.
 
     Args:
         max_attempts: Maximum number of retry attempts
@@ -126,10 +124,10 @@ def with_retry(max_attempts: int = 3, delay: float = 1.0):
                 except Exception as e:
                     last_exception = e
                     if attempt < max_attempts - 1:
-                        logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                        logger.warning("Attempt %s failed: {e}. Retrying...", attempt + 1)
                         time.sleep(delay)
                     else:
-                        logger.error(f"All {max_attempts} attempts failed")
+                        logger.error("All %s attempts failed", max_attempts)
 
             raise last_exception
 
@@ -148,9 +146,8 @@ def ensure_path_exists(path: Path) -> Path:
     return path
 
 
-def get_video_directories(prompt_file: Path, videos_subdir: Optional[str] = None) -> List[Path]:
-    """
-    Get video directories based on prompt file and optional override.
+def get_video_directories(prompt_file: Path, videos_subdir: str | None = None) -> list[Path]:
+    """Get video directories based on prompt file and optional override.
 
     Args:
         prompt_file: Path to prompt file
@@ -180,10 +177,9 @@ def format_duration(seconds: float) -> str:
 
 
 def log_workflow_event(
-    event_type: str, workflow_name: str, metadata: Dict[str, Any], log_dir: Path = Path("notes")
+    event_type: str, workflow_name: str, metadata: dict[str, Any], log_dir: Path = Path("notes")
 ) -> None:
-    """
-    Log a workflow event to the run history.
+    """Log a workflow event to the run history.
 
     Args:
         event_type: Type of event (e.g., "SUCCESS", "FAILED", "STARTED")
@@ -205,14 +201,14 @@ def log_workflow_event(
     with open(run_history_file, "a") as f:
         f.write(log_entry)
 
-    logger.info(f"Logged {event_type} event to {run_history_file}")
+    logger.info("Logged %s event to {run_history_file}", event_type)
 
 
 class ServiceManager:
     """Manages initialization and cleanup of workflow services."""
 
     def __init__(self):
-        self.services: Dict[str, Any] = {}
+        self.services: dict[str, Any] = {}
         self.initialized = False
 
     def register_service(self, name: str, service: Any) -> None:
@@ -232,7 +228,7 @@ class ServiceManager:
 
         for name, service in self.services.items():
             if hasattr(service, "initialize"):
-                logger.info(f"Initializing service: {name}")
+                logger.info("Initializing service: %s", name)
                 service.initialize()
 
         self.initialized = True
@@ -241,7 +237,7 @@ class ServiceManager:
         """Cleanup all registered services."""
         for name, service in self.services.items():
             if hasattr(service, "cleanup"):
-                logger.info(f"Cleaning up service: {name}")
+                logger.info("Cleaning up service: %s", name)
                 service.cleanup()
 
         self.initialized = False
@@ -257,8 +253,7 @@ class ServiceManager:
 
 
 def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
-    """
-    Validate GPU configuration parameters.
+    """Validate GPU configuration parameters.
 
     Args:
         num_gpu: Number of GPUs to use
@@ -268,29 +263,28 @@ def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
         True if configuration is valid
     """
     if num_gpu <= 0:
-        logger.error(f"Invalid num_gpu: {num_gpu}")
+        logger.error("Invalid num_gpu: %s", num_gpu)
         return False
 
     device_list = cuda_devices.split(",")
     if len(device_list) != num_gpu:
-        logger.error(f"num_gpu ({num_gpu}) doesn't match device count ({len(device_list)})")
+        logger.error("num_gpu (%s) doesn't match device count ({len(device_list)})", num_gpu)
         return False
 
     try:
         device_ids = [int(d.strip()) for d in device_list]
         if any(d < 0 for d in device_ids):
-            logger.error(f"Invalid CUDA device ID in: {cuda_devices}")
+            logger.error("Invalid CUDA device ID in: %s", cuda_devices)
             return False
     except ValueError:
-        logger.error(f"Invalid CUDA device string: {cuda_devices}")
+        logger.error("Invalid CUDA device string: %s", cuda_devices)
         return False
 
     return True
 
 
-def merge_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge multiple configuration dictionaries.
+def merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
+    """Merge multiple configuration dictionaries.
     Later configs override earlier ones.
 
     Args:

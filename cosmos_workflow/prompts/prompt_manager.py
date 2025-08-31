@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""
-Prompt management system for Cosmos-Transfer1 workflow.
+"""Prompt management system for Cosmos-Transfer1 workflow.
 Orchestrates PromptSpec and RunSpec operations using specialized managers.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from ..config.config_manager import ConfigManager
+from cosmos_workflow.config.config_manager import ConfigManager
+
 from .prompt_spec_manager import PromptSpecManager
 from .run_spec_manager import RunSpecManager
 from .schema_validator import SchemaValidator
 from .schemas import (
-    BlurStrength,
-    CannyThreshold,
     DirectoryManager,
-    ExecutionStatus,
     PromptSpec,
     RunSpec,
 )
@@ -52,13 +48,13 @@ class PromptManager:
 
     def create_prompt_spec(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         prompt_text: str = "",
         negative_prompt: str = "bad quality, blurry, low resolution, cartoonish",
-        input_video_path: Optional[str] = None,
-        control_inputs: Optional[Dict[str, str]] = None,
+        input_video_path: str | None = None,
+        control_inputs: dict[str, str] | None = None,
         is_upsampled: bool = False,
-        parent_prompt_text: Optional[str] = None,
+        parent_prompt_text: str | None = None,
     ) -> PromptSpec:
         """Create a new PromptSpec using the PromptSpecManager."""
         return self.prompt_spec_manager.create_prompt_spec(
@@ -74,9 +70,9 @@ class PromptManager:
     def create_run_spec(
         self,
         prompt_spec: PromptSpec,
-        control_weights: Optional[Dict[str, float]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
-        custom_output_path: Optional[str] = None,
+        control_weights: dict[str, float] | None = None,
+        parameters: dict[str, Any] | None = None,
+        custom_output_path: str | None = None,
     ) -> RunSpec:
         """Create a new RunSpec using the RunSpecManager."""
         return self.run_spec_manager.create_run_spec(
@@ -87,27 +83,27 @@ class PromptManager:
             output_path=custom_output_path,
         )
 
-    def validate_prompt_spec(self, prompt_path: Union[str, Path]) -> bool:
+    def validate_prompt_spec(self, prompt_path: str | Path) -> bool:
         """Validate a PromptSpec using the SchemaValidator."""
         return self.validator.validate_prompt_spec(prompt_path)
 
-    def validate_run_spec(self, run_path: Union[str, Path]) -> bool:
+    def validate_run_spec(self, run_path: str | Path) -> bool:
         """Validate a RunSpec using the SchemaValidator."""
         return self.validator.validate_run_spec(run_path)
 
-    def list_prompts(self, pattern: Optional[str] = None) -> List[Path]:
+    def list_prompts(self, pattern: str | None = None) -> list[Path]:
         """List available PromptSpec files using the PromptSpecManager."""
         return self.prompt_spec_manager.list_prompts(self.prompts_dir, pattern)
 
-    def list_runs(self, pattern: Optional[str] = None) -> List[Path]:
+    def list_runs(self, pattern: str | None = None) -> list[Path]:
         """List available RunSpec files using the RunSpecManager."""
         return self.run_spec_manager.list_runs(self.runs_dir, pattern)
 
-    def get_prompt_info(self, prompt_path: Union[str, Path]) -> Dict[str, Any]:
+    def get_prompt_info(self, prompt_path: str | Path) -> dict[str, Any]:
         """Get information about a PromptSpec using the PromptSpecManager."""
         return self.prompt_spec_manager.get_prompt_info(prompt_path)
 
-    def get_run_info(self, run_path: Union[str, Path]) -> Dict[str, Any]:
+    def get_run_info(self, run_path: str | Path) -> dict[str, Any]:
         """Get information about a RunSpec using the RunSpecManager."""
         return self.run_spec_manager.get_run_info(run_path)
 
@@ -212,7 +208,7 @@ def main():
                 parent_prompt_text=args.parent_prompt,
             )
 
-            print(f"\n💡 To create a RunSpec for this prompt:")
+            print("\n💡 To create a RunSpec for this prompt:")
             print(
                 f"   python -m cosmos_workflow.prompts.prompt_manager create-run {prompt_spec.id}.json"
             )
@@ -254,7 +250,7 @@ def main():
                 custom_output_path=args.output_path,
             )
 
-            print(f"\n🚀 To run this specification:")
+            print("\n🚀 To run this specification:")
             print(f"   python -m cosmos_workflow.main run {run_spec.id}.json")
 
         elif args.command == "validate":
@@ -271,7 +267,7 @@ def main():
 
         elif args.command == "info":
             info = prompt_manager.get_prompt_info(args.prompt_file)
-            print(f"PromptSpec Information:")
+            print("PromptSpec Information:")
             print(f"  Filename: {info['filename']}")
             print(f"  ID: {info['id']}")
             print(f"  Name: {info['name']}")

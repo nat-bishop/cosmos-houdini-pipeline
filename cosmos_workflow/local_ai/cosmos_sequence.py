@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Cosmos-specific sequence validation and video conversion.
+"""Cosmos-specific sequence validation and video conversion.
 
 This module handles the strict validation and conversion of Cosmos Transfer
 control modality sequences (color, depth, segmentation, vis, edge).
@@ -12,12 +11,11 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import cv2
-import numpy as np
 
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
@@ -29,11 +27,11 @@ class CosmosSequenceInfo:
     """Information about a validated Cosmos sequence."""
 
     valid: bool
-    modalities: Dict[str, List[Path]]  # e.g., {"color": [paths], "depth": [paths]}
+    modalities: dict[str, list[Path]]  # e.g., {"color": [paths], "depth": [paths]}
     frame_count: int
-    frame_numbers: List[int]
-    issues: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    frame_numbers: list[int]
+    issues: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -45,16 +43,15 @@ class CosmosMetadata:
     description: str  # AI-generated description
     frame_count: int
     fps: float
-    modalities: List[str]
+    modalities: list[str]
     video_path: str  # Path to color.mp4
-    control_inputs: Dict[str, str]  # Paths to control videos (depth, seg, etc.)
+    control_inputs: dict[str, str]  # Paths to control videos (depth, seg, etc.)
     timestamp: str
-    resolution: Tuple[int, int]  # width, height
+    resolution: tuple[int, int]  # width, height
 
 
 class CosmosSequenceValidator:
-    """
-    Validates PNG sequences for Cosmos Transfer workflows.
+    """Validates PNG sequences for Cosmos Transfer workflows.
 
     Enforces strict naming conventions and ensures consistency
     across control modalities.
@@ -62,7 +59,7 @@ class CosmosSequenceValidator:
 
     REQUIRED_MODALITY = "color"
     OPTIONAL_MODALITIES = ["depth", "segmentation", "vis", "edge"]
-    ALL_MODALITIES = [REQUIRED_MODALITY] + OPTIONAL_MODALITIES
+    ALL_MODALITIES = [REQUIRED_MODALITY, *OPTIONAL_MODALITIES]
 
     def __init__(self):
         """Initialize the validator."""
@@ -70,8 +67,7 @@ class CosmosSequenceValidator:
         self.pattern = re.compile(r"^(\w+)\.(\d{4})\.png$")
 
     def validate(self, input_dir: Path) -> CosmosSequenceInfo:
-        """
-        Validate a directory containing Cosmos control sequences.
+        """Validate a directory containing Cosmos control sequences.
 
         Args:
             input_dir: Directory to validate
@@ -198,16 +194,14 @@ class CosmosSequenceValidator:
 
 
 class CosmosVideoConverter:
-    """
-    Converts validated Cosmos sequences to videos.
+    """Converts validated Cosmos sequences to videos.
 
     Creates separate video files for each control modality
     with proper naming for Cosmos Transfer workflows.
     """
 
     def __init__(self, fps: int = 24):
-        """
-        Initialize the converter.
+        """Initialize the converter.
 
         Args:
             fps: Frame rate for output videos
@@ -218,11 +212,10 @@ class CosmosVideoConverter:
         self,
         sequence_info: CosmosSequenceInfo,
         output_dir: Path,
-        name: Optional[str] = None,
+        name: str | None = None,
         use_ai_naming: bool = True,
-    ) -> Dict[str, Any]:
-        """
-        Convert validated sequences to videos.
+    ) -> dict[str, Any]:
+        """Convert validated sequences to videos.
 
         Args:
             sequence_info: Validated sequence information
@@ -248,7 +241,7 @@ class CosmosVideoConverter:
             name = "sequence"
 
         # Create timestamped output directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_path = output_dir / f"{name}_{timestamp}"
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -269,21 +262,20 @@ class CosmosVideoConverter:
                     success, video_path = future.result()
                     if success:
                         results["videos"][modality] = str(video_path)
-                        logger.info(f"Created {modality}.mp4")
+                        logger.info("Created %s.mp4", modality)
                     else:
                         results["errors"].append(f"Failed to create {modality}.mp4")
                         results["success"] = False
                 except Exception as e:
-                    results["errors"].append(f"Error creating {modality}.mp4: {str(e)}")
+                    results["errors"].append(f"Error creating {modality}.mp4: {e!s}")
                     results["success"] = False
 
         return results
 
     def _create_video(
-        self, frame_paths: List[Path], output_path: Path, modality: str
-    ) -> Tuple[bool, Optional[Path]]:
-        """
-        Create a video from frame paths.
+        self, frame_paths: list[Path], output_path: Path, modality: str
+    ) -> tuple[bool, Path | None]:
+        """Create a video from frame paths.
 
         Args:
             frame_paths: List of paths to frames
@@ -294,13 +286,13 @@ class CosmosVideoConverter:
             Tuple of (success, output_path)
         """
         if not frame_paths:
-            logger.error(f"No frames for {modality}")
+            logger.error("No frames for %s", modality)
             return False, None
 
         # Read first frame to get dimensions
         first_frame = cv2.imread(str(frame_paths[0]))
         if first_frame is None:
-            logger.error(f"Cannot read first frame for {modality}")
+            logger.error("Cannot read first frame for %s", modality)
             return False, None
 
         height, width = first_frame.shape[:2]
@@ -310,7 +302,7 @@ class CosmosVideoConverter:
         out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
 
         if not out.isOpened():
-            logger.error(f"Failed to open video writer for {modality}")
+            logger.error("Failed to open video writer for %s", modality)
             return False, None
 
         try:
@@ -328,13 +320,13 @@ class CosmosVideoConverter:
                     out.write(frame)
                     frames_written += 1
                 else:
-                    logger.warning(f"Cannot read frame: {frame_path}")
+                    logger.warning("Cannot read frame: %s", frame_path)
 
-            logger.info(f"Created {modality} video with {frames_written} frames")
+            logger.info("Created %s video with {frames_written} frames", modality)
             return True, output_path
 
-        except Exception as e:
-            logger.error(f"Error creating {modality} video: {e}")
+        except Exception:
+            logger.error("Error creating %s video: {e}", modality)
             return False, None
 
         finally:
@@ -344,12 +336,11 @@ class CosmosVideoConverter:
         self,
         sequence_info: CosmosSequenceInfo,
         output_dir: Path,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
         use_ai: bool = True,
     ) -> CosmosMetadata:
-        """
-        Generate simplified metadata for the sequence.
+        """Generate simplified metadata for the sequence.
 
         Args:
             sequence_info: Validated sequence information
@@ -380,12 +371,12 @@ class CosmosVideoConverter:
                 name = "sequence"
 
         # Generate quick hash ID
-        hash_input = f"{name}_{datetime.now().isoformat()}_{sequence_info.frame_count}"
+        hash_input = f"{name}_{datetime.now(timezone.utc).isoformat()}_{sequence_info.frame_count}"
         id_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
 
         # Get resolution from first color frame
         resolution = (1920, 1080)  # Default
-        if "color" in sequence_info.modalities and sequence_info.modalities["color"]:
+        if sequence_info.modalities.get("color"):
             first_frame = cv2.imread(str(sequence_info.modalities["color"][0]))
             if first_frame is not None:
                 height, width = first_frame.shape[:2]
@@ -394,7 +385,7 @@ class CosmosVideoConverter:
         # Build paths for video and control inputs
         video_path = str(output_dir / "color.mp4")
         control_inputs = {}
-        for modality in sequence_info.modalities.keys():
+        for modality in sequence_info.modalities:
             if modality != "color":
                 control_inputs[modality] = str(output_dir / f"{modality}.mp4")
 
@@ -408,7 +399,7 @@ class CosmosVideoConverter:
             modalities=list(sequence_info.modalities.keys()),
             video_path=video_path,
             control_inputs=control_inputs,
-            timestamp=datetime.now().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat() + "Z",
             resolution=resolution,
         )
 
@@ -434,9 +425,8 @@ class CosmosVideoConverter:
 
         return metadata
 
-    def _generate_ai_description(self, color_frames: List[Path]) -> str:
-        """
-        Generate AI description from color frames.
+    def _generate_ai_description(self, color_frames: list[Path]) -> str:
+        """Generate AI description from color frames.
 
         Args:
             color_frames: List of color frame paths
@@ -467,19 +457,18 @@ class CosmosVideoConverter:
             out = model.generate(**inputs, max_length=50)
             description = processor.decode(out[0], skip_special_tokens=True)
 
-            logger.info(f"Generated AI description: {description}")
+            logger.info("Generated AI description: %s", description)
             return description
 
         except ImportError:
             logger.warning("AI models not available (install transformers)")
             return f"Sequence with {len(color_frames)} frames"
         except Exception as e:
-            logger.warning(f"Could not generate AI description: {e}")
+            logger.warning("Could not generate AI description: %s", e)
             return f"Sequence with {len(color_frames)} frames"
 
     def _generate_smart_name(self, description: str, max_length: int = 20) -> str:
-        """
-        Generate a short, meaningful name from an AI description.
+        """Generate a short, meaningful name from an AI description.
 
         This is a wrapper around the shared smart naming utility.
 
@@ -491,5 +480,5 @@ class CosmosVideoConverter:
             Smart name derived from description
         """
         name = generate_smart_name(description, max_length)
-        logger.info(f"Generated smart name: '{name}' from description: '{description}'")
+        logger.info("Generated smart name: '%s' from description: '%s'", name, description)
         return name

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Main CLI interface for Cosmos-Transfer1 Python workflows.
+"""Main CLI interface for Cosmos-Transfer1 Python workflows.
 Provides a user-friendly command-line interface for all workflow operations.
 """
 
@@ -8,10 +7,19 @@ import argparse
 import json
 import logging
 import sys
+import traceback
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
-from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec, SchemaUtils
+from cosmos_workflow.config.config_manager import ConfigManager
+from cosmos_workflow.prompts.schemas import (
+    DirectoryManager,
+    ExecutionStatus,
+    PromptSpec,
+    RunSpec,
+    SchemaUtils,
+)
+from cosmos_workflow.utils.smart_naming import generate_smart_name
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 
@@ -35,7 +43,7 @@ def validate_prompt_file(prompt_file: str) -> Path:
 
 def run_full_cycle(
     prompt_file: Path,
-    videos_subdir: Optional[str],
+    videos_subdir: str | None,
     no_upscale: bool,
     upscale_weight: float,
     num_gpu: int,
@@ -57,7 +65,7 @@ def run_full_cycle(
         )
 
         if verbose:
-            print(f"\n📊 Workflow Results:")
+            print("\n📊 Workflow Results:")
             print(json.dumps(result, indent=2))
 
     except Exception as e:
@@ -66,7 +74,7 @@ def run_full_cycle(
 
 
 def run_inference_only(
-    prompt_file: Path, videos_subdir: Optional[str], num_gpu: int, cuda_devices: str, verbose: bool
+    prompt_file: Path, videos_subdir: str | None, num_gpu: int, cuda_devices: str, verbose: bool
 ) -> None:
     """Run only inference step."""
     setup_logging(verbose)
@@ -81,7 +89,7 @@ def run_inference_only(
         )
 
         if verbose:
-            print(f"\n📊 Inference Results:")
+            print("\n📊 Inference Results:")
             print(json.dumps(result, indent=2))
 
     except Exception as e:
@@ -105,7 +113,7 @@ def run_upscaling_only(
         )
 
         if verbose:
-            print(f"\n📊 Upscaling Results:")
+            print("\n📊 Upscaling Results:")
             print(json.dumps(result, indent=2))
 
     except Exception as e:
@@ -132,10 +140,10 @@ def check_status(verbose: bool) -> None:
             print(f"  Docker Running: {docker_status['docker_running']}")
 
             if verbose and docker_status["docker_running"]:
-                print(f"\n🐳 Docker Images:")
+                print("\n🐳 Docker Images:")
                 print(docker_status["available_images"])
 
-                print(f"\n📦 Running Containers:")
+                print("\n📦 Running Containers:")
                 print(docker_status["running_containers"])
         else:
             print(f"  Error: {status['error']}")
@@ -146,13 +154,13 @@ def check_status(verbose: bool) -> None:
 
 
 def create_prompt_spec(
-    name: Optional[str],
+    name: str | None,
     prompt_text: str,
     negative_prompt: str,
-    input_video_path: Optional[str],
-    control_inputs: Optional[list],
+    input_video_path: str | None,
+    control_inputs: list | None,
     is_upsampled: bool,
-    parent_prompt_text: Optional[str],
+    parent_prompt_text: str | None,
     verbose: bool,
 ) -> None:
     """Create a new PromptSpec using the new schema system with optional smart naming."""
@@ -161,8 +169,6 @@ def create_prompt_spec(
     try:
         # Auto-generate name if not provided
         if name is None:
-            from cosmos_workflow.utils.smart_naming import generate_smart_name
-
             name = generate_smart_name(prompt_text, max_length=30)
 
         # Parse control inputs
@@ -175,10 +181,7 @@ def create_prompt_spec(
                     control_inputs_dict[modality] = path
 
         # Build video path
-        if input_video_path:
-            video_path = input_video_path
-        else:
-            video_path = f"inputs/videos/{name}/color.mp4"
+        video_path = input_video_path or f"inputs/videos/{name}/color.mp4"
 
         # Default control inputs
         if not control_inputs_dict:
@@ -191,9 +194,7 @@ def create_prompt_spec(
         prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs_dict)
 
         # Create PromptSpec
-        from datetime import datetime
-
-        timestamp = datetime.now().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
         prompt_spec = PromptSpec(
             id=prompt_id,
             name=name,
@@ -207,14 +208,10 @@ def create_prompt_spec(
         )
 
         # Save to file
-        from cosmos_workflow.config.config_manager import ConfigManager
-
         config_manager = ConfigManager()
         local_config = config_manager.get_local_config()
 
         # Create date-based directory structure
-        from cosmos_workflow.prompts.schemas import DirectoryManager
-
         dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
         dir_manager.ensure_directories_exist()
 
@@ -226,21 +223,19 @@ def create_prompt_spec(
         print(f"   Name: {name}")
         print(f"   Video: {video_path}")
         print(f"   Control Inputs: {list(control_inputs_dict.keys())}")
-        print(f"\n[INFO] To create a RunSpec for this prompt:")
+        print("\n[INFO] To create a RunSpec for this prompt:")
         print(f"   python -m cosmos_workflow.main create-run {file_path}")
 
     except Exception as e:
         print(f"\n[ERROR] Failed to create PromptSpec: {e}")
         if verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 
 
 def create_run_spec(
     prompt_spec_path: str,
-    control_weights: Optional[list],
+    control_weights: list | None,
     num_steps: int,
     guidance: float,
     sigma_max: float,
@@ -248,7 +243,7 @@ def create_run_spec(
     canny_threshold: str,
     fps: int,
     seed: int,
-    custom_output_path: Optional[str],
+    custom_output_path: str | None,
     verbose: bool,
 ) -> None:
     """Create a new RunSpec for executing a PromptSpec."""
@@ -298,17 +293,10 @@ def create_run_spec(
         run_id = SchemaUtils.generate_run_id(prompt_spec.id, weights_dict, parameters)
 
         # Build output path
-        if custom_output_path:
-            output_path = custom_output_path
-        else:
-            output_path = f"outputs/{prompt_spec.name}_{run_id}"
+        output_path = custom_output_path or f"outputs/{prompt_spec.name}_{run_id}"
 
         # Create RunSpec
-        from datetime import datetime
-
-        from cosmos_workflow.prompts.schemas import ExecutionStatus
-
-        timestamp = datetime.now().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
         run_spec = RunSpec(
             id=run_id,
             prompt_id=prompt_spec.id,
@@ -321,14 +309,10 @@ def create_run_spec(
         )
 
         # Save to file
-        from cosmos_workflow.config.config_manager import ConfigManager
-
         config_manager = ConfigManager()
         local_config = config_manager.get_local_config()
 
         # Create date-based directory structure
-        from cosmos_workflow.prompts.schemas import DirectoryManager
-
         dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
         dir_manager.ensure_directories_exist()
 
@@ -340,29 +324,26 @@ def create_run_spec(
         print(f"   Prompt: {prompt_spec.id}")
         print(f"   Control Weights: {weights_dict}")
         print(f"   Output: {output_path}")
-        print(f"\n[INFO] To run this specification:")
+        print("\n[INFO] To run this specification:")
         print(f"   python -m cosmos_workflow.cli run {file_path}")
 
     except Exception as e:
         print(f"\n[ERROR] Failed to create RunSpec: {e}")
         if verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 
 
 def convert_png_sequence(
     input_dir: str,
-    output_path: Optional[str],
+    output_path: str | None,
     fps: int,
-    resolution: Optional[str],
+    resolution: str | None,
     generate_metadata: bool,
     ai_analysis: bool,
     verbose: bool,
 ) -> None:
-    """
-    Convert a PNG sequence to video with optional AI metadata generation.
+    """Convert a PNG sequence to video with optional AI metadata generation.
 
     Args:
         input_dir: Directory containing PNG sequence
@@ -376,7 +357,6 @@ def convert_png_sequence(
     setup_logging(verbose)
 
     try:
-        import json
         from pathlib import Path
 
         from cosmos_workflow.local_ai.video_metadata import VideoMetadataExtractor, VideoProcessor
@@ -394,7 +374,7 @@ def convert_png_sequence(
         validation = processor.validate_sequence(input_path)
 
         if not validation["valid"]:
-            print(f"[ERROR] Invalid PNG sequence:")
+            print("[ERROR] Invalid PNG sequence:")
             for issue in validation["issues"]:
                 print(f"  - {issue}")
             if validation["missing_frames"]:
@@ -433,7 +413,7 @@ def convert_png_sequence(
         )
 
         if not success:
-            print(f"[ERROR] Failed to create video")
+            print("[ERROR] Failed to create video")
             sys.exit(1)
 
         print(f"[SUCCESS] Video created successfully: {video_output}")
@@ -468,11 +448,11 @@ def convert_png_sequence(
                 video_output = standardized_path
                 print(f"[SUCCESS] Video standardized to {resolution}")
             else:
-                print(f"[WARNING] Standardization failed, using original video")
+                print("[WARNING] Standardization failed, using original video")
 
         # Step 6: Generate metadata if requested
         if generate_metadata:
-            print(f"\n[INFO] Generating metadata...")
+            print("\n[INFO] Generating metadata...")
             extractor = VideoMetadataExtractor(use_ai=ai_analysis)
             metadata = extractor.extract_metadata(video_output)
 
@@ -483,7 +463,7 @@ def convert_png_sequence(
             print(f"[SUCCESS] Metadata saved to: {metadata_path}")
 
             if verbose:
-                print(f"\n[INFO] Video Metadata:")
+                print("\n[INFO] Video Metadata:")
                 print(f"   Duration: {metadata.duration:.2f} seconds")
                 print(f"   Resolution: {metadata.width}x{metadata.height}")
                 print(f"   FPS: {metadata.fps}")
@@ -493,14 +473,14 @@ def convert_png_sequence(
                 if metadata.ai_tags:
                     print(f"   AI Tags: {', '.join(metadata.ai_tags[:5])}")
 
-        print(f"\n[SUCCESS] Conversion complete!")
+        print("\n[SUCCESS] Conversion complete!")
         print(f"   Video: {video_output}")
         if generate_metadata:
             print(f"   Metadata: {metadata_path}")
 
         # Suggest next steps
-        print(f"\n[INFO] Next steps:")
-        print(f"   1. Use this video as input for Cosmos Transfer:")
+        print("\n[INFO] Next steps:")
+        print("   1. Use this video as input for Cosmos Transfer:")
         print(
             f'      python -m cosmos_workflow.cli create-spec "my_scene" "Transform to cyberpunk style" --video-path {video_output}'
         )
@@ -508,8 +488,6 @@ def convert_png_sequence(
     except Exception as e:
         print(f"\n[ERROR] PNG sequence conversion failed: {e}")
         if verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 
@@ -521,7 +499,7 @@ def run_prompt_upsampling(
     num_frames: int = 2,
     num_gpu: int = 1,
     cuda_devices: str = "0",
-    save_dir: Optional[str] = None,
+    save_dir: str | None = None,
     verbose: bool = False,
 ):
     """Run prompt upsampling on one or more prompts."""
@@ -565,7 +543,7 @@ def run_prompt_upsampling(
                     save_path = Path(save_dir) / f"upsampled_{input_path_obj.name}"
                     spec_manager.save(updated_spec, str(save_path))
                     print(f"[SUCCESS] Saved upsampled prompt to: {save_path}")
-                print(f"[SUCCESS] Successfully upsampled prompt")
+                print("[SUCCESS] Successfully upsampled prompt")
             else:
                 print(f"[ERROR] Upsampling failed: {result.get('error')}")
 
@@ -600,22 +578,19 @@ def run_prompt_upsampling(
     except Exception as e:
         print(f"\n[ERROR] Failed to upsample prompts: {e}")
         if verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 
 
 def prepare_inference(
     input_dir: str,
-    name: Optional[str],
+    name: str | None,
     fps: int,
-    description: Optional[str],
+    description: str | None,
     use_ai: bool,
     verbose: bool,
 ) -> None:
-    """
-    Prepare Cosmos sequences for inference by validating and converting to videos.
+    """Prepare Cosmos sequences for inference by validating and converting to videos.
 
     Args:
         input_dir: Directory containing control modality PNGs
@@ -643,27 +618,25 @@ def prepare_inference(
         sequence_info = validator.validate(input_path)
 
         if not sequence_info.valid:
-            print(f"[ERROR] Invalid Cosmos sequence:")
+            print("[ERROR] Invalid Cosmos sequence:")
             for issue in sequence_info.issues:
                 print(f"  - {issue}")
             sys.exit(1)
 
-        print(f"[SUCCESS] Valid Cosmos sequence found:")
+        print("[SUCCESS] Valid Cosmos sequence found:")
         print(f"  - Frame count: {sequence_info.frame_count}")
         print(f"  - Modalities: {list(sequence_info.modalities.keys())}")
 
         if sequence_info.warnings:
-            print(f"[WARNING] Validation warnings:")
+            print("[WARNING] Validation warnings:")
             for warning in sequence_info.warnings:
                 print(f"  - {warning}")
 
         # Step 2: Convert to videos
-        print(f"\n[INFO] Converting sequences to videos...")
+        print("\n[INFO] Converting sequences to videos...")
         converter = CosmosVideoConverter(fps=fps)
 
         # Get output directory from config
-        from cosmos_workflow.config.config_manager import ConfigManager
-
         config_manager = ConfigManager()
         local_config = config_manager.get_local_config()
         videos_dir = Path(local_config.videos_dir)
@@ -673,18 +646,18 @@ def prepare_inference(
         )
 
         if not result["success"]:
-            print(f"[ERROR] Conversion failed:")
+            print("[ERROR] Conversion failed:")
             for error in result.get("errors", []):
                 print(f"  - {error}")
             sys.exit(1)
 
         output_dir = Path(result["output_dir"])
         print(f"[SUCCESS] Videos created in: {output_dir}")
-        for modality, video_path in result["videos"].items():
+        for modality in result["videos"]:
             print(f"  - {modality}.mp4")
 
         # Step 3: Generate metadata
-        print(f"\n[INFO] Generating metadata...")
+        print("\n[INFO] Generating metadata...")
         metadata = converter.generate_metadata(
             sequence_info=sequence_info,
             output_dir=output_dir,
@@ -693,7 +666,7 @@ def prepare_inference(
             use_ai=use_ai,
         )
 
-        print(f"[SUCCESS] Metadata generated:")
+        print("[SUCCESS] Metadata generated:")
         print(f"  - ID: {metadata.id}")
         print(f"  - Name: {metadata.name}")
         print(f"  - Description: {metadata.description}")
@@ -701,7 +674,7 @@ def prepare_inference(
         print(f"  - FPS: {metadata.fps}")
         print(f"  - Resolution: {metadata.resolution[0]}x{metadata.resolution[1]}")
 
-        print(f"\n[SUCCESS] Inference inputs prepared:")
+        print("\n[SUCCESS] Inference inputs prepared:")
         print(f"  Output directory: {output_dir}")
         print(f"  Video path: {metadata.video_path}")
         if metadata.control_inputs:
@@ -710,8 +683,6 @@ def prepare_inference(
     except Exception as e:
         print(f"\n[ERROR] Failed to prepare inference: {e}")
         if verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 
@@ -759,6 +730,7 @@ Examples:
   # Convert with AI metadata generation
   python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
         """,
+
     )
 
     # Subcommands
@@ -1051,8 +1023,6 @@ Examples:
     except Exception as e:
         print(f"\n[ERROR] Unexpected error: {e}")
         if args.verbose:
-            import traceback
-
             traceback.print_exc()
         sys.exit(1)
 

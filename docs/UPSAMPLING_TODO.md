@@ -111,6 +111,45 @@ hint_video_dir = "./inputs/hint_videos"
 - [ ] Batch processing test - PENDING
 - [ ] End-to-end workflow test - PENDING
 
+## 🔧 Remote Environment Setup (REQUIRED)
+
+### Docker Image Build
+```bash
+# On remote GPU instance:
+cd /home/ubuntu/NatsFS/cosmos-transfer1
+sudo docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
+```
+
+### Model Checkpoints
+- [ ] Ensure all model checkpoints are downloaded to `/home/ubuntu/NatsFS/cosmos-transfer1/checkpoints/`
+- [ ] Verify checkpoint directory structure matches expected paths
+
+### Hugging Face Authentication
+- [ ] Integrate read-only Hugging Face key for model access
+- [ ] Set up as environment variable or Docker secret
+- [ ] Test model download/access with the key
+
+## 🔒 Security Improvements (TODO)
+
+### Version Pinning
+- [ ] **Stop using `:latest` tags** - Pin specific Docker image versions
+  - Create versioned tags (e.g., `cosmos-transfer1:v1.0.0`)
+  - Update `config.toml` to use specific version
+  - Document version in deployment notes
+
+### Checkpoint Management
+- [ ] **Version control model checkpoints**
+  - Document specific checkpoint versions/hashes being used
+  - Create manifest file listing all required checkpoints
+  - Implement checkpoint validation before runs
+
+### Configuration Security
+- [ ] Move from `:latest` to explicit versions in:
+  - Docker base images in Dockerfile
+  - Python package versions in requirements
+  - Model checkpoint references
+- [ ] Create deployment checklist with specific versions
+
 ## Resolution Reference
 | Category | Resolution | Tokens | Works? |
 |----------|------------|--------|--------|
@@ -121,6 +160,26 @@ hint_video_dir = "./inputs/hint_videos"
 | Custom | 480×270 | 4,485 | ❌ No |
 | 480p | 640×480 | 10,629 | ❌ No |
 | 720p | 1280×704 | 31,179 | ❌ No |
+
+## 📋 Pre-flight Checklist
+
+1. **Build Docker image on remote**:
+   ```bash
+   ssh ubuntu@192.222.52.203
+   cd /home/ubuntu/NatsFS/cosmos-transfer1
+   sudo docker build -f Dockerfile . -t nvcr.io/ubuntu/cosmos-transfer1:v1.0.0
+   ```
+
+2. **Verify image exists**:
+   ```bash
+   sudo docker images | grep cosmos-transfer1
+   ```
+
+3. **Update config.toml to use versioned image**:
+   ```toml
+   [docker]
+   image = "nvcr.io/ubuntu/cosmos-transfer1:v1.0.0"  # Not :latest!
+   ```
 
 ## 🚀 Ready-to-Use Commands
 ```bash

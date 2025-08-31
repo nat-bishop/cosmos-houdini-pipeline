@@ -1,29 +1,46 @@
 # TODO - Cosmos Workflow Orchestrator
 *Last Updated: 2025-08-31*
 
-This document tracks planned features and improvements for the Cosmos Workflow Orchestrator project. Items are organized by category and priority, with effort estimates where applicable.
+This document tracks planned features and improvements for the Cosmos Workflow Orchestrator project. Items are organized by category and priority.
 
 ---
 
 ## 🔴 Priority 1: Critical Issues
 
-### Test Suite Overhaul
-- [ ] **Fix tests according to TEST_SUITE_INVESTIGATION_REPORT.md**
-  - Replace internal mocks with fakes
-  - Add contract tests at boundaries
-  - Fix test isolation issues
-  - Increase coverage of core components (WorkflowOrchestrator, PromptManager)
-  - *Effort: 10-15 days*
-  - *Reference: TEST_SUITE_INVESTIGATION_REPORT.md*
+### Remote Environment Setup
+- [ ] **Build Docker image on remote instance**
+  - Run: `sudo docker build -f Dockerfile . -t nvcr.io/ubuntu/cosmos-transfer1:v1.0.0`
+  - Verify image exists with `sudo docker images`
+  - Update config.toml to use versioned image
+  - *Effort: 1 day*
 
-### Code Quality & Cleanup
-- [ ] **Identify and fix cause of temporary directories proliferation**
-  - Investigate temp directories in `inputs/videos/`
-  - Clean up orphaned test_images files
-  - Implement proper cleanup in tests and main code
-  - Add automatic cleanup routines
-  - *Effort: 2-3 days*
+- [ ] **Setup model checkpoints**
+  - Download all required checkpoints to `/home/ubuntu/NatsFS/cosmos-transfer1/checkpoints/`
+  - Verify directory structure
+  - Create manifest of checkpoint versions
+  - *Effort: 1-2 days*
 
+- [ ] **Configure Hugging Face authentication**
+  - Set up read-only HF token
+  - Configure as environment variable or Docker secret
+  - Test model access
+  - *Effort: 1 day*
+
+### Security & Version Control
+- [ ] **Pin Docker image versions**
+  - Stop using `:latest` tags everywhere
+  - Create versioned tags (e.g., `cosmos-transfer1:v1.0.0`)
+  - Update all references in code and config
+  - Document version in deployment notes
+  - *Effort: 1 day*
+
+- [ ] **Version control model checkpoints**
+  - Document specific checkpoint versions/hashes
+  - Create manifest file listing all checkpoints
+  - Implement checkpoint validation
+  - *Effort: 1-2 days*
+
+### Code Quality
 - [ ] **Fix hardcoded negative prompt**
   - Currently hardcoded as "bad quality, blurry, low resolution, cartoonish"
   - Make configurable via config.toml or command line
@@ -41,20 +58,19 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 ## 🟡 Priority 2: Feature Enhancements
 
-### Workflow Improvements
-- [ ] **Revamp cursor workflow using TDD and subagents**
-  - Design new cursor workflow architecture
-  - Implement with Test-Driven Development
-  - Use subagents for modular processing
-  - *Effort: 5-7 days*
+### Upsampling Integration
+- [ ] **Complete upsampling integration testing**
+  - Test with various resolutions on remote GPU
+  - Verify model stays loaded between runs
+  - Test batch processing with checkpoints
+  - Document maximum working resolutions
+  - *Effort: 2-3 days*
 
-### AI & Smart Features
-- [ ] **Improve AI renaming and description generation**
-  - Enhance prompt analysis for better names
-  - Add context-aware description generation
-  - Implement fallback strategies for edge cases
-  - Train/fine-tune better naming model
-  - *Effort: 3-4 days*
+- [ ] **Implement automatic video preprocessing**
+  - Auto-resize videos exceeding token limits
+  - Create hint videos at 320×180 for upsampling
+  - Add resolution validation before processing
+  - *Effort: 2 days*
 
 ### Batch Processing
 - [ ] **Implement batch inference support**
@@ -70,69 +86,37 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - Add failure recovery and retry logic
   - *Effort: 4-5 days*
 
-### CLI Enhancement
-- [ ] **Merge prompt upsampling CLI with main CLI**
-  - Consolidate all CLI commands
-  - Ensure consistent interface
-  - Update documentation
-  - *Effort: 1-2 days*
+### AI & Smart Features
+- [ ] **Improve AI naming and description generation**
+  - Enhance prompt analysis for better names
+  - Add context-aware description generation
+  - Implement fallback strategies for edge cases
+  - *Effort: 3-4 days*
 
+---
+
+## 🟢 Priority 3: Nice to Have
+
+### CLI Enhancement
 - [ ] **Add interactive prompt creation interface**
   - CLI wizard for creating prompts
   - Template system for common scenarios
   - Prompt preview and validation
   - *Effort: 2-3 days*
 
----
+### Documentation
+- [ ] **Create comprehensive user guide**
+  - Step-by-step setup instructions
+  - Common workflow examples
+  - Troubleshooting guide
+  - *Effort: 2 days*
 
-## 🟢 Priority 3: Infrastructure & Documentation
-
-### Dependencies & Build
-- [ ] **Make dependencies in requirements.txt more specific**
-  - Pin exact versions for production stability
-  - Add requirements-dev.txt for development deps
-  - Document minimum version requirements
-  - *Effort: 1 day*
-
+### Infrastructure
 - [ ] **Fix GitHub Actions workflows**
   - Update CI/CD pipelines
   - Add automated testing on PR
   - Configure release automation
   - *Effort: 2 days*
-
-### Documentation
-- [ ] **Fix incorrect resolution and info in docs**
-  - Audit all documentation for accuracy
-  - Update resolution specifications
-  - Correct model parameters
-  - Add examples with correct values
-  - *Effort: 1-2 days*
-
-### Code Organization
-- [ ] **Investigate cosmos_transfer1 repo usage**
-  - Check if cosmos_transfer1 repo is being imported unnecessarily
-  - Remove unused dependencies
-  - Clarify separation between repos
-  - *Effort: 1 day*
-
----
-
-## 📋 Implementation Notes
-
-### Quick Wins (Can do in <2 hours each)
-1. Fix negative prompt hardcoding
-2. Update requirements.txt with specific versions
-3. Document correct resolution info
-
-### Dependencies Between Tasks
-- Test suite overhaul should be done before major new features
-- CLI consolidation should happen before adding prompt creation interface
-- Cleanup temp directories before implementing batch processing
-
-### Testing Requirements
-- All new features must have >80% test coverage
-- Use TDD for cursor workflow revamp
-- Add integration tests for batch processing
 
 ---
 
@@ -140,57 +124,46 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 | Priority | Total Days | Items |
 |----------|------------|-------|
-| Priority 1 | 14-21 days | 4 items |
-| Priority 2 | 18-27 days | 6 items |
-| Priority 3 | 5-6 days | 4 items |
-| **Total** | **37-54 days** | **14 items** |
+| Priority 1 | 8-11 days | 7 items |
+| Priority 2 | 11-14 days | 4 items |
+| Priority 3 | 4-5 days | 3 items |
+| **Total** | **23-30 days** | **14 items** |
 
 ---
 
-## 🎯 Suggested Execution Order
+## 🎯 Next Steps (In Order)
 
-### Phase 1: Foundation (Week 1-3)
-1. Fix test suite (highest impact on code quality)
-2. Clean up temp directories (prevents future issues)
-3. Fix negative prompt hardcoding (quick win)
-
-### Phase 2: Core Features (Week 4-6)
-1. Investigate control weight optimization
-2. Improve AI naming/description
-3. Merge CLI commands
-
-### Phase 3: Advanced Features (Week 7-9)
-1. Implement batch inference
-2. Add overnight processing
-3. Revamp cursor workflow with TDD
-
-### Phase 4: Polish (Week 10)
-1. Fix documentation
-2. Update dependencies
-3. Fix GitHub Actions
-
----
-
-## 📝 Notes for Future Items
-
-Space for additional TODOs as they arise:
-
-- [ ]
-- [ ]
-- [ ]
-- [ ]
-- [ ]
+1. **Setup remote environment** - Build Docker image, download checkpoints
+2. **Configure authentication** - Set up HF token
+3. **Pin versions** - Move away from `:latest` tags
+4. **Test upsampling** - Complete integration testing
+5. **Fix performance issues** - Control weight optimization
 
 ---
 
 ## ✅ Completed Items
 
-Move completed items here with completion date:
+- [x] **Prompt upsampling integration** - Completed 2025-08-31
+  - Integrated upsampling into WorkflowOrchestrator
+  - Added CLI `upsample` command
+  - Created resolution testing utilities
+  - Documented token limits (320×180 safe resolution)
 
-<!-- Example:
-- [x] **Item description** - Completed 2025-01-15
-  - Notes about implementation
--->
+- [x] **Script cleanup** - Completed 2025-08-31
+  - Removed 24 redundant upsampling scripts
+  - Kept 4 essential scripts
+  - Removed 15+ outdated documentation files
+  - Cleaned Python cache files
+
+- [x] **Test suite improvements** - Completed 2025-08-31
+  - Reverted to real implementations (no fakes)
+  - Fixed schema mismatches
+  - Tests now verify actual code behavior
+
+- [x] **Documentation cleanup** - Completed 2025-08-31
+  - Removed all outdated test planning docs
+  - Updated CHANGELOG with recent changes
+  - Consolidated upsampling documentation
 
 ---
 

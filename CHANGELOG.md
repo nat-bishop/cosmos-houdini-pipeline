@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-31 (Prompt Upsampling Integration)
+- **Upsampling Workflow Integration**
+  - Created `cosmos_workflow/workflows/upsample_integration.py` - Mixin for WorkflowOrchestrator
+  - Added `cosmos_workflow/workflows/resolution_tester.py` - Resolution testing utilities
+  - Integrated prompt upsampling into CLI with `upsample` command
+  - Added support for batch upsampling with checkpoint recovery
+  - Implemented token estimation formula: `tokens = width × height × frames × 0.0173`
+
+- **Resolution Analysis Tools**
+  - Created resolution testing framework for finding maximum safe resolutions
+  - Documented safe resolution limits (320×180 @ 2 frames = 1,992 tokens)
+  - Added automatic video preprocessing for high-resolution inputs
+  - Created test video generation capabilities for resolution testing
+
+### Changed - 2025-08-31
+- **Script Cleanup**
+  - Removed 24 redundant/experimental upsampling scripts
+  - Kept only 4 essential scripts: working_prompt_upsampler.py, deploy_and_test_upsampler.py, test_actual_resolution_limits.py, check_remote_results.py
+  - Consolidated upsampling logic into workflow integration
+
+- **Docker Integration**
+  - Updated upsampling to use DockerCommandBuilder pattern (consistent with inference)
+  - Added proper environment variable setup for VLLM
+  - Integrated with existing SSH/SFTP infrastructure
+
+### Fixed - 2025-08-31
+- **Upsampling Issues**
+  - Fixed VLLM multiprocessing spawn method requirement
+  - Resolved token limit errors with high-resolution videos
+  - Fixed environment variable setup for TorchElastic
+
+### Documentation - 2025-08-31
+- **Updated Documentation**
+  - Created UPSAMPLING_TODO.md with complete integration status
+  - Added UPSAMPLING_INTEGRATION_SUMMARY.md with key findings
+  - Updated CLAUDE.md with upsampling workflow instructions
+  - Removed 15+ outdated investigation/planning documents
+
+### Security - 2025-08-31 (Planned)
+- **Version Pinning Requirements**
+  - Need to stop using `:latest` Docker tags
+  - Plan to pin specific model checkpoint versions
+  - Document all dependency versions for reproducibility
+
+## [Unreleased]
+
 ### Added - 2024-12-30 (Modern Linting & Code Quality)
 - **Comprehensive Linting Setup**
   - Integrated Ruff (v0.12.11) - Fast, all-in-one Python linter replacing black, isort, flake8, pylint

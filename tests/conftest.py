@@ -59,7 +59,22 @@ def mock_ssh_manager():
     """Create a mock SSHManager."""
     ssh_manager = MagicMock()
     ssh_manager.execute_command.return_value = (0, "Success", "")
+    ssh_manager.execute_command_success.return_value = (0, "Success", "")
     ssh_manager.is_connected.return_value = True
+
+    # Add get_sftp context manager mock with a persistent sftp client
+    mock_sftp = MagicMock()
+    mock_sftp.put = MagicMock()
+    mock_sftp.get = MagicMock()
+    mock_sftp.mkdir = MagicMock()
+    mock_sftp.listdir = MagicMock(return_value=[])
+    mock_sftp.listdir_attr = MagicMock(return_value=[])
+    mock_sftp.stat = MagicMock(side_effect=FileNotFoundError())
+
+    ssh_manager.get_sftp.return_value.__enter__ = lambda self: mock_sftp
+    ssh_manager.get_sftp.return_value.__exit__ = lambda self, *args: None
+    ssh_manager._sftp_client = mock_sftp  # Store reference for tests to access
+
     return ssh_manager
 
 

@@ -1,142 +1,168 @@
-# CLAUDE.md
+# CLAUDE.md — Project Memory (Cosmos Workflow Orchestrator)
 
-## Project Overview
-Python-based workflow orchestration for Nvidia Cosmos Transfer video generation with remote GPU execution via SSH/Docker.
+## 0) Scope
+This file defines how to work in this repo: goals, constraints, commands, code style, run/test/doc rules. Details in linked docs.
 
-## Tech Stack
-- **Python 3.x** with Paramiko (SSH), TOML (config), pytest (testing)
-- **Nvidia Cosmos Transfer** model at F:/Art/cosmos-transfer1
+## 1) Mission
+Build a Python orchestrator that prepares inputs and executes NVIDIA Cosmos-Transfer video generation on remote GPU via SSH + Docker. Deterministic, recoverable, observable.
+
+## 2) Ground Rules (STRICT)
+
+### Security & Config
+1. **Never hardcode** secrets, IPs, usernames, or paths. Use `cosmos_workflow/config/config.toml` or ENV vars.
+2. **SSH/SFTP only** - no rsync (Windows compatibility). Use `SSHManager` context managers.
+
+### Code Quality
+3. **Small functions** with full type hints. No dynamic monkey-patching.
+4. **Use `pathlib.Path`** (never `os.path`). All datetimes are UTC with `timezone.utc`.
+5. **Logging**: Lazy % formatting (NOT f-strings). No print debugging.
+   ```python
+   logger.info("Processing %s", filename)  # Good
+   logger.info(f"Processing {filename}")   # Bad
+   ```
+
+### Robustness
+6. **Fail fast** on invalid specs. Provide actionable error codes.
+7. **Idempotency**: Reruns must resume or no-op. Never corrupt artifacts.
+8. **Resource cleanup**: Always use context managers. Clean up Docker containers.
+
+## 3) Documentation Rules
+
+### When You Change Code
+1. **CHANGELOG.md**: Log ALL changes chronologically
+2. **README.md**: Update if user-facing features change
+3. **docs/implementation/**: Add detailed docs for new features
+4. **CLAUDE.md**: Only update for workflow/structure changes
+
+### Docstring Requirements
+```python
+def process_video(input_path: Path, fps: int = 24) -> VideoMetadata:
+    """Process video and extract metadata.
+
+    Args:
+        input_path: Path to input video
+        fps: Target frame rate
+
+    Returns:
+        VideoMetadata with extracted info
+
+    Raises:
+        FileNotFoundError: If input missing
+    """
+```
+
+## 4) Testing Rules
+
+### Test Coverage
+- **Minimum 80%** coverage required
+- **Unit tests** must run in <1s
+- Mark tests: `@pytest.mark.unit/integration/system`
+- Use fixtures from `conftest.py`
+
+### Before Committing
+```bash
+# 1. Format & lint
+ruff format cosmos_workflow/
+ruff check cosmos_workflow/ --fix
+
+# 2. Run tests
+pytest tests/ -m unit --cov=cosmos_workflow
+
+# 3. Full validation (if changing core logic)
+pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
+```
+
+## 5) Quick Reference
+
+### Key Commands
+```bash
+# Create prompt with AI naming
+python -m cosmos_workflow.cli create-spec "name" "prompt text" --input-video video.mp4
+
+# Execute on GPU (default 2 GPUs)
+python -m cosmos_workflow.cli run prompt_spec.json --num-gpu 2
+
+# Convert PNG sequence to video
+python -m cosmos_workflow.cli convert-sequence /path/to/pngs --fps 24
+
+# Prepare video for inference
+python -m cosmos_workflow.cli prepare-inference input.mp4 --target-res 720
+```
+
+### Project Structure
+```
+cosmos_workflow/
+├── cli.py                 # Entry point - all commands
+├── config/config.toml     # SSH, paths, Docker config
+├── connection/            # SSHManager (SFTP/SSH)
+├── execution/             # DockerExecutor
+├── prompts/               # PromptSpec, RunSpec schemas
+├── workflows/             # WorkflowOrchestrator
+└── local_ai/             # Video processing, smart naming
+```
+
+### Core Abstractions
+- **PromptSpec**: Prompt definition → `inputs/prompts/{date}/{name}_ps_{hash}.json`
+- **RunSpec**: Execution config → `inputs/runs/{date}/{name}_rs_{hash}.json`
+- **WorkflowOrchestrator**: Main pipeline (workflows/workflow_orchestrator.py)
+- **SSHManager**: Remote ops with SFTP (connection/ssh_manager.py)
+
+## 6) Environment
+
+### Local Dev
+- **OS**: Windows 11 (MINGW64)
+- **Python**: 3.10+ required
+- **Formatter**: Ruff (NOT Black), line length 100
+
+### Remote GPU
+- **Config**: See `cosmos_workflow/config/config.toml`
+- **Model**: Cosmos-Transfer1-7B at `/home/ubuntu/NatsFS/cosmos-transfer1`
 - **Docker**: `nvcr.io/ubuntu/cosmos-transfer1:latest`
-- **Remote GPU**: CUDA 12.4+, PyTorch, 24GB+ VRAM
+- **Requirements**: CUDA 12.4+, 24GB+ VRAM
 
-## Repository Structure
-```
-cosmos-houdini-experiments/
-├── cosmos_workflow/                  # Main Python package
-│   ├── config/config.toml           # SSH, paths, Docker config
-│   ├── connection/ssh_manager.py    # SSH management
-│   ├── execution/docker_executor.py # Docker orchestration
-│   ├── prompts/                     # Schema management
-│   │   ├── schemas.py               # PromptSpec/RunSpec dataclasses
-│   │   ├── prompt_spec_manager.py
-│   │   └── run_spec_manager.py
-│   ├── transfer/file_transfer.py    # rsync file sync
-│   └── cli.py                       # CLI interface
-├── inputs/                           # prompts/, runs/, videos/
-├── outputs/                          # Generated videos
-├── scripts/                          # inference.sh, upscale.sh
-└── tests/                           # pytest test suite
-```
+## 7) Critical Known Issues
 
-## Cosmos Transfer Key Files (F:/Art/cosmos-transfer1/)
-- `cosmos_transfer1/diffusion/inference/transfer.py` - Main inference
-- `cosmos_transfer1/diffusion/inference/transfer_pipeline.py` - Pipeline
-- `checkpoints/nvidia/Cosmos-Transfer1-7B/` - Model weights
-- `checkpoints/nvidia/Cosmos-UpsamplePrompt1-12B-Transfer/` - Upsampler
+### Blockers (with workarounds)
+1. **Vocab error** on high-res videos + prompt upsampling
+   - Fix: Use manual upsampling or reduce resolution first
+2. **SFTP timeout** on files >1GB
+   - Fix: Increase timeout in SSHManager to 1800s
+3. **Docker cleanup** after failures
+   - Fix: Run `docker container prune` on remote
 
-## Schema System
-**PromptSpec**: Prompt definition without execution params
-- Fields: id, name, prompt, negative_prompt, input_video_path, control_inputs
-- Location: `inputs/prompts/{date}/{name}_{timestamp}_ps_{hash}.json`
+### Important Parameters
+- `num_steps`: 35 (quality) or 1 (distilled/fast)
+- `guidance_scale`: 8.0 (CFG default)
+- `num_gpu`: 1-2 recommended
+- `offload_models`: True for memory optimization
 
-**RunSpec**: Execution configuration with all parameters
-- Fields: id, prompt_spec_id, control_weights, parameters, execution_status
-- Location: `inputs/runs/{date}/{name}_{timestamp}_rs_{hash}.json`
+Details: `docs/ai-context/KNOWN_ISSUES.md`
 
-## Common Commands
-```bash
-# Create prompt
-python -m cosmos_workflow.main create-spec "name" "prompt text"
-
-# Create run with control weights
-python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
-
-# Execute on remote GPU
-python -m cosmos_workflow.main run run_spec.json --num-gpu 2
-
-# Run tests
-pytest tests/ --cov=cosmos_workflow
-```
-
-## Direct Cosmos Inference (on GPU)
-```bash
-torchrun --nproc_per_node=$NUM_GPU cosmos_transfer1/diffusion/inference/transfer.py \
-    --checkpoint_dir checkpoints \
-    --input_video_path video.mp4 \
-    --controlnet_specs spec.json \
-    --num_gpus $NUM_GPU
-```
-
-## Control Modalities
-- **vis/blur**: Visual blur control
+## 8) Control Modalities
+- **vis/blur**: Visual blur (0.0-1.0)
 - **edge**: Canny edge detection
 - **depth**: Depth estimation
 - **segmentation**: Semantic segmentation
-- **lidar/hdmap**: AV-specific controls
+- Default weights: [0.3, 0.3, 0.2, 0.2]
 
-## Configuration (config.toml)
-```toml
-[remote]
-host = "192.222.52.92"
-user = "ubuntu"
-ssh_key = "~/.ssh/LambdaSSHkey.pem"
+## 9) Common Debugging
 
-[paths]
-remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
-local_prompts_dir = "./inputs/prompts"
-local_outputs_dir = "./outputs"
-
-[docker]
-image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
-```
-
-## Remote Execution Flow
-1. Create PromptSpec locally
-2. Upload to remote via rsync/SSH
-3. Execute inference.sh in Docker container
-4. Optional: Run upscale.sh for 4K
-5. Download results via rsync
-
-## Important Parameters
-- **num_steps**: 35 (default) or 1 (distilled)
-- **guidance_scale**: CFG scale (default 8.0)
-- **control_weight**: 0.0-1.0 per modality
-- **offload_***: Memory optimization flags
-
-## Code Standards
-- Type hints throughout
-- Dataclasses with validation
-- Pathlib for paths
-- Comprehensive docstrings
-- Test coverage >80%
-
-## Documentation Updates (REQUIRED)
-When making changes, update:
-- **CHANGELOG.md**: Primary log of ALL changes (development history, completed phases, planned work)
-- **README.md**: User-facing features and usage
-- **REFERENCE.md**: Technical API documentation
-- **CLAUDE.md**: Only major workflow/structure changes
-- **docs/implementation/**: Detailed technical implementation docs for completed features
-
-## Known Issues & Solutions
-- **Vocab out of range error**: Occurs with high-res videos + prompt upsampling
-  - Solution: Manually call upsampling functions instead of --upsample-prompt
-- **SSH failures**: Check key permissions (chmod 600)
-- **GPU memory**: Use offload flags for optimization
-
-## Phase 2 Focus: Prompt Upsampling
-- Implement batch prompt upsampling without inference
-- Keep model loaded between runs
-- Handle video preprocessing (resolution/frame reduction)
-- Work around vocab range bug with high-res inputs
-
-## Testing
+### SSH/SFTP Issues
 ```bash
-pytest tests/                        # All tests
-pytest tests/test_schemas.py -v      # Specific file
-pytest --cov=cosmos_workflow tests/  # With coverage
+# Check key permissions
+chmod 600 ~/.ssh/key.pem
+# Test connection
+ssh -i key.pem ubuntu@192.222.52.92
 ```
 
-## External Resources
-- [Cosmos Transfer GitHub](https://github.com/nvidia-cosmos/cosmos-transfer1)
-- [Hugging Face Models](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e)
+### Error Patterns
+- "Connection refused" → SSH down or firewall
+- "Permission denied" → Key permissions or wrong user
+- "No such file" → Remote dir not mounted
+- "CUDA out of memory" → Enable offloading or reduce batch
+
+## 10) References
+- [Cosmos GitHub](https://github.com/nvidia-cosmos/cosmos-transfer1)
+- [Model Weights](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e)
+- Conventions: `docs/ai-context/CONVENTIONS.md`
+- Issues: `docs/ai-context/KNOWN_ISSUES.md`

@@ -18,7 +18,7 @@ class FakeSSHManager:
     allowing tests to verify behavior rather than method calls.
     """
 
-    def __init__(self, connected: bool = True):
+    def __init__(self, connected: bool = False):
         self.connected = connected
         self.commands_executed: list[tuple[str, dict]] = []
         self.files_uploaded: list[tuple[Path, str]] = []
@@ -38,9 +38,19 @@ class FakeSSHManager:
         """Check connection status."""
         return self.connected
 
-    def execute_command(self, command: str, timeout: int = 30, **kwargs) -> tuple[int, str, str]:
+    def ensure_connected(self) -> None:
+        """Ensure SSH connection is active."""
+        if not self.connected:
+            self.connect()
+
+    def get_sftp(self):
+        """Get SFTP client (fake)."""
+        self.ensure_connected()
+        return self  # Return self as a mock SFTP client
+
+    def execute_command(self, command: str, timeout: int = 30) -> tuple[int, str, str]:
         """Execute command and return predictable output based on command type."""
-        self.commands_executed.append((command, kwargs))
+        self.commands_executed.append((command, {"timeout": timeout}))
 
         # Return predictable responses based on command patterns
         if "docker run" in command:
@@ -81,21 +91,60 @@ class FakeFileTransferService:
     def __init__(self, ssh_manager: FakeSSHManager = None, remote_dir: str = "/remote"):
         self.ssh_manager = ssh_manager or FakeSSHManager()
         self.remote_dir = remote_dir
-        self.uploaded_files: dict[str, Path] = {}  # remote_path -> local_path
-        self.uploaded_dirs: dict[str, Path] = {}
-        self.downloaded_files: dict[Path, str] = {}  # local_path -> remote_path
+        # Changed structure to track more details
+        self.uploaded_files: list[dict] = []  # List of upload details
+        self.downloaded_files: list[dict] = []  # List of download details
+        self.failed_uploads: list[dict] = []  # Track failed uploads
+        self.remote_files: dict[str, bytes] = {}  # Simulated remote files
+        self.fail_next_upload = False  # For testing failure scenarios
 
     def upload_file(self, local_path: Path, remote_dir: str) -> None:
         """Track file upload."""
         if not isinstance(local_path, Path):
             local_path = Path(local_path)
 
+        if self.fail_next_upload:
+            self.fail_next_upload = False
+            self.failed_uploads.append(
+                {"local_path": local_path, "remote_path": remote_dir, "reason": "Simulated failure"}
+            )
+            raise ConnectionError("Simulated upload failure")
+
         if not local_path.exists():
             raise FileNotFoundError(f"Local file not found: {local_path}")
 
-        remote_path = f"{remote_dir}/{local_path.name}"
-        self.uploaded_files[remote_path] = local_path
-        self.ssh_manager.files_uploaded.append((local_path, remote_path))
+        upload_info = {
+            "local_path": local_path,
+            "remote_path": remote_dir,
+            "filename": local_path.name,
+        }
+        self.uploaded_files.append(upload_info)
+
+        # Also track in SSH manager for compatibility
+        remote_full_path = f"{remote_dir}/{local_path.name}"
+        self.ssh_manager.files_uploaded.append((local_path, remote_full_path))
+
+    def upload_directory(self, local_dir: Path, remote_dir: str) -> None:
+        """Upload directory recursively."""
+        if not isinstance(local_dir, Path):
+            local_dir = Path(local_dir)
+
+        if not local_dir.exists():
+            raise FileNotFoundError(f"Local directory not found: {local_dir}")
+
+        # Upload all files in directory recursively
+        for file_path in local_dir.rglob("*"):
+            if file_path.is_file():
+                # Preserve directory structure
+                relative_path = file_path.relative_to(local_dir.parent)
+                remote_subdir = f"{remote_dir}/{relative_path.parent}".replace("\\", "/")
+
+                upload_info = {
+                    "local_path": file_path,
+                    "remote_path": remote_subdir,
+                    "filename": file_path.name,
+                }
+                self.uploaded_files.append(upload_info)
 
     def upload_prompt_and_videos(self, prompt_file: Path, video_dirs: list[Path]) -> None:
         """Upload prompt and video directories."""
@@ -105,18 +154,61 @@ class FakeFileTransferService:
         # Upload video directories
         for video_dir in video_dirs:
             if video_dir.exists():
-                self.uploaded_dirs[f"{self.remote_dir}/inputs/videos/{video_dir.name}"] = video_dir
+                self.upload_directory(video_dir, f"{self.remote_dir}/inputs/videos")
+
+    def download_file(self, remote_path: str, local_path: Path) -> None:
+        """Download a file from remote."""
+        if not isinstance(local_path, Path):
+            local_path = Path(local_path)
+
+        # Create parent directory
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Simulate download
+        download_info = {
+            "remote_path": remote_path,
+            "local_path": local_path,
+            "filename": Path(remote_path).name,
+        }
+        self.downloaded_files.append(download_info)
+
+        # If we have simulated content, write it
+        if remote_path in self.remote_files:
+            local_path.write_bytes(self.remote_files[remote_path])
+
+    def download_directory(self, remote_dir: str, local_dir: Path) -> None:
+        """Download directory from remote."""
+        if not isinstance(local_dir, Path):
+            local_dir = Path(local_dir)
+
+        local_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download all files that match the remote directory
+        for remote_path in self.remote_files:
+            if remote_path.startswith(remote_dir):
+                # Calculate local path
+                relative_path = Path(remote_path).relative_to(remote_dir)
+                local_path = local_dir / relative_path
+
+                self.download_file(remote_path, local_path)
 
     def download_results(self, prompt_file: Path) -> None:
         """Download results for a prompt."""
         prompt_name = prompt_file.stem
         remote_results = f"{self.remote_dir}/outputs/{prompt_name}"
         local_results = Path("outputs") / prompt_name
-        self.downloaded_files[local_results] = remote_results
+
+        # Download as directory
+        self.download_directory(remote_results, local_results)
 
     def file_exists_remote(self, remote_path: str) -> bool:
         """Check if file exists on remote."""
-        return remote_path in self.uploaded_files
+        # Check if path was uploaded
+        for upload in self.uploaded_files:
+            full_path = f"{upload['remote_path']}/{upload['filename']}"
+            if full_path == remote_path:
+                return True
+        return remote_path in self.remote_files
 
     def create_remote_directory(self, remote_path: str) -> None:
         """Track remote directory creation."""
@@ -126,9 +218,10 @@ class FakeFileTransferService:
         """List files in remote directory."""
         # Return files we've uploaded to this directory
         files = []
-        for remote_path in self.uploaded_files:
-            if remote_path.startswith(remote_dir + "/"):
-                files.append(Path(remote_path).name)
+        for upload in self.uploaded_files:
+            full_path = f"{upload['remote_path']}/{upload['filename']}"
+            if full_path.startswith(remote_dir + "/"):
+                files.append(upload["filename"])
         return files
 
 
@@ -165,6 +258,7 @@ class FakeDockerExecutor:
         # Create output directory
         output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
         self.ssh_manager.execute_command(f"mkdir -p {output_dir}")
+        self.remote_executor.created_directories.append(output_dir)
 
         # Store result
         self.inference_results[prompt_name] = {
@@ -205,6 +299,16 @@ class FakeDockerExecutor:
         # Create upscaled output directory
         output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
         self.ssh_manager.execute_command(f"mkdir -p {output_dir}")
+        self.remote_executor.created_directories.append(output_dir)
+
+    def get_container_logs(self, container_id: str) -> str:
+        """Get logs for a container (stub)."""
+        return f"Logs for container {container_id}"
+
+    def cleanup_containers(self) -> None:
+        """Clean up containers (stub)."""
+        self.containers_run.clear()
+        self.inference_results.clear()
 
     def get_docker_status(self) -> dict[str, Any]:
         """Get Docker status."""
@@ -250,6 +354,7 @@ class FakeWorkflowOrchestrator:
     def __init__(self, config=None):
         self.config = config
         self.ssh_manager = FakeSSHManager()
+        self.ssh_manager.connect()  # Connect by default for orchestrator
         self.file_transfer = FakeFileTransferService(self.ssh_manager)
         self.docker_executor = FakeDockerExecutor(self.ssh_manager)
         self.workflows_run: list[dict] = []
@@ -288,6 +393,64 @@ class FakeWorkflowOrchestrator:
     def check_status(self, verbose: bool = False) -> bool:
         """Check system status."""
         return self.ssh_manager.is_connected()
+
+    def check_remote_status(self) -> dict:
+        """Check remote system status."""
+        return {
+            "ssh_connected": self.ssh_manager.is_connected(),
+            "docker_running": True,
+            "disk_space": "100GB available",
+        }
+
+    def run(self, spec_file: str, **kwargs) -> bool:
+        """Main entry point - delegates to run_inference."""
+        return self.run_inference(spec_file, **kwargs)
+
+    def run_full_cycle(self, spec_file: str, **kwargs) -> bool:
+        """Run full inference cycle."""
+        return self.run_inference(spec_file, **kwargs)
+
+    def run_inference_only(self, spec_file: str, **kwargs) -> bool:
+        """Run inference only (no upsampling/upscaling)."""
+        return self.run_inference(spec_file, **kwargs)
+
+    def run_upscaling_only(self, spec_file: str, **kwargs) -> bool:
+        """Run upscaling only."""
+        # Simulate upscaling
+        self.workflows_run.append(
+            {
+                "type": "upscaling",
+                "run_spec": spec_file,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return True
+
+    def run_prompt_upsampling(self, spec_file: str, **kwargs) -> bool:
+        """Run prompt upsampling (stub for future merge)."""
+        self.workflows_run.append(
+            {
+                "type": "prompt_upsampling",
+                "spec": spec_file,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return True
+
+    def run_single_prompt_upsampling(self, prompt: str, **kwargs) -> str:
+        """Upsample a single prompt (stub)."""
+        return f"[UPSAMPLED] {prompt}"
+
+    def run_prompt_upsampling_from_directory(self, directory: str, **kwargs) -> bool:
+        """Run upsampling on directory of prompts (stub)."""
+        self.workflows_run.append(
+            {
+                "type": "batch_upsampling",
+                "directory": directory,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return True
 
     def _get_video_directories(self, name: str, run_spec_file: str) -> list[Path]:
         """Get video directories for a given name."""

@@ -13,10 +13,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from cosmos_workflow.config.config_manager import ConfigManager
-from cosmos_workflow.connection.ssh_manager import SSHManager
-from cosmos_workflow.execution.docker_executor import DockerExecutor
-from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 
@@ -520,7 +516,7 @@ image = "cosmos-transfer1:latest"
             assert log_file.exists()
 
             # Check log content
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 log_content = f.read()
                 assert "test_prompt.json" in log_content
                 assert "outputs/test_prompt" in log_content
@@ -549,7 +545,7 @@ image = "cosmos-transfer1:latest"
             assert log_file.exists()
 
             # Check log content
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 log_content = f.read()
                 assert "FAILED" in log_content
                 assert "test_prompt.json" in log_content

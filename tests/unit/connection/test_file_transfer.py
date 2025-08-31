@@ -8,7 +8,7 @@ uploading and downloading files between local and remote systems via rsync.
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -60,8 +60,8 @@ class TestFileTransferService:
         self.mock_ssh_manager.execute_command_success.return_value = None
 
         # Mock successful file uploads
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
+            with patch.object(self.file_transfer, "_sftp_upload_dir"):
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
                 prompt_file.write_text('{"test": "data"}')
@@ -88,7 +88,7 @@ class TestFileTransferService:
 
         # Mock successful file uploads
         with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
+            with patch.object(self.file_transfer, "_sftp_upload_dir"):
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
                 prompt_file.write_text('{"test": "data"}')
@@ -111,7 +111,7 @@ class TestFileTransferService:
         self.mock_ssh_manager.execute_command_success.return_value = None
 
         # Mock successful file uploads
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
             with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
@@ -139,7 +139,7 @@ class TestFileTransferService:
         scripts_dir.mkdir()
         (scripts_dir / "test_script.sh").write_text("#!/bin/bash\necho 'test'")
 
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
             with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
@@ -172,7 +172,7 @@ class TestFileTransferService:
         # Mock successful directory creation
         self.mock_ssh_manager.execute_command_success.return_value = None
 
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
             with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
@@ -213,8 +213,8 @@ class TestFileTransferService:
         scripts_dir.mkdir()
         (scripts_dir / "test_script.sh").write_text("#!/bin/bash\necho 'test'")
 
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
+            with patch.object(self.file_transfer, "_sftp_upload_dir"):
                 # Create test prompt file
                 prompt_file = Path(self.temp_dir) / "test_prompt.json"
                 prompt_file.write_text('{"test": "data"}')
@@ -257,7 +257,7 @@ class TestFileTransferService:
 
     def test_upload_file_creates_remote_directory(self):
         """Test that upload_file creates remote directory before upload."""
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
+        with patch.object(self.file_transfer, "_sftp_upload_file"):
             # Mock successful directory creation
             self.mock_ssh_manager.execute_command_success.return_value = None
 
@@ -468,7 +468,7 @@ class TestFileTransferService:
         """Test that _sftp_download_dir handles recursive directory download."""
         # Mock SFTP context manager with file attributes
         mock_sftp = Mock()
-        from stat import S_IFDIR, S_IFREG
+        from stat import S_IFREG
 
         # Mock file attributes for directory listing
         mock_file_attr = Mock()

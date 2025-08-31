@@ -1,6 +1,7 @@
 """
 Shared pytest fixtures and configuration for all tests.
 """
+
 import json
 import tempfile
 from datetime import datetime
@@ -10,7 +11,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager, LocalConfig, RemoteConfig
-from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
+from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
 
 # --- Configuration Fixtures ---
 
@@ -58,7 +59,22 @@ def mock_ssh_manager():
     """Create a mock SSHManager."""
     ssh_manager = MagicMock()
     ssh_manager.execute_command.return_value = (0, "Success", "")
+    ssh_manager.execute_command_success.return_value = (0, "Success", "")
     ssh_manager.is_connected.return_value = True
+
+    # Add get_sftp context manager mock with a persistent sftp client
+    mock_sftp = MagicMock()
+    mock_sftp.put = MagicMock()
+    mock_sftp.get = MagicMock()
+    mock_sftp.mkdir = MagicMock()
+    mock_sftp.listdir = MagicMock(return_value=[])
+    mock_sftp.listdir_attr = MagicMock(return_value=[])
+    mock_sftp.stat = MagicMock(side_effect=FileNotFoundError())
+
+    ssh_manager.get_sftp.return_value.__enter__ = lambda self: mock_sftp
+    ssh_manager.get_sftp.return_value.__exit__ = lambda self, *args: None
+    ssh_manager._sftp_client = mock_sftp  # Store reference for tests to access
+
     return ssh_manager
 
 
@@ -89,6 +105,8 @@ def sample_prompt_spec(temp_dir):
             "segmentation": str(temp_dir / "segmentation.mp4"),
         },
         timestamp=datetime.now().isoformat(),
+        is_upsampled=False,
+        parent_prompt_text=None,
     )
 
 
@@ -97,12 +115,13 @@ def sample_run_spec(sample_prompt_spec):
     """Create a sample RunSpec for testing."""
     return RunSpec(
         id="test_rs_456",
-        prompt_spec_id=sample_prompt_spec.id,
+        prompt_id=sample_prompt_spec.id,
+        name="test_run",
         control_weights={"depth": 0.3, "segmentation": 0.4},
-        parameters={"num_steps": 35, "guidance_scale": 8.0, "seed": 42},
-        execution_status="pending",
-        output_path="outputs/test_run",
+        parameters={"num_steps": 35, "guidance": 8.0, "seed": 42},
         timestamp=datetime.now().isoformat(),
+        execution_status=ExecutionStatus.PENDING,
+        output_path="outputs/test_run",
     )
 
 
@@ -184,12 +203,13 @@ def create_test_spec(temp_dir):
         else:  # run spec
             spec = RunSpec(
                 id=kwargs.get("id", "test_rs_001"),
-                prompt_spec_id=kwargs.get("prompt_spec_id", "test_ps_001"),
+                prompt_id=kwargs.get("prompt_id", "test_ps_001"),
+                name=kwargs.get("name", "test_run"),
                 control_weights=kwargs.get("control_weights", {}),
                 parameters=kwargs.get("parameters", {}),
-                execution_status=kwargs.get("execution_status", "pending"),
-                output_path=kwargs.get("output_path", "outputs/test"),
                 timestamp=kwargs.get("timestamp", datetime.now().isoformat()),
+                execution_status=kwargs.get("execution_status", ExecutionStatus.PENDING),
+                output_path=kwargs.get("output_path", "outputs/test"),
             )
 
         spec_file = spec_dir / f"{spec.id}.json"

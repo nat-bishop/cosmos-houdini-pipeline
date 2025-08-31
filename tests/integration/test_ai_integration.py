@@ -10,13 +10,11 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
 from cosmos_workflow.local_ai.cosmos_sequence import (
-    CosmosSequenceInfo,
     CosmosSequenceValidator,
     CosmosVideoConverter,
 )
@@ -71,7 +69,7 @@ class TestAIIntegration:
         # Test image 3: Abstract art
         img3 = Image.new("RGB", (512, 512), color="black")
         draw = ImageDraw.Draw(img3)
-        for i in range(10):
+        for _i in range(10):
             x1, y1 = np.random.randint(0, 512, 2)
             x2, y2 = np.random.randint(0, 512, 2)
             color = tuple(np.random.randint(0, 255, 3))
@@ -244,8 +242,10 @@ class TestAIIntegration:
             print(f"{scene_type}: '{description}' -> '{name}'")
 
             # Verify we got meaningful results
-            assert description and "Sequence with" not in description
-            assert name and name != "sequence"
+            assert description
+            assert "Sequence with" not in description
+            assert name
+            assert name != "sequence"
 
     def test_performance_with_multiple_frames(self):
         """Test performance when processing multiple frames."""
@@ -263,12 +263,12 @@ class TestAIIntegration:
 
         # Measure time for single frame
         start = time.time()
-        desc1 = converter._generate_ai_description([frames[0]])
+        converter._generate_ai_description([frames[0]])
         single_time = time.time() - start
 
         # Measure time for multiple frames (uses middle frame)
         start = time.time()
-        desc2 = converter._generate_ai_description(frames)
+        converter._generate_ai_description(frames)
         multi_time = time.time() - start
 
         print(f"Single frame: {single_time:.2f}s")
@@ -388,7 +388,7 @@ class TestDirectoryNamingCompliance:
         import re
         from datetime import datetime
 
-        converter = CosmosVideoConverter()
+        CosmosVideoConverter()
 
         # Mock datetime for consistent testing
         test_time = datetime(2025, 8, 30, 16, 36, 4)

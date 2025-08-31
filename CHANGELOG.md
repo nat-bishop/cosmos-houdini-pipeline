@@ -15,18 +15,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added GPU memory usage profiles
   - Established testing framework for future models
 
-- **Upsampling Batch Processing Verified**
-  - Confirmed batch processing works with safe resolution videos
-  - Tested with/without offloading performance differences
-  - Documented optimal strategies for different use cases
+- **Comprehensive Test Coverage for WorkflowOrchestrator**
+  - Added 25 unit tests achieving 93.79% coverage (up from 13.66%)
+  - Test categories: initialization, helpers, workflows, convenience methods, logging, edge cases
+  - Created `tests/unit/workflows/test_workflow_orchestrator.py`
+  - All tests use proper mocking for fast, isolated execution
+
+- **Upsampling Workflow Integration**
+  - Created `cosmos_workflow/workflows/upsample_integration.py` - Mixin for WorkflowOrchestrator
+  - Added `cosmos_workflow/workflows/resolution_tester.py` - Resolution testing utilities
+  - Integrated prompt upsampling into CLI with `upsample` command
+  - Added support for batch upsampling with checkpoint recovery
+  - Implemented token estimation formula: `tokens = width × height × frames × 0.0173`
+
+- **Resolution Analysis Tools**
+  - Created resolution testing framework for finding maximum safe resolutions
+  - Documented safe resolution limits (320×180 @ 2 frames = 1,992 tokens)
+  - Added automatic video preprocessing for high-resolution inputs
+  - Created test video generation capabilities for resolution testing
+
+### Changed - 2025-08-31 (Test Suite)
+- **Test Suite Cleanup**
+  - Removed outdated integration tests using non-existent methods
+  - Fixed SFTP integration tests with proper context manager mocking
+  - Achieved full green baseline: 614 tests passing, 0 failing
+  - Added missing methods to FileTransferService for test compatibility
+
+- **Documentation Improvements**
+  - Clarified "legacy" methods are actually convenience methods
+  - Updated workflow orchestrator comments to reflect true purpose
+  - Created test plan document with coverage analysis
+  - Created comprehensive testing and merge strategy documentation
+
+- **Script Cleanup**
+  - Removed 24 redundant/experimental upsampling scripts
+  - Kept only 4 essential scripts: working_prompt_upsampler.py, deploy_and_test_upsampler.py, test_actual_resolution_limits.py, check_remote_results.py
+  - Consolidated upsampling logic into workflow integration
+
+- **Docker Integration**
+  - Updated upsampling to use DockerCommandBuilder pattern (consistent with inference)
+  - Added proper environment variable setup for VLLM
+  - Integrated with existing SSH/SFTP infrastructure
 
 ### Fixed - 2025-08-31
+- **SFTP Test Failures**
+  - Fixed mock configuration to properly mock get_sftp() context manager
+  - Added upload_directory() and download_directory() to FileTransferService
+  - Resolved all 8 SFTP integration test failures
+
 - **Resolution Token Limits Identified**
   - Maximum safe resolution: 320×180 @ 2 frames (1,992 tokens)
   - Token formula verified: `tokens = width × height × frames × 0.0173`
   - Videos above 426×240 will fail with vocab errors
 
-## [Unreleased]
+- **Upsampling Issues**
+  - Fixed VLLM multiprocessing spawn method requirement
+  - Resolved token limit errors with high-resolution videos
+  - Fixed environment variable setup for TorchElastic
+
+### Security - 2025-08-31 (Planned)
+- **Version Pinning Requirements**
+  - Need to stop using `:latest` Docker tags
+  - Plan to pin specific model checkpoint versions
+  - Document all dependency versions for reproducibility
 
 ### Added - 2024-12-30 (Modern Linting & Code Quality)
 - **Comprehensive Linting Setup**

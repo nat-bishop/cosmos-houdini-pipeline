@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -90,17 +90,17 @@ class TestVideoPreprocessing(unittest.TestCase):
             out.release()
             return output_path
 
-        result = preprocess_video_for_upsampling(
+        preprocess_video_for_upsampling(
             self.test_video_path, max_resolution=480, num_frames=2
         )
 
         # Verify downscaling calculations
         mock_writer.assert_called_once()
         args = mock_writer.call_args[0]
-        self.assertEqual(args[3], (480, 270))  # Correct aspect ratio
+        assert args[3] == (480, 270)  # Correct aspect ratio
 
         # Verify frames were written
-        self.assertEqual(mock_out.write.call_count, 2)
+        assert mock_out.write.call_count == 2
 
         # Verify cleanup
         mock_cap.release.assert_called_once()
@@ -120,7 +120,7 @@ class TestVideoPreprocessing(unittest.TestCase):
         result = preprocess_video_for_upsampling("/nonexistent/video.mp4", max_resolution=480)
 
         # Should return original path when file doesn't exist
-        self.assertEqual(result, "/nonexistent/video.mp4")
+        assert result == "/nonexistent/video.mp4"
 
 
 class TestPromptUpsampling(unittest.TestCase):
@@ -193,16 +193,16 @@ class TestPromptUpsampling(unittest.TestCase):
         )
 
         # Verify results
-        self.assertEqual(len(results), 2)
-        self.assertIn("upsampled_prompt", results[0])
-        self.assertIn("upsampled_prompt", results[1])
-        self.assertIn("detailed and elaborate", results[0]["upsampled_prompt"])
+        assert len(results) == 2
+        assert "upsampled_prompt" in results[0]
+        assert "upsampled_prompt" in results[1]
+        assert "detailed and elaborate" in results[0]["upsampled_prompt"]
 
         # Verify output file was created
-        self.assertTrue(os.path.exists(output_file))
-        with open(output_file, "r") as f:
+        assert os.path.exists(output_file)
+        with open(output_file) as f:
             saved_results = json.load(f)
-        self.assertEqual(len(saved_results), 2)
+        assert len(saved_results) == 2
 
     def test_error_handling(self):
         """Test error handling during upsampling."""
@@ -242,11 +242,11 @@ class TestPromptUpsampling(unittest.TestCase):
         results = process_prompt_batch_with_errors(self.test_prompts, output_file)
 
         # Should handle error gracefully
-        self.assertEqual(len(results), 2)
-        self.assertIn("Upsampled:", results[0]["upsampled_prompt"])
+        assert len(results) == 2
+        assert "Upsampled:" in results[0]["upsampled_prompt"]
         # Second should fallback to original
-        self.assertEqual(results[1]["upsampled_prompt"], "Natural landscape")
-        self.assertIn("error", results[1])
+        assert results[1]["upsampled_prompt"] == "Natural landscape"
+        assert "error" in results[1]
 
 
 class TestCLIInterface(unittest.TestCase):
@@ -281,10 +281,10 @@ class TestCLIInterface(unittest.TestCase):
             ["--prompts-file", "test.json", "--preprocess-videos", "--max-resolution", "360"]
         )
 
-        self.assertEqual(args.prompts_file, "test.json")
-        self.assertTrue(args.preprocess_videos)
-        self.assertEqual(args.max_resolution, 360)
-        self.assertEqual(args.num_frames, 2)
+        assert args.prompts_file == "test.json"
+        assert args.preprocess_videos
+        assert args.max_resolution == 360
+        assert args.num_frames == 2
 
     def test_cli_batch_processing(self):
         """Test CLI batch processing logic."""
@@ -298,7 +298,7 @@ class TestCLIInterface(unittest.TestCase):
         output_file = os.path.join(self.temp_dir, "output.json")
 
         # Load prompts
-        with open(prompts_file, "r") as f:
+        with open(prompts_file) as f:
             loaded_prompts = json.load(f)
 
         # Process
@@ -311,10 +311,10 @@ class TestCLIInterface(unittest.TestCase):
             json.dump(results, f)
 
         # Verify
-        self.assertTrue(os.path.exists(output_file))
-        with open(output_file, "r") as f:
+        assert os.path.exists(output_file)
+        with open(output_file) as f:
             saved = json.load(f)
-        self.assertEqual(len(saved), 2)
+        assert len(saved) == 2
 
 
 class TestEnvironmentHandling(unittest.TestCase):
@@ -322,7 +322,6 @@ class TestEnvironmentHandling(unittest.TestCase):
 
     def test_torchrun_environment_cleanup(self):
         """Test that torchrun environment variables are handled correctly."""
-        import os
 
         # Simulate torchrun environment
         test_env = {
@@ -347,11 +346,11 @@ class TestEnvironmentHandling(unittest.TestCase):
         # Test cleanup
         cleaned = clean_torchrun_env(test_env)
 
-        self.assertNotIn("RANK", cleaned)
-        self.assertNotIn("LOCAL_RANK", cleaned)
-        self.assertNotIn("WORLD_SIZE", cleaned)
-        self.assertNotIn("MASTER_ADDR", cleaned)
-        self.assertNotIn("MASTER_PORT", cleaned)
+        assert "RANK" not in cleaned
+        assert "LOCAL_RANK" not in cleaned
+        assert "WORLD_SIZE" not in cleaned
+        assert "MASTER_ADDR" not in cleaned
+        assert "MASTER_PORT" not in cleaned
 
     def test_rank_based_execution(self):
         """Test that only rank 0 executes in distributed setting."""
@@ -360,9 +359,9 @@ class TestEnvironmentHandling(unittest.TestCase):
         def should_execute(rank):
             return rank == 0
 
-        self.assertTrue(should_execute(0))
-        self.assertFalse(should_execute(1))
-        self.assertFalse(should_execute(2))
+        assert should_execute(0)
+        assert not should_execute(1)
+        assert not should_execute(2)
 
 
 if __name__ == "__main__":

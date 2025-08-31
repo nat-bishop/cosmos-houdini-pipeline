@@ -4,9 +4,7 @@ Comprehensive integration tests for the prompt system.
 Tests how all components work together in real scenarios.
 """
 
-import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -14,16 +12,10 @@ import pytest
 
 from cosmos_workflow.prompts import (
     PromptManager,
-    PromptSpecManager,
-    RunSpecManager,
-    SchemaValidator,
 )
 from cosmos_workflow.prompts.schemas import (
-    DirectoryManager,
-    ExecutionStatus,
     PromptSpec,
     RunSpec,
-    SchemaUtils,
 )
 
 
@@ -343,7 +335,7 @@ class TestPromptSystemIntegration:
                 "directory_test", "Test prompt for directory structure"
             )
 
-            run_spec = prompt_manager.create_run_spec(prompt_spec)
+            prompt_manager.create_run_spec(prompt_spec)
 
             # Check that date-based directories were created
             date_dirs = list(self.prompts_dir.iterdir())

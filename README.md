@@ -2,6 +2,10 @@
 
 A professional Python workflow orchestrator for NVIDIA Cosmos Transfer video generation with remote GPU execution.
 
+[![Test Coverage](https://img.shields.io/badge/coverage-75%25-green.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-614%20passing-brightgreen.svg)](tests/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+
 ## 🚀 Quick Start
 
 ### Prerequisites

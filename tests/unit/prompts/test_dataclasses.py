@@ -6,15 +6,11 @@ Tests all methods, edge cases, and error conditions.
 
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
 from cosmos_workflow.prompts.schemas import (
-    BlurStrength,
-    CannyThreshold,
     ExecutionStatus,
     PromptSpec,
     RunSpec,
@@ -123,7 +119,7 @@ class TestPromptSpec:
         assert file_path.is_file()
 
         # Verify content
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             saved_data = json.load(f)
 
         assert saved_data["id"] == "ps_test123"
@@ -333,7 +329,7 @@ class TestRunSpec:
         assert file_path.is_file()
 
         # Verify content
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             saved_data = json.load(f)
 
         assert saved_data["id"] == "rs_test456"

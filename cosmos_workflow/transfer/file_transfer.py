@@ -69,13 +69,33 @@ class FileTransferService:
         else:
             logger.warning("Scripts directory not found; skipping script upload.")
 
-    def upload_file(self, local_path: Path, remote_dir: str) -> None:
+    def upload_file(self, local_path: Path | str, remote_dir: str) -> bool:
         """Upload a single file to a remote directory via SFTP."""
+        local_path = Path(local_path) if isinstance(local_path, str) else local_path
         if not local_path.exists():
             raise FileNotFoundError(local_path)
         remote_dir = remote_dir.replace("\\", "/")
         self._remote_mkdirs([remote_dir])
         self._sftp_upload_file(local_path, f"{remote_dir}/{local_path.name}")
+        return True
+
+    def upload_directory(self, local_dir: Path | str, remote_dir: str) -> bool:
+        """Upload a directory recursively to remote via SFTP."""
+        local_dir = Path(local_dir) if isinstance(local_dir, str) else local_dir
+        if not local_dir.exists():
+            raise FileNotFoundError(local_dir)
+        remote_dir = remote_dir.replace("\\", "/")
+        self._remote_mkdirs([remote_dir])
+        self._sftp_upload_dir(local_dir, remote_dir)
+        return True
+
+    def download_directory(self, remote_dir: str, local_dir: Path | str) -> bool:
+        """Download a directory recursively from remote via SFTP."""
+        local_dir = Path(local_dir) if isinstance(local_dir, str) else local_dir
+        local_dir.mkdir(parents=True, exist_ok=True)
+        remote_dir = remote_dir.replace("\\", "/")
+        self._sftp_download_dir(remote_dir, local_dir)
+        return True
 
     def download_results(self, prompt_file: Path) -> None:
         """Download results from remote:

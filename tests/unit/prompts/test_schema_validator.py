@@ -5,12 +5,9 @@ Tests for SchemaValidator class.
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from cosmos_workflow.prompts.schema_validator import SchemaValidator
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
 
 
 class TestSchemaValidator:

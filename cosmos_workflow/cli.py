@@ -194,7 +194,7 @@ def create_prompt_spec(
         prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs_dict)
 
         # Create PromptSpec
-        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         prompt_spec = PromptSpec(
             id=prompt_id,
             name=name,
@@ -515,16 +515,11 @@ def run_prompt_upsampling(
 
         if input_path_obj.is_file():
             # Single file upsampling
-            print(f"📄 Upsampling single prompt: {input_path}")
-            from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-            from cosmos_workflow.prompts.schemas import DirectoryManager
+            print(f"[FILE] Upsampling single prompt: {input_path}")
+            from cosmos_workflow.prompts.schemas import PromptSpec
 
             # Load the prompt spec
-            dir_manager = DirectoryManager(
-                str(input_path_obj.parent), str(input_path_obj.parent), str(input_path_obj.parent)
-            )
-            spec_manager = PromptSpecManager(dir_manager)
-            prompt_spec = spec_manager.load(str(input_path_obj))
+            prompt_spec = PromptSpec.load(input_path_obj)
 
             # Run upsampling
             result = orchestrator.run_single_prompt_upsampling(
@@ -541,7 +536,8 @@ def run_prompt_upsampling(
                 if updated_spec and save_dir:
                     # Save the upsampled spec
                     save_path = Path(save_dir) / f"upsampled_{input_path_obj.name}"
-                    spec_manager.save(updated_spec, str(save_path))
+                    save_path.parent.mkdir(parents=True, exist_ok=True)
+                    updated_spec.save(save_path)
                     print(f"[SUCCESS] Saved upsampled prompt to: {save_path}")
                 print("[SUCCESS] Successfully upsampled prompt")
             else:
@@ -549,7 +545,7 @@ def run_prompt_upsampling(
 
         elif input_path_obj.is_dir():
             # Directory batch upsampling
-            print(f"📁 Upsampling directory: {input_path}")
+            print(f"[DIR] Upsampling directory: {input_path}")
             result = orchestrator.run_prompt_upsampling_from_directory(
                 prompts_dir=str(input_path_obj),
                 preprocess_videos=preprocess_videos,
@@ -730,7 +726,6 @@ Examples:
   # Convert with AI metadata generation
   python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
         """,
-
     )
 
     # Subcommands

@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -136,11 +136,11 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
             updated_specs.append((updated_spec, updated_path))
 
         # Verify results
-        self.assertEqual(len(updated_specs), 3)
+        assert len(updated_specs) == 3
         for updated_spec, path in updated_specs:
-            self.assertIn("detailed and elaborate", updated_spec.prompt)
-            self.assertTrue(updated_spec.is_upsampled)
-            self.assertIsNotNone(updated_spec.parent_prompt_text)
+            assert "detailed and elaborate" in updated_spec.prompt
+            assert updated_spec.is_upsampled
+            assert updated_spec.parent_prompt_text is not None
 
     def test_workflow_with_run_spec_creation(self):
         """Test workflow including RunSpec creation after upsampling."""
@@ -213,9 +213,9 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
         loaded_run = RunSpec.load(run_path)
         loaded_prompt = PromptSpec.load(upsampled_path)  # Use the path we saved to
 
-        self.assertIn("sprawling futuristic metropolis", loaded_prompt.prompt)
-        self.assertTrue(loaded_prompt.is_upsampled)
-        self.assertEqual(loaded_run.prompt_id, upsampled_spec.id)
+        assert "sprawling futuristic metropolis" in loaded_prompt.prompt
+        assert loaded_prompt.is_upsampled
+        assert loaded_run.prompt_id == upsampled_spec.id
 
     @patch("subprocess.run")
     def test_bash_script_execution_workflow(self, mock_subprocess):
@@ -242,7 +242,7 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
         # Simulate bash script execution
         import subprocess
 
-        result = subprocess.run(
+        subprocess.run(
             [
                 "bash",
                 "scripts/upsample_prompt.sh",
@@ -253,17 +253,17 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
                 "2",  # num_frames
                 "1",  # num_gpu
             ],
-            capture_output=True,
+            check=False, capture_output=True,
             text=True,
         )
 
         # Verify execution
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
-        self.assertEqual(call_args[0], "bash")
-        self.assertIn("upsample_prompt.sh", call_args[1])
-        self.assertEqual(call_args[2], input_file)
-        self.assertEqual(call_args[3], output_file)
+        assert call_args[0] == "bash"
+        assert "upsample_prompt.sh" in call_args[1]
+        assert call_args[2] == input_file
+        assert call_args[3] == output_file
 
 
 class TestCLIWorkflow(unittest.TestCase):
@@ -314,10 +314,10 @@ class TestCLIWorkflow(unittest.TestCase):
         mock_upsample_func.assert_called_once()
 
         # Verify results
-        self.assertIsNotNone(result)
-        self.assertIn("results", result)
-        self.assertEqual(len(result["results"]), 2)
-        self.assertIn("Upsampled:", result["results"][0]["upsampled"])
+        assert result is not None
+        assert "results" in result
+        assert len(result["results"]) == 2
+        assert "Upsampled:" in result["results"][0]["upsampled"]
 
 
 class TestBatchProcessingWorkflow(unittest.TestCase):
@@ -358,9 +358,9 @@ class TestBatchProcessingWorkflow(unittest.TestCase):
             all_results.extend(chunk_results)
 
         # Verify all processed
-        self.assertEqual(len(all_results), num_prompts)
+        assert len(all_results) == num_prompts
         for i, result in enumerate(all_results):
-            self.assertEqual(result["name"], f"prompt_{i}")
+            assert result["name"] == f"prompt_{i}"
 
     def test_parallel_batch_processing(self):
         """Test parallel processing of prompt batches."""
@@ -401,9 +401,9 @@ class TestBatchProcessingWorkflow(unittest.TestCase):
                 all_results.extend(batch_results)
 
         # Verify parallel processing
-        self.assertEqual(len(all_results), 20)  # 4 batches * 5 prompts
-        batch_ids = set(r["batch_id"] for r in all_results)
-        self.assertEqual(len(batch_ids), 4)
+        assert len(all_results) == 20  # 4 batches * 5 prompts
+        batch_ids = {r["batch_id"] for r in all_results}
+        assert len(batch_ids) == 4
 
 
 class TestVideoPreprocessingWorkflow(unittest.TestCase):
@@ -466,12 +466,12 @@ class TestVideoPreprocessingWorkflow(unittest.TestCase):
                 )
 
         # Verify preprocessing decisions
-        self.assertEqual(len(processed_videos), 3)
+        assert len(processed_videos) == 3
         # First two should be downscaled
-        self.assertNotEqual(processed_videos[0]["original"], processed_videos[0]["processed"])
-        self.assertNotEqual(processed_videos[1]["original"], processed_videos[1]["processed"])
+        assert processed_videos[0]["original"] != processed_videos[0]["processed"]
+        assert processed_videos[1]["original"] != processed_videos[1]["processed"]
         # Third should not be processed (already small)
-        self.assertEqual(processed_videos[2]["original"], processed_videos[2]["processed"])
+        assert processed_videos[2]["original"] == processed_videos[2]["processed"]
 
 
 if __name__ == "__main__":

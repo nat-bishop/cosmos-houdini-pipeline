@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from cosmos_workflow.execution.command_builder import DockerCommandBuilder
 from cosmos_workflow.prompts.schemas import PromptSpec
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,10 @@ class UpsampleWorkflowMixin:
         Returns:
             Dictionary with upsampling results and metadata
         """
+        # Initialize services if not already done
+        if hasattr(self, "_initialize_services"):
+            self._initialize_services()
+
         log.info(f"Starting prompt upsampling for {len(prompt_specs)} prompts")
 
         # Prepare batch data
@@ -71,53 +76,104 @@ class UpsampleWorkflowMixin:
 
         # Upload batch file to remote
         remote_config = self.config_manager.get_remote_config()
-        remote_batch_path = f"{remote_config.remote_dir}/inputs/{batch_filename}"
-        log.info(f"Uploading batch file to {remote_batch_path}")
-        self.file_transfer.upload_file(str(local_batch_path), remote_batch_path)
+        remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
+        log.info(f"Uploading batch file to {remote_inputs_dir}")
+        self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
 
         # Upload any associated videos
         for spec in prompt_specs:
             if spec.input_video_path and os.path.exists(spec.input_video_path):
-                remote_video_path = f"{remote_config.remote_dir}/inputs/videos/"
+                remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
                 log.info(f"Uploading video: {spec.input_video_path}")
-                self.file_transfer.upload_file(spec.input_video_path, remote_video_path)
+                self.file_transfer.upload_file(Path(spec.input_video_path), remote_videos_dir)
 
-        # Prepare output path
+        # Prepare paths
+        remote_batch_path = f"{remote_config.remote_dir}/inputs/{batch_filename}"
         output_filename = f"upsampled_{batch_filename}"
         remote_output_path = f"{remote_config.remote_dir}/outputs/{output_filename}"
 
-        # Build Docker command
-        docker_cmd = [
-            "bash",
-            "/home/ubuntu/NatsFS/cosmos-transfer1/scripts/upsample_prompt.sh",
-            remote_batch_path,
-            remote_output_path,
-            str(preprocess_videos).lower(),
-            str(max_resolution),
-            str(num_frames),
-            str(num_gpu),
-        ]
+        # First, upload the working upsampler script
+        scripts_dir = f"{remote_config.remote_dir}/scripts"
+        self.ssh_manager.execute_command_success(f"mkdir -p {scripts_dir}")
 
-        # Set environment variables
-        environment = {}
-        if cuda_devices:
-            environment["CUDA_VISIBLE_DEVICES"] = cuda_devices
+        # Upload the working upsampler script
+        local_script = (
+            Path(__file__).parent.parent.parent / "scripts" / "working_prompt_upsampler.py"
+        )
+        if local_script.exists():
+            remote_script_path = f"{scripts_dir}/working_prompt_upsampler.py"
+            log.info(f"Uploading upsampler script to {remote_script_path}")
+            self.file_transfer.upload_file(local_script, scripts_dir)
+        else:
+            log.error(f"Working upsampler script not found at {local_script}")
+            return {"success": False, "error": "Working upsampler script not found"}
+
+        # Create output directory on remote
+        remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
+        self.ssh_manager.execute_command_success(f"mkdir -p {remote_outputs_dir}")
+
+        # Build Docker command using the same pattern as inference
+        docker_image = remote_config.docker_image
+
+        # Build command using DockerCommandBuilder
+        builder = DockerCommandBuilder(docker_image)
+        builder.with_gpu(cuda_devices or "0")
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(remote_config.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+
+        # Set environment for VLLM
+        builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+        builder.add_environment("CUDA_VISIBLE_DEVICES", cuda_devices or "0")
+
+        # Build the command to run the upsampler
+        # Note: The script uses --no-offload flag, not --offload
+        # By default (without flag) it offloads, with --no-offload it keeps model in memory
+        upsample_cmd = (
+            f"python /workspace/scripts/working_prompt_upsampler.py "
+            f"--batch /workspace/inputs/{batch_filename} "
+            f"--output-dir /workspace/outputs "
+            f"--checkpoint-dir /workspace/checkpoints"
+            # Omit the flag to enable offloading by default
+        )
+        builder.set_command(upsample_cmd)
+
+        # Get the full Docker command
+        cmd = builder.build()
 
         # Execute upsampling
         log.info("Executing prompt upsampling on remote GPU...")
-        exit_code, stdout, stderr = self.docker_executor.execute(
-            command=docker_cmd, working_dir=remote_config.remote_dir, environment=environment
-        )
+        try:
+            # Add sudo prefix for Docker command
+            full_cmd = f"sudo {cmd}"
+            output = self.ssh_manager.execute_command_success(
+                full_cmd, timeout=1200
+            )  # 20 min timeout
+            exit_code = 0
+            stdout = output
+            stderr = ""
+        except RuntimeError as e:
+            exit_code = 1
+            stdout = ""
+            stderr = str(e)
 
         if exit_code != 0:
             log.error(f"Upsampling failed with exit code {exit_code}")
             log.error(f"Error output: {stderr}")
             return {"success": False, "error": stderr, "exit_code": exit_code}
 
-        # Download results
-        local_output_path = local_config.outputs_dir / output_filename
-        log.info(f"Downloading results to {local_output_path}")
-        self.file_transfer.download_file(remote_output_path, str(local_output_path))
+        # Download results JSON file
+        remote_results_file = f"{remote_outputs_dir}/batch_results.json"
+        local_output_path = local_config.outputs_dir / f"upsampled_{batch_filename}"
+        os.makedirs(local_output_path.parent, exist_ok=True)
+
+        log.info(f"Downloading results from {remote_results_file}")
+        try:
+            self.file_transfer.download_file(remote_results_file, str(local_output_path))
+        except Exception as e:
+            log.error(f"Failed to download results: {e}")
+            return {"success": False, "error": f"Failed to download results: {e}"}
 
         # Load and process results
         with open(local_output_path) as f:

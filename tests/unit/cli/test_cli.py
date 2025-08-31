@@ -3,19 +3,14 @@
 Tests for the CLI interface.
 """
 
-import json
-import sys
 import tempfile
-from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from cosmos_workflow.cli import (
     check_status,
-    create_prompt_spec,
-    create_run_spec,
     main,
     run_full_cycle,
     run_inference_only,
@@ -23,7 +18,6 @@ from cosmos_workflow.cli import (
     setup_logging,
     validate_prompt_file,
 )
-from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 
 
 class TestCLIHelpers:
@@ -202,7 +196,6 @@ class TestCreateCommands:
 
     # These integration tests would require more complex mocking of the entire
     # create flow, which is better tested at the integration level
-    pass
 
 
 class TestMainFunction:
@@ -311,9 +304,8 @@ class TestMainFunction:
         mock_validate.return_value = Path("test.json")
         mock_run.side_effect = Exception("Unexpected error")
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch("traceback.print_exc"):
-                main()
+        with pytest.raises(SystemExit) as exc_info, patch("traceback.print_exc"):
+            main()
 
         assert exc_info.value.code == 1
 

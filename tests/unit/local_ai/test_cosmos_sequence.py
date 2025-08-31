@@ -9,14 +9,12 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
 
 import cv2
 import numpy as np
 import pytest
 
 from cosmos_workflow.local_ai.cosmos_sequence import (
-    CosmosMetadata,
     CosmosSequenceInfo,
     CosmosSequenceValidator,
     CosmosVideoConverter,

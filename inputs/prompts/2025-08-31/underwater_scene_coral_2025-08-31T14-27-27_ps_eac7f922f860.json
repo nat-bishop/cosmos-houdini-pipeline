@@ -1,0 +1,14 @@
+{
+  "id": "ps_eac7f922f860",
+  "name": "underwater_scene_coral",
+  "prompt": "An underwater scene with coral reefs and tropical fish",
+  "negative_prompt": "bad quality, blurry, low resolution, cartoonish",
+  "input_video_path": "inputs/videos/underwater_scene_coral/color.mp4",
+  "control_inputs": {
+    "depth": "inputs/videos/underwater_scene_coral/depth.mp4",
+    "seg": "inputs/videos/underwater_scene_coral/segmentation.mp4"
+  },
+  "timestamp": "2025-08-31T14:27:27.126513Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

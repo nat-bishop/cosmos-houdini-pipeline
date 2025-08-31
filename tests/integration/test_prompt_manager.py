@@ -3,7 +3,6 @@
 Tests for the prompt management system.
 """
 
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -153,7 +152,7 @@ class TestPromptManager:
     def test_get_prompt_info(self):
         """Test getting prompt information."""
         # Create a PromptSpec
-        prompt_spec = self.prompt_manager.create_prompt_spec("test_shot", "Test prompt")
+        self.prompt_manager.create_prompt_spec("test_shot", "Test prompt")
 
         # Get info from the created file
         prompt_files = list(self.prompt_manager.prompts_dir.rglob("*.json"))
@@ -200,7 +199,7 @@ class TestPromptManager:
         """Test validating a RunSpec."""
         # Create a PromptSpec and RunSpec
         prompt_spec = self.prompt_manager.create_prompt_spec("test_shot", "Test prompt")
-        run_spec = self.prompt_manager.create_run_spec(prompt_spec)
+        self.prompt_manager.create_run_spec(prompt_spec)
 
         # Test validation with non-existent file
         assert self.prompt_manager.validate_run_spec("non_existent.json") is False
@@ -232,7 +231,7 @@ class TestPromptManager:
         """Test getting run information."""
         # Create a PromptSpec and RunSpec
         prompt_spec = self.prompt_manager.create_prompt_spec("test_shot", "Test prompt")
-        run_spec = self.prompt_manager.create_run_spec(
+        self.prompt_manager.create_run_spec(
             prompt_spec=prompt_spec,
             control_weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
         )

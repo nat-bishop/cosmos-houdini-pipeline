@@ -4,16 +4,14 @@ Comprehensive tests for PromptManager orchestrator.
 Tests how PromptManager coordinates all specialized managers.
 """
 
-import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from cosmos_workflow.prompts.prompt_manager import PromptManager
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
+from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 
 
 class TestPromptManagerOrchestrator:
@@ -337,7 +335,7 @@ class TestPromptManagerOrchestrator:
             shutil.rmtree(self.runs_dir)
             shutil.rmtree(self.outputs_dir)
 
-            prompt_manager = PromptManager("dummy_config.toml")
+            PromptManager("dummy_config.toml")
 
             # Check that directories were created
             assert self.prompts_dir.exists()
@@ -421,23 +419,22 @@ class TestPromptManagerOrchestrator:
 
             with patch.object(
                 prompt_manager.prompt_spec_manager, "create_prompt_spec"
-            ) as mock_create_prompt:
-                with patch.object(
-                    prompt_manager.run_spec_manager, "create_run_spec"
-                ) as mock_create_run:
-                    mock_create_prompt.return_value = mock_prompt_spec
-                    mock_create_run.return_value = mock_run_spec
+            ) as mock_create_prompt, patch.object(
+                prompt_manager.run_spec_manager, "create_run_spec"
+            ) as mock_create_run:
+                mock_create_prompt.return_value = mock_prompt_spec
+                mock_create_run.return_value = mock_run_spec
 
-                    # Test method chaining
-                    prompt_spec = prompt_manager.create_prompt_spec("test_prompt", "Test prompt")
-                    run_spec = prompt_manager.create_run_spec(prompt_spec=prompt_spec)
+                # Test method chaining
+                prompt_spec = prompt_manager.create_prompt_spec("test_prompt", "Test prompt")
+                run_spec = prompt_manager.create_run_spec(prompt_spec=prompt_spec)
 
-                    # Verify both methods were called
-                    mock_create_prompt.assert_called_once()
-                    mock_create_run.assert_called_once()
+                # Verify both methods were called
+                mock_create_prompt.assert_called_once()
+                mock_create_run.assert_called_once()
 
-                    assert prompt_spec == mock_prompt_spec
-                    assert run_spec == mock_run_spec
+                assert prompt_spec == mock_prompt_spec
+                assert run_spec == mock_run_spec
 
     def test_prompt_manager_config_file_handling(self):
         """Test that PromptManager handles config file paths correctly."""
@@ -446,7 +443,7 @@ class TestPromptManagerOrchestrator:
         with patch("cosmos_workflow.prompts.prompt_manager.ConfigManager") as mock_config_class:
             mock_config_class.return_value.get_local_config.return_value = self.mock_config
 
-            prompt_manager = PromptManager(config_path)
+            PromptManager(config_path)
 
             # Verify ConfigManager was called with correct path
             mock_config_class.assert_called_once_with(config_path)

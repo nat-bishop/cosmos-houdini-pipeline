@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-08-31 (Test Suite Improvements)
+- **Comprehensive Test Coverage for WorkflowOrchestrator**
+  - Added 25 unit tests achieving 93.79% coverage (up from 13.66%)
+  - Test categories: initialization, helpers, workflows, convenience methods, logging, edge cases
+  - Created `tests/unit/workflows/test_workflow_orchestrator.py`
+  - All tests use proper mocking for fast, isolated execution
+
+### Changed - 2025-08-31 (Test Suite)
+- **Test Suite Cleanup**
+  - Removed outdated integration tests using non-existent methods
+  - Fixed SFTP integration tests with proper context manager mocking
+  - Achieved full green baseline: 614 tests passing, 0 failing
+  - Added missing methods to FileTransferService for test compatibility
+
+- **Documentation Improvements**
+  - Clarified "legacy" methods are actually convenience methods
+  - Updated workflow orchestrator comments to reflect true purpose
+  - Created test plan document with coverage analysis
+
+### Fixed - 2025-08-31
+- **SFTP Test Failures**
+  - Fixed mock configuration to properly mock get_sftp() context manager
+  - Added upload_directory() and download_directory() to FileTransferService
+  - Resolved all 8 SFTP integration test failures
+
 ### Added - 2025-08-31 (Prompt Upsampling Integration)
 - **Upsampling Workflow Integration**
   - Created `cosmos_workflow/workflows/upsample_integration.py` - Mixin for WorkflowOrchestrator

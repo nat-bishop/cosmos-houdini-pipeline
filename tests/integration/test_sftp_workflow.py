@@ -3,12 +3,10 @@ Integration tests for SFTP file transfer workflow.
 Tests the complete upload/download cycle with mocked SSH/SFTP connections.
 """
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 from cosmos_workflow.transfer.file_transfer import FileTransferService
 
 

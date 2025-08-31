@@ -112,8 +112,8 @@ class TestFakeContracts:
                 fake_sig = inspect.signature(fake_method)
 
                 # Compare parameters (excluding self)
-                real_params = list(real_sig.parameters.keys())[1:]
-                fake_params = list(fake_sig.parameters.keys())[1:]
+                list(real_sig.parameters.keys())[1:]
+                list(fake_sig.parameters.keys())[1:]
 
                 # Check required parameters match
                 real_required = [
@@ -142,7 +142,7 @@ class TestFakeContracts:
         # Test that key methods return expected types
         fake_ssh = FakeSSHManager()
         fake_docker = FakeDockerExecutor()
-        fake_transfer = FakeFileTransferService()
+        FakeFileTransferService()
 
         # SSH Manager tests
         assert fake_ssh.is_connected() in [True, False], "is_connected should return bool"

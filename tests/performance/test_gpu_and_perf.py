@@ -231,10 +231,11 @@ class TestPerformanceRegression:
         Simulates a complete workflow to catch performance regressions.
         """
         from unittest.mock import Mock, patch
+
         from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
         # Use REAL orchestrator with mocked external dependencies
-        with patch('cosmos_workflow.workflows.workflow_orchestrator.SSHManager'):
+        with patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager"):
             orchestrator = WorkflowOrchestrator()
             # Mock only external services
             orchestrator.ssh_manager = Mock()

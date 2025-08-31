@@ -2,16 +2,14 @@
 Integration tests for the complete workflow orchestration.
 Tests the full pipeline from PromptSpec creation to inference execution.
 """
+
 import json
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.run_spec_manager import RunSpecManager
-from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
+from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 
@@ -23,13 +21,15 @@ class TestWorkflowOrchestration:
         self, mock_config_manager, mock_ssh_manager, mock_file_transfer, mock_docker_executor
     ):
         """Create WorkflowOrchestrator with mocked dependencies."""
-        with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager"
-        ) as mock_ssh_class, patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService"
-        ) as mock_ft_class, patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
-        ) as mock_docker_class:
+        with (
+            patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager") as mock_ssh_class,
+            patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService"
+            ) as mock_ft_class,
+            patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"
+            ) as mock_docker_class,
+        ):
             mock_ssh_class.return_value = mock_ssh_manager
             mock_ft_class.return_value = mock_file_transfer
             mock_docker_class.return_value = mock_docker_executor
@@ -116,12 +116,13 @@ class TestWorkflowOrchestration:
         # Create RunSpec that references one of these
         run_spec = RunSpec(
             id="test_rs_001",
-            prompt_spec_id="test_ps_001",
+            prompt_id="test_ps_001",
+            name="test_run",
             control_weights={"depth": 0.3},
             parameters={"num_steps": 35},
-            execution_status="pending",
-            output_path=str(dirs[1]),  # Reference middle directory
             timestamp=datetime.now().isoformat(),
+            execution_status=ExecutionStatus.PENDING,
+            output_path=str(dirs[1]),  # Reference middle directory
         )
 
         run_spec_file = temp_dir / "runs" / "run_spec.json"
@@ -199,12 +200,13 @@ class TestWorkflowOrchestration:
         for i in range(3):
             run_spec = RunSpec(
                 id=f"test_rs_{i:03d}",
-                prompt_spec_id=f"test_ps_{i:03d}",
+                prompt_id=f"test_ps_{i:03d}",
+                name=f"test_run_{i:03d}",
                 control_weights={"depth": 0.3 + i * 0.1},
                 parameters={"num_steps": 35, "seed": 42 + i},
-                execution_status="pending",
-                output_path=f"outputs/run_{i:03d}",
                 timestamp=datetime.now().isoformat(),
+                execution_status=ExecutionStatus.PENDING,
+                output_path=f"outputs/run_{i:03d}",
             )
 
             run_spec_file = temp_dir / f"run_{i:03d}.json"
@@ -213,7 +215,7 @@ class TestWorkflowOrchestration:
 
         # Execute batch workflow
         results = []
-        for spec_file, spec in run_specs:
+        for spec_file, _spec in run_specs:
             with patch("cosmos_workflow.prompts.prompt_spec_manager.PromptSpecManager.load_by_id"):
                 result = workflow_orchestrator.run_inference(
                     str(spec_file), num_gpus=1, verbose=False
@@ -342,7 +344,7 @@ class TestWorkflowOrchestration:
 
             # Execute a workflow step
             workflow_orchestrator.ssh_manager.is_connected.return_value = True
-            status = workflow_orchestrator.check_status(verbose=True)
+            status = workflow_orchestrator.check_remote_status()
 
         # Verify status reporting
         assert status is True

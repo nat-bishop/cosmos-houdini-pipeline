@@ -8,7 +8,7 @@ running Docker commands on remote instances for Cosmos-Transfer1 workflows.
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -95,8 +95,8 @@ class TestDockerExecutor:
             # Mock successful operations
             self.mock_ssh_manager.execute_command_success.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
-                with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
+            with patch.object(self.docker_executor, "_create_upscaler_spec"):
+                with patch.object(self.docker_executor, "_run_upscaling_script"):
                     # Run upscaling
                     self.docker_executor.run_upscaling(
                         self.test_prompt_file, control_weight=0.7, num_gpu=2, cuda_devices="0,1"
@@ -126,8 +126,8 @@ class TestDockerExecutor:
 
             self.mock_ssh_manager.execute_command_success.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
-                with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
+            with patch.object(self.docker_executor, "_create_upscaler_spec"):
+                with patch.object(self.docker_executor, "_run_upscaling_script"):
                     # Run upscaling
                     self.docker_executor.run_upscaling(self.test_prompt_file)
 
@@ -144,7 +144,7 @@ class TestDockerExecutor:
 
             self.mock_ssh_manager.execute_command_success.return_value = None
 
-            with patch.object(self.docker_executor, "_create_upscaler_spec") as mock_create_spec:
+            with patch.object(self.docker_executor, "_create_upscaler_spec"):
                 with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
                     # Run upscaling with custom parameters
                     self.docker_executor.run_upscaling(
@@ -175,7 +175,7 @@ class TestDockerExecutor:
         assert "--ipc=host" in cmd
         assert "--shm-size=8g" in cmd
         assert f"-v {self.remote_dir}:/workspace" in cmd
-        assert f"-w /workspace" in cmd
+        assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/inference.sh test_prompt 2 0,1" in cmd
         assert call_args[1]["timeout"] == 3600  # 1 hour timeout
@@ -201,7 +201,7 @@ class TestDockerExecutor:
         assert "--ipc=host" in cmd
         assert "--shm-size=8g" in cmd
         assert f"-v {self.remote_dir}:/workspace" in cmd
-        assert f"-w /workspace" in cmd
+        assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/upscale.sh test_prompt 0.6 2 0,1" in cmd
         assert call_args[1]["timeout"] == 1800  # 30 minute timeout

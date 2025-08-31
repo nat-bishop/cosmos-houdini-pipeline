@@ -16,26 +16,68 @@
 
 ### 2. Cosmos-Transfer1 Supported Resolutions
 
-The model supports **5 resolution categories** with multiple aspect ratios:
+The model supports **5 resolution categories** with multiple aspect ratios, defined in `cosmos_transfer1/diffusion/datasets/augmentors/control_input.py`:
 
-#### 720p (Default Processing Resolution)
-| Aspect Ratio | Resolution | Usage |
-|-------------|------------|--------|
-| 1:1 | 960×960 | Square videos |
-| 4:3 | 960×704 | Classic TV format |
-| 3:4 | 704×960 | Portrait classic |
-| 16:9 | 1280×704 | Widescreen (most common) |
-| 9:16 | 704×1280 | Vertical video |
+#### 1080p Category
+| Aspect Ratio | Resolution | Pixels | Est. Tokens (2 frames) |
+|-------------|------------|---------|------------------------|
+| 1:1 | 1024×1024 | 1,048,576 | ~36,273 |
+| 4:3 | 1440×1056 | 1,520,640 | ~52,614 |
+| 3:4 | 1056×1440 | 1,520,640 | ~52,614 |
+| 16:9 | 1920×1056 | 2,027,520 | ~70,152 |
+| 9:16 | 1056×1920 | 2,027,520 | ~70,152 |
 
-#### Other Resolution Categories
-- **1080p**: 1024×1024, 1440×1056, 1920×1056, etc.
-- **512p**: 512×512, 640×512, 640×384, etc.
-- **480p**: 480×480, 640×480, 768×432, etc.
-- **256p**: 256×256, 320×256, 320×192, etc.
+#### 720p Category (Default)
+| Aspect Ratio | Resolution | Pixels | Est. Tokens (2 frames) |
+|-------------|------------|---------|------------------------|
+| 1:1 | 960×960 | 921,600 | ~31,887 |
+| 4:3 | 960×704 | 675,840 | ~23,388 |
+| 3:4 | 704×960 | 675,840 | ~23,388 |
+| 16:9 | 1280×704 | 901,120 | ~31,179 |
+| 9:16 | 704×1280 | 901,120 | ~31,179 |
+
+#### 512p Category
+| Aspect Ratio | Resolution | Pixels | Est. Tokens (2 frames) |
+|-------------|------------|---------|------------------------|
+| 1:1 | 512×512 | 262,144 | ~9,068 |
+| 4:3 | 640×512 | 327,680 | ~11,338 |
+| 3:4 | 512×640 | 327,680 | ~11,338 |
+| 16:9 | 640×384 | 245,760 | ~8,503 |
+| 9:16 | 384×640 | 245,760 | ~8,503 |
+
+#### 480p Category (Video only)
+| Aspect Ratio | Resolution | Pixels | Est. Tokens (2 frames) |
+|-------------|------------|---------|------------------------|
+| 1:1 | 480×480 | 230,400 | ~7,972 |
+| 4:3 | 640×480 | 307,200 | ~10,629 |
+| 3:4 | 480×640 | 307,200 | ~10,629 |
+| 16:9 | 768×432 | 331,776 | ~11,479 |
+| 9:16 | 432×768 | 331,776 | ~11,479 |
+
+#### 256p Category
+| Aspect Ratio | Resolution | Pixels | Est. Tokens (2 frames) |
+|-------------|------------|---------|------------------------|
+| 1:1 | 256×256 | 65,536 | ~2,267 |
+| 4:3 | 320×256 | 81,920 | ~2,834 |
+| 3:4 | 256×320 | 81,920 | ~2,834 |
+| 16:9 | 320×192 | 61,440 | ~2,126 |
+| 9:16 | 192×320 | 61,440 | ~2,126 |
 
 **Important**: The tokenizer (`Cosmos-Tokenize1-CV8x8x8-720p`) is **hardcoded for 720p only**.
 
-### 3. The Upsampling Token Limit Problem
+### 3. The Critical Discovery: Resolution Paradox
+
+**MAJOR FINDING**: There's a fundamental conflict between NVIDIA's supported resolutions and the upsampler's token limit:
+
+- **Only 256p category works** for upsampling (all under 3000 tokens)
+- **480p and above ALL exceed** the 4096 token limit
+- **Even 480×480 uses ~8000 tokens** (2x the limit!)
+- **All 720p resolutions use 23,000-32,000 tokens** (6-8x the limit!)
+- **1080p resolutions use 36,000-70,000 tokens** (9-17x the limit!)
+
+This explains why upsampling fails on standard videos - NVIDIA's default resolutions are incompatible with their upsampler's token limit!
+
+### 4. The Upsampling Token Limit Problem
 
 #### Why It Fails
 1. `extract_video_frames()` in `cosmos_transfer1/utils/misc.py` extracts frames at **original resolution**
@@ -52,17 +94,36 @@ The model supports **5 resolution categories** with multiple aspect ratios:
 | 1280×704 | 2 | ~31,000 | ❌ Far exceeds |
 | 1280×720 | 2 | ~32,000 | ❌ Far exceeds |
 
-### 4. The NVIDIA Example Mystery
+### 4. Resolution Auto-Conversion Mechanism (SOLVED)
 
-**The Paradox**: NVIDIA's examples use 720p videos, but the upsampler should fail on these.
+**How NVIDIA Handles Arbitrary Resolutions**:
 
-**Possible Explanations**:
-1. **VLLM internal resizing** - The VLLM library might resize images automatically
-2. **Examples don't use upsampling** - The `--upsample_prompt` flag might not be used
-3. **Different model configuration** - Production model might have higher token limit
-4. **Control modalities only** - Upsampling might only work with preprocessed control videos
+The system uses `detect_aspect_ratio()` in `inference_utils.py`:
+1. **Detects closest aspect ratio** from input video (16:9, 4:3, 1:1, 3:4, 9:16)
+2. **Maps to nearest supported resolution** in that aspect ratio category
+3. **Resizes video** to the matched resolution using `resize_video()`
 
-### 5. Working Solution Pattern
+**The Critical Disconnect**:
+- **Model Inference**: `read_and_resize_input()` → auto-resizes to 720p variants
+- **Prompt Upsampling**: `extract_video_frames()` → keeps ORIGINAL resolution
+- **Result**: Upsampler gets full resolution → exceeds 4096 token limit
+
+### 5. The NVIDIA Example Mystery (SOLVED)
+
+**Why NVIDIA's 720p examples work for inference but not upsampling**:
+
+1. **Inference works fine** - Videos are auto-resized to 720p variants (23K-32K pixels)
+2. **Upsampling would fail** - Examples likely don't use `--upsample_prompt` flag
+3. **Two separate pipelines** - Different resolution handling:
+   - Inference: Auto-converts any resolution → 720p
+   - Upsampling: Uses original resolution → token overflow
+
+**The Vocab Error Connection**:
+- "Vocab error" is misleading - it's actually a token limit error
+- Occurs when video resolution generates >4096 tokens
+- Only 256p category (and some custom <320x180) work for upsampling
+
+### 6. Working Solution Pattern
 
 ```python
 # CRITICAL: Must be set BEFORE any imports
@@ -146,6 +207,42 @@ python scripts/test_upsampling_resolution_limits.py --quick
 ```
 
 Then test on GPU with actual upsampler.
+
+## Token Limit Configuration (IMPORTANT FINDING)
+
+### Can the 4096 Token Limit Be Changed?
+
+**YES** - The token limit is configurable! Found in `cosmos_transfer1/auxiliary/upsampler/model/upsampler.py`:
+
+```python
+self.upsampler_model = LLM(
+    model=model_path,
+    tensor_parallel_size=1,
+    tokenizer_mode="mistral",
+    gpu_memory_utilization=0.98,
+    max_model_len=4096,  # <-- This can be changed!
+    max_num_seqs=2,
+    limit_mm_per_prompt={"image": 2},
+    enable_prefix_caching=True,
+)
+```
+
+### Testing Different Limits
+
+Created test scripts to verify if increasing `max_model_len` allows larger resolutions:
+- `test_token_limit_config.py` - Tests different max_model_len values
+- `remote_resolution_test.py` - Comprehensive testing on GPU
+- `deploy_resolution_test.py` - Deployment script for remote testing
+
+**Theoretical Possibilities**:
+- `max_model_len=8192`: Could handle 480p resolutions (~4,500-8,000 tokens)
+- `max_model_len=16384`: Could handle 512p resolutions (~8,500-11,300 tokens)
+- `max_model_len=32768`: Could handle 720p resolutions (~23,000-32,000 tokens)
+
+**Important**: Actual limits depend on:
+1. Model's training context length (Pixtral-12B capabilities)
+2. GPU memory availability
+3. VLLM's internal constraints
 
 ## Critical Environment Setup
 

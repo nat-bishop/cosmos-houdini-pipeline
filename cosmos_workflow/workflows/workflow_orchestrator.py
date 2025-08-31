@@ -155,7 +155,8 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     ) -> dict[str, Any]:
         """Run complete workflow: upload → inference → upscaling → download.
 
-        Legacy method for backward compatibility.
+        Convenience method that configures all steps for a full pipeline execution.
+        Used by CLI for the 'run' command without additional flags.
         """
         return self.run(
             prompt_file=prompt_file,
@@ -178,7 +179,8 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     ) -> dict[str, Any]:
         """Run only inference without upscaling.
 
-        Legacy method for backward compatibility.
+        Convenience method for running inference-only workflows.
+        Useful for quick generation without 4K upscaling overhead.
         """
         return self.run(
             prompt_file=prompt_file,
@@ -200,7 +202,8 @@ class WorkflowOrchestrator(UpsampleWorkflowMixin):
     ) -> dict[str, Any]:
         """Run only upscaling on existing inference output.
 
-        Legacy method for backward compatibility.
+        Convenience method for upscaling previously generated videos.
+        Assumes inference output already exists on the remote server.
         """
         return self.run(
             prompt_file=prompt_file,

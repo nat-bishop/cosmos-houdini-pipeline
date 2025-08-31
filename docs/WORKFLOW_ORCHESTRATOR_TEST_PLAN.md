@@ -10,21 +10,21 @@
 - **Tests Added**: 25 comprehensive tests
 - **Date Completed**: 2025-08-31
 
-### Legacy Code Investigation
+### Convenience Methods Investigation
 
-#### Legacy Methods Found
-The following methods are marked as "Legacy method for backward compatibility":
-1. `run_full_cycle()` - Lines 147-170
-2. `run_inference_only()` - Lines 172-192
-3. `run_upscaling_only()` - Lines 194-214
+#### Specialized Workflow Methods Found
+The following methods provide convenient APIs for common workflows:
+1. `run_full_cycle()` - Lines 147-170 - Full pipeline with all steps
+2. `run_inference_only()` - Lines 172-192 - Quick generation without upscaling
+3. `run_upscaling_only()` - Lines 194-214 - Upscale existing outputs
 
 #### Usage Analysis
-These legacy methods are still actively used in `cli.py`:
-- `run_full_cycle` - Called by CLI command (line 58)
-- `run_inference_only` - Called by CLI command (line 84)
-- `run_upscaling_only` - Called by CLI command (line 108)
+These convenience methods are actively used by the CLI:
+- `run_full_cycle` - Called by CLI 'run' command (line 58)
+- `run_inference_only` - Called by CLI 'run' with --no-upscale flag (line 84)
+- `run_upscaling_only` - Called by CLI 'upscale' command (line 108)
 
-**Recommendation**: DO NOT REMOVE - These are still used by the CLI. However, they're simple delegation methods that just call the main `run()` method, so they're fine as-is.
+**Purpose**: These methods provide cleaner, more intuitive APIs for common workflows. They delegate to the flexible `run()` method with appropriate presets, making the CLI simpler and more user-friendly.
 
 ### Potentially Removable Code
 After analysis, there's no dead code to remove. All methods are either:

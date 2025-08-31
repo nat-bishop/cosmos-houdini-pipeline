@@ -128,12 +128,14 @@ class UpsampleWorkflowMixin:
         builder.add_environment("CUDA_VISIBLE_DEVICES", cuda_devices or "0")
 
         # Build the command to run the upsampler
+        # Note: The script uses --no-offload flag, not --offload
+        # By default (without flag) it offloads, with --no-offload it keeps model in memory
         upsample_cmd = (
             f"python /workspace/scripts/working_prompt_upsampler.py "
             f"--batch /workspace/inputs/{batch_filename} "
             f"--output-dir /workspace/outputs "
-            f"--checkpoint-dir /workspace/checkpoints "
-            f"--offload"
+            f"--checkpoint-dir /workspace/checkpoints"
+            # Omit the flag to enable offloading by default
         )
         builder.set_command(upsample_cmd)
 

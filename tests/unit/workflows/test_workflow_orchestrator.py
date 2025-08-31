@@ -628,7 +628,7 @@ class TestWorkflowOrchestratorRun:
 
 
 class TestWorkflowOrchestratorLegacy:
-    """Test legacy methods for backward compatibility."""
+    """Test convenience methods that provide specialized workflow APIs."""
 
     def test_run_full_cycle_delegates_correctly(
         self,

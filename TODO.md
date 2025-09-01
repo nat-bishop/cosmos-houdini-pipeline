@@ -66,6 +66,15 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - *Effort: 2-3 days*
   - *Reference: CLI_TEST_PROGRESS.md - Architecture Questions*
 
+- [ ] **Reorganize directory structure for better clarity**
+  - Investigate merging similar directories (e.g., transfer and connection)
+  - Review if current directory organization makes sense
+  - Consider consolidating related functionality
+  - Ensure directory names clearly reflect their purpose
+  - Document the rationale for directory structure
+  - *Effort: 1-2 days*
+  - *Note: Some directories like transfer and connection might be redundant*
+
 ### Documentation Structure
 - [ ] **Reorganize documentation for clarity**
   - Too many scattered .md files causing confusion
@@ -231,11 +240,12 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 1. **CRITICAL: Migrate to cli_new** - Port --dry-run, switch over, update tests (5-6 hours)
 2. **Complete CLI test coverage** - Add missing tests (1 hour)
-3. **Reorganize documentation** - Create clear structure (1 day)
-4. **Investigate architecture** - Assess if refactoring needed (2-3 days)
-5. **Setup remote environment** - Build Docker image, download checkpoints
-6. **Configure authentication** - Set up HF token
-7. **Pin versions** - Move away from `:latest` tags
+3. **Reorganize directory structure** - Merge redundant dirs, clarify purpose (1-2 days)
+4. **Reorganize documentation** - Create clear structure (1 day)
+5. **Investigate architecture** - Assess if refactoring needed (2-3 days)
+6. **Setup remote environment** - Build Docker image, download checkpoints
+7. **Configure authentication** - Set up HF token
+8. **Pin versions** - Move away from `:latest` tags
 
 ---
 

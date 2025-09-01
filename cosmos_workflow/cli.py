@@ -31,8 +31,8 @@ class CLIContext:
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        self.orchestrator = None
-        self.config_manager = None
+        self.orchestrator: WorkflowOrchestrator | None = None
+        self.config_manager: ConfigManager | None = None
 
     def setup_logging(self):
         """Setup logging configuration."""
@@ -56,11 +56,17 @@ class CLIContext:
         return self.config_manager
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={
+        "help_option_names": ["-h", "--help"],
+        "auto_envvar_prefix": "COSMOS",
+    }
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output for debugging")
+@click.version_option(version="0.1.0", prog_name="Cosmos Workflow Orchestrator")
 @click.pass_context
 def cli(ctx, verbose):
-    """Cosmos-Transfer1 Workflow Orchestrator
+    r"""Cosmos-Transfer1 Workflow Orchestrator.
 
     A powerful CLI for orchestrating NVIDIA Cosmos video generation workflows.
     Manage prompts, run inference, and control remote GPU execution with ease.
@@ -105,7 +111,7 @@ def create(ctx):
 @click.option("--parent-prompt", help="Original prompt text (if this is enhanced)")
 @click.pass_context
 def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prompt):
-    """Create a new prompt specification.
+    r"""Create a new prompt specification.
 
     \b
     Examples:
@@ -183,7 +189,15 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
 
 
 @create.command("run")
-@click.argument("prompt_spec_path", type=click.Path(exists=True))
+@click.argument(
+    "prompt_spec_path",
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda _ctx, _param, incomplete: [
+        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
+    ]
+    if Path("inputs/prompts").exists()
+    else [],
+)
 @click.option(
     "--weights",
     "-w",
@@ -199,7 +213,7 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
 @click.option("--output", help="Custom output path")
 @click.pass_context
 def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, output):
-    """Create a run specification for a prompt.
+    r"""Create a run specification for a prompt.
 
     \b
     Examples:
@@ -272,10 +286,9 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
         table.add_row("Run ID", run_id[:16] + "...")
         table.add_row("Prompt", prompt_spec.name)
         table.add_row("File", str(file_path))
-        table.add_row(
-            "Weights",
-            f"vis={weights[0]:.2f} edge={weights[1]:.2f} depth={weights[2]:.2f} seg={weights[3]:.2f}",
-        )
+        weights_str = f"vis={weights[0]:.2f} edge={weights[1]:.2f} "
+        weights_str += f"depth={weights[2]:.2f} seg={weights[3]:.2f}"
+        table.add_row("Weights", weights_str)
 
         console.print(table)
 
@@ -295,7 +308,15 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
 
 
 @cli.command()
-@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument(
+    "spec_file",
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda _ctx, _param, incomplete: [
+        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
+    ]
+    if Path("inputs/prompts").exists()
+    else [],
+)
 @click.option("--videos-dir", help="Custom videos directory")
 @click.option("--no-upscale", is_flag=True, help="Skip upscaling step")
 @click.option("--upscale-weight", default=0.5, help="Upscaling control weight")
@@ -303,7 +324,7 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
 @click.option("--cuda-devices", default="0,1", help="CUDA device IDs")
 @click.pass_context
 def run(ctx, spec_file, videos_dir, no_upscale, upscale_weight, num_gpu, cuda_devices):
-    """🎬 Run complete inference workflow.
+    r"""🎬 Run complete inference workflow.
 
     Executes the full Cosmos Transfer pipeline including inference
     and optional upscaling on remote GPU.
@@ -350,13 +371,21 @@ def run(ctx, spec_file, videos_dir, no_upscale, upscale_weight, num_gpu, cuda_de
 
 
 @cli.command()
-@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument(
+    "spec_file",
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda _ctx, _param, incomplete: [
+        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
+    ]
+    if Path("inputs/prompts").exists()
+    else [],
+)
 @click.option("--videos-dir", help="Custom videos directory")
 @click.option("--num-gpu", default=1, help="Number of GPUs to use")
 @click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.pass_context
 def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
-    """🔮 Run inference only (no upscaling).
+    r"""🔮 Run inference only (no upscaling).
 
     \b
     Examples:
@@ -397,13 +426,21 @@ def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
 
 
 @cli.command()
-@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument(
+    "spec_file",
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda _ctx, _param, incomplete: [
+        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
+    ]
+    if Path("inputs/prompts").exists()
+    else [],
+)
 @click.option("--weight", default=0.5, help="Upscaling control weight")
 @click.option("--num-gpu", default=1, help="Number of GPUs to use")
 @click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.pass_context
 def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
-    """⬆️ Run upscaling only (requires prior inference).
+    r"""⬆️ Run upscaling only (requires prior inference).
 
     \b
     Examples:
@@ -449,7 +486,15 @@ def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
 
 
 @cli.command("prompt-enhance")
-@click.argument("input_path", type=click.Path(exists=True))
+@click.argument(
+    "input_path",
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda _ctx, _param, incomplete: [
+        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
+    ]
+    if Path("inputs/prompts").exists()
+    else [],
+)
 @click.option(
     "--preprocess/--no-preprocess",
     default=True,
@@ -464,7 +509,7 @@ def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
 def prompt_enhance(
     ctx, input_path, preprocess, max_resolution, num_frames, num_gpu, cuda_devices, save_dir
 ):
-    """✨ Enhance prompts using Pixtral AI model.
+    r"""✨ Enhance prompts using Pixtral AI model.
 
     Improves prompt quality by adding details, style descriptions,
     and optimizations for better generation results.
@@ -556,14 +601,17 @@ def prompt_enhance(
 
 
 @cli.command()
-@click.argument("input_dir", type=click.Path(exists=True))
+@click.argument(
+    "input_dir",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
+)
 @click.option("--name", help="Name for output (AI-generated if not provided)")
 @click.option("--fps", default=24, help="Frame rate for output videos")
 @click.option("--description", help="Description for metadata")
 @click.option("--no-ai", is_flag=True, help="Skip AI analysis")
 @click.pass_context
 def prepare(ctx, input_dir, name, fps, description, no_ai):
-    """🎥 Prepare renders for Cosmos inference.
+    r"""🎥 Prepare renders for Cosmos inference.
 
     Validates Houdini/Blender renders and converts control modality
     PNG sequences to videos ready for Cosmos Transfer.
@@ -741,89 +789,14 @@ def status(ctx):
         sys.exit(1)
 
 
-# ============================================================================
-# VERSION COMMAND
-# ============================================================================
-
-
-@cli.command()
-def version():
-    """Show version information."""
-    console.print("[bold]Cosmos Workflow Orchestrator[/bold]")
-    console.print("Version: 0.1.0")
-    console.print("Python: 3.10+")
-    console.print("Framework: NVIDIA Cosmos-Transfer1")
-
-
-# ============================================================================
-# SHELL COMPLETION
-# ============================================================================
-
-
-@cli.command()
-@click.argument("shell", type=click.Choice(["bash", "zsh", "fish", "powershell", "gitbash"]))
-def completion(shell):
-    """Generate shell completion script.
-
-    \b
-    Installation instructions:
-
-    Bash:
-      eval "$(_COSMOS_COMPLETE=bash_source cosmos)"
-      Add to ~/.bashrc
-
-    Zsh:
-      eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"
-      Add to ~/.zshrc
-
-    Git Bash (Windows):
-      eval "$(_COSMOS_COMPLETE=bash_source python /path/to/cosmos)"
-      Add to ~/.bashrc
-
-    PowerShell:
-      Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {
-        $env:_COSMOS_COMPLETE='powershell_complete'; python "C:\\path\to\\cosmos"
-      }
-      Add to $PROFILE
-
-    Fish:
-      _COSMOS_COMPLETE=fish_source cosmos > ~/.config/fish/completions/cosmos.fish
-    """
-    from pathlib import Path
-
-    # Get the actual cosmos script path
-    cosmos_script = Path(__file__).parent.parent / "cosmos"
-
-    if shell == "bash":
-        console.print("[cyan]Add this to your ~/.bashrc:[/cyan]")
-        console.print('eval "$(_COSMOS_COMPLETE=bash_source cosmos)"')
-    elif shell == "zsh":
-        console.print("[cyan]Add this to your ~/.zshrc:[/cyan]")
-        console.print('eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"')
-    elif shell == "gitbash":
-        console.print("[cyan]Add this to your ~/.bashrc (Git Bash):[/cyan]")
-        console.print(f'eval "$(_COSMOS_COMPLETE=bash_source python {cosmos_script})"')
-    elif shell == "fish":
-        console.print("[cyan]Run this command:[/cyan]")
-        console.print(
-            "_COSMOS_COMPLETE=fish_source cosmos > ~/.config/fish/completions/cosmos.fish"
-        )
-    elif shell == "powershell":
-        console.print("[cyan]Add this to your PowerShell $PROFILE:[/cyan]")
-        console.print("Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {")
-        console.print(f"  $env:_COSMOS_COMPLETE='powershell_complete'; python '{cosmos_script}'")
-        console.print("}")
-        console.print("\n[dim]To edit your profile, run: notepad $PROFILE[/dim]")
-
-
 def main():
     """Main entry point."""
     # Ensure UTF-8 encoding for Windows
     if sys.platform == "win32":
         if sys.stdout.encoding != "utf-8":
-            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
         if sys.stderr.encoding != "utf-8":
-            sys.stderr.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
     try:
         cli(obj=None)

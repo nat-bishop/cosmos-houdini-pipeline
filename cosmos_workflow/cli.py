@@ -74,7 +74,7 @@ def cli(ctx, verbose):
     \b
     Quick Start:
       1. Create a prompt:  cosmos create prompt "A cyberpunk city"
-      2. Run inference:    cosmos run <prompt_file>
+      2. Run inference:    cosmos inference <prompt_file>
       3. Check status:     cosmos status
 
     Use 'cosmos <command> --help' for detailed command information.
@@ -307,7 +307,7 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
 # ============================================================================
 
 
-@cli.command()
+@cli.command(name="run")
 @click.argument(
     "spec_file",
     type=click.Path(exists=True, path_type=Path),
@@ -318,56 +318,11 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
     else [],
 )
 @click.option("--videos-dir", help="Custom videos directory")
-@click.option("--no-upscale", is_flag=True, help="Skip upscaling step")
-@click.option("--upscale-weight", default=0.5, help="Upscaling control weight")
-@click.option("--num-gpu", default=2, help="Number of GPUs to use")
-@click.option("--cuda-devices", default="0,1", help="CUDA device IDs")
 @click.pass_context
-def run(ctx, spec_file, videos_dir, no_upscale, upscale_weight, num_gpu, cuda_devices):
-    r"""🎬 Run complete inference workflow.
-
-    Executes the full Cosmos Transfer pipeline including inference
-    and optional upscaling on remote GPU.
-
-    \b
-    Examples:
-      cosmos run prompt_spec.json
-      cosmos run prompt_spec.json --num-gpu 2
-      cosmos run prompt_spec.json --no-upscale
-    """
-    ctx_obj = ctx.obj
-
-    try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("[cyan]Running workflow...", total=None)
-
-            orchestrator = ctx_obj.get_orchestrator()
-            result = orchestrator.run_full_cycle(
-                prompt_file=Path(spec_file),
-                videos_subdir=videos_dir,
-                no_upscale=no_upscale,
-                upscale_weight=upscale_weight,
-                num_gpu=num_gpu,
-                cuda_devices=cuda_devices,
-            )
-
-            progress.update(task, completed=True)
-
-        console.print("\n[bold green]✅ Workflow completed successfully![/bold green]")
-
-        if ctx_obj.verbose:
-            console.print("\n[cyan]Results:[/cyan]")
-            console.print_json(json.dumps(result, indent=2))
-
-    except Exception as e:
-        console.print(f"[bold red]❌ Workflow failed:[/bold red] {e}")
-        if ctx_obj.verbose:
-            console.print_exception()
-        sys.exit(1)
+def run_command(ctx, spec_file, videos_dir):
+    r"""🎬 Run inference with automatic upscaling (legacy command, use 'inference' instead)."""
+    console.print("[yellow]Note: 'run' command is deprecated. Use 'inference' instead.[/yellow]")
+    ctx.invoke(inference, spec_file=spec_file, videos_dir=videos_dir, upscale=True)
 
 
 @cli.command()
@@ -381,16 +336,26 @@ def run(ctx, spec_file, videos_dir, no_upscale, upscale_weight, num_gpu, cuda_de
     else [],
 )
 @click.option("--videos-dir", help="Custom videos directory")
+@click.option(
+    "--upscale/--no-upscale",
+    default=True,
+    help="Enable/disable 4K upscaling after inference (default: enabled)",
+)
+@click.option("--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0)")
 @click.option("--num-gpu", default=1, help="Number of GPUs to use")
 @click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.pass_context
-def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
-    r"""🔮 Run inference only (no upscaling).
+def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, num_gpu, cuda_devices):
+    r"""🔮 Run Cosmos Transfer inference with optional upscaling.
+
+    By default, this command runs both inference and 4K upscaling.
+    Use --no-upscale to run inference only.
 
     \b
     Examples:
-      cosmos inference prompt_spec.json
-      cosmos inference prompt_spec.json --num-gpu 2 --cuda-devices "0,1"
+      cosmos inference prompt_spec.json              # Inference + upscaling
+      cosmos inference prompt_spec.json --no-upscale # Inference only
+      cosmos inference prompt_spec.json --upscale-weight 0.7
     """
     ctx_obj = ctx.obj
 
@@ -400,32 +365,46 @@ def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task("[cyan]Running inference...", total=None)
+            workflow_desc = "inference + upscaling" if upscale else "inference"
+            task = progress.add_task(f"[cyan]Running {workflow_desc}...", total=None)
 
             orchestrator = ctx_obj.get_orchestrator()
-            result = orchestrator.run_inference_only(
-                prompt_file=Path(spec_file),
-                videos_subdir=videos_dir,
-                num_gpu=num_gpu,
-                cuda_devices=cuda_devices,
-            )
+
+            if upscale:
+                # Run full cycle with inference and upscaling
+                result = orchestrator.run_full_cycle(
+                    prompt_file=Path(spec_file),
+                    videos_subdir=videos_dir,
+                    no_upscale=False,
+                    upscale_weight=upscale_weight,
+                    num_gpu=num_gpu,
+                    cuda_devices=cuda_devices,
+                )
+            else:
+                # Run inference only
+                result = orchestrator.run_inference_only(
+                    prompt_file=Path(spec_file),
+                    videos_subdir=videos_dir,
+                    num_gpu=num_gpu,
+                    cuda_devices=cuda_devices,
+                )
 
             progress.update(task, completed=True)
 
-        console.print("\n[bold green]✅ Inference completed![/bold green]")
+        console.print(f"\n[bold green]✅ {workflow_desc.capitalize()} completed![/bold green]")
 
         if ctx_obj.verbose:
             console.print("\n[cyan]Results:[/cyan]")
             console.print_json(json.dumps(result, indent=2))
 
     except Exception as e:
-        console.print(f"[bold red]❌ Inference failed:[/bold red] {e}")
+        console.print(f"[bold red]❌ {workflow_desc.capitalize()} failed:[/bold red] {e}")
         if ctx_obj.verbose:
             console.print_exception()
         sys.exit(1)
 
 
-@cli.command()
+@cli.command(name="upscale")
 @click.argument(
     "spec_file",
     type=click.Path(exists=True, path_type=Path),
@@ -436,19 +415,15 @@ def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
     else [],
 )
 @click.option("--weight", default=0.5, help="Upscaling control weight")
-@click.option("--num-gpu", default=1, help="Number of GPUs to use")
-@click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.pass_context
-def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
-    r"""⬆️ Run upscaling only (requires prior inference).
-
-    \b
-    Examples:
-      cosmos upscale prompt_spec.json
-      cosmos upscale prompt_spec.json --weight 0.7
-    """
+def upscale_command(ctx, spec_file, weight):
+    r"""⬆️ Run upscaling only (legacy command, use 'inference --upscale-only' instead)."""
+    console.print(
+        "[yellow]Note: 'upscale' command is deprecated. "
+        "Use 'inference' with appropriate flags instead.[/yellow]"
+    )
     ctx_obj = ctx.obj
-
+    orchestrator = ctx_obj.get_orchestrator()
     try:
         with Progress(
             SpinnerColumn(),
@@ -456,27 +431,16 @@ def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
             console=console,
         ) as progress:
             task = progress.add_task("[cyan]Running upscaling...", total=None)
-
-            orchestrator = ctx_obj.get_orchestrator()
-            result = orchestrator.run_upscaling_only(
+            orchestrator.run_upscaling_only(
                 prompt_file=Path(spec_file),
                 upscale_weight=weight,
-                num_gpu=num_gpu,
-                cuda_devices=cuda_devices,
+                num_gpu=1,
+                cuda_devices="0",
             )
-
             progress.update(task, completed=True)
-
         console.print("\n[bold green]✅ Upscaling completed![/bold green]")
-
-        if ctx_obj.verbose:
-            console.print("\n[cyan]Results:[/cyan]")
-            console.print_json(json.dumps(result, indent=2))
-
     except Exception as e:
         console.print(f"[bold red]❌ Upscaling failed:[/bold red] {e}")
-        if ctx_obj.verbose:
-            console.print_exception()
         sys.exit(1)
 
 

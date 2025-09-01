@@ -1,5 +1,5 @@
 # TODO - Cosmos Workflow Orchestrator
-*Last Updated: 2025-08-31*
+*Last Updated: 2025-09-01*
 
 This document tracks planned features and improvements for the Cosmos Workflow Orchestrator project. Items are organized by category and priority.
 
@@ -47,6 +47,14 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - Add smart negative prompt generation based on input
   - *Effort: 1 day*
 
+### CLI Refactoring
+- [ ] **Refactor CLI module structure** (NEW - HIGH PRIORITY)
+  - CLI file is 800+ lines and growing
+  - Split into modules by command group
+  - Maintain backward compatibility
+  - *Effort: 2 hours*
+  - *Reference: CLI_TEST_PROGRESS.md*
+
 ### Performance Issues
 - [ ] **Investigate control weight zero optimization**
   - Check if control_weight=0 still passes params to controlnet
@@ -57,6 +65,34 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 ---
 
 ## 🟡 Priority 2: Feature Enhancements
+
+### CLI Improvements (NEW)
+- [ ] **Complete test coverage for all CLI commands**
+  - Add tests for `create run` command
+  - Add non-dry-run tests for `prompt-enhance`
+  - *Effort: 1 hour*
+  - *Reference: tests/test_cli.py*
+
+- [ ] **Improve error messages with actionable suggestions**
+  - Add "did you mean?" for typos
+  - Show examples on invalid usage
+  - Include relevant documentation links
+  - *Effort: 1 hour*
+
+- [ ] **Add --output-format option**
+  - Support json/table/plain output formats
+  - Useful for scripting and automation
+  - *Effort: 2 hours*
+
+- [ ] **Add command aliases**
+  - `cosmos prompt` → `cosmos create prompt`
+  - `cosmos run` → `cosmos inference`
+  - *Effort: 30 mins*
+
+- [ ] **Create config command group**
+  - `cosmos config get/set/list`
+  - Manage settings from CLI
+  - *Effort: 2 hours*
 
 ### Testing & Benchmarking
 - [ ] **Complete additional upsampling performance testing**
@@ -111,6 +147,16 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 ## 🟢 Priority 3: Nice to Have
 
+### UI/Dashboard (NEW - FUTURE)
+- [ ] **Create web dashboard for analytics and control**
+  - Real-time job monitoring
+  - Performance analytics and metrics
+  - Model version management
+  - Resource usage tracking
+  - Remote control interface
+  - *Effort: Significant project (2-4 weeks)*
+  - *Note: Should be separate project/repository*
+
 ### CLI Enhancement
 - [ ] **Add interactive prompt creation interface**
   - CLI wizard for creating prompts
@@ -138,25 +184,37 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 | Priority | Total Days | Items |
 |----------|------------|-------|
-| Priority 1 | 8-11 days | 7 items |
-| Priority 2 | 11-14 days | 4 items |
-| Priority 3 | 4-5 days | 3 items |
-| **Total** | **23-30 days** | **14 items** |
+| Priority 1 | 8-11 days | 8 items |
+| Priority 2 | 16-21 days | 10 items |
+| Priority 3 | 6-10 days + future | 4 items |
+| **Total** | **30-42 days** | **22 items** |
 
 ---
 
 ## 🎯 Next Steps (In Order)
 
-1. **Setup remote environment** - Build Docker image, download checkpoints
-2. **Configure authentication** - Set up HF token
-3. **Pin versions** - Move away from `:latest` tags
-4. **Test upsampling** - Complete integration testing
-5. **Fix performance issues** - Control weight optimization
+1. **Refactor CLI structure** - Split into modules (2 hours)
+2. **Complete CLI test coverage** - Add missing tests (1 hour)
+3. **Setup remote environment** - Build Docker image, download checkpoints
+4. **Configure authentication** - Set up HF token
+5. **Pin versions** - Move away from `:latest` tags
 
 ---
 
 ## ✅ Completed Items
 
+### 2025-09-01 Session
+- [x] **CLI test infrastructure** - Completed 2025-09-01
+  - Created comprehensive test suite with CliRunner
+  - 23 tests covering all major commands
+  - Tests run in ~0.32s
+
+- [x] **--dry-run implementation** - Completed 2025-09-01
+  - Added to inference, prepare, and prompt-enhance commands
+  - Prevents expensive operations (GPU, file creation, API calls)
+  - Full test coverage with TDD approach
+
+### 2025-08-31 Session
 - [x] **Prompt upsampling integration** - Completed 2025-08-31
   - Integrated upsampling into WorkflowOrchestrator
   - Added CLI `upsample` command

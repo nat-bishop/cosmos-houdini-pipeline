@@ -26,6 +26,78 @@ from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 console = Console()
 
 
+# ============================================================================
+# AUTOCOMPLETE FUNCTIONS
+# ============================================================================
+
+
+def complete_prompt_specs(_ctx, _param, incomplete):
+    """Autocomplete for PromptSpec JSON files."""
+    prompts_dir = Path("inputs/prompts")
+    if not prompts_dir.exists():
+        return []
+
+    # Match files starting with incomplete text
+    results = []
+    for json_file in prompts_dir.rglob("*.json"):
+        if json_file.is_file():
+            relative_path = str(json_file)
+            if not incomplete or relative_path.startswith(incomplete):
+                results.append(relative_path)
+    return sorted(results)
+
+
+def complete_video_files(_ctx, _param, incomplete):
+    """Autocomplete for video files in inputs/videos."""
+    videos_dir = Path("inputs/videos")
+    if not videos_dir.exists():
+        return []
+
+    results = []
+    for video in videos_dir.rglob("color.mp4"):
+        relative_path = str(video)
+        if not incomplete or relative_path.startswith(incomplete):
+            results.append(relative_path)
+    return sorted(results)
+
+
+def complete_video_dirs(_ctx, _param, incomplete):
+    """Autocomplete for video directories."""
+    videos_dir = Path("inputs/videos")
+    if not videos_dir.exists():
+        return []
+
+    results = []
+    for subdir in videos_dir.iterdir():
+        if subdir.is_dir():
+            dir_path = str(subdir)
+            if not incomplete or dir_path.startswith(incomplete):
+                results.append(dir_path)
+    return sorted(results)
+
+
+def complete_directories(_ctx, _param, incomplete):
+    """Autocomplete for any directory."""
+    if incomplete:
+        base_path = Path(incomplete)
+        parent = base_path.parent if base_path.parent != base_path else Path(".")
+        prefix = base_path.name
+    else:
+        parent = Path(".")
+        prefix = ""
+
+    if not parent.exists():
+        return []
+
+    results = []
+    for item in parent.iterdir():
+        if item.is_dir():
+            dir_path = str(item)
+            if not prefix or item.name.startswith(prefix):
+                results.append(dir_path + "/")
+    return sorted(results)
+
+
 class CLIContext:
     """Context object to pass around CLI state."""
 
@@ -106,7 +178,11 @@ def create(ctx):
     default="bad quality, blurry, low resolution, cartoonish",
     help="Negative prompt for quality improvement",
 )
-@click.option("--video", help="Path to input video file")
+@click.option(
+    "--video",
+    help="Path to input video file",
+    shell_complete=complete_video_files,
+)
 @click.option("--enhanced", is_flag=True, help="Mark this as an enhanced (upsampled) prompt")
 @click.option("--parent-prompt", help="Original prompt text (if this is enhanced)")
 @click.pass_context
@@ -192,11 +268,7 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
 @click.argument(
     "prompt_spec_path",
     type=click.Path(exists=True, path_type=Path),
-    shell_complete=lambda _ctx, _param, incomplete: [
-        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
-    ]
-    if Path("inputs/prompts").exists()
-    else [],
+    shell_complete=complete_prompt_specs,
 )
 @click.option(
     "--weights",
@@ -307,35 +379,17 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
 # ============================================================================
 
 
-@cli.command(name="run")
-@click.argument(
-    "spec_file",
-    type=click.Path(exists=True, path_type=Path),
-    shell_complete=lambda _ctx, _param, incomplete: [
-        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
-    ]
-    if Path("inputs/prompts").exists()
-    else [],
-)
-@click.option("--videos-dir", help="Custom videos directory")
-@click.pass_context
-def run_command(ctx, spec_file, videos_dir):
-    r"""🎬 Run inference with automatic upscaling (legacy command, use 'inference' instead)."""
-    console.print("[yellow]Note: 'run' command is deprecated. Use 'inference' instead.[/yellow]")
-    ctx.invoke(inference, spec_file=spec_file, videos_dir=videos_dir, upscale=True)
-
-
 @cli.command()
 @click.argument(
     "spec_file",
     type=click.Path(exists=True, path_type=Path),
-    shell_complete=lambda _ctx, _param, incomplete: [
-        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
-    ]
-    if Path("inputs/prompts").exists()
-    else [],
+    shell_complete=complete_prompt_specs,
 )
-@click.option("--videos-dir", help="Custom videos directory")
+@click.option(
+    "--videos-dir",
+    help="Custom videos directory",
+    shell_complete=complete_video_dirs,
+)
 @click.option(
     "--upscale/--no-upscale",
     default=True,
@@ -402,48 +456,8 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight):
         sys.exit(1)
 
 
-@cli.command(name="upscale")
-@click.argument(
-    "spec_file",
-    type=click.Path(exists=True, path_type=Path),
-    shell_complete=lambda _ctx, _param, incomplete: [
-        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
-    ]
-    if Path("inputs/prompts").exists()
-    else [],
-)
-@click.option("--weight", default=0.5, help="Upscaling control weight")
-@click.pass_context
-def upscale_command(ctx, spec_file, weight):
-    r"""⬆️ Run upscaling only (legacy command, use 'inference --upscale-only' instead)."""
-    console.print(
-        "[yellow]Note: 'upscale' command is deprecated. "
-        "Use 'inference' with appropriate flags instead.[/yellow]"
-    )
-    ctx_obj = ctx.obj
-    orchestrator = ctx_obj.get_orchestrator()
-    try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("[cyan]Running upscaling...", total=None)
-            orchestrator.run_upscaling_only(
-                prompt_file=Path(spec_file),
-                upscale_weight=weight,
-                num_gpu=1,
-                cuda_devices="0",
-            )
-            progress.update(task, completed=True)
-        console.print("\n[bold green]✅ Upscaling completed![/bold green]")
-    except Exception as e:
-        console.print(f"[bold red]❌ Upscaling failed:[/bold red] {e}")
-        sys.exit(1)
-
-
 # ============================================================================
-# PROMPT ENHANCEMENT (formerly upsample)
+# PROMPT ENHANCEMENT
 # ============================================================================
 
 
@@ -453,11 +467,7 @@ def upscale_command(ctx, spec_file, weight):
     nargs=-1,
     required=True,
     type=click.Path(exists=True, path_type=Path),
-    shell_complete=lambda _ctx, _param, incomplete: [
-        str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
-    ]
-    if Path("inputs/prompts").exists()
-    else [],
+    shell_complete=complete_prompt_specs,
 )
 @click.option(
     "--resolution",
@@ -560,9 +570,8 @@ def prompt_enhance(ctx, prompt_specs, resolution):
 
             progress.update(task, completed=True)
 
-        console.print(
-            f"\n[bold green]✅ Enhanced {enhanced_count}/{len(specs_to_enhance)} prompts![/bold green]"
-        )
+        count_msg = f"Enhanced {enhanced_count}/{len(specs_to_enhance)} prompts!"
+        console.print(f"\n[bold green]✅ {count_msg}[/bold green]")
 
     except Exception as e:
         console.print(f"[bold red]❌ Enhancement failed:[/bold red] {e}")

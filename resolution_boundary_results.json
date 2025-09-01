@@ -3,72 +3,24 @@
     "resolution": "350x197",
     "pixels": 68950,
     "estimated_tokens": 2385,
-    "success": true,
-    "status": "PASS",
-    "error": ""
+    "status": "VIDEO_OK"
   },
   {
-    "resolution": "380x214",
-    "pixels": 81320,
-    "estimated_tokens": 2813,
-    "success": true,
-    "status": "PASS",
-    "error": ""
+    "resolution": "940x529",
+    "pixels": 497260,
+    "estimated_tokens": 17205,
+    "status": "VIDEO_OK"
   },
   {
-    "resolution": "400x225",
-    "pixels": 90000,
-    "estimated_tokens": 3114,
-    "success": true,
-    "status": "PASS",
-    "error": ""
+    "resolution": "950x534",
+    "pixels": 507300,
+    "estimated_tokens": 17552,
+    "status": "VIDEO_OK"
   },
   {
-    "resolution": "410x231",
-    "pixels": 94710,
-    "estimated_tokens": 3276,
-    "success": true,
-    "status": "PASS",
-    "error": ""
-  },
-  {
-    "resolution": "420x236",
-    "pixels": 99120,
-    "estimated_tokens": 3429,
-    "success": true,
-    "status": "PASS",
-    "error": ""
-  },
-  {
-    "resolution": "425x239",
-    "pixels": 101575,
-    "estimated_tokens": 3514,
-    "success": true,
-    "status": "PASS",
-    "error": ""
-  },
-  {
-    "resolution": "430x242",
-    "pixels": 104060,
-    "estimated_tokens": 3600,
-    "success": true,
-    "status": "PASS",
-    "error": ""
-  },
-  {
-    "resolution": "435x245",
-    "pixels": 106575,
-    "estimated_tokens": 3687,
-    "success": true,
-    "status": "PASS",
-    "error": ""
-  },
-  {
-    "resolution": "440x248",
-    "pixels": 109120,
-    "estimated_tokens": 3775,
-    "success": true,
-    "status": "PASS",
-    "error": ""
+    "resolution": "960x540",
+    "pixels": 518400,
+    "estimated_tokens": 17936,
+    "status": "VIDEO_OK"
   }
 ]

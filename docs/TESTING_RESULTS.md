@@ -299,12 +299,19 @@ print(f"Safe: {test.is_safe()}")  # True
 
 ## Test Log
 
+### September 1, 2025
+- Discovered actual resolution limits (3x higher than expected)
+- Found 940×529 works (497,260 pixels)
+- Confirmed token formula is incorrect
+- Fixed SSH encoding issues on Windows
+- Updated all documentation with correct limits
+
 ### August 31, 2025
 - Initial batch processing tests completed
-- Resolution limits identified
+- Initial resolution limits identified (later found incorrect)
 - Memory profiling conducted
 - Documentation created
 
 ---
 
-*Last Updated: August 31, 2025*
+*Last Updated: September 1, 2025*

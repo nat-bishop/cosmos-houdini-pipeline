@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-09-01 (Resolution Discovery)
+- **Major Resolution Limit Discovery**
+  - Found actual maximum resolution: 940×529 (497,260 pixels)
+  - This is 3x higher than initially documented 320×180 limit
+  - Created comprehensive resolution testing framework
+  - Added `docs/RESOLUTION_LIMITS_FINAL.md` with production guidelines
+  - Created `docs/SESSION_SUMMARY_2025_09_01.md` documenting findings
+
+### Fixed - 2025-09-01
+- **SSH Unicode Encoding Error**
+  - Fixed Windows encoding issues in `cosmos_workflow/connection/ssh_manager.py`
+  - Added try/catch blocks with ASCII fallback for special characters
+  - Resolves `'charmap' codec can't encode character` errors
+
+### Changed - 2025-09-01
+- **Updated Resolution Documentation**
+  - Corrected token formula findings (formula is wrong)
+  - Updated `docs/TESTING_RESULTS.md` with actual limits
+  - Documented that 960×540 reports 4,157 actual tokens (not 17,936 estimated)
+  - Clarified pixel threshold is 497,000-518,000, not token-based
+
 ### Added - 2025-08-31 (Testing & Documentation)
 - **Comprehensive Testing Documentation**
   - Created `docs/TESTING_RESULTS.md` with performance benchmarks

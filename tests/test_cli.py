@@ -311,6 +311,222 @@ class TestInferenceCommand:
         call_args = mock_orchestrator.run_full_cycle.call_args
         assert call_args.kwargs["upscale_weight"] == 0.7
 
+    # --dry-run tests (TDD - these will fail initially)
+    def test_inference_dry_run_prevents_execution(
+        self, cli_runner, mock_orchestrator, sample_prompt_spec_file
+    ):
+        """Test that --dry-run prevents actual execution."""
+        result = cli_runner.invoke(
+            cli,
+            ["inference", str(sample_prompt_spec_file), "--dry-run"],
+        )
+
+        assert_success(result)
+
+        # Should show dry run mode
+        assert "DRY RUN" in result.output or "dry run" in result.output.lower()
+
+        # Should NOT execute actual operations
+        mock_orchestrator.run_full_cycle.assert_not_called()
+        mock_orchestrator.run_inference_only.assert_not_called()
+
+    def test_inference_dry_run_shows_plan(
+        self, cli_runner, mock_orchestrator, sample_prompt_spec_file
+    ):
+        """Test that --dry-run shows what would happen."""
+        result = cli_runner.invoke(
+            cli,
+            ["inference", str(sample_prompt_spec_file), "--dry-run"],
+        )
+
+        assert_success(result)
+
+        # Should describe what would happen
+        output_lower = result.output.lower()
+        assert any(word in output_lower for word in ["would", "will", "plan", "preview"])
+        assert "upload" in output_lower or "transfer" in output_lower
+        assert "inference" in output_lower or "execute" in output_lower
+
+    def test_inference_dry_run_with_no_upscale(
+        self, cli_runner, mock_orchestrator, sample_prompt_spec_file
+    ):
+        """Test --dry-run combined with --no-upscale."""
+        result = cli_runner.invoke(
+            cli,
+            ["inference", str(sample_prompt_spec_file), "--dry-run", "--no-upscale"],
+        )
+
+        assert_success(result)
+
+        # Should indicate no upscaling in dry run
+        output_lower = result.output.lower()
+        assert "dry run" in output_lower
+        assert "no upscaling" in output_lower or "inference only" in output_lower
+
+        # Should not execute
+        mock_orchestrator.run_full_cycle.assert_not_called()
+        mock_orchestrator.run_inference_only.assert_not_called()
+
+
+# =============================================================================
+# PREPARE COMMAND TESTS
+# =============================================================================
+
+
+class TestPrepareCommand:
+    """Test 'prepare' command."""
+
+    @patch("cosmos_workflow.local_ai.cosmos_sequence.CosmosSequenceValidator")
+    @patch("cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter")
+    def test_prepare_basic(self, mock_converter, mock_validator, cli_runner, temp_dir):
+        """Test basic prepare command."""
+        # Setup mocks
+        mock_validator_instance = MagicMock()
+        mock_validator.return_value = mock_validator_instance
+
+        # Mock valid sequence
+        sequence_info = MagicMock()
+        sequence_info.valid = True
+        sequence_info.issues = []
+        mock_validator_instance.validate.return_value = sequence_info
+
+        mock_converter_instance = MagicMock()
+        mock_converter.return_value = mock_converter_instance
+        mock_converter_instance.convert_sequence.return_value = {
+            "success": True,
+            "output_dir": str(temp_dir / "videos" / "test"),
+        }
+
+        # Mock metadata generation (needed to avoid MagicMock rendering error)
+        metadata = MagicMock()
+        metadata.name = "test_scene"
+        metadata.frame_count = 10
+        metadata.resolution = (1920, 1080)
+        metadata.fps = 24
+        metadata.control_inputs = {"color": "color.mp4"}
+        metadata.video_path = "color.mp4"
+        metadata.description = "Test description"
+        mock_converter_instance.generate_metadata.return_value = metadata
+
+        # Create a dummy input directory
+        input_dir = temp_dir / "renders"
+        input_dir.mkdir()
+
+        result = cli_runner.invoke(cli, ["prepare", str(input_dir)])
+
+        # Should succeed without dry-run
+        assert_success(result, "Inference inputs prepared")
+        mock_converter_instance.convert_sequence.assert_called_once()
+
+    @patch("cosmos_workflow.local_ai.cosmos_sequence.CosmosSequenceValidator")
+    def test_prepare_dry_run_prevents_conversion(self, mock_validator, cli_runner, temp_dir):
+        """Test that --dry-run prevents actual video conversion."""
+        # Setup validator mock
+        mock_validator_instance = MagicMock()
+        mock_validator.return_value = mock_validator_instance
+
+        # Mock valid sequence with details
+        sequence_info = MagicMock()
+        sequence_info.valid = True
+        sequence_info.issues = []
+        sequence_info.sequences = {
+            "color": {"count": 10, "pattern": "color.####.png"},
+            "depth": {"count": 10, "pattern": "depth.####.png"},
+        }
+        sequence_info.frame_count = 10
+        sequence_info.resolution = (1920, 1080)
+        mock_validator_instance.validate.return_value = sequence_info
+
+        # Create input directory
+        input_dir = temp_dir / "renders"
+        input_dir.mkdir()
+
+        result = cli_runner.invoke(cli, ["prepare", str(input_dir), "--dry-run"])
+
+        assert_success(result)
+
+        # Should show dry run mode
+        assert "DRY RUN" in result.output or "dry run" in result.output.lower()
+
+        # Should validate but not convert
+        mock_validator_instance.validate.assert_called_once()
+
+        # Should describe what would happen
+        output_lower = result.output.lower()
+        assert "would" in output_lower
+        # Check for output files mentioned (*.mp4 files)
+        assert ".mp4" in output_lower or "frames" in output_lower
+
+    @patch("cosmos_workflow.local_ai.cosmos_sequence.CosmosSequenceValidator")
+    def test_prepare_dry_run_shows_details(self, mock_validator, cli_runner, temp_dir):
+        """Test that --dry-run shows conversion details."""
+        # Setup validator mock with detailed sequence info
+        mock_validator_instance = MagicMock()
+        mock_validator.return_value = mock_validator_instance
+
+        sequence_info = MagicMock()
+        sequence_info.valid = True
+        sequence_info.issues = []
+        sequence_info.sequences = {
+            "color": {"count": 120, "pattern": "color.####.png"},
+            "depth": {"count": 120, "pattern": "depth.####.png"},
+            "segmentation": {"count": 120, "pattern": "seg.####.png"},
+        }
+        sequence_info.frame_count = 120
+        sequence_info.resolution = (1920, 1080)
+        mock_validator_instance.validate.return_value = sequence_info
+
+        input_dir = temp_dir / "renders"
+        input_dir.mkdir()
+
+        result = cli_runner.invoke(
+            cli, ["prepare", str(input_dir), "--dry-run", "--fps", "30", "--name", "test_scene"]
+        )
+
+        assert_success(result)
+
+        # Should show sequence details
+        assert "120" in result.output  # frame count
+        assert "1920" in result.output or "1080" in result.output  # resolution
+        assert "color" in result.output.lower()
+        assert "depth" in result.output.lower()
+
+
+# =============================================================================
+# PROMPT-ENHANCE COMMAND TESTS
+# =============================================================================
+
+
+class TestPromptEnhanceCommand:
+    """Test 'prompt-enhance' command."""
+
+    @patch("cosmos_workflow.cli.WorkflowOrchestrator")
+    def test_prompt_enhance_dry_run(
+        self, mock_orchestrator_class, cli_runner, sample_prompt_spec_file
+    ):
+        """Test that --dry-run prevents AI API calls."""
+        # Setup mock
+        mock_orchestrator = MagicMock()
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        result = cli_runner.invoke(
+            cli,
+            ["prompt-enhance", str(sample_prompt_spec_file), "--dry-run"],
+        )
+
+        assert_success(result)
+
+        # Should show dry run mode
+        assert "DRY RUN" in result.output or "dry run" in result.output.lower()
+
+        # Should NOT call the upsampling method
+        mock_orchestrator.run_single_prompt_upsampling.assert_not_called()
+
+        # Should describe what would happen
+        output_lower = result.output.lower()
+        assert "would" in output_lower
+        assert "enhance" in output_lower or "upsample" in output_lower
+
 
 # =============================================================================
 # RUN WITH PYTEST

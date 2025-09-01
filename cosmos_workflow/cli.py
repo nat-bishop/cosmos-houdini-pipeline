@@ -396,20 +396,67 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
     help="Enable/disable 4K upscaling after inference (default: enabled)",
 )
 @click.option("--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0)")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would happen without executing",
+)
 @click.pass_context
-def inference(ctx, spec_file, videos_dir, upscale, upscale_weight):
+def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
     r"""🔮 Run Cosmos Transfer inference with optional upscaling.
 
     By default, this command runs both inference and 4K upscaling.
     Use --no-upscale to run inference only.
+    Use --dry-run to preview what would happen without executing.
 
     \b
     Examples:
       cosmos inference prompt_spec.json              # Inference + upscaling
       cosmos inference prompt_spec.json --no-upscale # Inference only
+      cosmos inference prompt_spec.json --dry-run    # Preview only
       cosmos inference prompt_spec.json --upscale-weight 0.7
     """
     ctx_obj = ctx.obj
+
+    # Handle dry-run mode
+    if dry_run:
+        console.print("\n[bold yellow]🔍 DRY RUN MODE[/bold yellow]")
+        console.print("This is a preview of what would happen:\n")
+
+        # Load and display prompt spec info
+        from cosmos_workflow.prompts.schemas import PromptSpec
+
+        prompt_spec = PromptSpec.load(Path(spec_file))
+
+        # Show what would happen
+        table = Table(show_header=False, box=None)
+        table.add_column("Action", style="cyan")
+        table.add_column("Details")
+
+        table.add_row("📁 Would load", f"Prompt: {prompt_spec.name}")
+        table.add_row(
+            "📝 Prompt text",
+            prompt_spec.prompt[:50] + "..." if len(prompt_spec.prompt) > 50 else prompt_spec.prompt,
+        )
+        table.add_row("🎬 Input video", prompt_spec.input_video_path)
+
+        if videos_dir:
+            table.add_row("📂 Videos from", videos_dir)
+
+        table.add_row("⬆️ Would upload", "Prompt spec and video files to remote GPU")
+
+        if upscale:
+            table.add_row("🚀 Would execute", "Inference + 4K upscaling")
+            table.add_row("⚖️ Upscale weight", str(upscale_weight))
+        else:
+            table.add_row("🚀 Would execute", "Inference only (no upscaling)")
+
+        table.add_row("⬇️ Would download", "Generated video results")
+
+        console.print(table)
+
+        console.print("\n[dim]To execute for real, run without --dry-run[/dim]")
+        return
 
     try:
         with Progress(
@@ -475,8 +522,13 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight):
     type=int,
     help="Max resolution for preprocessing (implies preprocessing, e.g. 480)",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would happen without calling AI API",
+)
 @click.pass_context
-def prompt_enhance(ctx, prompt_specs, resolution):
+def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
     r"""✨ Enhance prompts using Pixtral AI model.
 
     Creates new enhanced PromptSpecs with improved prompt quality.
@@ -500,10 +552,6 @@ def prompt_enhance(ctx, prompt_specs, resolution):
         preprocess = resolution is not None
         max_resolution = resolution if resolution else 480
 
-        orchestrator = ctx_obj.get_orchestrator()
-        config_manager = ctx_obj.get_config_manager()
-        local_config = config_manager.get_local_config()
-
         # Load all prompt specs
         specs_to_enhance = []
         for spec_path in prompt_specs:
@@ -516,6 +564,47 @@ def prompt_enhance(ctx, prompt_specs, resolution):
         if not specs_to_enhance:
             console.print("[bold red]❌ No valid prompt specs to enhance![/bold red]")
             sys.exit(1)
+
+        # Handle dry-run mode
+        if dry_run:
+            console.print("\n[bold yellow]🔍 DRY RUN MODE[/bold yellow]")
+            console.print("This is a preview of what would happen:\n")
+
+            table = Table(show_header=False, box=None)
+            table.add_column("Action", style="cyan")
+            table.add_column("Details")
+
+            table.add_row("📁 Would enhance", f"{len(specs_to_enhance)} prompt(s)")
+
+            if preprocess:
+                table.add_row("🎬 Preprocessing", f"Resize videos to {max_resolution}p")
+
+            table.add_row("🤖 AI Model", "Pixtral for prompt enhancement")
+            table.add_row("💾 Output", "Save as *_enhanced.json files")
+
+            console.print(table)
+
+            console.print("\n[bold]Prompts to enhance:[/bold]")
+            for spec, spec_path in specs_to_enhance:
+                console.print(
+                    f'  • {spec.name}: "{spec.prompt[:50]}..."'
+                    if len(spec.prompt) > 50
+                    else f'  • {spec.name}: "{spec.prompt}"'
+                )
+
+            console.print("\n[bold]Would create files:[/bold]")
+            for spec, spec_path in specs_to_enhance:
+                enhanced_name = spec_path.stem.replace("_ps_", "_enhanced_ps_")
+                if "_enhanced" not in enhanced_name:
+                    enhanced_name = f"{spec_path.stem}_enhanced"
+                console.print(f"  • {enhanced_name}.json")
+
+            console.print("\n[dim]To execute for real, run without --dry-run[/dim]")
+            return
+
+        orchestrator = ctx_obj.get_orchestrator()
+        config_manager = ctx_obj.get_config_manager()
+        local_config = config_manager.get_local_config()
 
         with Progress(
             SpinnerColumn(),
@@ -594,8 +683,13 @@ def prompt_enhance(ctx, prompt_specs, resolution):
 @click.option("--fps", default=24, help="Frame rate for output videos")
 @click.option("--description", help="Description for metadata")
 @click.option("--no-ai", is_flag=True, help="Skip AI analysis")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would happen without creating files",
+)
 @click.pass_context
-def prepare(ctx, input_dir, name, fps, description, no_ai):
+def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
     r"""🎥 Prepare renders for Cosmos inference.
 
     Validates Houdini/Blender renders and converts control modality
@@ -624,12 +718,12 @@ def prepare(ctx, input_dir, name, fps, description, no_ai):
 
         input_path = Path(input_dir)
 
+        # Validate sequences first (needed for both dry-run and actual execution)
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            # Validate
             task = progress.add_task("[cyan]Validating sequences...", total=None)
             validator = CosmosSequenceValidator()
             sequence_info = validator.validate(input_path)
@@ -642,6 +736,49 @@ def prepare(ctx, input_dir, name, fps, description, no_ai):
 
             progress.update(task, completed=True, description="[green]✓ Validation complete")
 
+        # Handle dry-run mode
+        if dry_run:
+            console.print("\n[bold yellow]🔍 DRY RUN MODE[/bold yellow]")
+            console.print("This is a preview of what would happen:\n")
+
+            # Show sequence details
+            table = Table(show_header=False, box=None)
+            table.add_column("Property", style="cyan")
+            table.add_column("Value")
+
+            table.add_row("📂 Input", str(input_path))
+            table.add_row("🎬 Sequences", ", ".join(sequence_info.sequences.keys()))
+            table.add_row("🖼️ Frames", str(sequence_info.frame_count))
+            table.add_row(
+                "📐 Resolution", f"{sequence_info.resolution[0]}x{sequence_info.resolution[1]}"
+            )
+            table.add_row("⏱️ FPS", str(fps))
+
+            if name:
+                table.add_row("📝 Name", name)
+            else:
+                table.add_row("📝 Name", "[dim]Would be AI-generated[/dim]")
+
+            console.print(table)
+
+            console.print("\n[bold]Would create:[/bold]")
+            for seq_name in sequence_info.sequences:
+                console.print(f"  • {seq_name}.mp4 ({sequence_info.frame_count} frames @ {fps}fps)")
+
+            if not no_ai:
+                console.print("\n[bold]Would also:[/bold]")
+                console.print("  • Generate AI description")
+                console.print("  • Create metadata.json")
+
+            console.print("\n[dim]To execute for real, run without --dry-run[/dim]")
+            return
+
+        # Continue with actual conversion if not dry-run
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
             # Convert
             task = progress.add_task("[cyan]Converting to videos...", total=None)
             converter = CosmosVideoConverter(fps=fps)

@@ -449,7 +449,9 @@ def upscale_command(ctx, spec_file, weight):
 
 @cli.command("prompt-enhance")
 @click.argument(
-    "input_path",
+    "prompt_specs",
+    nargs=-1,
+    required=True,
     type=click.Path(exists=True, path_type=Path),
     shell_complete=lambda _ctx, _param, incomplete: [
         str(p) for p in Path("inputs/prompts").rglob(f"*{incomplete}*.json") if p.is_file()
@@ -458,93 +460,109 @@ def upscale_command(ctx, spec_file, weight):
     else [],
 )
 @click.option(
-    "--preprocess/--no-preprocess",
-    default=True,
-    help="Preprocess videos to avoid vocabulary errors",
+    "--resolution",
+    default=None,
+    type=int,
+    help="Max resolution for preprocessing (implies preprocessing, e.g. 480)",
 )
-@click.option("--max-resolution", default=480, help="Maximum resolution for video preprocessing")
-@click.option("--num-frames", default=2, help="Number of frames to extract")
-@click.option("--save-dir", help="Directory to save enhanced prompts")
 @click.pass_context
-def prompt_enhance(ctx, input_path, preprocess, max_resolution, num_frames, save_dir):
+def prompt_enhance(ctx, prompt_specs, resolution):
     r"""✨ Enhance prompts using Pixtral AI model.
 
-    Improves prompt quality by adding details, style descriptions,
-    and optimizations for better generation results.
+    Creates new enhanced PromptSpecs with improved prompt quality.
+    Enhanced specs are saved with '_enhanced' suffix in the same directory structure.
 
     \b
     Examples:
       cosmos prompt-enhance prompt_spec.json
-      cosmos prompt-enhance prompts_directory/
-      cosmos prompt-enhance prompt.json --save-dir enhanced_prompts/
+      cosmos prompt-enhance spec1.json spec2.json spec3.json
+      cosmos prompt-enhance inputs/prompts/*.json --resolution 480
     """
     ctx_obj = ctx.obj
 
+    if not prompt_specs:
+        console.print("[bold red]❌ No prompt specs provided![/bold red]")
+        console.print("Usage: cosmos prompt-enhance <spec1.json> [spec2.json ...]")
+        sys.exit(1)
+
     try:
-        input_path_obj = Path(input_path)
+        # Determine preprocessing based on resolution
+        preprocess = resolution is not None
+        max_resolution = resolution if resolution else 480
+
+        orchestrator = ctx_obj.get_orchestrator()
+        config_manager = ctx_obj.get_config_manager()
+        local_config = config_manager.get_local_config()
+
+        # Load all prompt specs
+        specs_to_enhance = []
+        for spec_path in prompt_specs:
+            try:
+                spec = PromptSpec.load(Path(spec_path))
+                specs_to_enhance.append((spec, Path(spec_path)))
+            except Exception as e:
+                console.print(f"[yellow]Warning: Failed to load {spec_path}: {e}[/yellow]")
+
+        if not specs_to_enhance:
+            console.print("[bold red]❌ No valid prompt specs to enhance![/bold red]")
+            sys.exit(1)
 
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            if input_path_obj.is_file():
-                task = progress.add_task("[cyan]Enhancing single prompt...", total=None)
+            task = progress.add_task(
+                f"[cyan]Enhancing {len(specs_to_enhance)} prompt(s)...", total=None
+            )
 
-                from cosmos_workflow.prompts.schemas import PromptSpec
+            # Process all specs
+            enhanced_count = 0
+            for spec, original_path in specs_to_enhance:
+                try:
+                    result = orchestrator.run_single_prompt_upsampling(
+                        prompt_spec=spec,
+                        preprocess_videos=preprocess,
+                        max_resolution=max_resolution,
+                        num_frames=2,  # Fixed value
+                        num_gpu=1,
+                        cuda_devices="0",
+                    )
 
-                prompt_spec = PromptSpec.load(input_path_obj)
+                    if result["success"] and result.get("updated_spec"):
+                        updated_spec = result["updated_spec"]
 
-                orchestrator = ctx_obj.get_orchestrator()
-                result = orchestrator.run_single_prompt_upsampling(
-                    prompt_spec=prompt_spec,
-                    preprocess_videos=preprocess,
-                    max_resolution=max_resolution,
-                    num_frames=num_frames,
-                    num_gpu=1,
-                    cuda_devices="0",
-                )
+                        # Save enhanced spec in the same directory structure
+                        # Get the relative path from prompts_dir
+                        rel_path = original_path.relative_to(local_config.prompts_dir)
 
-                if result["success"]:
-                    updated_spec = result.get("updated_spec")
-                    if updated_spec and save_dir:
-                        save_path = Path(save_dir) / f"enhanced_{input_path_obj.name}"
+                        # Create enhanced filename
+                        enhanced_name = rel_path.stem.replace("_ps_", "_enhanced_ps_")
+                        if "_enhanced" not in enhanced_name:
+                            enhanced_name = f"{rel_path.stem}_enhanced"
+
+                        # Build the save path
+                        save_path = (
+                            local_config.prompts_dir / rel_path.parent / f"{enhanced_name}.json"
+                        )
                         save_path.parent.mkdir(parents=True, exist_ok=True)
+
                         updated_spec.save(save_path)
-                        console.print(f"[green]Saved to:[/green] {save_path}")
+                        enhanced_count += 1
+                        console.print(
+                            f"  [green]✓[/green] Enhanced: {spec.name} → {save_path.name}"
+                        )
+                    else:
+                        console.print(f"  [yellow]⚠[/yellow] Failed: {spec.name}")
 
-                    console.print("[bold green]✅ Prompt enhanced successfully![/bold green]")
-                else:
-                    raise Exception(result.get("error", "Unknown error"))
-
-            elif input_path_obj.is_dir():
-                task = progress.add_task("[cyan]Enhancing directory of prompts...", total=None)
-
-                orchestrator = ctx_obj.get_orchestrator()
-                result = orchestrator.run_prompt_upsampling_from_directory(
-                    prompts_dir=str(input_path_obj),
-                    preprocess_videos=preprocess,
-                    max_resolution=max_resolution,
-                    num_frames=num_frames,
-                    num_gpu=1,
-                    cuda_devices="0",
-                )
-
-                if result["success"]:
-                    num = result.get("num_upsampled", 0)
-                    console.print(f"[bold green]✅ Enhanced {num} prompts![/bold green]")
-
-                    if save_dir and result.get("updated_specs"):
-                        save_path = Path(save_dir)
-                        save_path.mkdir(parents=True, exist_ok=True)
-                        for spec in result["updated_specs"]:
-                            spec_path = save_path / f"enhanced_{spec.name}.json"
-                            spec.save(str(spec_path))
-                        console.print(f"[green]Saved to:[/green] {save_path}")
-                else:
-                    raise Exception(result.get("error", "Unknown error"))
+                except Exception as e:
+                    console.print(f"  [red]✗[/red] Error enhancing {spec.name}: {e}")
 
             progress.update(task, completed=True)
+
+        console.print(
+            f"\n[bold green]✅ Enhanced {enhanced_count}/{len(specs_to_enhance)} prompts![/bold green]"
+        )
 
     except Exception as e:
         console.print(f"[bold red]❌ Enhancement failed:[/bold red] {e}")

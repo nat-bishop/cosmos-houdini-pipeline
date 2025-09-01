@@ -5,7 +5,7 @@ Adds prompt upsampling capabilities to the workflow system.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -187,23 +187,25 @@ class UpsampleWorkflowMixin:
 
             if matching_spec:
                 # Create new spec with upsampled prompt
+                # Generate a new ID for the enhanced prompt
+                from cosmos_workflow.prompts.schemas import SchemaUtils
+
+                enhanced_id = SchemaUtils.generate_prompt_id(
+                    result.get("upsampled_prompt", matching_spec.prompt),
+                    matching_spec.input_video_path,
+                    matching_spec.control_inputs,
+                )
+
                 updated_spec = PromptSpec(
-                    name=matching_spec.name,
+                    id=enhanced_id,
+                    name=f"{matching_spec.name}_enhanced",
                     prompt=result.get("upsampled_prompt", matching_spec.prompt),
                     negative_prompt=matching_spec.negative_prompt,
                     input_video_path=matching_spec.input_video_path,
                     control_inputs=matching_spec.control_inputs,
-                    metadata={
-                        **matching_spec.metadata,
-                        "original_prompt": result.get("original_prompt"),
-                        "upsampled": True,
-                        "upsampled_at": datetime.now().isoformat(),
-                        "upsampling_params": {
-                            "max_resolution": max_resolution,
-                            "num_frames": num_frames,
-                            "preprocessed": preprocess_videos,
-                        },
-                    },
+                    timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    is_upsampled=True,
+                    parent_prompt_text=matching_spec.prompt,
                 )
                 updated_specs.append(updated_spec)
 

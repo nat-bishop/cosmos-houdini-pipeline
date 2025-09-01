@@ -1,0 +1,74 @@
+[
+  {
+    "resolution": "350x197",
+    "pixels": 68950,
+    "estimated_tokens": 2385,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "380x214",
+    "pixels": 81320,
+    "estimated_tokens": 2813,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "400x225",
+    "pixels": 90000,
+    "estimated_tokens": 3114,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "410x231",
+    "pixels": 94710,
+    "estimated_tokens": 3276,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "420x236",
+    "pixels": 99120,
+    "estimated_tokens": 3429,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "425x239",
+    "pixels": 101575,
+    "estimated_tokens": 3514,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "430x242",
+    "pixels": 104060,
+    "estimated_tokens": 3600,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "435x245",
+    "pixels": 106575,
+    "estimated_tokens": 3687,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  },
+  {
+    "resolution": "440x248",
+    "pixels": 109120,
+    "estimated_tokens": 3775,
+    "success": true,
+    "status": "PASS",
+    "error": ""
+  }
+]

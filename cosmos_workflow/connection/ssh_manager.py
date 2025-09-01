@@ -108,7 +108,11 @@ class SSHManager:
                 for line in stdout:
                     line = line.strip()
                     if line:
-                        print(f"  {line}")
+                        try:
+                            print(f"  {line}")
+                        except UnicodeEncodeError:
+                            # Fallback for Windows encoding issues
+                            print(f"  {line.encode('ascii', 'ignore').decode('ascii')}")
                         stdout_lines.append(line)
 
                 # Collect stderr
@@ -117,7 +121,13 @@ class SSHManager:
                     stderr_lines = stderr_output.split("\n")
                     for line in stderr_lines:
                         if line.strip():
-                            print(f"  STDERR: {line.strip()}")
+                            try:
+                                print(f"  STDERR: {line.strip()}")
+                            except UnicodeEncodeError:
+                                # Fallback for Windows encoding issues
+                                print(
+                                    f"  STDERR: {line.strip().encode('ascii', 'ignore').decode('ascii')}"
+                                )
             else:
                 # Collect all output at once
                 stdout_output = stdout.read().decode().strip()

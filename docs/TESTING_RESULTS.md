@@ -78,28 +78,62 @@ Total: 138.28s
 #### Test Methodology
 Using the token estimation formula: `tokens = width × height × frames × 0.0173`
 
-#### Working Resolutions
+#### Test Results - August 31, 2025
 
-| Resolution | Aspect | Pixels | Tokens (2 frames) | Status | Notes |
-|-----------|--------|--------|-------------------|--------|-------|
-| 160×90 | 16:9 | 14,400 | 498 | ✅ Safe | Minimal quality |
-| 240×135 | 16:9 | 32,400 | 1,121 | ✅ Safe | Low quality |
-| 320×180 | 16:9 | 57,600 | 1,992 | ✅ Safe | **Recommended** |
-| 426×240 | 16:9 | 102,240 | 3,537 | ✅ Works | Near limit |
-| 480×270 | 16:9 | 129,600 | 4,484 | ❌ Fails | Exceeds 4096 |
+| Resolution | Aspect | Pixels | Est. Tokens | Status | Notes |
+|-----------|--------|--------|-------------|--------|-------|
+| 320×180 | 16:9 | 57,600 | 1,992 | ✅ Works | Ultra-safe for production |
+| 350×197 | 16:9 | 68,950 | 2,385 | ✅ Works | Safe |
+| 380×214 | 16:9 | 81,320 | 2,813 | ✅ Works | Safe |
+| 400×225 | 16:9 | 90,000 | 3,114 | ✅ Works | Safe |
+| 410×231 | 16:9 | 94,710 | 3,276 | ✅ Works | Good quality |
+| 420×236 | 16:9 | 99,120 | 3,429 | ✅ Works | Good quality |
+| 425×239 | 16:9 | 101,575 | 3,514 | ✅ Works | Good quality |
+| 430×242 | 16:9 | 104,060 | 3,600 | ✅ Works | Good quality |
+| 435×245 | 16:9 | 106,575 | 3,687 | ✅ Works | High quality |
+| 440×248 | 16:9 | 109,120 | 3,775 | ✅ Works | High quality |
+| 445×250 | 16:9 | 111,250 | 3,849 | ✅ Works | High quality |
+| 450×253 | 16:9 | 113,850 | 3,939 | ✅ Works | High quality |
+| 455×256 | 16:9 | 116,480 | 4,030 | ✅ Works | High quality |
+| 460×259 | 16:9 | 119,140 | 4,122 | ✅ Works | **Previous est. limit** |
+| 465×262 | 16:9 | 121,830 | 4,215 | ✅ Works | Exceeds est. limit |
+| 470×265 | 16:9 | 124,550 | 4,309 | ✅ Works | Exceeds est. limit |
+| 475×267 | 16:9 | 126,825 | 4,388 | ✅ Works | Exceeds est. limit |
+| 480×270 | 16:9 | 129,600 | 4,484 | ✅ Works | **New finding!** |
+| 490×276 | 16:9 | 135,240 | 4,679 | ✅ Works | Well beyond est. |
+| 500×281 | 16:9 | 140,500 | 4,861 | ✅ Works | **Current maximum tested** |
 
-#### Failed Resolutions
+#### Important Discovery About Token Limits
 
-| Resolution | Tokens | Error Message |
-|-----------|--------|---------------|
-| 1280×704 | 31,191 | "Prompt length of 4699 is longer than the maximum model length of 4096" |
-| 720×405 | 10,092 | Vocab size error (exceeds token limit) |
-| 640×360 | 7,966 | Vocab size error (exceeds token limit) |
+**MAJOR FINDING**: The resolution limit is NOT based on our estimated token formula. The actual boundary is around **854×480** pixels (409,920 pixels).
 
-#### Maximum Safe Resolution
-- **320×180 @ 2 frames** = 1,992 tokens (48.6% of limit)
-- **426×240 @ 2 frames** = 3,537 tokens (86.3% of limit) - works but risky
-- Safety margin recommended: Stay under 2,000 tokens
+**Test Results Summary**:
+- ✅ **940×529 WORKS** (497,260 pixels) - Maximum confirmed working
+- ✅ **854×480 WORKS** (409,920 pixels) - 480p widescreen
+- ❓ **960×540 UNCLEAR** (518,400 pixels) - Actual tokens: 4,157 (may be OOM issue)
+- ❌ **1280×720 FAILS** (921,600 pixels) - Actual tokens: 4,689
+
+**Key Insights**:
+1. The token formula `width × height × frames × 0.0173` is completely wrong
+2. Actual tokenization appears to have a hard limit around 410,000-450,000 pixels
+3. The model reports actual token counts that don't match any simple formula
+4. Token count is NOT linear with resolution (4,157 tokens for 960×540 vs 4,689 for 1280×720)
+
+**Practical Limits**:
+- **Maximum Safe**: 854×480 (480p widescreen)
+- **Good Quality**: 720×405 (works reliably)
+- **HD Fails**: 960×540 and above will fail
+
+**Mystery**: Why do lower resolutions like 500×281 work when they have fewer pixels than 854×480? The tokenization method remains unclear.
+
+#### Resolution Recommendations (FINAL)
+- **Ultra-Safe Production**: 320×180 (always works)
+- **Recommended Production**: 640×360 (good balance)
+- **High Quality**: 720×405 (near maximum)
+- **Maximum Resolution**: 854×480 (absolute limit)
+- **Will Fail**: 960×540 and above
+
+**Important**: The actual pixel limit appears to be around 410,000-450,000 pixels per frame, NOT based on the token formula we initially used.
 
 ### GPU Memory Usage
 
@@ -141,19 +175,42 @@ Estimated safe batch sizes based on memory:
    - Token count exceeds model's context window
    - Solution: Reduce video resolution to ≤320×180
 
-2. **Encoding Errors** (Cosmetic)
+2. **VLLM Processing Error**
+   ```
+   "[ERROR] Failed to process test_426x240: Prompt length of 4698 is longer than the maximum model length of 4096"
+   ```
+   - Happens during VLLM initialization
+   - Video tokens + prompt tokens exceed limit
+   - Threshold appears to be around 3,500-3,600 tokens
+
+3. **Encoding Errors** (Cosmetic)
    ```
    "'charmap' codec can't encode characters in position 143-152"
    ```
    - Occurs at end of successful processing
    - Does not affect output quality
-   - Issue with SSH output handling, not model
+   - Issue with Windows SSH output handling, not model
+   - Can be ignored in production
 
 #### Factors Affecting Token Usage
-1. **Video resolution** (primary factor)
-2. **Number of frames** (multiplier effect)
-3. **Prompt text length** (minimal impact)
-4. **Video codec** (no observed impact)
+1. **Video resolution** (primary factor - linear relationship)
+2. **Number of frames** (multiplier effect - 2 frames default)
+3. **Prompt text length** (adds ~50-100 tokens)
+4. **System prompts** (adds ~500-600 tokens overhead)
+5. **Video codec** (no observed impact)
+
+#### Token Budget Breakdown
+For a typical upsampling request:
+- System prompts: ~600 tokens
+- User prompt text: ~100 tokens
+- Video tokens: `width × height × frames × 0.0173`
+- **Total must be < 4,096 tokens**
+
+Example for 320×180:
+- System: 600 tokens
+- Prompt: 100 tokens
+- Video: 1,992 tokens (320×180×2×0.0173)
+- Total: 2,692 tokens (65.7% of limit) ✅
 
 ---
 

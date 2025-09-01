@@ -47,13 +47,35 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - Add smart negative prompt generation based on input
   - *Effort: 1 day*
 
-### CLI Refactoring
-- [ ] **Refactor CLI module structure** (NEW - HIGH PRIORITY)
-  - CLI file is 800+ lines and growing
-  - Split into modules by command group
-  - Maintain backward compatibility
-  - *Effort: 2 hours*
+### CLI Migration (CRITICAL - Discovered Issue)
+- [ ] **Migrate to cli_new module structure** (CRITICAL)
+  - cli_new already exists with modular structure!
+  - Need to port --dry-run features from old cli.py
+  - Switch application to use cli_new
+  - Update all tests to test new structure
+  - *Effort: 5-6 hours*
   - *Reference: CLI_TEST_PROGRESS.md*
+
+### Code Architecture Investigation
+- [ ] **Investigate and refactor architecture issues**
+  - Analyze if ContextManager and ConfigManager are both necessary
+  - Review if resolution_tester.py is still needed
+  - Evaluate upsample_integration.py mixin pattern
+  - Assess if WorkflowOrchestrator is becoming monolithic
+  - Consider splitting into smaller services (InferenceService, etc.)
+  - *Effort: 2-3 days*
+  - *Reference: CLI_TEST_PROGRESS.md - Architecture Questions*
+
+### Documentation Structure
+- [ ] **Reorganize documentation for clarity**
+  - Too many scattered .md files causing confusion
+  - Create clear structure: docs/, architecture/, guides/, _temp/
+  - One README per directory for technical details
+  - Move CHANGELOG to docs/
+  - Create _temp/ folder for ephemeral reports (gitignored)
+  - Establish clear guidelines for what goes where
+  - *Effort: 1 day*
+  - *Reference: CLI_TEST_PROGRESS.md - Documentation Structure*
 
 ### Performance Issues
 - [ ] **Investigate control weight zero optimization**
@@ -198,20 +220,22 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 | Priority | Total Days | Items |
 |----------|------------|-------|
-| Priority 1 | 8-11 days | 8 items |
+| Priority 1 | 12-16 days | 11 items |
 | Priority 2 | 16-21 days | 10 items |
-| Priority 3 | 6-10 days + future | 4 items |
-| **Total** | **30-42 days** | **22 items** |
+| Priority 3 | 6-10 days + future | 5 items |
+| **Total** | **34-47 days** | **26 items** |
 
 ---
 
 ## 🎯 Next Steps (In Order)
 
-1. **Refactor CLI structure** - Split into modules (2 hours)
+1. **CRITICAL: Migrate to cli_new** - Port --dry-run, switch over, update tests (5-6 hours)
 2. **Complete CLI test coverage** - Add missing tests (1 hour)
-3. **Setup remote environment** - Build Docker image, download checkpoints
-4. **Configure authentication** - Set up HF token
-5. **Pin versions** - Move away from `:latest` tags
+3. **Reorganize documentation** - Create clear structure (1 day)
+4. **Investigate architecture** - Assess if refactoring needed (2-3 days)
+5. **Setup remote environment** - Build Docker image, download checkpoints
+6. **Configure authentication** - Set up HF token
+7. **Pin versions** - Move away from `:latest` tags
 
 ---
 

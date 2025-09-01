@@ -70,7 +70,20 @@ pytest tests/ -m unit --cov=cosmos_workflow
 
 # 3. Full validation (if changing core logic)
 pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
+
+# 4. Update documentation
+# - Update CHANGELOG.md with your changes
+# - Update README.md if user-facing features changed
+# - Add docs for new features in docs/implementation/
+# - Commit with descriptive message
 ```
+
+### Documentation & Commit Policy
+**IMPORTANT**: After ANY feature addition or significant change:
+1. **Update CHANGELOG.md** immediately with dated entry
+2. **Update relevant docs** (README for user features, docs/ for technical)
+3. **Commit with clear message** describing what changed and why
+4. **Never delay documentation** - document as you code
 
 ## 5) Quick Reference
 

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - 2025-09-01 (Codebase Cleanup)
+- **Test Files & Directories**
+  - Removed obsolete CLI tests that referenced old argparse-based CLI
+  - Deleted `tests/unit/cli/` directory with outdated test files
+  - Removed `test_bash_script_execution_workflow` and `TestCLIWorkflow` class from integration tests
+  - Deleted all root-level test scripts (`test_resolution_*.py`, `quick_resolution_test.py`, etc.)
+  - Removed unused test directories (`resolution_tests/`, `test_videos/`, `test_images/`, `testing/`)
+
+- **Scripts & Utilities**
+  - Deleted redundant scripts from `scripts/` directory (kept only essential remote execution files)
+  - Removed `check_remote_results.py`, `deploy_and_test_upsampler.py`, `test_actual_resolution_limits.py`
+  - Deleted unused shell scripts (`ssh_lambda.sh`, `upsample_prompt.sh`, `run_upsampler_docker.sh`)
+  - Removed linting helper scripts (`lint.py`, `fix_all_linting.py`)
+
+- **Build Artifacts & Cache**
+  - Cleaned up all cache directories (`.mypy_cache/`, `.ruff_cache/`, `htmlcov/`)
+  - Removed all log files and test JSON outputs
+  - Deleted empty directories (`notes/`, `art/`, `test_notes/`)
+
+### Added - 2025-09-01 (Documentation)
+- **Documentation & Commit Policy** in CLAUDE.md
+  - Added mandatory documentation update requirement before commits
+  - Clear policy: update CHANGELOG.md immediately after features
+  - Requirement to update README.md for user-facing changes
+  - "Document as you code" principle
+
 ### Changed - 2025-09-01 (CLI Refactor)
 - **Complete CLI Overhaul**
   - Migrated from argparse to Click framework for better UX

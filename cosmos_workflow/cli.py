@@ -432,7 +432,7 @@ def convert_png_sequence(
                     parts = resolution.split("x")
                     target_width = int(parts[0])
                     target_height = int(parts[1])
-                except:
+                except (ValueError, IndexError):
                     print(f"[ERROR] Invalid resolution format: {resolution}")
                     print("   Use 720p, 1080p, 4k, or WxH format (e.g., 1920x1080)")
                     sys.exit(1)

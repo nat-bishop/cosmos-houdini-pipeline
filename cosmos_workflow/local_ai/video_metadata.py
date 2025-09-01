@@ -275,8 +275,8 @@ class VideoMetadataExtractor:
             kmeans.fit(pixels)
             dominant_colors = kmeans.cluster_centers_.astype(int).tolist()
             stats["dominant_colors"] = dominant_colors
-        except:
-            # Fallback if sklearn is not available
+        except (ImportError, ValueError, AttributeError):
+            # Fallback if sklearn is not available or clustering fails
             stats["dominant_colors"] = []
 
         return stats, frame

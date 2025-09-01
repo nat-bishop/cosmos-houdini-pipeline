@@ -322,11 +322,11 @@ class CosmosVideoConverter:
                 else:
                     logger.warning("Cannot read frame: %s", frame_path)
 
-            logger.info("Created %s video with {frames_written} frames", modality)
+            logger.info("Created %s video with %d frames", modality, frames_written)
             return True, output_path
 
-        except Exception:
-            logger.error("Error creating %s video: {e}", modality)
+        except Exception as e:
+            logger.error("Error creating %s video: %s", modality, e)
             return False, None
 
         finally:

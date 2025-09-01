@@ -56,7 +56,7 @@ class SSHManager:
             # Try to execute a simple command to test connection
             self.ssh_client.exec_command("echo 'test'", timeout=5)
             return True
-        except:
+        except (paramiko.SSHException, OSError, AttributeError):
             return False
 
     def ensure_connected(self) -> None:

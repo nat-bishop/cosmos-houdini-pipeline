@@ -7,13 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added - 2025-09-01 (CLI Refactoring - Phase 1 Foundation)
-- **Created modular CLI architecture foundation**
+### Added - 2025-09-01 (CLI Refactoring Complete)
+- **Phase 1: Created modular CLI architecture foundation**
   - New `cosmos_workflow/cli_new/` directory structure for refactored CLI
   - `base.py`: Core utilities including CLIContext class and error handling decorator
   - `completions.py`: All autocomplete functions consolidated in one place
   - `helpers.py`: Rich display utilities for tables, progress, and formatting
   - Foundation for splitting 935-line CLI into manageable ~100-200 line modules
+
+- **Phase 2 & 3: Migrated all commands to modular structure**
+  - `status.py` (63 lines): Remote GPU status checking
+  - `prepare.py` (156 lines): Video sequence preparation
+  - `enhance.py` (164 lines): Prompt enhancement with AI
+  - `inference.py` (117 lines): Inference execution  
+  - `create.py` (217 lines): Create prompt and run specifications
+  - Main CLI integration in `__init__.py` (71 lines)
+  - Successfully reduced max file size by 76% (935 → 217 lines)
+  - All 23 tests still passing, 100% functionality preserved
 
 - **Display Utilities Added**
   - Success/error/warning/info display functions with consistent styling
@@ -26,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Centralized error handling decorator for consistent error messages
   - UTF-8 encoding support for Windows terminals
   - Graceful handling of keyboard interrupts
+
+### Changed - 2025-09-01 (Documentation)
+- **Streamlined CLAUDE.md**
+  - Reduced from 192 to 83 lines (57% reduction)
+  - Moved documentation & commit policy to top with red emphasis
+  - Simplified structure while keeping all critical information
+  - Added clear "commit as you go" requirement
 
 ### Changed - 2025-09-01 (Major CLI Improvements)
 - **Merged Commands for Simplicity**

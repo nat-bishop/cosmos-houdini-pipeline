@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-09-01 (CLI Refactoring - Phase 1 Foundation)
+- **Created modular CLI architecture foundation**
+  - New `cosmos_workflow/cli_new/` directory structure for refactored CLI
+  - `base.py`: Core utilities including CLIContext class and error handling decorator
+  - `completions.py`: All autocomplete functions consolidated in one place
+  - `helpers.py`: Rich display utilities for tables, progress, and formatting
+  - Foundation for splitting 935-line CLI into manageable ~100-200 line modules
+
+- **Display Utilities Added**
+  - Success/error/warning/info display functions with consistent styling
+  - Table creation helpers for structured output
+  - Progress context managers for long operations
+  - Formatting utilities for paths, IDs, file sizes, and durations
+  - Dry-run mode display helpers
+
+- **Error Handling Improvements**
+  - Centralized error handling decorator for consistent error messages
+  - UTF-8 encoding support for Windows terminals
+  - Graceful handling of keyboard interrupts
+
 ### Changed - 2025-09-01 (Major CLI Improvements)
 - **Merged Commands for Simplicity**
   - Combined `run`, `inference`, and `upscale` into single `inference` command

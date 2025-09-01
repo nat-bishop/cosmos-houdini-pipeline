@@ -172,6 +172,20 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - *Effort: 2 days*
 
 ### Infrastructure
+- [ ] **Fix pre-commit hooks configuration**
+  - Fix "look-behind requires fixed-width pattern" error
+  - Resolve bandit toml parser issue
+  - Configure hooks to work with Windows line endings
+  - Update pyproject.toml for better compatibility
+  - *Effort: 1 day*
+
+- [ ] **Setup Claude to interact with GitHub Actions**
+  - Configure Claude Code to trigger and monitor GitHub Actions
+  - Add ability to view CI/CD results directly
+  - Enable automated PR checks and feedback
+  - Create integration for release automation
+  - *Effort: 2-3 days*
+
 - [ ] **Fix GitHub Actions workflows**
   - Update CI/CD pipelines
   - Add automated testing on PR

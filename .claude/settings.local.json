@@ -148,7 +148,12 @@
       "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler/**)",
       "Read(F:\\Art\\cosmos-transfer1\\cosmos_transfer1\\auxiliary\\upsampler\\model/**)",
       "Read(F:\\Art/**)",
-      "Bash(_COSMOS_COMPLETE=bash_source python cosmos)"
+      "Bash(_COSMOS_COMPLETE=bash_source python cosmos)",
+      "Bash(_COSMOS_COMPLETE=bash_source cosmos)",
+      "Bash(source ~/.bashrc)",
+      "Bash(ssh:*)",
+      "Read(F:\\art/**)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

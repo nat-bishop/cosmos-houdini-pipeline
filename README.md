@@ -109,21 +109,22 @@ cosmos <command> [options]
 Commands:
   create prompt     Create a new prompt specification
   create run        Create a run specification
-  run              Execute full workflow (inference + upscaling)
-  inference        Run inference only
-  upscale          Run upscaling only
+  inference        Run Cosmos inference (with upscaling by default)
   prompt-enhance   Enhance prompts with AI (formerly 'upsample')
   prepare          Prepare Houdini/Blender renders for inference
   status           Check remote GPU status
-  completion       Setup shell completion
-  version          Show version info
+
+Deprecated (still work but show warnings):
+  run              Legacy alias for 'inference'
+  upscale          Legacy alias for 'inference' with upscaling only
 ```
 
 ### Examples
 ```bash
 # Create and run a prompt
 cosmos create prompt "Transform to cyberpunk style" --video input.mp4
-cosmos run prompt_spec.json --num-gpu 2
+cosmos inference prompt_spec.json  # Runs inference + upscaling by default
+cosmos inference prompt_spec.json --no-upscale  # Inference only
 
 # Prepare renders from Houdini/Blender
 cosmos prepare ./renders/ --name city_scene --fps 24
@@ -135,27 +136,29 @@ cosmos prompt-enhance prompts/ --save-dir enhanced/
 cosmos status --verbose
 ```
 
-## 🔧 Shell Completion
+## 🔧 Shell Completion (Tab Autocomplete)
 
-Enable tab completion for better CLI experience:
-
-### Windows PowerShell
-```powershell
-# Show setup instructions
-cosmos completion powershell
-
-# Or add to $PROFILE manually:
-notepad $PROFILE
-# Add the completion script shown by the command above
-```
+Enable tab completion for commands, options, and file paths. The CLI uses Click's built-in completion system.
 
 ### Git Bash (Windows)
 ```bash
-# Show setup instructions
-cosmos completion gitbash
+# Add to ~/.bashrc (replace path with your actual cosmos location)
+eval "$(_COSMOS_COMPLETE=bash_source python /f/Art/cosmos-houdini-experiments/cosmos)"
 
-# Or add to ~/.bashrc:
-eval "$(_COSMOS_COMPLETE=bash_source python /path/to/cosmos)"
+# Then reload:
+source ~/.bashrc
+```
+
+### Windows PowerShell
+```powershell
+# Add to $PROFILE (to edit: notepad $PROFILE)
+Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $env:_COSMOS_COMPLETE = 'powershell_complete'
+    python C:\path\to\cosmos | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}
 ```
 
 ### Linux/Mac Bash

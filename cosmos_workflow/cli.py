@@ -342,10 +342,8 @@ def run_command(ctx, spec_file, videos_dir):
     help="Enable/disable 4K upscaling after inference (default: enabled)",
 )
 @click.option("--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0)")
-@click.option("--num-gpu", default=1, help="Number of GPUs to use")
-@click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.pass_context
-def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, num_gpu, cuda_devices):
+def inference(ctx, spec_file, videos_dir, upscale, upscale_weight):
     r"""🔮 Run Cosmos Transfer inference with optional upscaling.
 
     By default, this command runs both inference and 4K upscaling.
@@ -377,16 +375,16 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, num_gpu, cuda
                     videos_subdir=videos_dir,
                     no_upscale=False,
                     upscale_weight=upscale_weight,
-                    num_gpu=num_gpu,
-                    cuda_devices=cuda_devices,
+                    num_gpu=1,
+                    cuda_devices="0",
                 )
             else:
                 # Run inference only
                 result = orchestrator.run_inference_only(
                     prompt_file=Path(spec_file),
                     videos_subdir=videos_dir,
-                    num_gpu=num_gpu,
-                    cuda_devices=cuda_devices,
+                    num_gpu=1,
+                    cuda_devices="0",
                 )
 
             progress.update(task, completed=True)
@@ -466,13 +464,9 @@ def upscale_command(ctx, spec_file, weight):
 )
 @click.option("--max-resolution", default=480, help="Maximum resolution for video preprocessing")
 @click.option("--num-frames", default=2, help="Number of frames to extract")
-@click.option("--num-gpu", default=1, help="Number of GPUs")
-@click.option("--cuda-devices", default="0", help="CUDA device IDs")
 @click.option("--save-dir", help="Directory to save enhanced prompts")
 @click.pass_context
-def prompt_enhance(
-    ctx, input_path, preprocess, max_resolution, num_frames, num_gpu, cuda_devices, save_dir
-):
+def prompt_enhance(ctx, input_path, preprocess, max_resolution, num_frames, save_dir):
     r"""✨ Enhance prompts using Pixtral AI model.
 
     Improves prompt quality by adding details, style descriptions,
@@ -507,8 +501,8 @@ def prompt_enhance(
                     preprocess_videos=preprocess,
                     max_resolution=max_resolution,
                     num_frames=num_frames,
-                    num_gpu=num_gpu,
-                    cuda_devices=cuda_devices,
+                    num_gpu=1,
+                    cuda_devices="0",
                 )
 
                 if result["success"]:
@@ -532,8 +526,8 @@ def prompt_enhance(
                     preprocess_videos=preprocess,
                     max_resolution=max_resolution,
                     num_frames=num_frames,
-                    num_gpu=num_gpu,
-                    cuda_devices=cuda_devices,
+                    num_gpu=1,
+                    cuda_devices="0",
                 )
 
                 if result["success"]:

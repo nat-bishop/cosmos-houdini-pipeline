@@ -102,14 +102,14 @@ python cosmos --help
 # Create prompt with AI naming
 cosmos create prompt "prompt text" --name "name" --video video.mp4
 
-# Execute on GPU (default 2 GPUs)
-cosmos run prompt_spec.json --num-gpu 2
+# Execute on GPU (runs inference + upscaling by default)
+cosmos inference prompt_spec.json
 
 # Prepare Houdini/Blender renders for inference
 cosmos prepare /path/to/renders --fps 24
 
-# Enhance prompts with AI (formerly 'upsample')
-cosmos prompt-enhance prompt_spec.json --save-dir enhanced/
+# Enhance prompts with AI (accepts multiple files)
+cosmos prompt-enhance prompt1.json prompt2.json --resolution 480
 ```
 
 ### Project Structure
@@ -156,7 +156,7 @@ cosmos_workflow/
 ### Important Parameters
 - `num_steps`: 35 (quality) or 1 (distilled/fast)
 - `guidance_scale`: 8.0 (CFG default)
-- `num_gpu`: 1-2 recommended
+- GPU: Always uses 1 GPU (CUDA device 0)
 - `offload_models`: True for memory optimization
 
 Details: `docs/ai-context/KNOWN_ISSUES.md`

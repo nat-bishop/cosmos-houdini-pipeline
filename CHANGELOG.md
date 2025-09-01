@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-01 (Major CLI Improvements)
+- **Merged Commands for Simplicity**
+  - Combined `run`, `inference`, and `upscale` into single `inference` command
+  - Default behavior: run both inference and upscaling (most common use case)
+  - Use `--no-upscale` flag for inference only
+  - Removed deprecated `run` and `upscale` commands completely
+
+- **Autocomplete System Overhaul**
+  - Created reusable autocomplete functions, eliminating ~25 lines of duplicate code
+  - Added smart autocomplete for video files, directories, and prompt specs
+  - Fixed pattern matching to use prefix matching instead of substring
+  - Added proper autocomplete for `--videos-dir` and `--video` options
+  - Autocomplete now works properly in Git Bash and CMD on Windows
+
+- **Parameter Simplification**
+  - Removed `--num-gpu` and `--cuda-devices` from all commands (always uses 1 GPU)
+  - Simplified `prompt-enhance`: `--resolution` now implies preprocessing
+  - Removed unnecessary flags: `--save-dir`, `--num-frames`, `--preprocess`
+  - `prompt-enhance` now accepts multiple files as arguments
+
+- **Bug Fixes**
+  - Fixed critical PromptSpec metadata bug in upsample_integration.py
+  - Fixed prompt-enhance to properly create new PromptSpecs with `_enhanced` suffix
+  - Properly generates new IDs for enhanced PromptSpecs
+  - Fixed `is_upsampled` and `parent_prompt_text` fields
+
 ### Removed - 2025-09-01 (Codebase Cleanup)
+- **Old CLI Files**
+  - Removed `cli_old.py` (obsolete argparse-based CLI)
+  - Removed deprecated `run` and `upscale` commands
+  - Removed `setup_completion.py` (integrated into main CLI)
+
 - **Test Files & Directories**
   - Removed obsolete CLI tests that referenced old argparse-based CLI
   - Deleted `tests/unit/cli/` directory with outdated test files

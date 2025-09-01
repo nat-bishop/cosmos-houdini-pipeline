@@ -110,13 +110,9 @@ Commands:
   create prompt     Create a new prompt specification
   create run        Create a run specification
   inference        Run Cosmos inference (with upscaling by default)
-  prompt-enhance   Enhance prompts with AI (formerly 'upsample')
+  prompt-enhance   Enhance prompts with AI
   prepare          Prepare Houdini/Blender renders for inference
   status           Check remote GPU status
-
-Deprecated (still work but show warnings):
-  run              Legacy alias for 'inference'
-  upscale          Legacy alias for 'inference' with upscaling only
 ```
 
 ### Examples
@@ -129,11 +125,12 @@ cosmos inference prompt_spec.json --no-upscale  # Inference only
 # Prepare renders from Houdini/Blender
 cosmos prepare ./renders/ --name city_scene --fps 24
 
-# Enhance prompts with AI
-cosmos prompt-enhance prompts/ --save-dir enhanced/
+# Enhance prompts with AI (accepts multiple files)
+cosmos prompt-enhance prompt1.json prompt2.json
+cosmos prompt-enhance inputs/prompts/*.json --resolution 480
 
 # Check system status
-cosmos status --verbose
+cosmos status
 ```
 
 ## 🔧 Shell Completion (Tab Autocomplete)
@@ -185,10 +182,12 @@ source ~/.zshrc
 
 ### AI Integration
 - **Smart Naming** - AI-powered descriptive names from prompts
+- **Prompt Enhancement** - Pixtral AI model for improving prompt quality
 - **Video Analysis** - Automatic metadata extraction and description
 - **Content Understanding** - BLIP model for scene analysis
 
 ### Developer Tools
+- **Modern CLI** - Click framework with smart autocomplete
 - **Modern Linting** - Ruff, MyPy, Bandit for code quality
 - **Comprehensive Testing** - Unit, integration, and system tests
 - **Pre-commit Hooks** - Automated quality checks

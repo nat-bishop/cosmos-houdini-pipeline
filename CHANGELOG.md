@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-01 (CLI Refactor)
+- **Complete CLI Overhaul**
+  - Migrated from argparse to Click framework for better UX
+  - Reorganized commands into logical groups (`create prompt`, `create run`)
+  - Added rich console output with colors and progress indicators
+  - Renamed `upsample` command to `prompt-enhance` for clarity
+  - Removed deprecated `convert-sequence` command (use `prepare` instead)
+  - Added shell completion support for Bash, Zsh, Fish, PowerShell, and Git Bash
+  - Improved help text and command examples throughout
+
+- **Simplified Installation**
+  - Removed pip package configuration - now using standalone scripts
+  - Created `cosmos` Python script and `cosmos.bat` for direct execution
+  - Updated documentation with manual setup instructions
+  - No pip installation required - just install dependencies and run
+
+- **Documentation Updates**
+  - Updated README.md with new command structure and examples
+  - Updated CLAUDE.md with simplified setup instructions
+  - Added shell completion setup instructions for all platforms
+  - Clarified that pip is not required for CLI usage
+
 ### Added - 2025-09-01 (Resolution Discovery)
 - **Major Resolution Limit Discovery**
   - Found actual maximum resolution: 940×529 (497,260 pixels)

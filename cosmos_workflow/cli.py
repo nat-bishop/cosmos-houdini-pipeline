@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Main CLI interface for Cosmos-Transfer1 Python workflows.
-Provides a user-friendly command-line interface for all workflow operations.
-"""
+"""Modern CLI interface for Cosmos-Transfer1 workflow orchestration."""
 
-import argparse
 import json
 import logging
 import sys
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.prompts.schemas import (
@@ -22,585 +23,567 @@ from cosmos_workflow.prompts.schemas import (
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
-
-def setup_logging(verbose: bool = False) -> None:
-    """Setup logging configuration."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
+console = Console()
 
 
-def validate_prompt_file(prompt_file: str) -> Path:
-    """Validate prompt file exists and return Path object."""
-    prompt_path = Path(prompt_file)
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
-    return prompt_path
+class CLIContext:
+    """Context object to pass around CLI state."""
 
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+        self.orchestrator = None
+        self.config_manager = None
 
-def run_full_cycle(
-    prompt_file: Path,
-    videos_subdir: str | None,
-    no_upscale: bool,
-    upscale_weight: float,
-    num_gpu: int,
-    cuda_devices: str,
-    verbose: bool,
-) -> None:
-    """Run complete workflow cycle."""
-    setup_logging(verbose)
-
-    try:
-        orchestrator = WorkflowOrchestrator()
-        result = orchestrator.run_full_cycle(
-            prompt_file=prompt_file,
-            videos_subdir=videos_subdir,
-            no_upscale=no_upscale,
-            upscale_weight=upscale_weight,
-            num_gpu=num_gpu,
-            cuda_devices=cuda_devices,
+    def setup_logging(self):
+        """Setup logging configuration."""
+        level = logging.DEBUG if self.verbose else logging.INFO
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
         )
 
-        if verbose:
-            print("\n📊 Workflow Results:")
-            print(json.dumps(result, indent=2))
+    def get_orchestrator(self) -> WorkflowOrchestrator:
+        """Get or create workflow orchestrator."""
+        if self.orchestrator is None:
+            self.orchestrator = WorkflowOrchestrator()
+        return self.orchestrator
 
-    except Exception as e:
-        print(f"\n[ERROR] Workflow failed: {e}")
-        sys.exit(1)
-
-
-def run_inference_only(
-    prompt_file: Path, videos_subdir: str | None, num_gpu: int, cuda_devices: str, verbose: bool
-) -> None:
-    """Run only inference step."""
-    setup_logging(verbose)
-
-    try:
-        orchestrator = WorkflowOrchestrator()
-        result = orchestrator.run_inference_only(
-            prompt_file=prompt_file,
-            videos_subdir=videos_subdir,
-            num_gpu=num_gpu,
-            cuda_devices=cuda_devices,
-        )
-
-        if verbose:
-            print("\n📊 Inference Results:")
-            print(json.dumps(result, indent=2))
-
-    except Exception as e:
-        print(f"\n[ERROR] Inference failed: {e}")
-        sys.exit(1)
+    def get_config_manager(self) -> ConfigManager:
+        """Get or create config manager."""
+        if self.config_manager is None:
+            self.config_manager = ConfigManager()
+        return self.config_manager
 
 
-def run_upscaling_only(
-    prompt_file: Path, upscale_weight: float, num_gpu: int, cuda_devices: str, verbose: bool
-) -> None:
-    """Run only upscaling step."""
-    setup_logging(verbose)
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output for debugging")
+@click.pass_context
+def cli(ctx, verbose):
+    """Cosmos-Transfer1 Workflow Orchestrator
 
-    try:
-        orchestrator = WorkflowOrchestrator()
-        result = orchestrator.run_upscaling_only(
-            prompt_file=prompt_file,
-            upscale_weight=upscale_weight,
-            num_gpu=num_gpu,
-            cuda_devices=cuda_devices,
-        )
+    A powerful CLI for orchestrating NVIDIA Cosmos video generation workflows.
+    Manage prompts, run inference, and control remote GPU execution with ease.
 
-        if verbose:
-            print("\n📊 Upscaling Results:")
-            print(json.dumps(result, indent=2))
+    \b
+    Quick Start:
+      1. Create a prompt:  cosmos create prompt "A cyberpunk city"
+      2. Run inference:    cosmos run <prompt_file>
+      3. Check status:     cosmos status
 
-    except Exception as e:
-        print(f"\n[ERROR] Upscaling failed: {e}")
-        sys.exit(1)
+    Use 'cosmos <command> --help' for detailed command information.
+    """
+    ctx.obj = CLIContext(verbose=verbose)
+    ctx.obj.setup_logging()
 
 
-def check_status(verbose: bool) -> None:
-    """Check remote instance status."""
-    setup_logging(verbose)
-
-    try:
-        orchestrator = WorkflowOrchestrator()
-        status = orchestrator.check_remote_status()
-
-        print("\n🔍 Remote Instance Status:")
-        print(f"  SSH Status: {status['ssh_status']}")
-
-        if status["ssh_status"] == "connected":
-            print(f"  Remote Directory: {status['remote_directory']}")
-            print(f"  Directory Exists: {status['remote_directory_exists']}")
-
-            docker_status = status["docker_status"]
-            print(f"  Docker Running: {docker_status['docker_running']}")
-
-            if verbose and docker_status["docker_running"]:
-                print("\n🐳 Docker Images:")
-                print(docker_status["available_images"])
-
-                print("\n📦 Running Containers:")
-                print(docker_status["running_containers"])
-        else:
-            print(f"  Error: {status['error']}")
-
-    except Exception as e:
-        print(f"\n[ERROR] Status check failed: {e}")
-        sys.exit(1)
+# ============================================================================
+# CREATE COMMAND GROUP
+# ============================================================================
 
 
-def create_prompt_spec(
-    name: str | None,
-    prompt_text: str,
-    negative_prompt: str,
-    input_video_path: str | None,
-    control_inputs: list | None,
-    is_upsampled: bool,
-    parent_prompt_text: str | None,
-    verbose: bool,
-) -> None:
-    """Create a new PromptSpec using the new schema system with optional smart naming."""
-    setup_logging(verbose)
+@cli.group()
+@click.pass_context
+def create(ctx):
+    """📝 Create prompts and run specifications.
+
+    Use these commands to create the JSON specifications needed for
+    Cosmos Transfer inference and upscaling workflows.
+    """
+
+
+@create.command("prompt")
+@click.argument("prompt_text")
+@click.option("--name", "-n", help="Name for the prompt (auto-generated if not provided)")
+@click.option(
+    "--negative",
+    default="bad quality, blurry, low resolution, cartoonish",
+    help="Negative prompt for quality improvement",
+)
+@click.option("--video", help="Path to input video file")
+@click.option("--enhanced", is_flag=True, help="Mark this as an enhanced (upsampled) prompt")
+@click.option("--parent-prompt", help="Original prompt text (if this is enhanced)")
+@click.pass_context
+def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prompt):
+    """Create a new prompt specification.
+
+    \b
+    Examples:
+      cosmos create prompt "A futuristic city at night"
+      cosmos create prompt "Transform to anime style" --video input.mp4
+      cosmos create prompt "Enhanced prompt" --enhanced --parent-prompt "Original"
+    """
+    ctx_obj = ctx.obj
 
     try:
-        # Auto-generate name if not provided
-        if name is None:
-            name = generate_smart_name(prompt_text, max_length=30)
+        with console.status("[bold green]Creating prompt specification..."):
+            # Auto-generate name if not provided
+            if name is None:
+                name = generate_smart_name(prompt_text, max_length=30)
+                console.print(f"[cyan]Generated name:[/cyan] {name}")
 
-        # Parse control inputs
-        control_inputs_dict = {}
-        if control_inputs:
-            for i in range(0, len(control_inputs), 2):
-                if i + 1 < len(control_inputs):
-                    modality = control_inputs[i]
-                    path = control_inputs[i + 1]
-                    control_inputs_dict[modality] = path
+            # Build video path
+            video_path = video or f"inputs/videos/{name}/color.mp4"
 
-        # Build video path
-        video_path = input_video_path or f"inputs/videos/{name}/color.mp4"
-
-        # Default control inputs
-        if not control_inputs_dict:
+            # Default control inputs
             control_inputs_dict = {
                 "depth": f"inputs/videos/{name}/depth.mp4",
                 "seg": f"inputs/videos/{name}/segmentation.mp4",
             }
 
-        # Generate unique ID
-        prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs_dict)
+            # Generate unique ID
+            prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs_dict)
 
-        # Create PromptSpec
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        prompt_spec = PromptSpec(
-            id=prompt_id,
-            name=name,
-            prompt=prompt_text,
-            negative_prompt=negative_prompt,
-            input_video_path=video_path,
-            control_inputs=control_inputs_dict,
-            timestamp=timestamp,
-            is_upsampled=is_upsampled,
-            parent_prompt_text=parent_prompt_text,
-        )
-
-        # Save to file
-        config_manager = ConfigManager()
-        local_config = config_manager.get_local_config()
-
-        # Create date-based directory structure
-        dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
-        dir_manager.ensure_directories_exist()
-
-        file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_id)
-        prompt_spec.save(file_path)
-
-        print(f"\n[SUCCESS] Created PromptSpec: {prompt_id}")
-        print(f"   Saved to: {file_path}")
-        print(f"   Name: {name}")
-        print(f"   Video: {video_path}")
-        print(f"   Control Inputs: {list(control_inputs_dict.keys())}")
-        print("\n[INFO] To create a RunSpec for this prompt:")
-        print(f"   python -m cosmos_workflow.main create-run {file_path}")
-
-    except Exception as e:
-        print(f"\n[ERROR] Failed to create PromptSpec: {e}")
-        if verbose:
-            traceback.print_exc()
-        sys.exit(1)
-
-
-def create_run_spec(
-    prompt_spec_path: str,
-    control_weights: list | None,
-    num_steps: int,
-    guidance: float,
-    sigma_max: float,
-    blur_strength: str,
-    canny_threshold: str,
-    fps: int,
-    seed: int,
-    custom_output_path: str | None,
-    verbose: bool,
-) -> None:
-    """Create a new RunSpec for executing a PromptSpec."""
-    setup_logging(verbose)
-
-    try:
-        # Load the PromptSpec
-        prompt_spec_file = Path(prompt_spec_path)
-        if not prompt_spec_file.exists():
-            print(f"[ERROR] PromptSpec file not found: {prompt_spec_path}")
-            sys.exit(1)
-
-        prompt_spec = PromptSpec.load(prompt_spec_file)
-
-        # Build control weights
-        if control_weights:
-            weights_dict = {
-                "vis": control_weights[0],
-                "edge": control_weights[1],
-                "depth": control_weights[2],
-                "seg": control_weights[3],
-            }
-        else:
-            weights_dict = SchemaUtils.get_default_control_weights()
-
-        # Build parameters
-        parameters = {
-            "num_steps": num_steps,
-            "guidance": guidance,
-            "sigma_max": sigma_max,
-            "blur_strength": blur_strength,
-            "canny_threshold": canny_threshold,
-            "fps": fps,
-            "seed": seed,
-        }
-
-        # Validate inputs
-        if not SchemaUtils.validate_control_weights(weights_dict):
-            print("[ERROR] Invalid control weights")
-            sys.exit(1)
-
-        if not SchemaUtils.validate_parameters(parameters):
-            print("[ERROR] Invalid parameters")
-            sys.exit(1)
-
-        # Generate unique run ID
-        run_id = SchemaUtils.generate_run_id(prompt_spec.id, weights_dict, parameters)
-
-        # Build output path
-        output_path = custom_output_path or f"outputs/{prompt_spec.name}_{run_id}"
-
-        # Create RunSpec
-        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
-        run_spec = RunSpec(
-            id=run_id,
-            prompt_id=prompt_spec.id,
-            name=f"{prompt_spec.name}_{run_id}",
-            control_weights=weights_dict,
-            parameters=parameters,
-            timestamp=timestamp,
-            execution_status=ExecutionStatus.PENDING,
-            output_path=output_path,
-        )
-
-        # Save to file
-        config_manager = ConfigManager()
-        local_config = config_manager.get_local_config()
-
-        # Create date-based directory structure
-        dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
-        dir_manager.ensure_directories_exist()
-
-        file_path = dir_manager.get_run_file_path(prompt_spec.name, timestamp, run_id)
-        run_spec.save(file_path)
-
-        print(f"\n[SUCCESS] Created RunSpec: {run_id}")
-        print(f"   Saved to: {file_path}")
-        print(f"   Prompt: {prompt_spec.id}")
-        print(f"   Control Weights: {weights_dict}")
-        print(f"   Output: {output_path}")
-        print("\n[INFO] To run this specification:")
-        print(f"   python -m cosmos_workflow.cli run {file_path}")
-
-    except Exception as e:
-        print(f"\n[ERROR] Failed to create RunSpec: {e}")
-        if verbose:
-            traceback.print_exc()
-        sys.exit(1)
-
-
-def convert_png_sequence(
-    input_dir: str,
-    output_path: str | None,
-    fps: int,
-    resolution: str | None,
-    generate_metadata: bool,
-    ai_analysis: bool,
-    verbose: bool,
-) -> None:
-    """Convert a PNG sequence to video with optional AI metadata generation.
-
-    Args:
-        input_dir: Directory containing PNG sequence
-        output_path: Output video path (optional)
-        fps: Frame rate for output video
-        resolution: Target resolution (720p, 1080p, 4k, or WxH)
-        generate_metadata: Whether to generate metadata JSON
-        ai_analysis: Whether to use AI for metadata generation
-        verbose: Enable verbose logging
-    """
-    setup_logging(verbose)
-
-    try:
-        from pathlib import Path
-
-        from cosmos_workflow.local_ai.video_metadata import VideoMetadataExtractor, VideoProcessor
-
-        input_path = Path(input_dir)
-        if not input_path.exists() or not input_path.is_dir():
-            print(f"[ERROR] Input directory does not exist: {input_dir}")
-            sys.exit(1)
-
-        # Initialize processor
-        processor = VideoProcessor()
-
-        # Step 1: Validate PNG sequence
-        print(f"\n[INFO] Validating PNG sequence in: {input_dir}")
-        validation = processor.validate_sequence(input_path)
-
-        if not validation["valid"]:
-            print("[ERROR] Invalid PNG sequence:")
-            for issue in validation["issues"]:
-                print(f"  - {issue}")
-            if validation["missing_frames"]:
-                print(
-                    f"  - Missing frames: {validation['missing_frames'][:10]}{'...' if len(validation['missing_frames']) > 10 else ''}"
-                )
-            sys.exit(1)
-
-        print(f"[SUCCESS] Valid sequence found: {validation['frame_count']} frames")
-        if validation["pattern"]:
-            print(f"   Pattern: {validation['pattern']}")
-
-        # Step 2: Get PNG files
-        png_files = sorted(input_path.glob("*.png"))
-
-        # Step 3: Determine output path
-        if output_path:
-            video_output = Path(output_path)
-        else:
-            # Default to inputs/videos/ directory for inference workflow
-            from cosmos_workflow.config.config_manager import ConfigManager
-
-            config_manager = ConfigManager()
-            local_config = config_manager.get_local_config()
-            videos_dir = Path(local_config.videos_dir) / input_path.name
-            videos_dir.mkdir(parents=True, exist_ok=True)
-            video_output = videos_dir / "color.mp4"
-
-        # Step 4: Convert to video
-        print(f"\n[INFO] Converting {len(png_files)} frames to video...")
-        print(f"   Output: {video_output}")
-        print(f"   FPS: {fps}")
-
-        success = processor.create_video_from_frames(
-            frame_paths=png_files, output_path=video_output, fps=fps
-        )
-
-        if not success:
-            print("[ERROR] Failed to create video")
-            sys.exit(1)
-
-        print(f"[SUCCESS] Video created successfully: {video_output}")
-
-        # Step 5: Optional standardization
-        if resolution:
-            print(f"\n[INFO] Standardizing video to {resolution}...")
-            standardized_path = video_output.parent / f"{video_output.stem}_standardized.mp4"
-
-            # Parse resolution
-            if resolution in processor.standard_resolutions:
-                target_width, target_height = processor.standard_resolutions[resolution]
-            else:
-                # Try to parse WxH format
-                try:
-                    parts = resolution.split("x")
-                    target_width = int(parts[0])
-                    target_height = int(parts[1])
-                except (ValueError, IndexError):
-                    print(f"[ERROR] Invalid resolution format: {resolution}")
-                    print("   Use 720p, 1080p, 4k, or WxH format (e.g., 1920x1080)")
-                    sys.exit(1)
-
-            success = processor.standardize_video(
-                input_path=video_output,
-                output_path=standardized_path,
-                target_fps=fps,
-                target_resolution=(target_width, target_height),
+            # Create PromptSpec
+            timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            prompt_spec = PromptSpec(
+                id=prompt_id,
+                name=name,
+                prompt=prompt_text,
+                negative_prompt=negative,
+                input_video_path=video_path,
+                control_inputs=control_inputs_dict,
+                timestamp=timestamp,
+                is_upsampled=enhanced,
+                parent_prompt_text=parent_prompt,
             )
 
-            if success:
-                video_output = standardized_path
-                print(f"[SUCCESS] Video standardized to {resolution}")
-            else:
-                print("[WARNING] Standardization failed, using original video")
+            # Save to file
+            config_manager = ctx_obj.get_config_manager()
+            local_config = config_manager.get_local_config()
 
-        # Step 6: Generate metadata if requested
-        if generate_metadata:
-            print("\n[INFO] Generating metadata...")
-            extractor = VideoMetadataExtractor(use_ai=ai_analysis)
-            metadata = extractor.extract_metadata(video_output)
+            dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
+            dir_manager.ensure_directories_exist()
 
-            # Save metadata
-            metadata_path = video_output.parent / f"{video_output.stem}_metadata.json"
-            extractor.save_metadata(metadata, metadata_path)
+            file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_id)
+            prompt_spec.save(file_path)
 
-            print(f"[SUCCESS] Metadata saved to: {metadata_path}")
+        # Display success with rich formatting
+        console.print("\n[bold green]✅ Prompt created successfully![/bold green]")
 
-            if verbose:
-                print("\n[INFO] Video Metadata:")
-                print(f"   Duration: {metadata.duration:.2f} seconds")
-                print(f"   Resolution: {metadata.width}x{metadata.height}")
-                print(f"   FPS: {metadata.fps}")
-                print(f"   Frame Count: {metadata.frame_count}")
-                if metadata.ai_caption:
-                    print(f"   AI Caption: {metadata.ai_caption}")
-                if metadata.ai_tags:
-                    print(f"   AI Tags: {', '.join(metadata.ai_tags[:5])}")
+        table = Table(show_header=False, box=None)
+        table.add_column("Field", style="cyan")
+        table.add_column("Value")
 
-        print("\n[SUCCESS] Conversion complete!")
-        print(f"   Video: {video_output}")
-        if generate_metadata:
-            print(f"   Metadata: {metadata_path}")
+        table.add_row("ID", prompt_id[:16] + "...")
+        table.add_row("Name", name)
+        table.add_row("File", str(file_path))
+        table.add_row("Video", video_path)
 
-        # Suggest next steps
-        print("\n[INFO] Next steps:")
-        print("   1. Use this video as input for Cosmos Transfer:")
-        print(
-            f'      python -m cosmos_workflow.cli create-spec "my_scene" "Transform to cyberpunk style" --video-path {video_output}'
-        )
+        console.print(table)
+
+        console.print("\n[dim]Next step:[/dim]")
+        console.print(f"  cosmos run {file_path}")
 
     except Exception as e:
-        print(f"\n[ERROR] PNG sequence conversion failed: {e}")
-        if verbose:
-            traceback.print_exc()
+        console.print(f"[bold red]❌ Failed to create prompt:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
         sys.exit(1)
 
 
-def run_prompt_upsampling(
-    input_path: str,
-    preprocess_videos: bool = True,
-    max_resolution: int = 480,
-    num_frames: int = 2,
-    num_gpu: int = 1,
-    cuda_devices: str = "0",
-    save_dir: str | None = None,
-    verbose: bool = False,
-):
-    """Run prompt upsampling on one or more prompts."""
-    setup_logging(verbose)
+@create.command("run")
+@click.argument("prompt_spec_path", type=click.Path(exists=True))
+@click.option(
+    "--weights",
+    "-w",
+    nargs=4,
+    type=float,
+    default=[0.25, 0.25, 0.25, 0.25],
+    help="Control weights: VIS EDGE DEPTH SEG",
+)
+@click.option("--steps", default=35, help="Number of inference steps")
+@click.option("--guidance", default=7.0, help="Guidance scale (CFG)")
+@click.option("--seed", default=1, help="Random seed for reproducibility")
+@click.option("--fps", default=24, help="Output video FPS")
+@click.option("--output", help="Custom output path")
+@click.pass_context
+def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, output):
+    """Create a run specification for a prompt.
 
-    print("\n[INFO] Starting prompt upsampling...")
-    orchestrator = WorkflowOrchestrator()
+    \b
+    Examples:
+      cosmos create run prompt_spec.json
+      cosmos create run prompt_spec.json --weights 0.3 0.3 0.2 0.2
+      cosmos create run prompt_spec.json --steps 50 --guidance 8.0
+    """
+    ctx_obj = ctx.obj
 
     try:
-        from pathlib import Path
+        with console.status("[bold green]Creating run specification..."):
+            # Load the PromptSpec
+            prompt_spec = PromptSpec.load(Path(prompt_spec_path))
 
+            # Build control weights
+            weights_dict = {
+                "vis": weights[0],
+                "edge": weights[1],
+                "depth": weights[2],
+                "seg": weights[3],
+            }
+
+            # Build parameters
+            parameters = {
+                "num_steps": steps,
+                "guidance": guidance,
+                "sigma_max": 70.0,
+                "blur_strength": "medium",
+                "canny_threshold": "medium",
+                "fps": fps,
+                "seed": seed,
+            }
+
+            # Generate unique run ID
+            run_id = SchemaUtils.generate_run_id(prompt_spec.id, weights_dict, parameters)
+
+            # Build output path
+            output_path = output or f"outputs/{prompt_spec.name}_{run_id}"
+
+            # Create RunSpec
+            timestamp = datetime.now(timezone.utc).isoformat() + "Z"
+            run_spec = RunSpec(
+                id=run_id,
+                prompt_id=prompt_spec.id,
+                name=f"{prompt_spec.name}_{run_id}",
+                control_weights=weights_dict,
+                parameters=parameters,
+                timestamp=timestamp,
+                execution_status=ExecutionStatus.PENDING,
+                output_path=output_path,
+            )
+
+            # Save to file
+            config_manager = ctx_obj.get_config_manager()
+            local_config = config_manager.get_local_config()
+
+            dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
+            dir_manager.ensure_directories_exist()
+
+            file_path = dir_manager.get_run_file_path(prompt_spec.name, timestamp, run_id)
+            run_spec.save(file_path)
+
+        # Display success
+        console.print("\n[bold green]✅ Run specification created![/bold green]")
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Field", style="cyan")
+        table.add_column("Value")
+
+        table.add_row("Run ID", run_id[:16] + "...")
+        table.add_row("Prompt", prompt_spec.name)
+        table.add_row("File", str(file_path))
+        table.add_row(
+            "Weights",
+            f"vis={weights[0]:.2f} edge={weights[1]:.2f} depth={weights[2]:.2f} seg={weights[3]:.2f}",
+        )
+
+        console.print(table)
+
+        console.print("\n[dim]Next step:[/dim]")
+        console.print(f"  cosmos run {file_path}")
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Failed to create run spec:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+# ============================================================================
+# RUN COMMANDS
+# ============================================================================
+
+
+@cli.command()
+@click.argument("spec_file", type=click.Path(exists=True))
+@click.option("--videos-dir", help="Custom videos directory")
+@click.option("--no-upscale", is_flag=True, help="Skip upscaling step")
+@click.option("--upscale-weight", default=0.5, help="Upscaling control weight")
+@click.option("--num-gpu", default=2, help="Number of GPUs to use")
+@click.option("--cuda-devices", default="0,1", help="CUDA device IDs")
+@click.pass_context
+def run(ctx, spec_file, videos_dir, no_upscale, upscale_weight, num_gpu, cuda_devices):
+    """🎬 Run complete inference workflow.
+
+    Executes the full Cosmos Transfer pipeline including inference
+    and optional upscaling on remote GPU.
+
+    \b
+    Examples:
+      cosmos run prompt_spec.json
+      cosmos run prompt_spec.json --num-gpu 2
+      cosmos run prompt_spec.json --no-upscale
+    """
+    ctx_obj = ctx.obj
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Running workflow...", total=None)
+
+            orchestrator = ctx_obj.get_orchestrator()
+            result = orchestrator.run_full_cycle(
+                prompt_file=Path(spec_file),
+                videos_subdir=videos_dir,
+                no_upscale=no_upscale,
+                upscale_weight=upscale_weight,
+                num_gpu=num_gpu,
+                cuda_devices=cuda_devices,
+            )
+
+            progress.update(task, completed=True)
+
+        console.print("\n[bold green]✅ Workflow completed successfully![/bold green]")
+
+        if ctx_obj.verbose:
+            console.print("\n[cyan]Results:[/cyan]")
+            console.print_json(json.dumps(result, indent=2))
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Workflow failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("spec_file", type=click.Path(exists=True))
+@click.option("--videos-dir", help="Custom videos directory")
+@click.option("--num-gpu", default=1, help="Number of GPUs to use")
+@click.option("--cuda-devices", default="0", help="CUDA device IDs")
+@click.pass_context
+def inference(ctx, spec_file, videos_dir, num_gpu, cuda_devices):
+    """🔮 Run inference only (no upscaling).
+
+    \b
+    Examples:
+      cosmos inference prompt_spec.json
+      cosmos inference prompt_spec.json --num-gpu 2 --cuda-devices "0,1"
+    """
+    ctx_obj = ctx.obj
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Running inference...", total=None)
+
+            orchestrator = ctx_obj.get_orchestrator()
+            result = orchestrator.run_inference_only(
+                prompt_file=Path(spec_file),
+                videos_subdir=videos_dir,
+                num_gpu=num_gpu,
+                cuda_devices=cuda_devices,
+            )
+
+            progress.update(task, completed=True)
+
+        console.print("\n[bold green]✅ Inference completed![/bold green]")
+
+        if ctx_obj.verbose:
+            console.print("\n[cyan]Results:[/cyan]")
+            console.print_json(json.dumps(result, indent=2))
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Inference failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("spec_file", type=click.Path(exists=True))
+@click.option("--weight", default=0.5, help="Upscaling control weight")
+@click.option("--num-gpu", default=1, help="Number of GPUs to use")
+@click.option("--cuda-devices", default="0", help="CUDA device IDs")
+@click.pass_context
+def upscale(ctx, spec_file, weight, num_gpu, cuda_devices):
+    """⬆️ Run upscaling only (requires prior inference).
+
+    \b
+    Examples:
+      cosmos upscale prompt_spec.json
+      cosmos upscale prompt_spec.json --weight 0.7
+    """
+    ctx_obj = ctx.obj
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Running upscaling...", total=None)
+
+            orchestrator = ctx_obj.get_orchestrator()
+            result = orchestrator.run_upscaling_only(
+                prompt_file=Path(spec_file),
+                upscale_weight=weight,
+                num_gpu=num_gpu,
+                cuda_devices=cuda_devices,
+            )
+
+            progress.update(task, completed=True)
+
+        console.print("\n[bold green]✅ Upscaling completed![/bold green]")
+
+        if ctx_obj.verbose:
+            console.print("\n[cyan]Results:[/cyan]")
+            console.print_json(json.dumps(result, indent=2))
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Upscaling failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+# ============================================================================
+# PROMPT ENHANCEMENT (formerly upsample)
+# ============================================================================
+
+
+@cli.command("prompt-enhance")
+@click.argument("input_path", type=click.Path(exists=True))
+@click.option(
+    "--preprocess/--no-preprocess",
+    default=True,
+    help="Preprocess videos to avoid vocabulary errors",
+)
+@click.option("--max-resolution", default=480, help="Maximum resolution for video preprocessing")
+@click.option("--num-frames", default=2, help="Number of frames to extract")
+@click.option("--num-gpu", default=1, help="Number of GPUs")
+@click.option("--cuda-devices", default="0", help="CUDA device IDs")
+@click.option("--save-dir", help="Directory to save enhanced prompts")
+@click.pass_context
+def prompt_enhance(
+    ctx, input_path, preprocess, max_resolution, num_frames, num_gpu, cuda_devices, save_dir
+):
+    """✨ Enhance prompts using Pixtral AI model.
+
+    Improves prompt quality by adding details, style descriptions,
+    and optimizations for better generation results.
+
+    \b
+    Examples:
+      cosmos prompt-enhance prompt_spec.json
+      cosmos prompt-enhance prompts_directory/
+      cosmos prompt-enhance prompt.json --save-dir enhanced_prompts/
+    """
+    ctx_obj = ctx.obj
+
+    try:
         input_path_obj = Path(input_path)
 
-        if input_path_obj.is_file():
-            # Single file upsampling
-            print(f"[FILE] Upsampling single prompt: {input_path}")
-            from cosmos_workflow.prompts.schemas import PromptSpec
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            if input_path_obj.is_file():
+                task = progress.add_task("[cyan]Enhancing single prompt...", total=None)
 
-            # Load the prompt spec
-            prompt_spec = PromptSpec.load(input_path_obj)
+                from cosmos_workflow.prompts.schemas import PromptSpec
 
-            # Run upsampling
-            result = orchestrator.run_single_prompt_upsampling(
-                prompt_spec=prompt_spec,
-                preprocess_videos=preprocess_videos,
-                max_resolution=max_resolution,
-                num_frames=num_frames,
-                num_gpu=num_gpu,
-                cuda_devices=cuda_devices,
-            )
+                prompt_spec = PromptSpec.load(input_path_obj)
 
-            if result["success"]:
-                updated_spec = result.get("updated_spec")
-                if updated_spec and save_dir:
-                    # Save the upsampled spec
-                    save_path = Path(save_dir) / f"upsampled_{input_path_obj.name}"
-                    save_path.parent.mkdir(parents=True, exist_ok=True)
-                    updated_spec.save(save_path)
-                    print(f"[SUCCESS] Saved upsampled prompt to: {save_path}")
-                print("[SUCCESS] Successfully upsampled prompt")
-            else:
-                print(f"[ERROR] Upsampling failed: {result.get('error')}")
+                orchestrator = ctx_obj.get_orchestrator()
+                result = orchestrator.run_single_prompt_upsampling(
+                    prompt_spec=prompt_spec,
+                    preprocess_videos=preprocess,
+                    max_resolution=max_resolution,
+                    num_frames=num_frames,
+                    num_gpu=num_gpu,
+                    cuda_devices=cuda_devices,
+                )
 
-        elif input_path_obj.is_dir():
-            # Directory batch upsampling
-            print(f"[DIR] Upsampling directory: {input_path}")
-            result = orchestrator.run_prompt_upsampling_from_directory(
-                prompts_dir=str(input_path_obj),
-                preprocess_videos=preprocess_videos,
-                max_resolution=max_resolution,
-                num_frames=num_frames,
-                num_gpu=num_gpu,
-                cuda_devices=cuda_devices,
-            )
+                if result["success"]:
+                    updated_spec = result.get("updated_spec")
+                    if updated_spec and save_dir:
+                        save_path = Path(save_dir) / f"enhanced_{input_path_obj.name}"
+                        save_path.parent.mkdir(parents=True, exist_ok=True)
+                        updated_spec.save(save_path)
+                        console.print(f"[green]Saved to:[/green] {save_path}")
 
-            if result["success"]:
-                print(f"[SUCCESS] Successfully upsampled {result['num_upsampled']} prompts")
-                if save_dir and result.get("updated_specs"):
-                    # Save all upsampled specs
-                    save_path = Path(save_dir)
-                    save_path.mkdir(parents=True, exist_ok=True)
-                    for spec in result["updated_specs"]:
-                        spec_path = save_path / f"upsampled_{spec.name}.json"
-                        spec.save(str(spec_path))
-                    print(f"[SUCCESS] Saved upsampled prompts to: {save_path}")
-            else:
-                print(f"[ERROR] Upsampling failed: {result.get('error')}")
-        else:
-            print(f"[ERROR] Invalid input path: {input_path}")
-            sys.exit(1)
+                    console.print("[bold green]✅ Prompt enhanced successfully![/bold green]")
+                else:
+                    raise Exception(result.get("error", "Unknown error"))
+
+            elif input_path_obj.is_dir():
+                task = progress.add_task("[cyan]Enhancing directory of prompts...", total=None)
+
+                orchestrator = ctx_obj.get_orchestrator()
+                result = orchestrator.run_prompt_upsampling_from_directory(
+                    prompts_dir=str(input_path_obj),
+                    preprocess_videos=preprocess,
+                    max_resolution=max_resolution,
+                    num_frames=num_frames,
+                    num_gpu=num_gpu,
+                    cuda_devices=cuda_devices,
+                )
+
+                if result["success"]:
+                    num = result.get("num_upsampled", 0)
+                    console.print(f"[bold green]✅ Enhanced {num} prompts![/bold green]")
+
+                    if save_dir and result.get("updated_specs"):
+                        save_path = Path(save_dir)
+                        save_path.mkdir(parents=True, exist_ok=True)
+                        for spec in result["updated_specs"]:
+                            spec_path = save_path / f"enhanced_{spec.name}.json"
+                            spec.save(str(spec_path))
+                        console.print(f"[green]Saved to:[/green] {save_path}")
+                else:
+                    raise Exception(result.get("error", "Unknown error"))
+
+            progress.update(task, completed=True)
 
     except Exception as e:
-        print(f"\n[ERROR] Failed to upsample prompts: {e}")
-        if verbose:
-            traceback.print_exc()
+        console.print(f"[bold red]❌ Enhancement failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
         sys.exit(1)
 
 
-def prepare_inference(
-    input_dir: str,
-    name: str | None,
-    fps: int,
-    description: str | None,
-    use_ai: bool,
-    verbose: bool,
-) -> None:
-    """Prepare Cosmos sequences for inference by validating and converting to videos.
+# ============================================================================
+# PREPARE COMMAND
+# ============================================================================
 
-    Args:
-        input_dir: Directory containing control modality PNGs
-        name: Name for the output (AI-generated if not provided and use_ai is True)
-        fps: Frame rate for videos
-        description: Optional description (AI-generated if not provided)
-        use_ai: Whether to use AI for description and name generation
-        verbose: Enable verbose logging
+
+@cli.command()
+@click.argument("input_dir", type=click.Path(exists=True))
+@click.option("--name", help="Name for output (AI-generated if not provided)")
+@click.option("--fps", default=24, help="Frame rate for output videos")
+@click.option("--description", help="Description for metadata")
+@click.option("--no-ai", is_flag=True, help="Skip AI analysis")
+@click.pass_context
+def prepare(ctx, input_dir, name, fps, description, no_ai):
+    """🎥 Prepare renders for Cosmos inference.
+
+    Validates Houdini/Blender renders and converts control modality
+    PNG sequences to videos ready for Cosmos Transfer.
+
+    \b
+    Expected structure:
+      input_dir/
+        ├── color.0001.png, color.0002.png, ...
+        ├── depth.0001.png, depth.0002.png, ...
+        └── segmentation.0001.png, segmentation.0002.png, ...
+
+    \b
+    Examples:
+      cosmos prepare ./houdini_renders/
+      cosmos prepare ./renders/ --name "city_scene" --fps 30
+      cosmos prepare ./renders/ --no-ai
     """
-    setup_logging(verbose)
+    ctx_obj = ctx.obj
 
     try:
-        from pathlib import Path
-
         from cosmos_workflow.local_ai.cosmos_sequence import (
             CosmosSequenceValidator,
             CosmosVideoConverter,
@@ -608,417 +591,247 @@ def prepare_inference(
 
         input_path = Path(input_dir)
 
-        # Step 1: Validate the sequence
-        print(f"\n[INFO] Validating Cosmos sequence in: {input_dir}")
-        validator = CosmosSequenceValidator()
-        sequence_info = validator.validate(input_path)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # Validate
+            task = progress.add_task("[cyan]Validating sequences...", total=None)
+            validator = CosmosSequenceValidator()
+            sequence_info = validator.validate(input_path)
 
-        if not sequence_info.valid:
-            print("[ERROR] Invalid Cosmos sequence:")
-            for issue in sequence_info.issues:
-                print(f"  - {issue}")
-            sys.exit(1)
+            if not sequence_info.valid:
+                console.print("[bold red]❌ Invalid sequence:[/bold red]")
+                for issue in sequence_info.issues:
+                    console.print(f"  • {issue}")
+                sys.exit(1)
 
-        print("[SUCCESS] Valid Cosmos sequence found:")
-        print(f"  - Frame count: {sequence_info.frame_count}")
-        print(f"  - Modalities: {list(sequence_info.modalities.keys())}")
+            progress.update(task, completed=True, description="[green]✓ Validation complete")
 
-        if sequence_info.warnings:
-            print("[WARNING] Validation warnings:")
-            for warning in sequence_info.warnings:
-                print(f"  - {warning}")
+            # Convert
+            task = progress.add_task("[cyan]Converting to videos...", total=None)
+            converter = CosmosVideoConverter(fps=fps)
 
-        # Step 2: Convert to videos
-        print("\n[INFO] Converting sequences to videos...")
-        converter = CosmosVideoConverter(fps=fps)
+            config_manager = ctx_obj.get_config_manager()
+            local_config = config_manager.get_local_config()
+            videos_dir = Path(local_config.videos_dir)
 
-        # Get output directory from config
-        config_manager = ConfigManager()
-        local_config = config_manager.get_local_config()
-        videos_dir = Path(local_config.videos_dir)
+            result = converter.convert_sequence(
+                sequence_info=sequence_info, output_dir=videos_dir, name=name
+            )
 
-        result = converter.convert_sequence(
-            sequence_info=sequence_info, output_dir=videos_dir, name=name
-        )
+            if not result["success"]:
+                raise Exception("Conversion failed")
 
-        if not result["success"]:
-            print("[ERROR] Conversion failed:")
-            for error in result.get("errors", []):
-                print(f"  - {error}")
-            sys.exit(1)
+            progress.update(task, completed=True, description="[green]✓ Videos created")
 
-        output_dir = Path(result["output_dir"])
-        print(f"[SUCCESS] Videos created in: {output_dir}")
-        for modality in result["videos"]:
-            print(f"  - {modality}.mp4")
+            # Generate metadata
+            task = progress.add_task("[cyan]Generating metadata...", total=None)
+            output_dir = Path(result["output_dir"])
 
-        # Step 3: Generate metadata
-        print("\n[INFO] Generating metadata...")
-        metadata = converter.generate_metadata(
-            sequence_info=sequence_info,
-            output_dir=output_dir,
-            name=name,
-            description=description,
-            use_ai=use_ai,
-        )
+            metadata = converter.generate_metadata(
+                sequence_info=sequence_info,
+                output_dir=output_dir,
+                name=name,
+                description=description,
+                use_ai=not no_ai,
+            )
 
-        print("[SUCCESS] Metadata generated:")
-        print(f"  - ID: {metadata.id}")
-        print(f"  - Name: {metadata.name}")
-        print(f"  - Description: {metadata.description}")
-        print(f"  - Frame count: {metadata.frame_count}")
-        print(f"  - FPS: {metadata.fps}")
-        print(f"  - Resolution: {metadata.resolution[0]}x{metadata.resolution[1]}")
+            progress.update(task, completed=True, description="[green]✓ Metadata generated")
 
-        print("\n[SUCCESS] Inference inputs prepared:")
-        print(f"  Output directory: {output_dir}")
-        print(f"  Video path: {metadata.video_path}")
+        # Display results
+        console.print("\n[bold green]✅ Inference inputs prepared![/bold green]")
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Field", style="cyan")
+        table.add_column("Value")
+
+        table.add_row("Name", metadata.name)
+        table.add_row("Output", str(output_dir))
+        table.add_row("Frames", str(metadata.frame_count))
+        table.add_row("Resolution", f"{metadata.resolution[0]}x{metadata.resolution[1]}")
+        table.add_row("FPS", str(metadata.fps))
+
         if metadata.control_inputs:
-            print(f"  Control inputs detected: {', '.join(metadata.control_inputs.keys())}")
+            table.add_row("Controls", ", ".join(metadata.control_inputs.keys()))
+
+        console.print(table)
+
+        if metadata.description:
+            console.print(f"\n[dim]Description:[/dim] {metadata.description}")
+
+        console.print("\n[dim]Next step:[/dim]")
+        console.print(f'  cosmos create prompt "Your prompt here" --video {metadata.video_path}')
 
     except Exception as e:
-        print(f"\n[ERROR] Failed to prepare inference: {e}")
-        if verbose:
-            traceback.print_exc()
+        console.print(f"[bold red]❌ Preparation failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
         sys.exit(1)
+
+
+# ============================================================================
+# STATUS COMMAND
+# ============================================================================
+
+
+@cli.command()
+@click.pass_context
+def status(ctx):
+    """📊 Check remote GPU instance status.
+
+    Shows SSH connectivity, Docker status, and available resources
+    on the configured remote GPU instance.
+    """
+    ctx_obj = ctx.obj
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Checking remote status...", total=None)
+
+            orchestrator = ctx_obj.get_orchestrator()
+            status = orchestrator.check_remote_status()
+
+            progress.update(task, completed=True)
+
+        # Display status
+        console.print("\n[bold]🖥️  Remote Instance Status[/bold]")
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Property", style="cyan")
+        table.add_column("Value")
+
+        if status["ssh_status"] == "connected":
+            table.add_row("SSH Status", "[green]Connected[/green]")
+            table.add_row("Remote Directory", status.get("remote_directory", "N/A"))
+            table.add_row(
+                "Directory Exists",
+                "[green]Yes[/green]" if status.get("remote_directory_exists") else "[red]No[/red]",
+            )
+
+            docker_status = status.get("docker_status", {})
+            table.add_row(
+                "Docker Running",
+                "[green]Yes[/green]" if docker_status.get("docker_running") else "[red]No[/red]",
+            )
+
+            if ctx_obj.verbose and docker_status.get("docker_running"):
+                table.add_row(
+                    "Docker Images",
+                    str(len(docker_status.get("available_images", []))) + " available",
+                )
+                table.add_row(
+                    "Running Containers", str(docker_status.get("running_containers", "0"))
+                )
+        else:
+            table.add_row("SSH Status", "[red]Disconnected[/red]")
+            table.add_row("Error", status.get("error", "Unknown error"))
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Status check failed:[/bold red] {e}")
+        if ctx_obj.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
+# ============================================================================
+# VERSION COMMAND
+# ============================================================================
+
+
+@cli.command()
+def version():
+    """Show version information."""
+    console.print("[bold]Cosmos Workflow Orchestrator[/bold]")
+    console.print("Version: 0.1.0")
+    console.print("Python: 3.10+")
+    console.print("Framework: NVIDIA Cosmos-Transfer1")
+
+
+# ============================================================================
+# SHELL COMPLETION
+# ============================================================================
+
+
+@cli.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish", "powershell", "gitbash"]))
+def completion(shell):
+    """Generate shell completion script.
+
+    \b
+    Installation instructions:
+
+    Bash:
+      eval "$(_COSMOS_COMPLETE=bash_source cosmos)"
+      Add to ~/.bashrc
+
+    Zsh:
+      eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"
+      Add to ~/.zshrc
+
+    Git Bash (Windows):
+      eval "$(_COSMOS_COMPLETE=bash_source python /path/to/cosmos)"
+      Add to ~/.bashrc
+
+    PowerShell:
+      Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {
+        $env:_COSMOS_COMPLETE='powershell_complete'; python "C:\\path\to\\cosmos"
+      }
+      Add to $PROFILE
+
+    Fish:
+      _COSMOS_COMPLETE=fish_source cosmos > ~/.config/fish/completions/cosmos.fish
+    """
+    from pathlib import Path
+
+    # Get the actual cosmos script path
+    cosmos_script = Path(__file__).parent.parent / "cosmos"
+
+    if shell == "bash":
+        console.print("[cyan]Add this to your ~/.bashrc:[/cyan]")
+        console.print('eval "$(_COSMOS_COMPLETE=bash_source cosmos)"')
+    elif shell == "zsh":
+        console.print("[cyan]Add this to your ~/.zshrc:[/cyan]")
+        console.print('eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"')
+    elif shell == "gitbash":
+        console.print("[cyan]Add this to your ~/.bashrc (Git Bash):[/cyan]")
+        console.print(f'eval "$(_COSMOS_COMPLETE=bash_source python {cosmos_script})"')
+    elif shell == "fish":
+        console.print("[cyan]Run this command:[/cyan]")
+        console.print(
+            "_COSMOS_COMPLETE=fish_source cosmos > ~/.config/fish/completions/cosmos.fish"
+        )
+    elif shell == "powershell":
+        console.print("[cyan]Add this to your PowerShell $PROFILE:[/cyan]")
+        console.print("Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {")
+        console.print(f"  $env:_COSMOS_COMPLETE='powershell_complete'; python '{cosmos_script}'")
+        console.print("}")
+        console.print("\n[dim]To edit your profile, run: notepad $PROFILE[/dim]")
 
 
 def main():
-    """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Cosmos-Transfer1 Python Workflow CLI",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run complete workflow
-  python -m cosmos_workflow.main run prompt.json
-
-  # Run with custom videos subdirectory
-  python -m cosmos_workflow.main run prompt.json --videos-subdir custom_videos
-
-  # Run without upscaling
-  python -m cosmos_workflow.main run prompt.json --no-upscale
-
-  # Run with custom upscale weight
-  python -m cosmos_workflow.main run prompt.json --upscale-weight 0.7
-
-  # Run only inference
-  python -m cosmos_workflow.main inference prompt.json
-
-  # Run only upscaling
-  python -m cosmos_workflow.main upscale prompt.json --upscale-weight 0.6
-
-  # Check remote status
-  python -m cosmos_workflow.main status
-
-  # Use multiple GPUs
-  python -m cosmos_workflow.main run prompt.json --num-gpu 2 --cuda-devices "0,1"
-
-  # Create new PromptSpec
-  python -m cosmos_workflow.main create-spec "cyberpunk_city" "Cyberpunk city at night with neon lights"
-
-  # Create new RunSpec
-  python -m cosmos_workflow.main create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
-
-  # Convert PNG sequence to video
-  python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p
-
-  # Convert with AI metadata generation
-  python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --generate-metadata --ai-analysis
-        """,
-    )
-
-    # Subcommands
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # Run command (full cycle)
-    run_parser = subparsers.add_parser("run", help="Run complete workflow")
-    run_parser.add_argument("prompt_file", help="Path to prompt JSON file")
-    run_parser.add_argument("--videos-subdir", help="Custom videos subdirectory override")
-    run_parser.add_argument("--no-upscale", action="store_true", help="Skip upscaling step")
-    run_parser.add_argument(
-        "--upscale-weight", type=float, default=0.5, help="Upscaling control weight"
-    )
-    run_parser.add_argument("--num-gpu", type=int, default=1, help="Number of GPUs to use")
-    run_parser.add_argument("--cuda-devices", default="0", help="CUDA device IDs to use")
-    run_parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
-
-    # Inference command
-    inference_parser = subparsers.add_parser("inference", help="Run only inference")
-    inference_parser.add_argument("prompt_file", help="Path to prompt JSON file")
-    inference_parser.add_argument("--videos-subdir", help="Custom videos subdirectory override")
-    inference_parser.add_argument("--num-gpu", type=int, default=1, help="Number of GPUs to use")
-    inference_parser.add_argument("--cuda-devices", default="0", help="CUDA device IDs to use")
-    inference_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Upscale command
-    upscale_parser = subparsers.add_parser("upscale", help="Run only upscaling")
-    upscale_parser.add_argument("prompt_file", help="Path to prompt JSON file")
-    upscale_parser.add_argument(
-        "--upscale-weight", type=float, default=0.5, help="Upscaling control weight"
-    )
-    upscale_parser.add_argument("--num-gpu", type=int, default=1, help="Number of GPUs to use")
-    upscale_parser.add_argument("--cuda-devices", default="0", help="CUDA device IDs to use")
-    upscale_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Status command
-    status_parser = subparsers.add_parser("status", help="Check remote instance status")
-    status_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Create PromptSpec command
-    create_spec_parser = subparsers.add_parser(
-        "create-spec", help="Create a new PromptSpec with optional smart naming"
-    )
-    create_spec_parser.add_argument("prompt_text", help="The text prompt for generation")
-    create_spec_parser.add_argument(
-        "--name", help="Name for the prompt (auto-generated from prompt if not provided)"
-    )
-    create_spec_parser.add_argument(
-        "--negative-prompt",
-        default="bad quality, blurry, low resolution, cartoonish",
-        help="Negative prompt for improved quality",
-    )
-    create_spec_parser.add_argument("--video-path", help="Custom video path override")
-    create_spec_parser.add_argument(
-        "--control-inputs",
-        nargs="*",
-        metavar=("MODALITY", "PATH"),
-        help="Control input file paths (e.g., depth inputs/videos/name/depth.mp4)",
-    )
-    create_spec_parser.add_argument(
-        "--upsampled", action="store_true", help="Mark as upsampled prompt"
-    )
-    create_spec_parser.add_argument("--parent-prompt", help="Original prompt text if upsampled")
-    create_spec_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Create RunSpec command
-    create_run_parser = subparsers.add_parser("create-run", help="Create a new RunSpec")
-    create_run_parser.add_argument("prompt_spec_path", help="Path to PromptSpec JSON file")
-    create_run_parser.add_argument(
-        "--weights",
-        nargs=4,
-        type=float,
-        metavar=("VIS", "EDGE", "DEPTH", "SEG"),
-        help="Control weights (default: 0.25 each)",
-    )
-    create_run_parser.add_argument(
-        "--num-steps", type=int, default=35, help="Number of inference steps"
-    )
-    create_run_parser.add_argument("--guidance", type=float, default=7.0, help="Guidance scale")
-    create_run_parser.add_argument("--sigma-max", type=float, default=70.0, help="Sigma max value")
-    create_run_parser.add_argument(
-        "--blur-strength",
-        choices=["very_low", "low", "medium", "high", "very_high"],
-        default="medium",
-        help="Blur strength for vis controlnet",
-    )
-    create_run_parser.add_argument(
-        "--canny-threshold",
-        choices=["very_low", "low", "medium", "high", "very_high"],
-        default="medium",
-        help="Canny threshold for edge controlnet",
-    )
-    create_run_parser.add_argument("--fps", type=int, default=24, help="Output FPS")
-    create_run_parser.add_argument("--seed", type=int, default=1, help="Random seed")
-    create_run_parser.add_argument("--output-path", help="Custom output path")
-    create_run_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Add upsample command
-    upsample_parser = subparsers.add_parser("upsample", help="Upsample prompts using Pixtral model")
-    upsample_parser.add_argument("input", help="PromptSpec file or directory of prompts")
-    upsample_parser.add_argument(
-        "--preprocess-videos",
-        action="store_true",
-        default=True,
-        help="Preprocess videos to avoid vocab errors",
-    )
-    upsample_parser.add_argument(
-        "--max-resolution", type=int, default=480, help="Max resolution for video preprocessing"
-    )
-    upsample_parser.add_argument(
-        "--num-frames", type=int, default=2, help="Number of frames to extract"
-    )
-    upsample_parser.add_argument("--num-gpu", type=int, default=1, help="Number of GPUs")
-    upsample_parser.add_argument("--cuda-devices", default="0", help="CUDA device IDs")
-    upsample_parser.add_argument("--save-dir", help="Directory to save upsampled prompts")
-    upsample_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Add prepare-inference command (replaces convert-sequence)
-    prepare_parser = subparsers.add_parser(
-        "prepare-inference",
-        help="Prepare Houdini renders for Cosmos inference (validates & converts to videos)",
-    )
-    prepare_parser.add_argument(
-        "input_dir", help="Directory containing control modality PNGs (color.XXXX.png, etc.)"
-    )
-    prepare_parser.add_argument(
-        "--name", help="Name for the output directory (AI-generated if not provided)"
-    )
-    prepare_parser.add_argument(
-        "--fps", type=int, default=24, help="Frame rate for output videos (default: 24)"
-    )
-    prepare_parser.add_argument(
-        "--description", help="Description for metadata (AI-generated if not provided)"
-    )
-    prepare_parser.add_argument(
-        "--no-ai", action="store_true", help="Skip AI description and name generation"
-    )
-    prepare_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    # Add convert-sequence command (deprecated, kept for backward compatibility)
-    convert_parser = subparsers.add_parser(
-        "convert-sequence", help="[DEPRECATED] Use prepare-inference instead"
-    )
-    convert_parser.add_argument("input_dir", help="Directory containing PNG sequence")
-    convert_parser.add_argument(
-        "--output", help="Output video path (default: <input_dir>_video.mp4)"
-    )
-    convert_parser.add_argument(
-        "--fps", type=int, default=24, help="Frame rate for output video (default: 24)"
-    )
-    convert_parser.add_argument(
-        "--resolution", help="Target resolution (720p, 1080p, 4k, or WxH format)"
-    )
-    convert_parser.add_argument(
-        "--no-metadata", action="store_true", help="Skip metadata generation (generated by default)"
-    )
-    convert_parser.add_argument(
-        "--ai-analysis",
-        action="store_true",
-        help="Use AI models for metadata generation (requires transformers)",
-    )
-    convert_parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    args = parser.parse_args()
-
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
+    """Main entry point."""
+    # Ensure UTF-8 encoding for Windows
+    if sys.platform == "win32":
+        if sys.stdout.encoding != "utf-8":
+            sys.stdout.reconfigure(encoding="utf-8")
+        if sys.stderr.encoding != "utf-8":
+            sys.stderr.reconfigure(encoding="utf-8")
 
     try:
-        if args.command == "run":
-            prompt_file = validate_prompt_file(args.prompt_file)
-            run_full_cycle(
-                prompt_file=prompt_file,
-                videos_subdir=args.videos_subdir,
-                no_upscale=args.no_upscale,
-                upscale_weight=args.upscale_weight,
-                num_gpu=args.num_gpu,
-                cuda_devices=args.cuda_devices,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "inference":
-            prompt_file = validate_prompt_file(args.prompt_file)
-            run_inference_only(
-                prompt_file=prompt_file,
-                videos_subdir=args.videos_subdir,
-                num_gpu=args.num_gpu,
-                cuda_devices=args.cuda_devices,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "upscale":
-            prompt_file = validate_prompt_file(args.prompt_file)
-            run_upscaling_only(
-                prompt_file=prompt_file,
-                upscale_weight=args.upscale_weight,
-                num_gpu=args.num_gpu,
-                cuda_devices=args.cuda_devices,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "status":
-            check_status(args.verbose)
-
-        elif args.command == "create-spec":
-            create_prompt_spec(
-                name=args.name,
-                prompt_text=args.prompt_text,
-                negative_prompt=args.negative_prompt,
-                input_video_path=args.video_path,
-                control_inputs=args.control_inputs,
-                is_upsampled=args.upsampled,
-                parent_prompt_text=args.parent_prompt,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "create-run":
-            create_run_spec(
-                prompt_spec_path=args.prompt_spec_path,
-                control_weights=args.weights,
-                num_steps=args.num_steps,
-                guidance=args.guidance,
-                sigma_max=args.sigma_max,
-                blur_strength=args.blur_strength,
-                canny_threshold=args.canny_threshold,
-                fps=args.fps,
-                seed=args.seed,
-                custom_output_path=args.output_path,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "upsample":
-            run_prompt_upsampling(
-                input_path=args.input,
-                preprocess_videos=args.preprocess_videos,
-                max_resolution=args.max_resolution,
-                num_frames=args.num_frames,
-                num_gpu=args.num_gpu,
-                cuda_devices=args.cuda_devices,
-                save_dir=args.save_dir,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "prepare-inference":
-            prepare_inference(
-                input_dir=args.input_dir,
-                name=args.name,
-                fps=args.fps,
-                description=args.description,
-                use_ai=not args.no_ai,
-                verbose=args.verbose,
-            )
-
-        elif args.command == "convert-sequence":
-            print("[WARNING] convert-sequence is deprecated. Use prepare-inference instead.")
-            convert_png_sequence(
-                input_dir=args.input_dir,
-                output_path=args.output,
-                fps=args.fps,
-                resolution=args.resolution,
-                generate_metadata=not args.no_metadata,  # Default is True now
-                ai_analysis=args.ai_analysis,
-                verbose=args.verbose,
-            )
-
-        else:
-            parser.print_help()
-            sys.exit(1)
-
+        cli(obj=None)
     except KeyboardInterrupt:
-        print("\n\n⏹️  Workflow interrupted by user")
+        console.print("\n[yellow]Interrupted by user[/yellow]")
         sys.exit(1)
     except Exception as e:
-        print(f"\n[ERROR] Unexpected error: {e}")
-        if args.verbose:
-            traceback.print_exc()
+        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
         sys.exit(1)
 
 

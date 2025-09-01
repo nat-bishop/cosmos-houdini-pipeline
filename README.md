@@ -20,12 +20,48 @@ A professional Python workflow orchestrator for NVIDIA Cosmos Transfer video gen
 git clone https://github.com/yourusername/cosmos-houdini-experiments.git
 cd cosmos-houdini-experiments
 
-# Install dependencies
-pip install -r requirements.txt
+# Install Python dependencies
+pip install click rich paramiko toml pyyaml
 
-# Install development dependencies (optional)
-pip install -r requirements-dev.txt
-pre-commit install
+# The 'cosmos' command is now available via:
+# 1. Direct Python script (Windows/Unix/Mac):
+python cosmos --help
+
+# 2. Or via Python module:
+python -m cosmos_workflow --help
+```
+
+#### Optional: Add to PATH for direct `cosmos` command
+
+**Windows (Command Prompt/PowerShell):**
+```bash
+# Add current directory to PATH for this session
+set PATH=%PATH%;%cd%
+
+# Or use cosmos.bat directly
+cosmos.bat --help
+```
+
+**Unix/Linux/Mac:**
+```bash
+# Make script executable
+chmod +x cosmos
+
+# Add to PATH for this session
+export PATH="$PATH:$(pwd)"
+
+# Or add permanently to ~/.bashrc or ~/.zshrc
+echo 'export PATH="$PATH:/path/to/cosmos-houdini-experiments"' >> ~/.bashrc
+```
+
+**Git Bash (Windows):**
+```bash
+# Use the Python script directly
+python cosmos --help
+
+# Or create an alias in ~/.bashrc
+echo "alias cosmos='python /path/to/cosmos-houdini-experiments/cosmos'" >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ### Configuration
@@ -49,40 +85,91 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 ### Basic Usage
 
 ```bash
+# After setup, you can use the 'cosmos' command directly:
+
 # 1. Create a prompt specification
-python -m cosmos_workflow.cli create-spec "my_scene" "A futuristic city at sunset"
+cosmos create prompt "A futuristic city at sunset" --name my_scene
 
-# 2. Create a run configuration with control weights
-python -m cosmos_workflow.cli create-run prompt_spec.json --weights 0.3 0.4 0.2 0.1
+# 2. Execute on remote GPU
+cosmos run prompt_spec.json --num-gpu 2
 
-# 3. Execute on remote GPU
-python -m cosmos_workflow.cli run run_spec.json --num-gpu 2
+# 3. Check remote status
+cosmos status
 
-# 4. Check remote status
-python -m cosmos_workflow.cli status
+# Or use Python module directly (always works):
+python -m cosmos_workflow create prompt "A futuristic city"
 ```
 
 ## 📁 Key Commands
 
-### Video Processing
+### Command Structure
 ```bash
-# Convert PNG sequence to video
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ --fps 30 --resolution 1080p
+cosmos <command> [options]
 
-# Prepare Cosmos sequences for inference
-python -m cosmos_workflow.cli prepare-inference ./cosmos_sequences/ --name "my_scene" --fps 24
+Commands:
+  create prompt     Create a new prompt specification
+  create run        Create a run specification
+  run              Execute full workflow (inference + upscaling)
+  inference        Run inference only
+  upscale          Run upscaling only
+  prompt-enhance   Enhance prompts with AI (formerly 'upsample')
+  prepare          Prepare Houdini/Blender renders for inference
+  status           Check remote GPU status
+  completion       Setup shell completion
+  version          Show version info
 ```
 
-### Workflow Management
+### Examples
 ```bash
-# Run full pipeline (upload → inference → upscale → download)
-python -m cosmos_workflow.cli run prompt.json --upscale
+# Create and run a prompt
+cosmos create prompt "Transform to cyberpunk style" --video input.mp4
+cosmos run prompt_spec.json --num-gpu 2
 
-# Run inference only
-python -m cosmos_workflow.cli run-inference prompt.json
+# Prepare renders from Houdini/Blender
+cosmos prepare ./renders/ --name city_scene --fps 24
 
-# Run upscaling only
-python -m cosmos_workflow.cli run-upscale prompt.json --weight 0.5
+# Enhance prompts with AI
+cosmos prompt-enhance prompts/ --save-dir enhanced/
+
+# Check system status
+cosmos status --verbose
+```
+
+## 🔧 Shell Completion
+
+Enable tab completion for better CLI experience:
+
+### Windows PowerShell
+```powershell
+# Show setup instructions
+cosmos completion powershell
+
+# Or add to $PROFILE manually:
+notepad $PROFILE
+# Add the completion script shown by the command above
+```
+
+### Git Bash (Windows)
+```bash
+# Show setup instructions
+cosmos completion gitbash
+
+# Or add to ~/.bashrc:
+eval "$(_COSMOS_COMPLETE=bash_source python /path/to/cosmos)"
+```
+
+### Linux/Mac Bash
+```bash
+# Add to ~/.bashrc
+eval "$(_COSMOS_COMPLETE=bash_source cosmos)"
+source ~/.bashrc
+```
+
+### Zsh
+```bash
+# Add to ~/.zshrc
+eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"
+source ~/.zshrc
 ```
 
 ## 🎯 Features

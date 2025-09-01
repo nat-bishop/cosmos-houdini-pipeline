@@ -17,6 +17,9 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
+# CLI scripts are provided as standalone executables (cosmos.bat for Windows, cosmos for Unix)
+# No pip installation required - see README.md for setup instructions
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",

@@ -74,19 +74,29 @@ pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
 
 ## 5) Quick Reference
 
+### CLI Setup
+```bash
+# Install dependencies
+pip install click rich paramiko toml pyyaml
+
+# Use the cosmos command
+python cosmos --help
+# Or: python -m cosmos_workflow --help
+```
+
 ### Key Commands
 ```bash
 # Create prompt with AI naming
-python -m cosmos_workflow.cli create-spec "name" "prompt text" --input-video video.mp4
+cosmos create prompt "prompt text" --name "name" --video video.mp4
 
 # Execute on GPU (default 2 GPUs)
-python -m cosmos_workflow.cli run prompt_spec.json --num-gpu 2
+cosmos run prompt_spec.json --num-gpu 2
 
-# Convert PNG sequence to video
-python -m cosmos_workflow.cli convert-sequence /path/to/pngs --fps 24
+# Prepare Houdini/Blender renders for inference
+cosmos prepare /path/to/renders --fps 24
 
-# Prepare video for inference
-python -m cosmos_workflow.cli prepare-inference input.mp4 --target-res 720
+# Enhance prompts with AI (formerly 'upsample')
+cosmos prompt-enhance prompt_spec.json --save-dir enhanced/
 ```
 
 ### Project Structure

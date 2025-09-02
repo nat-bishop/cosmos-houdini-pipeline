@@ -11,35 +11,34 @@ Complete API documentation for the Cosmos Workflow System.
 
 ## CLI Commands
 
-### create-spec
-Create a prompt specification for Cosmos Transfer.
+### create prompt
+Create a new prompt specification.
 
 ```bash
-python -m cosmos_workflow.cli create-spec NAME PROMPT [OPTIONS]
+cosmos create prompt "PROMPT_TEXT" [OPTIONS]
 ```
 
 **Arguments:**
-- `NAME`: Name for the prompt specification
-- `PROMPT`: Text prompt for generation
+- `PROMPT_TEXT`: Text prompt for generation
 
 **Options:**
-- `--negative-prompt`: Negative prompt text
-- `--video-path`: Path to input video
-- `--control-inputs`: Control modality inputs (JSON)
-- `--verbose`: Enable verbose output
+- `-n, --name`: Name for the prompt (auto-generated if not provided)
+- `--negative`: Negative prompt for quality improvement
+- `--video`: Path to input video file
+- `--enhanced`: Mark as enhanced (upsampled) prompt
+- `--parent-prompt`: Original prompt text (if enhanced)
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli create-spec "city_scene" "A futuristic city" \
-    --negative-prompt "blurry, low quality" \
-    --video-path ./videos/input.mp4
+cosmos create prompt "A futuristic city at night"
+cosmos create prompt "Transform to anime style" --video input.mp4
 ```
 
-### create-run
+### create run
 Create a run specification from a prompt spec.
 
 ```bash
-python -m cosmos_workflow.cli create-run PROMPT_FILE [OPTIONS]
+cosmos create run PROMPT_FILE [OPTIONS]
 ```
 
 **Arguments:**
@@ -50,74 +49,61 @@ python -m cosmos_workflow.cli create-run PROMPT_FILE [OPTIONS]
 - `--num-steps`: Number of inference steps (default: 35)
 - `--guidance-scale`: CFG guidance scale (default: 8.0)
 - `--output-path`: Custom output path
-- `--verbose`: Enable verbose output
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli create-run prompt_spec.json \
-    --weights 0.3 0.4 0.2 0.1 \
-    --num-steps 50 \
-    --guidance-scale 10.0
+cosmos create run prompt_spec.json --weights 0.3 0.4 0.2 0.1
 ```
 
-### run
-Execute a complete workflow on remote GPU.
+### inference
+Run Cosmos Transfer inference with optional upscaling.
 
 ```bash
-python -m cosmos_workflow.cli run PROMPT_FILE [OPTIONS]
+cosmos inference SPEC_FILE [OPTIONS]
 ```
 
 **Arguments:**
-- `PROMPT_FILE`: Path to prompt or run specification
+- `SPEC_FILE`: Path to prompt or run specification JSON
 
 **Options:**
-- `--videos-subdir`: Override video directory
-- `--no-upscale`: Skip upscaling step
-- `--upscale-weight`: Control weight for upscaling (default: 0.5)
-- `--num-gpu`: Number of GPUs to use (default: 1)
-- `--cuda-devices`: CUDA device IDs (default: "0")
-- `--verbose`: Enable verbose output
+- `--videos-dir`: Custom videos directory
+- `--upscale/--no-upscale`: Enable/disable 4K upscaling (default: enabled)
+- `--upscale-weight`: Control weight for upscaling (0.0-1.0)
+- `--dry-run`: Preview without executing
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli run run_spec.json \
-    --num-gpu 2 \
-    --cuda-devices "0,1" \
-    --upscale-weight 0.7
+cosmos inference prompt_spec.json              # Inference + upscaling
+cosmos inference prompt_spec.json --no-upscale # Inference only
+cosmos inference prompt_spec.json --upscale-weight 0.7
 ```
 
-### convert-sequence
-Convert PNG sequence to video.
+### prompt-enhance
+Enhance prompts using Pixtral AI model.
 
 ```bash
-python -m cosmos_workflow.cli convert-sequence INPUT_DIR [OPTIONS]
+cosmos prompt-enhance PROMPT_SPECS... [OPTIONS]
 ```
 
 **Arguments:**
-- `INPUT_DIR`: Directory containing PNG sequence
+- `PROMPT_SPECS`: One or more prompt specification JSON files
 
 **Options:**
-- `--output`: Output video path (optional)
-- `--fps`: Frame rate (default: 24)
-- `--resolution`: Target resolution (720p/1080p/4k/WxH)
-- `--generate-metadata`: Generate metadata JSON
-- `--ai-analysis`: Use AI for metadata generation
-- `--verbose`: Enable verbose output
+- `--resolution`: Max resolution for preprocessing (e.g., 480)
+- `--dry-run`: Preview without calling AI API
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli convert-sequence ./renders/sequence/ \
-    --fps 30 \
-    --resolution 1080p \
-    --generate-metadata \
-    --ai-analysis
+cosmos prompt-enhance prompt_spec.json
+cosmos prompt-enhance spec1.json spec2.json spec3.json
+cosmos prompt-enhance inputs/prompts/*.json --resolution 480
 ```
 
-### prepare-inference
-Prepare Cosmos sequences for inference.
+### prepare
+Prepare renders for Cosmos inference.
 
 ```bash
-python -m cosmos_workflow.cli prepare-inference INPUT_DIR [OPTIONS]
+cosmos prepare INPUT_DIR [OPTIONS]
 ```
 
 **Arguments:**
@@ -128,29 +114,22 @@ python -m cosmos_workflow.cli prepare-inference INPUT_DIR [OPTIONS]
 - `--fps`: Frame rate for videos (default: 24)
 - `--description`: Optional description
 - `--use-ai`: Use AI for descriptions (default: True)
-- `--verbose`: Enable verbose output
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli prepare-inference ./cosmos_sequences/ \
-    --name "urban_scene" \
-    --fps 24 \
-    --use-ai
+cosmos prepare ./cosmos_sequences/ --name "urban_scene" --fps 24
 ```
 
 ### status
-Check remote instance and Docker status.
+Check remote GPU instance status.
 
 ```bash
-python -m cosmos_workflow.cli status [OPTIONS]
+cosmos status
 ```
-
-**Options:**
-- `--verbose`: Show detailed information
 
 **Example:**
 ```bash
-python -m cosmos_workflow.cli status --verbose
+cosmos status
 ```
 
 ## Core Modules
@@ -377,7 +356,7 @@ print(remote_config.host)      # "192.222.52.92"
 print(local_config.prompts_dir) # Path("inputs/prompts")
 ```
 
-### Configuration File (config.toml)
+### Configuration File (cosmos_workflow/config/config.toml)
 ```toml
 [remote]
 host = "192.222.52.92"
@@ -407,6 +386,27 @@ offload_vae = true
 ```
 
 ## Utilities
+
+### GPU Utilities
+Manage and validate GPU resources.
+
+```python
+from cosmos_workflow.utils.example_feature import format_gpu_info, validate_gpu_request
+
+# Format GPU information for display
+info = format_gpu_info(gpu_count=4, gpu_memory=16)
+# Returns: "4 GPU(s) with 64GB total memory"
+
+info = format_gpu_info(gpu_count=0, gpu_memory=0)
+# Returns: "No GPUs available"
+
+# Validate GPU request against available resources
+is_valid = validate_gpu_request(requested=2, available=4)
+# Returns: True (request can be fulfilled)
+
+is_valid = validate_gpu_request(requested=8, available=4)
+# Returns: False (not enough GPUs)
+```
 
 ### SmartNaming
 Generate intelligent names from descriptions.
@@ -505,7 +505,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Or use CLI verbose flag
-python -m cosmos_workflow.cli run prompt.json --verbose
+cosmos status --verbose
 ```
 
 Log levels:
@@ -531,7 +531,7 @@ pytest tests/integration/
 
 ## Performance Tips
 
-1. **Use Multiple GPUs**: `--num-gpu 2 --cuda-devices "0,1"`
+1. **Use Multiple GPUs**: Currently limited to single GPU
 2. **Enable Model Offloading**: Set `offload_models = true` in config
 3. **Batch Processing**: Process multiple prompts in sequence
 4. **Optimize Transfers**: Use compression for large files
@@ -553,10 +553,10 @@ except ConnectionError as e:
 ### Docker Issues
 ```bash
 # Check Docker status
-python -m cosmos_workflow.cli status
+cosmos status
 
-# Clean up containers
-docker_executor.cleanup_containers()
+# Clean up containers manually via SSH
+ssh user@host "docker container prune -f"
 ```
 
 ### File Transfer Issues
@@ -567,7 +567,3 @@ exists = file_transfer.file_exists_remote("/path/to/dir")
 # List remote contents
 files = file_transfer.list_remote_directory("/path")
 ```
-
----
-
-For more examples and implementation details, see the [docs/implementation/](docs/implementation/) directory.

@@ -4,7 +4,7 @@ Handles PromptSpec creation, validation, and file operations.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ class PromptSpecManager:
         prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs)
 
         # Create PromptSpec
-        timestamp = datetime.now().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat()
         prompt_spec = PromptSpec(
             id=prompt_id,
             name=name,
@@ -142,5 +142,5 @@ class PromptSpecManager:
             "parent_prompt_text": prompt_data.get("parent_prompt_text", ""),
             "file_path": str(prompt_path),
             "file_size": prompt_path.stat().st_size,
-            "created_time": datetime.fromtimestamp(prompt_path.stat().st_ctime),
+            "created_time": datetime.fromtimestamp(prompt_path.stat().st_ctime, tz=timezone.utc),
         }

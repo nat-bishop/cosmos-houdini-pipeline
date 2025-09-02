@@ -1,27 +1,18 @@
 # Documentation
 
-## 📖 Available Documentation
+## Core Documentation
 
-### Development & Testing
-- [TDD Workflow](TDD_WORKFLOW.md) - Test-driven development process
-- [Testing Strategy](TESTING_STRATEGY.md) - Testing approach and guidelines
-- [Refactoring Recommendations](REFACTORING_RECOMMENDATIONS.md) - Code improvement suggestions
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - TDD workflow, code conventions, testing guide
+- **[API.md](API.md)** - Complete API reference
+- **[Main README](../README.md)** - Project overview and quick start
+- **[CHANGELOG](../CHANGELOG.md)** - Version history
 
-### Technical Specs
-- [Resolution Limits](RESOLUTION_LIMITS_FINAL.md) - GPU and resolution constraints
-- [Infrastructure Requirements](INFRASTRUCTURE_REQUIREMENTS.md) - System requirements
+## Project Rules
 
-### Implementation Docs
-- [Prompt Upsampling](implementation/phase2_prompt_upsampling.md) - Prompt enhancement system
-- [AI Naming](implementation/phase2_ai_description_naming.md) - Automatic naming system
+- **[CLAUDE.md](../CLAUDE.md)** - Instructions for Claude AI assistant
 
-### AI Assistant Context
-- [Project State](ai-context/PROJECT_STATE.md) - Current project status
-- [Conventions](ai-context/CONVENTIONS.md) - Project rules and patterns
-- [Known Issues](ai-context/KNOWN_ISSUES.md) - Current bugs and workarounds
+## Reference Documentation
 
-## 🚀 Quick Links
-
-- **Main README**: [../README.md](../README.md)
-- **Project Rules**: [../CLAUDE.md](../CLAUDE.md)
-- **Changelog**: [../CHANGELOG.md](../CHANGELOG.md)
+Technical references available in `docs/archive/reference/`:
+- Infrastructure requirements and GPU limits
+- Refactoring recommendations for future improvements

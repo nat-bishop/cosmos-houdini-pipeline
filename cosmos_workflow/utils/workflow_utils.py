@@ -1,168 +1,15 @@
 #!/usr/bin/env python3
 """Common utilities for workflow operations.
 
-Provides reusable functions and abstractions for workflow orchestration.
+Provides reusable functions for workflow orchestration.
 """
 
 import logging
-from collections.abc import Callable
-from datetime import datetime
-from functools import wraps
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
-
-class WorkflowStep:
-    """Represents a single step in a workflow."""
-
-    def __init__(
-        self, name: str, function: Callable, emoji: str = "➡️", description: str | None = None
-    ):
-        """Initialize a workflow step.
-
-        Args:
-            name: Name of the step.
-            function: Callable to execute for this step.
-            emoji: Emoji to display for this step.
-            description: Human-readable description of the step.
-        """
-        self.name = name
-        self.function = function
-        self.emoji = emoji
-        self.description = description or name
-
-    def execute(self, *args, **kwargs) -> Any:
-        """Execute the workflow step with logging.
-
-        Args:
-            *args: Positional arguments to pass to the function.
-            **kwargs: Keyword arguments to pass to the function.
-
-        Returns:
-            Result from the step function.
-        """
-        logger.info("Executing step: %s", self.name)
-        print(f"\n{self.emoji} {self.description}")
-        return self.function(*args, **kwargs)
-
-
-class WorkflowExecutor:
-    """Executes a series of workflow steps with proper error handling."""
-
-    def __init__(self, name: str = "workflow"):
-        """Initialize a workflow executor.
-
-        Args:
-            name: Name of the workflow.
-        """
-        self.name = name
-        self.steps: list[WorkflowStep] = []
-        self.start_time: datetime | None = None
-        self.end_time: datetime | None = None
-
-    def add_step(self, step: WorkflowStep) -> "WorkflowExecutor":
-        """Add a step to the workflow.
-
-        Args:
-            step: WorkflowStep to add.
-
-        Returns:
-            Self for method chaining.
-        """
-        self.steps.append(step)
-        return self
-
-    def execute(self, context: dict[str, Any], stop_on_error: bool = True) -> dict[str, Any]:
-        """Execute all workflow steps.
-
-        Args:
-            context: Shared context passed between steps
-            stop_on_error: Whether to stop execution on first error
-
-        Returns:
-            Execution result with status and metadata
-        """
-        self.start_time = datetime.now()
-        steps_completed = []
-
-        try:
-            for step in self.steps:
-                try:
-                    result = step.execute(**context)
-                    steps_completed.append(step.name)
-
-                    # Update context if step returns a dict
-                    if isinstance(result, dict):
-                        context.update(result)
-
-                except Exception as e:
-                    logger.error("Step %s failed: {e}", step.name)
-                    if stop_on_error:
-                        raise
-                    else:
-                        context[f"{step.name}_error"] = str(e)
-
-            self.end_time = datetime.now()
-            duration = self.end_time - self.start_time
-
-            return {
-                "status": "success",
-                "workflow": self.name,
-                "steps_completed": steps_completed,
-                "start_time": self.start_time.isoformat(),
-                "end_time": self.end_time.isoformat(),
-                "duration_seconds": duration.total_seconds(),
-                "context": context,
-            }
-
-        except Exception as e:
-            self.end_time = datetime.now()
-            duration = self.end_time - self.start_time
-
-            return {
-                "status": "failed",
-                "workflow": self.name,
-                "steps_completed": steps_completed,
-                "start_time": self.start_time.isoformat(),
-                "end_time": self.end_time.isoformat(),
-                "duration_seconds": duration.total_seconds(),
-                "error": str(e),
-                "context": context,
-            }
-
-
-def with_retry(max_attempts: int = 3, delay: float = 1.0):
-    """Decorator to retry a function on failure.
-
-    Args:
-        max_attempts: Maximum number of retry attempts
-        delay: Delay between retries in seconds
-    """
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            import time
-
-            last_exception = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    if attempt < max_attempts - 1:
-                        logger.warning("Attempt %s failed: {e}. Retrying...", attempt + 1)
-                        time.sleep(delay)
-                    else:
-                        logger.error("All %s attempts failed", max_attempts)
-
-            raise last_exception
-
-        return wrapper
-
-    return decorator
 
 
 def ensure_path_exists(path: Path) -> Path:
@@ -180,23 +27,6 @@ def ensure_path_exists(path: Path) -> Path:
         path = path.parent
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def get_video_directories(prompt_file: Path, videos_subdir: str | None = None) -> list[Path]:
-    """Get video directories based on prompt file and optional override.
-
-    Args:
-        prompt_file: Path to prompt file
-        videos_subdir: Optional subdirectory override
-
-    Returns:
-        List of video directory paths
-    """
-    if videos_subdir:
-        return [Path(f"inputs/videos/{videos_subdir}")]
-    else:
-        prompt_name = prompt_file.stem
-        return [Path(f"inputs/videos/{prompt_name}")]
 
 
 def format_duration(seconds: float) -> str:
@@ -232,7 +62,7 @@ def log_workflow_event(
     """
     ensure_path_exists(log_dir)
 
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     log_entry = f"{timestamp} | {event_type} | workflow={workflow_name}"
 
     for key, value in metadata.items():
@@ -245,86 +75,6 @@ def log_workflow_event(
         f.write(log_entry)
 
     logger.info("Logged %s event to {run_history_file}", event_type)
-
-
-class ServiceManager:
-    """Manages initialization and cleanup of workflow services."""
-
-    def __init__(self):
-        """Initialize the service manager."""
-        self.services: dict[str, Any] = {}
-        self.initialized = False
-
-    def register_service(self, name: str, service: Any) -> None:
-        """Register a service.
-
-        Args:
-            name: Name identifier for the service.
-            service: Service object to register.
-        """
-        self.services[name] = service
-
-    def get_service(self, name: str) -> Any:
-        """Get a registered service.
-
-        Args:
-            name: Name identifier for the service.
-
-        Returns:
-            The registered service object.
-
-        Raises:
-            KeyError: If service is not registered.
-        """
-        if name not in self.services:
-            raise KeyError(f"Service {name} not registered")
-        return self.services[name]
-
-    def initialize_all(self) -> None:
-        """Initialize all registered services.
-
-        Calls the initialize() method on each service that has one.
-        """
-        if self.initialized:
-            return
-
-        for name, service in self.services.items():
-            if hasattr(service, "initialize"):
-                logger.info("Initializing service: %s", name)
-                service.initialize()
-
-        self.initialized = True
-
-    def cleanup_all(self) -> None:
-        """Cleanup all registered services.
-
-        Calls the cleanup() method on each service that has one.
-        """
-        for name, service in self.services.items():
-            if hasattr(service, "cleanup"):
-                logger.info("Cleaning up service: %s", name)
-                service.cleanup()
-
-        self.initialized = False
-
-    def __enter__(self):
-        """Context manager entry.
-
-        Returns:
-            Self for use in with statement.
-        """
-        self.initialize_all()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit.
-
-        Args:
-            exc_type: Exception type if raised.
-            exc_val: Exception value if raised.
-            exc_tb: Exception traceback if raised.
-        """
-        self.cleanup_all()
 
 
 def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
@@ -356,21 +106,3 @@ def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
         return False
 
     return True
-
-
-def merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
-    """Merge multiple configuration dictionaries.
-
-    Later configs override earlier ones.
-
-    Args:
-        *configs: Configuration dictionaries to merge.
-
-    Returns:
-        Merged configuration dictionary.
-    """
-    result = {}
-    for config in configs:
-        if config:
-            result.update(config)
-    return result

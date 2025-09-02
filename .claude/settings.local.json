@@ -19,7 +19,11 @@
       "Bash(pre-commit:*)",
       "Bash(source:*)",
       "Bash(ssh:*)",
-      "WebSearch"
+      "WebSearch",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

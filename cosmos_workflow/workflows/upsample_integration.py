@@ -50,7 +50,7 @@ class UpsampleWorkflowMixin:
         if hasattr(self, "_initialize_services"):
             self._initialize_services()
 
-        log.info(f"Starting prompt upsampling for {len(prompt_specs)} prompts")
+        log.info("Starting prompt upsampling for %s prompts", len(prompt_specs))
 
         # Prepare batch data
         batch_data = []
@@ -65,7 +65,9 @@ class UpsampleWorkflowMixin:
             )
 
         # Create temporary batch file
-        batch_filename = f"upsample_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        batch_filename = (
+            f"upsample_batch_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+        )
         local_config = self.config_manager.get_local_config()
         local_batch_path = local_config.prompts_dir / batch_filename
 
@@ -77,20 +79,17 @@ class UpsampleWorkflowMixin:
         # Upload batch file to remote
         remote_config = self.config_manager.get_remote_config()
         remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
-        log.info(f"Uploading batch file to {remote_inputs_dir}")
+        log.info("Uploading batch file to %s", remote_inputs_dir)
         self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
 
         # Upload any associated videos
         for spec in prompt_specs:
             if spec.input_video_path and os.path.exists(spec.input_video_path):
                 remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                log.info(f"Uploading video: {spec.input_video_path}")
+                log.info("Uploading video: %s", spec.input_video_path)
                 self.file_transfer.upload_file(Path(spec.input_video_path), remote_videos_dir)
 
-        # Prepare paths
-        remote_batch_path = f"{remote_config.remote_dir}/inputs/{batch_filename}"
-        output_filename = f"upsampled_{batch_filename}"
-        remote_output_path = f"{remote_config.remote_dir}/outputs/{output_filename}"
+        # Prepare paths for later use
 
         # First, upload the working upsampler script
         scripts_dir = f"{remote_config.remote_dir}/scripts"
@@ -102,10 +101,10 @@ class UpsampleWorkflowMixin:
         )
         if local_script.exists():
             remote_script_path = f"{scripts_dir}/working_prompt_upsampler.py"
-            log.info(f"Uploading upsampler script to {remote_script_path}")
+            log.info("Uploading upsampler script to %s", remote_script_path)
             self.file_transfer.upload_file(local_script, scripts_dir)
         else:
-            log.error(f"Working upsampler script not found at {local_script}")
+            log.error("Working upsampler script not found at %s", local_script)
             return {"success": False, "error": "Working upsampler script not found"}
 
         # Create output directory on remote
@@ -147,20 +146,16 @@ class UpsampleWorkflowMixin:
         try:
             # Add sudo prefix for Docker command
             full_cmd = f"sudo {cmd}"
-            output = self.ssh_manager.execute_command_success(
-                full_cmd, timeout=1200
-            )  # 20 min timeout
+            self.ssh_manager.execute_command_success(full_cmd, timeout=1200)  # 20 min timeout
             exit_code = 0
-            stdout = output
             stderr = ""
         except RuntimeError as e:
             exit_code = 1
-            stdout = ""
             stderr = str(e)
 
         if exit_code != 0:
-            log.error(f"Upsampling failed with exit code {exit_code}")
-            log.error(f"Error output: {stderr}")
+            log.error("Upsampling failed with exit code %s", exit_code)
+            log.error("Error output: %s", stderr)
             return {"success": False, "error": stderr, "exit_code": exit_code}
 
         # Download results JSON file
@@ -168,11 +163,11 @@ class UpsampleWorkflowMixin:
         local_output_path = local_config.outputs_dir / f"upsampled_{batch_filename}"
         os.makedirs(local_output_path.parent, exist_ok=True)
 
-        log.info(f"Downloading results from {remote_results_file}")
+        log.info("Downloading results from %s", remote_results_file)
         try:
             self.file_transfer.download_file(remote_results_file, str(local_output_path))
         except Exception as e:
-            log.error(f"Failed to download results: {e}")
+            log.error("Failed to download results: %s", e)
             return {"success": False, "error": f"Failed to download results: {e}"}
 
         # Load and process results
@@ -209,7 +204,7 @@ class UpsampleWorkflowMixin:
                 )
                 updated_specs.append(updated_spec)
 
-        log.info(f"Successfully upsampled {len(updated_specs)} prompts")
+        log.info("Successfully upsampled %s prompts", len(updated_specs))
 
         return {
             "success": True,
@@ -256,7 +251,7 @@ class UpsampleWorkflowMixin:
         prompts_path = Path(prompts_dir)
 
         if not prompts_path.exists():
-            log.error(f"Directory not found: {prompts_dir}")
+            log.error("Directory not found: %s", prompts_dir)
             return {"success": False, "error": f"Directory not found: {prompts_dir}"}
 
         # Create managers for loading
@@ -275,13 +270,13 @@ class UpsampleWorkflowMixin:
                 if not spec.metadata.get("upsampled", False):
                     prompt_specs.append(spec)
                 else:
-                    log.info(f"Skipping already upsampled prompt: {spec.name}")
+                    log.info("Skipping already upsampled prompt: %s", spec.name)
             except Exception as e:
-                log.warning(f"Failed to load {prompt_file}: {e}")
+                log.warning("Failed to load %s: %s", prompt_file, e)
 
         if not prompt_specs:
             log.info("No prompts found to upsample")
             return {"success": True, "num_upsampled": 0, "message": "No prompts needed upsampling"}
 
-        log.info(f"Found {len(prompt_specs)} prompts to upsample")
+        log.info("Found %s prompts to upsample", len(prompt_specs))
         return self.run_prompt_upsampling(prompt_specs, **kwargs)

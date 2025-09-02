@@ -1,9 +1,9 @@
 # Cosmos Workflow System
 
-A professional Python workflow orchestrator for NVIDIA Cosmos Transfer video generation with remote GPU execution.
+A Python workflow orchestrator for NVIDIA Cosmos Transfer video generation with remote GPU execution.
 
-[![Test Coverage](https://img.shields.io/badge/coverage-75%25-green.svg)](tests/)
-[![Tests](https://img.shields.io/badge/tests-614%20passing-brightgreen.svg)](tests/)
+[![Test Coverage](https://img.shields.io/badge/coverage-80%25-green.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-613%20tests-brightgreen.svg)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
 ## 🚀 Quick Start
@@ -14,276 +14,103 @@ A professional Python workflow orchestrator for NVIDIA Cosmos Transfer video gen
 - Docker on remote instance
 
 ### Installation
-
 ```bash
-# Clone repository
+# Clone and install
 git clone https://github.com/yourusername/cosmos-houdini-experiments.git
 cd cosmos-houdini-experiments
+pip install -r requirements.txt
 
-# Install Python dependencies
-pip install click rich paramiko toml pyyaml
-
-# The 'cosmos' command is now available via:
-# 1. Direct Python script (Windows/Unix/Mac):
+# Run the CLI
 python cosmos --help
-
-# 2. Or via Python module:
-python -m cosmos_workflow --help
-```
-
-#### Optional: Add to PATH for direct `cosmos` command
-
-**Windows (Command Prompt/PowerShell):**
-```bash
-# Add current directory to PATH for this session
-set PATH=%PATH%;%cd%
-
-# Or use cosmos.bat directly
-cosmos.bat --help
-```
-
-**Unix/Linux/Mac:**
-```bash
-# Make script executable
-chmod +x cosmos
-
-# Add to PATH for this session
-export PATH="$PATH:$(pwd)"
-
-# Or add permanently to ~/.bashrc or ~/.zshrc
-echo 'export PATH="$PATH:/path/to/cosmos-houdini-experiments"' >> ~/.bashrc
-```
-
-**Git Bash (Windows):**
-```bash
-# Use the Python script directly
-python cosmos --help
-
-# Or create an alias in ~/.bashrc
-echo "alias cosmos='python /path/to/cosmos-houdini-experiments/cosmos'" >> ~/.bashrc
-source ~/.bashrc
 ```
 
 ### Configuration
-
-Create `cosmos_workflow/config/config.toml`:
-
+Edit `cosmos_workflow/config/config.toml`:
 ```toml
 [remote]
 host = "192.222.52.92"
 user = "ubuntu"
 ssh_key = "~/.ssh/your-key.pem"
-port = 22
 
 [paths]
 remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
-
-[docker]
-image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 ```
 
 ### Basic Usage
-
 ```bash
-# After setup, you can use the 'cosmos' command directly:
+# Create a prompt
+cosmos create prompt "A futuristic city at sunset"
 
-# 1. Create a prompt specification
-cosmos create prompt "A futuristic city at sunset" --name my_scene
+# Run inference (with upscaling)
+cosmos inference prompt_spec.json
 
-# 2. Execute on remote GPU
-cosmos run prompt_spec.json --num-gpu 2
-
-# 3. Check remote status
-cosmos status
-
-# Or use Python module directly (always works):
-python -m cosmos_workflow create prompt "A futuristic city"
-```
-
-## 📁 Key Commands
-
-### Command Structure
-```bash
-cosmos <command> [options]
-
-Commands:
-  create prompt     Create a new prompt specification
-  create run        Create a run specification
-  inference        Run Cosmos inference (with upscaling by default)
-  prompt-enhance   Enhance prompts with AI
-  prepare          Prepare Houdini/Blender renders for inference
-  status           Check remote GPU status
-```
-
-### Examples
-```bash
-# Create and run a prompt
-cosmos create prompt "Transform to cyberpunk style" --video input.mp4
-cosmos inference prompt_spec.json  # Runs inference + upscaling by default
-cosmos inference prompt_spec.json --no-upscale  # Inference only
-
-# Prepare renders from Houdini/Blender
-cosmos prepare ./renders/ --name city_scene --fps 24
-
-# Enhance prompts with AI (accepts multiple files)
-cosmos prompt-enhance prompt1.json prompt2.json
-cosmos prompt-enhance inputs/prompts/*.json --resolution 480
-
-# Check system status
+# Check status
 cosmos status
 ```
 
-## 🔧 Shell Completion (Tab Autocomplete)
+## 📁 Commands
 
-Enable tab completion for commands, options, and file paths. The CLI uses Click's built-in completion system.
+- `cosmos create prompt` - Create prompt specifications
+- `cosmos inference` - Run inference with optional upscaling
+- `cosmos prompt-enhance` - Enhance prompts with AI
+- `cosmos prepare` - Prepare renders for inference
+- `cosmos status` - Check remote GPU status
 
-### Git Bash (Windows)
-```bash
-# Add to ~/.bashrc (replace path with your actual cosmos location)
-eval "$(_COSMOS_COMPLETE=bash_source python /f/Art/cosmos-houdini-experiments/cosmos)"
+For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 
-# Then reload:
-source ~/.bashrc
-```
-
-### Windows PowerShell
-```powershell
-# Add to $PROFILE (to edit: notepad $PROFILE)
-Register-ArgumentCompleter -Native -CommandName cosmos -ScriptBlock {
-    param($wordToComplete, $commandAst, $cursorPosition)
-    $env:_COSMOS_COMPLETE = 'powershell_complete'
-    python C:\path\to\cosmos | ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-    }
-}
-```
-
-### Linux/Mac Bash
-```bash
-# Add to ~/.bashrc
-eval "$(_COSMOS_COMPLETE=bash_source cosmos)"
-source ~/.bashrc
-```
-
-### Zsh
-```bash
-# Add to ~/.zshrc
-eval "$(_COSMOS_COMPLETE=zsh_source cosmos)"
-source ~/.zshrc
-```
-
-## 🎯 Features
-
-### Core Capabilities
-- **Remote GPU Execution** - SSH-based orchestration with Docker
-- **Cross-Platform** - Windows/Linux/macOS compatible SFTP transfers
-- **Multi-GPU Support** - Configurable CUDA device allocation
-- **Schema Management** - Structured prompt and run specifications
-
-### AI Integration
-- **Smart Naming** - AI-powered descriptive names from prompts
-- **Prompt Enhancement** - Pixtral AI model for improving prompt quality
-- **Video Analysis** - Automatic metadata extraction and description
-- **Content Understanding** - BLIP model for scene analysis
-
-### Developer Tools
-- **Modern CLI** - Click framework with smart autocomplete
-- **Modern Linting** - Ruff, MyPy, Bandit for code quality
-- **Comprehensive Testing** - Unit, integration, and system tests
-- **Pre-commit Hooks** - Automated quality checks
-- **Type Hints** - Full type annotation coverage
-
-## 🏗️ Architecture
-
+## 🏗️ Project Structure
 ```
 cosmos_workflow/
-├── config/          # Configuration management
-├── connection/      # SSH/SFTP connections
-├── execution/       # Docker orchestration
+├── cli/             # CLI commands
+├── workflows/       # Orchestration logic
+├── connection/      # SSH/SFTP management
+├── execution/       # Docker execution
 ├── prompts/         # Schema definitions
-├── transfer/        # File transfers
-├── local_ai/        # AI features
-└── workflows/       # Pipeline orchestration
+├── local_ai/        # AI processing
+└── config/          # Configuration
 ```
-
-## 🧪 Development
-
-### Running Tests
-```bash
-# All tests with coverage
-pytest --cov=cosmos_workflow
-
-# Specific test categories
-pytest -m unit           # Fast unit tests
-pytest -m integration    # Integration tests
-pytest -m system        # End-to-end tests
-```
-
-### Code Quality
-```bash
-# Run linting
-make lint
-
-# Format code
-make format
-
-# Security scan
-make security
-
-# All checks
-make check-all
-```
-
-### Using Make Commands
-```bash
-make help        # Show all available commands
-make dev         # Install dev dependencies
-make test        # Run tests with coverage
-make clean       # Clean cache files
-```
-
-## 📊 Project Status
-
-- **Version**: 0.3.0
-- **Test Coverage**: 80%+
-- **Python**: 3.10+
-- **License**: MIT
-
-## 🔧 Configuration Options
-
-See `config.toml.example` for all available options:
-- SSH connection settings
-- Docker runtime configuration
-- Path mappings
-- GPU allocation
-- Logging levels
 
 ## 📚 Documentation
 
-- **[Documentation Index](docs/README.md)** - Complete documentation guide
-- [Quick Start](#-quick-start) - Get started immediately
-- [Testing Results](docs/TESTING_RESULTS.md) - Performance benchmarks & testing
-- [API Reference](REFERENCE.md) - Detailed API documentation
-- [Changelog](CHANGELOG.md) - Version history
-- [AI Context](docs/ai-context/PROJECT_STATE.md) - Current project state
+- **[Development Guide](docs/DEVELOPMENT.md)** - Setup, testing, TDD workflow
+- **[API Reference](docs/API.md)** - Complete API documentation
+- **[Changelog](CHANGELOG.md)** - Version history
+- **[Roadmap](ROADMAP.md)** - Planned features and improvements
 
-## 🤝 Contributing
+## 🧪 Development
 
-This is currently a private project for internal development. For questions or issues, please contact the maintainer.
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest --cov=cosmos_workflow
+
+# Format & lint
+ruff format cosmos_workflow/
+ruff check cosmos_workflow/ --fix
+```
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instructions.
+
+## 🎯 Features
+
+- **Remote GPU Execution** - SSH-based orchestration
+- **Multi-GPU Support** - Configurable CUDA devices
+- **AI Enhancement** - Prompt improvement with Pixtral
+- **Video Processing** - Frame extraction and metadata
+- **Progress Tracking** - Real-time transfer monitoring
 
 ## ⚡ Performance
 
-- Processes 100+ frame sequences in seconds
+- Processes 100+ frame sequences efficiently
 - Supports 4K video generation
 - Multi-GPU scaling for faster inference
-- Optimized SFTP transfers with progress tracking
+- Optimized SFTP transfers
 
-## 🔒 Security
+## 📄 License
 
-- SSH key authentication only
-- Secure configuration management
-- No hardcoded credentials
-- Regular dependency scanning
+MIT License - See LICENSE file for details.
 
 ---
 

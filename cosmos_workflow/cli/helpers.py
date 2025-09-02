@@ -93,7 +93,7 @@ def create_info_table(data: dict[str, Any], show_header: bool = False) -> Table:
     return table
 
 
-def create_progress_context(description: str):  # noqa: ARG001
+def create_progress_context(description: str):
     """Create a progress context for long-running operations.
 
     Args:

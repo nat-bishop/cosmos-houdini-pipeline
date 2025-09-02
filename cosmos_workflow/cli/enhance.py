@@ -95,12 +95,12 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
         console.print(table)
 
         console.print("\n[bold]Prompts to enhance:[/bold]")
-        for spec, spec_path in specs_to_enhance:
+        for spec, _ in specs_to_enhance:
             formatted_prompt = format_prompt_text(spec.prompt)
             console.print(f'  • {spec.name}: "{formatted_prompt}"')
 
         console.print("\n[bold]Would create files:[/bold]")
-        for spec, spec_path in specs_to_enhance:
+        for _, spec_path in specs_to_enhance:
             enhanced_name = spec_path.stem.replace("_ps_", "_enhanced_ps_")
             if "_enhanced" not in enhanced_name:
                 enhanced_name = f"{spec_path.stem}_enhanced"

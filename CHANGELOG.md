@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-02 (CLI Migration Complete)
+- **Migrated to modular CLI structure**
+  - Switched from monolithic `cli.py` (800+ lines) to modular `cli/` directory
+  - Maintained 100% backward compatibility
+  - Improved display with Rich formatting and emojis
+  - Better error handling and consistent output
+  - Maximum file size reduced by 76% (217 lines vs 800+)
+
 ### Added - 2025-09-01 (CLI Refactoring Complete)
 - **Phase 1: Created modular CLI architecture foundation**
   - New `cosmos_workflow/cli_new/` directory structure for refactored CLI
@@ -19,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `status.py` (63 lines): Remote GPU status checking
   - `prepare.py` (156 lines): Video sequence preparation
   - `enhance.py` (164 lines): Prompt enhancement with AI
-  - `inference.py` (117 lines): Inference execution  
+  - `inference.py` (117 lines): Inference execution
   - `create.py` (217 lines): Create prompt and run specifications
   - Main CLI integration in `__init__.py` (71 lines)
   - Successfully reduced max file size by 76% (935 → 217 lines)

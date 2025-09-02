@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -41,7 +41,7 @@ def display_info(message: str):
     console.print(f"[cyan]i  {message}[/cyan]")  # Using 'i' instead of emoji
 
 
-def create_info_table(data: Dict[str, Any], show_header: bool = False) -> Table:
+def create_info_table(data: dict[str, Any], show_header: bool = False) -> Table:
     """Create a formatted table for displaying information."""
     table = Table(show_header=show_header, box=None)
     table.add_column("Field", style="cyan")

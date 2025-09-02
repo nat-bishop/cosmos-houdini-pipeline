@@ -1,7 +1,5 @@
 """Status command for checking remote GPU instance."""
 
-import sys
-
 import click
 
 from .base import CLIContext, handle_errors
@@ -37,25 +35,19 @@ def status(ctx):
         status_data["SSH Status"] = "[green]Connected[/green]"
         status_data["Remote Directory"] = status_info.get("remote_directory", "N/A")
         status_data["Directory Exists"] = (
-            "[green]Yes[/green]"
-            if status_info.get("remote_directory_exists")
-            else "[red]No[/red]"
+            "[green]Yes[/green]" if status_info.get("remote_directory_exists") else "[red]No[/red]"
         )
 
         docker_status = status_info.get("docker_status", {})
         status_data["Docker Running"] = (
-            "[green]Yes[/green]"
-            if docker_status.get("docker_running")
-            else "[red]No[/red]"
+            "[green]Yes[/green]" if docker_status.get("docker_running") else "[red]No[/red]"
         )
 
         if ctx_obj.verbose and docker_status.get("docker_running"):
             status_data["Docker Images"] = (
                 f"{len(docker_status.get('available_images', []))} available"
             )
-            status_data["Running Containers"] = str(
-                docker_status.get("running_containers", "0")
-            )
+            status_data["Running Containers"] = str(docker_status.get("running_containers", "0"))
     else:
         status_data["SSH Status"] = "[red]Disconnected[/red]"
         status_data["Error"] = status_info.get("error", "Unknown error")

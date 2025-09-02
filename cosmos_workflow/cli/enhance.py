@@ -146,9 +146,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
                         enhanced_name = f"{rel_path.stem}_enhanced"
 
                     # Build the save path
-                    save_path = (
-                        local_config.prompts_dir / rel_path.parent / f"{enhanced_name}.json"
-                    )
+                    save_path = local_config.prompts_dir / rel_path.parent / f"{enhanced_name}.json"
                     save_path.parent.mkdir(parents=True, exist_ok=True)
 
                     updated_spec.save(save_path)

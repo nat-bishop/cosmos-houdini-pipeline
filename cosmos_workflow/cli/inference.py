@@ -1,7 +1,6 @@
 """Inference command for running Cosmos Transfer on remote GPU."""
 
 import json
-import sys
 from pathlib import Path
 
 import click

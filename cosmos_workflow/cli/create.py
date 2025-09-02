@@ -1,6 +1,5 @@
 """Create command group for prompts and run specifications."""
 
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,7 +18,6 @@ from .base import CLIContext, handle_errors
 from .completions import complete_prompt_specs, complete_video_files
 from .helpers import (
     console,
-    create_info_table,
     display_next_step,
     display_success,
     format_id,

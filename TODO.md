@@ -47,22 +47,25 @@ This document tracks planned features and improvements for the Cosmos Workflow O
   - Add smart negative prompt generation based on input
   - *Effort: 1 day*
 
-### CLI Migration (CRITICAL - Discovered Issue)
-- [ ] **Migrate to cli_new module structure** (CRITICAL)
-  - cli_new already exists with modular structure!
-  - Need to port --dry-run features from old cli.py
-  - Switch application to use cli_new
-  - Update all tests to test new structure
-  - *Effort: 5-6 hours*
-  - *Reference: CLI_TEST_PROGRESS.md*
+### CLI Migration (CRITICAL - Ready to Execute)
+- [ ] **Migrate to modular CLI structure** (CRITICAL)
+  - NEW CLI IS ALREADY COMPLETE with --dry-run!
+  - Just need to switch application to use it
+  - Update test imports (2 files only)
+  - Rename directories for clarity
+  - *Effort: 1 hour* (not 5-6 hours as originally thought)
+  - *Reference: CLI_MIGRATION_PLAN.md*
 
 ### Code Architecture Investigation
 - [ ] **Investigate and refactor architecture issues**
-  - Analyze if ContextManager and ConfigManager are both necessary
-  - Review if resolution_tester.py is still needed
-  - Evaluate upsample_integration.py mixin pattern
-  - Assess if WorkflowOrchestrator is becoming monolithic
-  - Consider splitting into smaller services (InferenceService, etc.)
+  - **CLIContext vs ConfigManager**: Both needed - serve different purposes
+    - CLIContext: Runtime command state (Click's context)
+    - ConfigManager: Persistent configuration (config.toml)
+  - **resolution_tester.py**: Still useful for debugging, move to utilities
+  - **upsample_integration.py mixin**: Pattern is OK but consider composition
+  - **WorkflowOrchestrator becoming monolithic**: YES - needs refactoring
+    - Currently handles: SSH, transfers, Docker, inference, upsampling, status
+    - Should split into: InferenceService, UpsampleService, TransferService, StatusService
   - *Effort: 2-3 days*
   - *Reference: CLI_TEST_PROGRESS.md - Architecture Questions*
 
@@ -238,11 +241,11 @@ This document tracks planned features and improvements for the Cosmos Workflow O
 
 ## 🎯 Next Steps (In Order)
 
-1. **CRITICAL: Migrate to cli_new** - Port --dry-run, switch over, update tests (5-6 hours)
+1. **CRITICAL: Migrate to modular CLI** - Switch to cli_new, update tests (1 hour)
 2. **Complete CLI test coverage** - Add missing tests (1 hour)
-3. **Reorganize directory structure** - Merge redundant dirs, clarify purpose (1-2 days)
-4. **Reorganize documentation** - Create clear structure (1 day)
-5. **Investigate architecture** - Assess if refactoring needed (2-3 days)
+3. **Reorganize documentation** - Create clear structure per plan (1 day)
+4. **Reorganize directory structure** - Merge redundant dirs, clarify purpose (1-2 days)
+5. **Refactor WorkflowOrchestrator** - Split into services (2-3 days)
 6. **Setup remote environment** - Build Docker image, download checkpoints
 7. **Configure authentication** - Set up HF token
 8. **Pin versions** - Move away from `:latest` tags

@@ -298,7 +298,8 @@ class TestVideoProcessor:
     def test_validate_sequence_non_sequential_names(self):
         """Test validation with non-standard naming."""
         sequence_dir = self.create_test_png_sequence(
-            num_frames=5, pattern="image_{:d}.png"  # Non-padded numbers
+            num_frames=5,
+            pattern="image_{:d}.png",  # Non-padded numbers
         )
 
         result = self.processor.validate_sequence(sequence_dir)

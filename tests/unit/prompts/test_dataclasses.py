@@ -178,7 +178,7 @@ class TestPromptSpec:
         """Test PromptSpec load with missing fields."""
         incomplete_data = {
             "id": "ps_test123",
-            "name": "test_prompt"
+            "name": "test_prompt",
             # Missing other required fields
         }
 
@@ -389,7 +389,7 @@ class TestRunSpec:
         incomplete_data = {
             "id": "rs_test456",
             "prompt_id": "ps_test123",
-            "name": "test_run"
+            "name": "test_run",
             # Missing other required fields
         }
 

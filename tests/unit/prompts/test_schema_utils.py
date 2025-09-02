@@ -4,8 +4,6 @@ Comprehensive tests for SchemaUtils.
 Tests all methods, edge cases, and error conditions.
 """
 
-
-
 from cosmos_workflow.prompts.schemas import BlurStrength, CannyThreshold, SchemaUtils
 
 

@@ -41,18 +41,18 @@ from cosmos_workflow.prompts import PromptSpec
 ```python
 def process_video(input_path: Path, fps: int = 24) -> VideoMetadata:
     """Process a video file and extract metadata.
-    
+
     Args:
         input_path: Path to the input video file
         fps: Target frame rate (default: 24)
-        
+
     Returns:
         VideoMetadata object containing extracted information
-        
+
     Raises:
         FileNotFoundError: If input file doesn't exist
         ValueError: If fps is invalid
-        
+
     Example:
         >>> metadata = process_video(Path("video.mp4"), fps=30)
         >>> print(metadata.duration)

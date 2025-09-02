@@ -368,7 +368,7 @@ class TestRunSpecManager:
         incomplete_file = self.runs_dir / "incomplete.json"
         incomplete_data = {
             "id": "rs_test123",
-            "name": "test_run"
+            "name": "test_run",
             # Missing other required fields
         }
 

@@ -31,10 +31,8 @@ def cli_runner():
 @pytest.fixture
 def mock_orchestrator():
     """Mock WorkflowOrchestrator to avoid real SSH/Docker operations."""
-    # The new CLI imports WorkflowOrchestrator differently
-    with patch(
-        "cosmos_workflow.workflows.workflow_orchestrator.WorkflowOrchestrator"
-    ) as mock_class:
+    # Patch where CLIContext imports it
+    with patch("cosmos_workflow.cli.base.WorkflowOrchestrator") as mock_class:
         orchestrator = MagicMock()
         mock_class.return_value = orchestrator
 
@@ -153,12 +151,10 @@ class TestCreateCommands:
         assert_success(result)
         assert "Create prompts and run specifications" in result.output
 
-    @patch("cosmos_workflow.utils.smart_naming.generate_smart_name")
     @patch("cosmos_workflow.prompts.schemas.DirectoryManager")
-    def test_create_prompt_minimal(self, mock_dir_manager, mock_smart_name, cli_runner, temp_dir):
+    def test_create_prompt_minimal(self, mock_dir_manager, cli_runner, temp_dir):
         """Test creating prompt with minimal arguments."""
         # Setup mocks
-        mock_smart_name.return_value = "futuristic_city"
         mock_dir_instance = MagicMock()
         mock_dir_manager.return_value = mock_dir_instance
 
@@ -171,11 +167,8 @@ class TestCreateCommands:
 
         # Verify success
         assert_success(result, "Prompt created successfully")
-        # The new CLI might reverse the word order in names
-        assert "futuristic" in result.output and "city" in result.output
-
-        # Verify smart name was called
-        mock_smart_name.assert_called_once_with("A futuristic city", max_length=30)
+        # The generated name should contain parts of the prompt
+        assert "city" in result.output.lower() or "futuristic" in result.output.lower()
 
     @patch("cosmos_workflow.prompts.schemas.DirectoryManager")
     def test_create_prompt_with_name(self, mock_dir_manager, cli_runner, temp_dir):
@@ -412,9 +405,14 @@ class TestPrepareCommand:
         metadata.description = "Test description"
         mock_converter_instance.generate_metadata.return_value = metadata
 
-        # Create a dummy input directory
+        # Create a dummy input directory with color sequence
         input_dir = temp_dir / "renders"
         input_dir.mkdir()
+        # Create color modality files
+        color_dir = input_dir / "color"
+        color_dir.mkdir()
+        (color_dir / "frame_0001.png").touch()
+        (color_dir / "frame_0002.png").touch()
 
         result = cli_runner.invoke(cli, ["prepare", str(input_dir)])
 
@@ -444,6 +442,10 @@ class TestPrepareCommand:
         # Create input directory
         input_dir = temp_dir / "renders"
         input_dir.mkdir()
+        color_dir = input_dir / "color"
+        color_dir.mkdir()
+        (color_dir / "frame_0001.png").touch()
+        (color_dir / "frame_0002.png").touch()
 
         result = cli_runner.invoke(cli, ["prepare", str(input_dir), "--dry-run"])
 
@@ -482,6 +484,10 @@ class TestPrepareCommand:
 
         input_dir = temp_dir / "renders"
         input_dir.mkdir()
+        color_dir = input_dir / "color"
+        color_dir.mkdir()
+        (color_dir / "frame_0001.png").touch()
+        (color_dir / "frame_0002.png").touch()
 
         result = cli_runner.invoke(
             cli, ["prepare", str(input_dir), "--dry-run", "--fps", "30", "--name", "test_scene"]

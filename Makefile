@@ -58,3 +58,22 @@ check-all:  ## Run all checks (lint, security, tests)
 	$(MAKE) lint
 	$(MAKE) security
 	$(MAKE) test
+
+# TDD Workflow Commands
+tdd-cycle:  ## Run complete TDD cycle
+	@echo "Starting TDD cycle..."
+	@echo "1. Write tests first (they should fail)"
+	@echo "2. Run tests to verify failure"
+	@echo "3. Implement code"
+	@echo "4. Run tests to verify pass"
+	@echo "5. Run quality checks"
+
+tdd-test:  ## Run tests expecting failure (for red phase)
+	@pytest tests/ -x --tb=short || echo "Tests failed as expected (red phase)"
+
+tdd-verify:  ## Run tests expecting success (for green phase)
+	@pytest tests/ -x --tb=short
+
+clean-workspace:  ## Clean Claude workspace
+	@rm -f .claude/workspace/*.md
+	@echo "Workspace cleaned"

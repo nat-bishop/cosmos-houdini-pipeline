@@ -417,11 +417,12 @@ class TestPromptManagerOrchestrator:
             mock_run_spec = Mock(spec=RunSpec)
             mock_run_spec.id = "rs_test456"
 
-            with patch.object(
-                prompt_manager.prompt_spec_manager, "create_prompt_spec"
-            ) as mock_create_prompt, patch.object(
-                prompt_manager.run_spec_manager, "create_run_spec"
-            ) as mock_create_run:
+            with (
+                patch.object(
+                    prompt_manager.prompt_spec_manager, "create_prompt_spec"
+                ) as mock_create_prompt,
+                patch.object(prompt_manager.run_spec_manager, "create_run_spec") as mock_create_run,
+            ):
                 mock_create_prompt.return_value = mock_prompt_spec
                 mock_create_run.return_value = mock_run_spec
 

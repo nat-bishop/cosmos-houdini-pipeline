@@ -1,42 +1,56 @@
 # CLAUDE.md — Cosmos Workflow Orchestrator
 
 ## 🔴 CRITICAL: Test-Driven Development
-**Follow TDD strictly** → See [docs/TDD_WORKFLOW.md](docs/TDD_WORKFLOW.md)
-1. Write tests first (must fail)
-2. `@subagent test-runner` to verify failure
-3. Commit tests
-4. Implement (keep in main thread)
-5. `@subagent test-runner` to verify pass
-6. `@subagent overfit-verifier` + `@subagent code-reviewer` (parallel)
-7. `@subagent doc-drafter` to update docs
-8. Commit implementation
+**YOU MUST follow EVERY step. Skip ANY step = TDD failure.**
 
-## Mission
-Python orchestrator for NVIDIA Cosmos-Transfer video generation on remote GPU via SSH + Docker.
+### For EVERY Code Change:
+1. **YOU MUST write test first** → Include edge cases & errors → Must fail
+2. **YOU MUST verify failure** → `@subagent test-runner` → Red phase
+3. **Commit tests** → Auto-handled by subagent
+4. **Implement** → Keep in main thread
+5. **YOU MUST verify pass** → `@subagent test-runner` → Green phase
+6. **Parallel verification**:
+   - `@subagent overfit-verifier` → Check implementation
+   - `@subagent code-reviewer` → Review diff
+7. **Update docs** → `@subagent doc-drafter` → Auto-updates:
+   - ✅ CHANGELOG.md (ALWAYS, no exceptions)
+   - ✅ README.md (if CLI/API changed)
+   - ✅ docs/*.md (if needed)
+8. **Commit implementation** → Auto-handled by subagent
 
-## Core Rules
-- **Security**: No hardcoded secrets → `config.toml` or ENV
-- **Quality**: Type hints, `pathlib.Path`, proper logging
-- **Testing**: 80% coverage, <1s unit tests
-- **Conventions**: See [docs/ai-context/CONVENTIONS.md](docs/ai-context/CONVENTIONS.md)
+## 📁 File Update Rules
+**doc-drafter ALWAYS updates:** CHANGELOG.md (every change), README.md (if CLI/API changed)
+**NEVER manually update:** `.claude/reports/*.json` (subagents only)
 
-## Quick Commands
+## 🤖 Subagent Rules
+- **One-way only**: Subagents write → `.claude/reports/*.json` → Main reads
+- **No sharing**: Subagents never read each other's output
+- **Main orchestrates**: All coordination through main thread
+
+## 📝 Workspace Rules
+- **One scratch file**: `.claude/workspace/current-task.md`
+- **YOU MUST delete** when task completes
+- **Never committed** (gitignored)
+
+## 📏 Critical Code Rules
+- **Logging**: Use `%` formatting, NOT f-strings (performance)
+- **Paths**: `pathlib.Path` only, NEVER `os.path` (cross-platform)
+- **Tests**: MUST cover edge cases & errors, not just happy path
+- **Temp Files**: DELETE `.claude/workspace/*` when task completes
+- **SSH/Remote**: All GPU ops via WorkflowOrchestrator (never direct)
+
+## 🚀 Frequent Commands
 ```bash
-# Testing & Quality
-pytest tests/ -q --tb=no
-ruff format cosmos_workflow/
-ruff check cosmos_workflow/ --fix
-
-# Subagent reports location
-.claude/reports/
+pytest tests/ -xvs               # Debug single test
+pytest tests/ -q --tb=no         # Quick test summary
+ruff format cosmos_workflow/      # Format code
+ruff check cosmos_workflow/ --fix # Fix linting issues
+gh pr create --title "feat: ..." # Create pull request
 ```
 
-## Key Parameters
-- **Safe resolution**: 320×180 @ 2 frames (940×529 max)
-- **Inference steps**: 35 (quality) or 1 (distilled)
-- **Model path**: `/home/ubuntu/NatsFS/cosmos-transfer1`
+## 🔑 Core Settings
+- **Model**: `/home/ubuntu/NatsFS/cosmos-transfer1`
+- **Safe res**: 320×180 @ 2 frames
+- **SSH**: 192.222.52.92
 
-## Documentation
-- [Project Details](docs/ai-context/PROJECT_STATE.md)
-- [Known Issues](docs/ai-context/KNOWN_ISSUES.md)
-- [Conventions](docs/ai-context/CONVENTIONS.md)
+[Details: docs/](docs/)

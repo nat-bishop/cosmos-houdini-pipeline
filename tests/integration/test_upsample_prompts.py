@@ -90,9 +90,7 @@ class TestVideoPreprocessing(unittest.TestCase):
             out.release()
             return output_path
 
-        preprocess_video_for_upsampling(
-            self.test_video_path, max_resolution=480, num_frames=2
-        )
+        preprocess_video_for_upsampling(self.test_video_path, max_resolution=480, num_frames=2)
 
         # Verify downscaling calculations
         mock_writer.assert_called_once()

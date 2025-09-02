@@ -195,7 +195,9 @@ class FakePromptSpecManager:
         """Get prompt spec by ID."""
         return self.prompt_specs.get(spec_id)
 
-    def list_prompts(self, prompts_dir: Path | None = None, pattern: str | None = None) -> list[Path]:
+    def list_prompts(
+        self, prompts_dir: Path | None = None, pattern: str | None = None
+    ) -> list[Path]:
         """List available prompts."""
         search_dir = prompts_dir or self.temp_dir
         if not search_dir.exists():

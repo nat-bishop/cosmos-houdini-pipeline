@@ -3,7 +3,6 @@
     "allow": [
       "Read(F:\\Art\\cosmos-houdini-experiments/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
-      "Read(C:\\Users\\17143\\Downloads/**)",
       "Bash(pytest:*)",
       "Bash(python -m pytest:*)",
       "Bash(ruff:*)",
@@ -20,9 +19,7 @@
       "Bash(pre-commit:*)",
       "Bash(source:*)",
       "Bash(ssh:*)",
-      "WebSearch",
-      "Bash(gh:*)",
-      "Bash(tree:*)"
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

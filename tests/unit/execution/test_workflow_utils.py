@@ -41,7 +41,7 @@ class TestUtilityFunctions:
         """Test ensure_path_exists with existing directory."""
         test_dir = tmp_path / "existing"
         test_dir.mkdir()
-        
+
         result = ensure_path_exists(test_dir)
         assert result == test_dir
 
@@ -63,7 +63,7 @@ class TestUtilityFunctions:
         assert format_duration(7325) == "2h 2m 5s"
 
     @patch("cosmos_workflow.utils.workflow_utils.ensure_path_exists")
-    def test_log_workflow_event(self, mock_ensure_path, mock_file):
+    def test_log_workflow_event(self, mock_ensure_path):
         """Test log_workflow_event function."""
         mock_file = mock_open()
         with patch("builtins.open", mock_file):
@@ -71,12 +71,12 @@ class TestUtilityFunctions:
                 "SUCCESS",
                 "test_workflow",
                 {"duration": "10s", "status": "completed"},
-                Path("test_logs")
+                Path("test_logs"),
             )
 
         mock_ensure_path.assert_called_once_with(Path("test_logs"))
         mock_file.assert_called_once_with(Path("test_logs") / "run_history.log", "a")
-        
+
         # Check that something was written
         handle = mock_file()
         handle.write.assert_called()

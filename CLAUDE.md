@@ -101,6 +101,7 @@ cosmos status                     # Check GPU status
 ## Testing Rules
 - 80% Code Coverage
 - Consider edge cases and error codes
+- Tests should follow TDD rules
 # Run tests
 pytest tests/ -m unit --cov=cosmos_workflow
 

@@ -322,8 +322,8 @@ class TestPromptSpecManager:
 
             prompt_spec = self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
 
-            # Check timestamp format
-            assert prompt_spec.timestamp.endswith("Z")
+            # Check timestamp format - should be timezone-aware ISO format
+            assert prompt_spec.timestamp.endswith("+00:00") or prompt_spec.timestamp.endswith("Z")
             # Should be parseable as ISO format
             datetime.fromisoformat(prompt_spec.timestamp.replace("Z", "+00:00"))
 

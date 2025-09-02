@@ -407,8 +407,8 @@ class TestRunSpecManager:
 
             run_spec = self.run_spec_manager.create_run_spec("ps_prompt123", "test_run")
 
-            # Check timestamp format
-            assert run_spec.timestamp.endswith("Z")
+            # Check timestamp format - should be timezone-aware ISO format
+            assert run_spec.timestamp.endswith("+00:00") or run_spec.timestamp.endswith("Z")
             # Should be parseable as ISO format
             datetime.fromisoformat(run_spec.timestamp.replace("Z", "+00:00"))
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Common utilities for workflow operations.
+
 Provides reusable functions and abstractions for workflow orchestration.
 """
 
@@ -19,13 +20,29 @@ class WorkflowStep:
     def __init__(
         self, name: str, function: Callable, emoji: str = "➡️", description: str | None = None
     ):
+        """Initialize a workflow step.
+
+        Args:
+            name: Name of the step.
+            function: Callable to execute for this step.
+            emoji: Emoji to display for this step.
+            description: Human-readable description of the step.
+        """
         self.name = name
         self.function = function
         self.emoji = emoji
         self.description = description or name
 
     def execute(self, *args, **kwargs) -> Any:
-        """Execute the workflow step with logging."""
+        """Execute the workflow step with logging.
+
+        Args:
+            *args: Positional arguments to pass to the function.
+            **kwargs: Keyword arguments to pass to the function.
+
+        Returns:
+            Result from the step function.
+        """
         logger.info("Executing step: %s", self.name)
         print(f"\n{self.emoji} {self.description}")
         return self.function(*args, **kwargs)
@@ -35,13 +52,25 @@ class WorkflowExecutor:
     """Executes a series of workflow steps with proper error handling."""
 
     def __init__(self, name: str = "workflow"):
+        """Initialize a workflow executor.
+
+        Args:
+            name: Name of the workflow.
+        """
         self.name = name
         self.steps: list[WorkflowStep] = []
         self.start_time: datetime | None = None
         self.end_time: datetime | None = None
 
     def add_step(self, step: WorkflowStep) -> "WorkflowExecutor":
-        """Add a step to the workflow."""
+        """Add a step to the workflow.
+
+        Args:
+            step: WorkflowStep to add.
+
+        Returns:
+            Self for method chaining.
+        """
         self.steps.append(step)
         return self
 
@@ -137,7 +166,14 @@ def with_retry(max_attempts: int = 3, delay: float = 1.0):
 
 
 def ensure_path_exists(path: Path) -> Path:
-    """Ensure a directory path exists, creating it if necessary."""
+    """Ensure a directory path exists, creating it if necessary.
+
+    Args:
+        path: Path to ensure exists (file or directory).
+
+    Returns:
+        The directory path that was created or verified.
+    """
     path = Path(path)
     # Check if it's a file path (has an extension) or already exists as a file
     if path.suffix or path.is_file():
@@ -164,7 +200,14 @@ def get_video_directories(prompt_file: Path, videos_subdir: str | None = None) -
 
 
 def format_duration(seconds: float) -> str:
-    """Format duration in seconds to a human-readable string."""
+    """Format duration in seconds to a human-readable string.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Human-readable duration string (e.g., "2h 15m 30s").
+    """
     hours, remainder = divmod(int(seconds), 3600)
     minutes, seconds = divmod(remainder, 60)
 
@@ -208,21 +251,40 @@ class ServiceManager:
     """Manages initialization and cleanup of workflow services."""
 
     def __init__(self):
+        """Initialize the service manager."""
         self.services: dict[str, Any] = {}
         self.initialized = False
 
     def register_service(self, name: str, service: Any) -> None:
-        """Register a service."""
+        """Register a service.
+
+        Args:
+            name: Name identifier for the service.
+            service: Service object to register.
+        """
         self.services[name] = service
 
     def get_service(self, name: str) -> Any:
-        """Get a registered service."""
+        """Get a registered service.
+
+        Args:
+            name: Name identifier for the service.
+
+        Returns:
+            The registered service object.
+
+        Raises:
+            KeyError: If service is not registered.
+        """
         if name not in self.services:
             raise KeyError(f"Service {name} not registered")
         return self.services[name]
 
     def initialize_all(self) -> None:
-        """Initialize all registered services."""
+        """Initialize all registered services.
+
+        Calls the initialize() method on each service that has one.
+        """
         if self.initialized:
             return
 
@@ -234,7 +296,10 @@ class ServiceManager:
         self.initialized = True
 
     def cleanup_all(self) -> None:
-        """Cleanup all registered services."""
+        """Cleanup all registered services.
+
+        Calls the cleanup() method on each service that has one.
+        """
         for name, service in self.services.items():
             if hasattr(service, "cleanup"):
                 logger.info("Cleaning up service: %s", name)
@@ -243,12 +308,22 @@ class ServiceManager:
         self.initialized = False
 
     def __enter__(self):
-        """Context manager entry."""
+        """Context manager entry.
+
+        Returns:
+            Self for use in with statement.
+        """
         self.initialize_all()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
+        """Context manager exit.
+
+        Args:
+            exc_type: Exception type if raised.
+            exc_val: Exception value if raised.
+            exc_tb: Exception traceback if raised.
+        """
         self.cleanup_all()
 
 
@@ -256,11 +331,11 @@ def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
     """Validate GPU configuration parameters.
 
     Args:
-        num_gpu: Number of GPUs to use
-        cuda_devices: Comma-separated CUDA device IDs
+        num_gpu: Number of GPUs to use.
+        cuda_devices: Comma-separated CUDA device IDs.
 
     Returns:
-        True if configuration is valid
+        True if configuration is valid, False otherwise.
     """
     if num_gpu <= 0:
         logger.error("Invalid num_gpu: %s", num_gpu)
@@ -285,13 +360,14 @@ def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
 
 def merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
     """Merge multiple configuration dictionaries.
+
     Later configs override earlier ones.
 
     Args:
-        *configs: Configuration dictionaries to merge
+        *configs: Configuration dictionaries to merge.
 
     Returns:
-        Merged configuration dictionary
+        Merged configuration dictionary.
     """
     result = {}
     for config in configs:

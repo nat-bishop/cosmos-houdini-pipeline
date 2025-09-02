@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Configuration manager for Cosmos-Transfer1 workflow system.
+
 Loads configuration from TOML files with environment variable overrides.
 """
 
@@ -38,6 +39,14 @@ class ConfigManager:
     """Manages configuration loading from TOML files with environment variable overrides."""
 
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
+        """Initialize the ConfigManager.
+
+        Args:
+            config_file: Path to the TOML configuration file.
+
+        Raises:
+            FileNotFoundError: If the configuration file doesn't exist.
+        """
         self.config_file = Path(config_file)
         self._config_data: dict[str, Any] | None = None
         self._remote_config: RemoteConfig | None = None
@@ -49,7 +58,13 @@ class ConfigManager:
         self._load_config()
 
     def _load_config(self) -> None:
-        """Load configuration from TOML file with environment variable overrides."""
+        """Load configuration from TOML file with environment variable overrides.
+
+        Raises:
+            toml.TomlDecodeError: If the TOML file is malformed.
+            ValueError: If required configuration values are missing.
+            FileNotFoundError: If the SSH key file doesn't exist.
+        """
         # Load base TOML configuration
         with open(self.config_file) as f:
             self._config_data = toml.load(f)
@@ -64,7 +79,13 @@ class ConfigManager:
         self._create_config_objects()
 
     def _apply_environment_overrides(self) -> None:
-        """Apply environment variable overrides to configuration."""
+        """Apply environment variable overrides to configuration.
+
+        Environment variables checked:
+            REMOTE_USER, REMOTE_HOST, REMOTE_PORT, SSH_KEY, REMOTE_DIR,
+            DOCKER_IMAGE, LOCAL_PROMPTS_DIR, LOCAL_RUNS_DIR, LOCAL_VIDEOS_DIR,
+            LOCAL_OUTPUTS_DIR, LOCAL_NOTES_DIR.
+        """
         # Remote instance overrides
         if "REMOTE_USER" in os.environ:
             self._config_data["remote"]["user"] = os.environ["REMOTE_USER"]
@@ -92,7 +113,12 @@ class ConfigManager:
             self._config_data["paths"]["local_notes_dir"] = os.environ["LOCAL_NOTES_DIR"]
 
     def _validate_config(self) -> None:
-        """Validate that required configuration values are present."""
+        """Validate that required configuration values are present.
+
+        Raises:
+            ValueError: If required configuration values are missing.
+            FileNotFoundError: If the SSH key file doesn't exist.
+        """
         remote = self._config_data.get("remote", {})
         paths = self._config_data.get("paths", {})
         docker = self._config_data.get("docker", {})
@@ -115,7 +141,11 @@ class ConfigManager:
             raise FileNotFoundError(f"SSH key file not found: {ssh_key_path}")
 
     def _create_config_objects(self) -> None:
-        """Create configuration objects from loaded data."""
+        """Create configuration objects from loaded data.
+
+        Creates RemoteConfig and LocalConfig dataclass instances from
+        the loaded configuration data.
+        """
         remote = self._config_data["remote"]
         paths = self._config_data["paths"]
         docker = self._config_data["docker"]
@@ -140,19 +170,40 @@ class ConfigManager:
         )
 
     def get_remote_config(self) -> RemoteConfig:
-        """Get remote configuration."""
+        """Get remote configuration.
+
+        Returns:
+            RemoteConfig object containing remote instance settings.
+
+        Raises:
+            RuntimeError: If configuration hasn't been loaded.
+        """
         if not self._remote_config:
             raise RuntimeError("Configuration not loaded")
         return self._remote_config
 
     def get_local_config(self) -> LocalConfig:
-        """Get local configuration."""
+        """Get local configuration.
+
+        Returns:
+            LocalConfig object containing local path settings.
+
+        Raises:
+            RuntimeError: If configuration hasn't been loaded.
+        """
         if not self._local_config:
             raise RuntimeError("Configuration not loaded")
         return self._local_config
 
     def get_ssh_options(self) -> dict[str, Any]:
-        """Get SSH connection options in the format expected by paramiko."""
+        """Get SSH connection options in the format expected by paramiko.
+
+        Returns:
+            Dictionary with hostname, username, port, and key_filename.
+
+        Raises:
+            RuntimeError: If configuration hasn't been loaded.
+        """
         remote_config = self.get_remote_config()
 
         return {
@@ -163,5 +214,14 @@ class ConfigManager:
         }
 
     def reload_config(self) -> None:
-        """Reload configuration from file."""
+        """Reload configuration from file.
+
+        Reloads the configuration from the TOML file and reapplies
+        environment variable overrides.
+
+        Raises:
+            toml.TomlDecodeError: If the TOML file is malformed.
+            ValueError: If required configuration values are missing.
+            FileNotFoundError: If the SSH key file doesn't exist.
+        """
         self._load_config()

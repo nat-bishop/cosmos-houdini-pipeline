@@ -12,7 +12,12 @@ console = Console()
 
 
 def display_success(message: str, details: dict[str, Any] | None = None):
-    """Display a success message with optional details."""
+    """Display a success message with optional details.
+
+    Args:
+        message: Success message to display.
+        details: Optional dictionary of additional details to show in a table.
+    """
     console.print(f"\n[bold green]✅ {message}[/bold green]")
 
     if details:
@@ -21,7 +26,13 @@ def display_success(message: str, details: dict[str, Any] | None = None):
 
 
 def display_error(message: str, error: str | None = None, verbose: bool = False):
-    """Display an error message with optional details."""
+    """Display an error message with optional details.
+
+    Args:
+        message: Error message to display.
+        error: Optional error details string.
+        verbose: If True, print full exception traceback.
+    """
     console.print(f"[bold red]❌ {message}[/bold red]")
 
     if error:
@@ -32,17 +43,33 @@ def display_error(message: str, error: str | None = None, verbose: bool = False)
 
 
 def display_warning(message: str):
-    """Display a warning message."""
+    """Display a warning message.
+
+    Args:
+        message: Warning message to display.
+    """
     console.print(f"[yellow]⚠️  {message}[/yellow]")
 
 
 def display_info(message: str):
-    """Display an informational message."""
+    """Display an informational message.
+
+    Args:
+        message: Informational message to display.
+    """
     console.print(f"[cyan]i  {message}[/cyan]")  # Using 'i' instead of emoji
 
 
 def create_info_table(data: dict[str, Any], show_header: bool = False) -> Table:
-    """Create a formatted table for displaying information."""
+    """Create a formatted table for displaying information.
+
+    Args:
+        data: Dictionary of field-value pairs to display.
+        show_header: Whether to show table headers.
+
+    Returns:
+        Rich Table object for console display.
+    """
     table = Table(show_header=show_header, box=None)
     table.add_column("Field", style="cyan")
     table.add_column("Value")
@@ -67,7 +94,14 @@ def create_info_table(data: dict[str, Any], show_header: bool = False) -> Table:
 
 
 def create_progress_context(description: str):  # noqa: ARG001
-    """Create a progress context for long-running operations."""
+    """Create a progress context for long-running operations.
+
+    Args:
+        description: Description for the progress display (unused but kept for API).
+
+    Returns:
+        Rich Progress object for context manager use.
+    """
     return Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -76,7 +110,15 @@ def create_progress_context(description: str):  # noqa: ARG001
 
 
 def format_file_path(path: Path, truncate: bool = True) -> str:
-    """Format a file path for display, optionally truncating long paths."""
+    """Format a file path for display, optionally truncating long paths.
+
+    Args:
+        path: Path object to format.
+        truncate: Whether to truncate paths longer than 50 characters.
+
+    Returns:
+        Formatted path string.
+    """
     path_str = str(path)
 
     if truncate and len(path_str) > 50:
@@ -89,38 +131,72 @@ def format_file_path(path: Path, truncate: bool = True) -> str:
 
 
 def format_prompt_text(prompt: str, max_length: int = 50) -> str:
-    """Format prompt text for display, truncating if necessary."""
+    """Format prompt text for display, truncating if necessary.
+
+    Args:
+        prompt: Prompt text to format.
+        max_length: Maximum length before truncation.
+
+    Returns:
+        Formatted prompt string with ellipsis if truncated.
+    """
     if len(prompt) > max_length:
         return f"{prompt[:max_length]}..."
     return prompt
 
 
 def format_id(id_str: str, length: int = 16) -> str:
-    """Format an ID string for display, truncating if necessary."""
+    """Format an ID string for display, truncating if necessary.
+
+    Args:
+        id_str: ID string to format.
+        length: Maximum length before truncation.
+
+    Returns:
+        Formatted ID string with ellipsis if truncated.
+    """
     if len(id_str) > length:
         return f"{id_str[:length]}..."
     return id_str
 
 
 def display_dry_run_header():
-    """Display the dry run mode header."""
+    """Display the dry run mode header.
+
+    Shows a styled header indicating dry run mode is active.
+    """
     console.print("\n[bold yellow]🔍 DRY RUN MODE[/bold yellow]")
     console.print("This is a preview of what would happen:\n")
 
 
 def display_dry_run_footer():
-    """Display the dry run mode footer."""
+    """Display the dry run mode footer.
+
+    Shows instructions for running the command without dry run.
+    """
     console.print("\n[dim]To execute for real, run without --dry-run[/dim]")
 
 
 def display_next_step(command: str):
-    """Display the next suggested command."""
+    """Display the next suggested command.
+
+    Args:
+        command: Command string to suggest as next step.
+    """
     console.print("\n[dim]Next step:[/dim]")
     console.print(f"  {command}")
 
 
 def confirm_action(prompt: str, default: bool = False) -> bool:
-    """Ask for user confirmation (for future interactive features)."""
+    """Ask for user confirmation (for future interactive features).
+
+    Args:
+        prompt: Confirmation prompt to display.
+        default: Default response if user presses Enter.
+
+    Returns:
+        True if user confirms, False otherwise.
+    """
     suffix = " [Y/n]" if default else " [y/N]"
     response = console.input(f"{prompt}{suffix}: ").strip().lower()
 
@@ -131,7 +207,14 @@ def confirm_action(prompt: str, default: bool = False) -> bool:
 
 
 def format_weights(weights: dict[str, float]) -> str:
-    """Format control weights for display."""
+    """Format control weights for display.
+
+    Args:
+        weights: Dictionary of weight names to values.
+
+    Returns:
+        Formatted string like "weight1=0.50 weight2=0.75".
+    """
     parts = []
     for key, value in weights.items():
         parts.append(f"{key}={value:.2f}")
@@ -139,7 +222,14 @@ def format_weights(weights: dict[str, float]) -> str:
 
 
 def format_duration(seconds: float) -> str:
-    """Format a duration in seconds to a human-readable string."""
+    """Format a duration in seconds to a human-readable string.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Human-readable duration (e.g., "1.5m", "2.3h").
+    """
     if seconds < 60:
         return f"{seconds:.1f}s"
     elif seconds < 3600:
@@ -151,7 +241,14 @@ def format_duration(seconds: float) -> str:
 
 
 def format_file_size(size_bytes: int) -> str:
-    """Format file size in bytes to human-readable string."""
+    """Format file size in bytes to human-readable string.
+
+    Args:
+        size_bytes: File size in bytes.
+
+    Returns:
+        Human-readable size (e.g., "1.5MB", "2.3GB").
+    """
     size = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB"]:
         if size < 1024:
@@ -161,7 +258,13 @@ def format_file_size(size_bytes: int) -> str:
 
 
 def display_command_result(success: bool, message: str, details: dict[str, Any] | None = None):
-    """Display the result of a command execution."""
+    """Display the result of a command execution.
+
+    Args:
+        success: Whether the command succeeded.
+        message: Result message to display.
+        details: Optional dictionary of additional details.
+    """
     if success:
         display_success(message, details)
     else:

@@ -23,10 +23,11 @@ See @README.md for project overview. Most directorys also contain a README.md
 ### Gate 4: Make Tests Pass
 - Now write implementation code
 - Keep iterating: write the code → run the tests → adjust → run the tests again
-- Use the test-runner subagent to run tests
+- Run BOTH agents IN PARALLEL for faster feedback:
+  - test-runner subagent: validates tests pass
+  - overfit-verifier subagent: checks for overfitting (starts immediately, not after tests pass)
 - Don't change tests - they're the spec
-- Keep iterating until tests pass
-- Verify tests are not overfitting with the overfit-verifier subagent, this can be run in parallel on passed tests
+- Keep iterating until both agents pass
 - **PASS**: 100% tests passing, tests verified for overfitting and tests unchanged
 
 ### Gate 5: Document and Commit
@@ -60,6 +61,8 @@ See @README.md for project overview. Most directorys also contain a README.md
 
 - Documentation @docs/ and @README.md and @CHANGELOG.md, use doc-drafter subagent to write documentation
 
+- NVIDIA Cosmos Transfer model source https://github.com/nvidia-cosmos/cosmos-transfer1 (runtime dependency on GPU instance, useful reference for model architecture)
+
 ## Code Conventions
 
 ### Use Our Wrappers, Not Raw Libraries, MUST FOLLOW
@@ -77,12 +80,13 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Path operations: Use `Path(a) / b` not `os.path.join(a, b)`
 - Logging: Use `logger.info("%s", var)` not f-strings in logs
 - Type hints: Always add them - `func(x: type) -> type:`
-- Docstrings: Every function needs one with Args/Returns
+- Docstrings: Google-style with Args/Returns/Raises sections (one-line summary, then details)
 - Exceptions: Catch specific ones - `except SpecificError:`
 
 ## Operating Procedures
-- **MUST DO** Write all temporary files and reports to /workspace
+- **MUST DO** Write all temporary files and reports to .claude/workspace/
 **DELETE all temporary files when done** - workspace files, test outputs, debug logs
+- When completing features from @ROADMAP.md, remove them from the file
 
 ## Quick Commands
 # Formatting and Linting
@@ -96,11 +100,14 @@ cosmos status                     # Check GPU status
 
 ## Testing Rules
 - 80% Code Coverage
-# 2. Run tests
+- Consider edge cases and error codes
+# Run tests
 pytest tests/ -m unit --cov=cosmos_workflow
 
-# 3. Full validation (if changing core logic)
+# Full validation (if changing core logic)
 pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
 
 ## Documentation
-- Use doc-drafter subagent to write documentation
+- Gate 5 of TDD: Update documentation with doc-drafter subagent before commits
+- Documentation must stay synchronized with code changes
+- Never create new documentation files without explicit request

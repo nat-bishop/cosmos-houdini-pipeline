@@ -1,6 +1,7 @@
 ---
 name: test-runner
 description: Use proactively to run tests and analyize failures. MUST be used for all test running
+tools: Glob, Grep, Read, Bash
 model: opus
 ---
 

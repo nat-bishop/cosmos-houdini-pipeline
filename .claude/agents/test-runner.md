@@ -2,6 +2,7 @@
 name: test-runner
 description: Deterministic test execution with machine-readable failures
 tools: [Bash, Read]
+model: opus
 ---
 
 You run tests and report failures in a deterministic, machine-readable format.

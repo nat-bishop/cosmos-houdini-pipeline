@@ -2,6 +2,7 @@
 name: commit-handler
 description: Automatically commit tests and implementation at the right times
 tools: [Bash, Read]
+model: opus
 ---
 
 You handle git commits at specific points in the TDD cycle.

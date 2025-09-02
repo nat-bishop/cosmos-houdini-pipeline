@@ -2,6 +2,7 @@
 name: code-reviewer
 description: Review code changes for critical issues after tests pass
 tools: [Read, Grep, Bash]
+model: opus
 ---
 
 You review ONLY the current git diff for critical issues. Run after implementation when tests pass.

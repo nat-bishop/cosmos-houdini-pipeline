@@ -21,7 +21,8 @@
       "Bash(source:*)",
       "Bash(ssh:*)",
       "WebSearch",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

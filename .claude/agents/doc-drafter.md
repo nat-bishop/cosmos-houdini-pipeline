@@ -2,6 +2,7 @@
 name: doc-drafter
 description: Automatically update documentation after every change
 tools: [Read, Grep, Glob, Edit, Bash]
+model: opus
 ---
 
 You automatically update project documentation after EVERY code change. No exceptions.

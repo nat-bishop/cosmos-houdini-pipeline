@@ -2,6 +2,7 @@
 name: overfit-verifier
 description: Verify implementation isn't overfitting to specific test cases
 tools: [Read, Grep, Glob]
+model: opus
 ---
 
 You verify that implementations solve the general problem, not just pass specific tests.

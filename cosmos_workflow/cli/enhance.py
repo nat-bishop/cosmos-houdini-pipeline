@@ -45,7 +45,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
     r"""✨ Enhance prompts using Pixtral AI model.
 
     Creates new enhanced PromptSpecs with improved prompt quality.
-    Enhanced specs are saved with '_enhanced' suffix in the same directory structure.
+    Enhanced specs are saved with smart names based on the enhanced content.
 
     \b
     Examples:
@@ -85,7 +85,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
         dry_run_data = {
             "📁 Would enhance": f"{len(specs_to_enhance)} prompt(s)",
             "🤖 AI Model": "Pixtral for prompt enhancement",
-            "💾 Output": "Save as *_enhanced.json files",
+            "💾 Output": "Save with smart names based on content",
         }
 
         if preprocess:
@@ -100,18 +100,14 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
             console.print(f'  • {spec.name}: "{formatted_prompt}"')
 
         console.print("\n[bold]Would create files:[/bold]")
-        for _, spec_path in specs_to_enhance:
-            enhanced_name = spec_path.stem.replace("_ps_", "_enhanced_ps_")
-            if "_enhanced" not in enhanced_name:
-                enhanced_name = f"{spec_path.stem}_enhanced"
-            console.print(f"  • {enhanced_name}.json")
+        console.print("  • Files with smart names based on enhanced content")
+        console.print("  • Example: 'foggy_morning' → 'misty_dawn_landscape'")
+        console.print(f"  • Total: {len(specs_to_enhance)} enhanced prompt file(s)")
 
         display_dry_run_footer()
         return
 
     orchestrator = ctx_obj.get_orchestrator()
-    config_manager = ctx_obj.get_config_manager()
-    local_config = config_manager.get_local_config()
 
     with create_progress_context(
         f"[cyan]Enhancing {len(specs_to_enhance)} prompt(s)..."
@@ -122,7 +118,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
 
         # Process all specs
         enhanced_count = 0
-        for spec, original_path in specs_to_enhance:
+        for spec, _ in specs_to_enhance:
             try:
                 result = orchestrator.run_single_prompt_upsampling(
                     prompt_spec=spec,
@@ -136,22 +132,10 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
                 if result["success"] and result.get("updated_spec"):
                     updated_spec = result["updated_spec"]
 
-                    # Save enhanced spec in the same directory structure
-                    # Get the relative path from prompts_dir
-                    rel_path = original_path.relative_to(local_config.prompts_dir)
-
-                    # Create enhanced filename
-                    enhanced_name = rel_path.stem.replace("_ps_", "_enhanced_ps_")
-                    if "_enhanced" not in enhanced_name:
-                        enhanced_name = f"{rel_path.stem}_enhanced"
-
-                    # Build the save path
-                    save_path = local_config.prompts_dir / rel_path.parent / f"{enhanced_name}.json"
-                    save_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    updated_spec.save(save_path)
+                    # The spec was already saved by PromptSpecManager with a smart name
+                    # We just need to report success - no need to save again
                     enhanced_count += 1
-                    console.print(f"  [green]✓[/green] Enhanced: {spec.name} → {save_path.name}")
+                    console.print(f"  [green]✓[/green] Enhanced: {spec.name} → {updated_spec.name}")
                 else:
                     console.print(f"  [yellow]⚠[/yellow] Failed: {spec.name}")
 

@@ -45,21 +45,24 @@ def create(ctx):
 )
 @click.option(
     "--video",
+    required=True,
     help="Path to input video file",
     shell_complete=complete_video_files,
 )
-@click.option("--enhanced", is_flag=True, help="Mark this as an enhanced (upsampled) prompt")
-@click.option("--parent-prompt", help="Original prompt text (if this is enhanced)")
 @click.pass_context
 @handle_errors
-def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prompt):
+def create_prompt(ctx, prompt_text, name, negative, video):
     r"""Create a new prompt specification.
+
+    Creates a PromptSpec JSON file for use with Cosmos Transfer inference.
+    The video file must exist and contain the source material to transform.
+    Use 'cosmos prompt-enhance' to create enhanced versions of existing prompts.
 
     \b
     Examples:
-      cosmos create prompt "A futuristic city at night"
-      cosmos create prompt "Transform to anime style" --video input.mp4
-      cosmos create prompt "Enhanced prompt" --enhanced --parent-prompt "Original"
+      cosmos create prompt "A futuristic city at night" --video input.mp4
+      cosmos create prompt "Transform to anime style" --video /path/to/source.mp4
+      cosmos create prompt "Cyberpunk street scene" --video renders/color.mp4
     """
     ctx_obj: CLIContext = ctx.obj
 
@@ -69,8 +72,8 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
             name = generate_smart_name(prompt_text, max_length=30)
             console.print(f"[cyan]Generated name:[/cyan] {name}")
 
-        # Build video path
-        video_path = video or f"inputs/videos/{name}/color.mp4"
+        # Use provided video path
+        video_path = video
 
         # Default control inputs
         control_inputs_dict = {
@@ -91,8 +94,8 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
             input_video_path=video_path,
             control_inputs=control_inputs_dict,
             timestamp=timestamp,
-            is_upsampled=enhanced,
-            parent_prompt_text=parent_prompt,
+            is_upsampled=False,
+            parent_prompt_text=None,
         )
 
         # Save to file

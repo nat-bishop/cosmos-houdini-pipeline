@@ -85,7 +85,7 @@ class TestPromptManagerOrchestrator:
                 mock_create.assert_called_once_with(
                     name="test_prompt",
                     prompt_text="Test prompt text",
-                    negative_prompt="bad quality, blurry, low resolution, cartoonish",
+                    negative_prompt="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
                     input_video_path=None,
                     control_inputs=None,
                     is_upsampled=False,

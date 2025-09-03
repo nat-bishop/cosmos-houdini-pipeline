@@ -10,7 +10,6 @@ from cosmos_workflow.cli.completions import (
     complete_directories,
     complete_prompt_specs,
     complete_video_dirs,
-    complete_video_dirs_smart,
     complete_video_files,
     normalize_path,
 )
@@ -219,8 +218,8 @@ class TestCompleteDirectories:
                 assert all("test" in r for r in result)
 
 
-class TestCompleteVideoDirsSmart:
-    """Test smart video directory completion."""
+class TestCompleteVideoDirsConsolidated:
+    """Test consolidated video directory completion."""
 
     def test_no_videos_dir(self):
         """Test returns empty list when videos dir doesn't exist."""
@@ -229,7 +228,7 @@ class TestCompleteVideoDirsSmart:
             mock_dir.exists.return_value = False
             mock_path.return_value = mock_dir
 
-            result = complete_video_dirs_smart(None, None, "")
+            result = complete_video_dirs(None, None, "")
             assert result == []
 
     def test_complete_videos_dirs(self):
@@ -253,12 +252,12 @@ class TestCompleteVideoDirsSmart:
                 ]
                 videos_dir.iterdir = mock_iterdir
 
-                result = complete_video_dirs_smart(None, None, "")
+                result = complete_video_dirs(None, None, "")
                 assert len(result) >= 0  # Depends on mock
 
     def test_complete_with_filter(self):
         """Test filters results by prefix."""
-        result = complete_video_dirs_smart(None, None, "inputs/videos/c")
+        result = complete_video_dirs(None, None, "inputs/videos/c")
         # Should only return dirs starting with 'c' if they exist
         if Path("inputs/videos").exists():
             assert all("inputs/videos/" in r for r in result)

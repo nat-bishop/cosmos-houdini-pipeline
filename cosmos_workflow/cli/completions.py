@@ -45,7 +45,7 @@ def complete_video_files(_ctx, _param, incomplete):
 
 
 def complete_video_dirs(_ctx, _param, incomplete):
-    """Autocomplete for video directories."""
+    """Autocomplete for video directories in inputs/videos/."""
     videos_dir = Path("inputs/videos")
     if not videos_dir.exists():
         return []
@@ -93,23 +93,4 @@ def complete_directories(_ctx, _param, incomplete):
                 else:
                     dir_path = normalize_path(parent / dir_name)
                 results.append(dir_path + "/")
-    return sorted(results)
-
-
-def complete_video_dirs_smart(_ctx, _param, incomplete):
-    """Autocomplete for video directories in inputs/videos/."""
-    videos_dir = Path("inputs/videos")
-    if not videos_dir.exists():
-        return []
-
-    # Normalize incomplete path for comparison
-    incomplete_norm = normalize_path(incomplete) if incomplete else ""
-
-    results = []
-    for subdir in videos_dir.iterdir():
-        if subdir.is_dir():
-            dir_path = normalize_path(subdir)
-            if not incomplete_norm or dir_path.startswith(incomplete_norm):
-                results.append(dir_path)
-
     return sorted(results)

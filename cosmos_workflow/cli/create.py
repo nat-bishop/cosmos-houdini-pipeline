@@ -15,7 +15,7 @@ from cosmos_workflow.prompts.schemas import (
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 from .base import CLIContext, handle_errors
-from .completions import complete_prompt_specs, complete_video_dirs_smart, complete_video_files
+from .completions import complete_prompt_specs, complete_video_dirs
 from .helpers import (
     console,
     display_next_step,
@@ -40,7 +40,7 @@ def create(ctx):
 @click.argument(
     "video_dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
-    shell_complete=complete_video_dirs_smart,
+    shell_complete=complete_video_dirs,
 )
 @click.option("--name", "-n", help="Name for the prompt (auto-generated if not provided)")
 @click.option(

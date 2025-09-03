@@ -10,7 +10,7 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-      - id: end-of-file-fixer
+      # Removed end-of-file-fixer - it modifies files causing uncommitted changes
       - id: check-yaml
         args: ['--allow-multiple-documents']
       - id: check-json
@@ -20,17 +20,18 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: mixed-line-ending
-        args: ['--fix=lf']
+        # Just check, don't fix (prevents uncommitted changes)
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8, etc.)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.4
     hooks:
-      # Run the linter with auto-fix
+      # Check only - don't auto-fix (prevents uncommitted changes)
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      # Run the formatter
+        args: [--exit-non-zero-on-fix]  # Fail if fixes needed, don't apply them
+      # Check formatting only - don't auto-format
       - id: ruff-format
+        args: [--check]  # Check only, don't modify files
 
 # That's it! Just the essentials:
 # - Files stay clean and consistent

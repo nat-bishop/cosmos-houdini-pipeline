@@ -41,7 +41,7 @@ def create(ctx):
 @click.option(
     "--negative",
     default="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
-    help="Negative prompt for quality improvement",
+    help="Negative prompt for quality improvement (default: provided)",
 )
 @click.option(
     "--video",
@@ -129,12 +129,12 @@ def create_prompt(ctx, prompt_text, name, negative, video, enhanced, parent_prom
     nargs=4,
     type=float,
     default=[0.25, 0.25, 0.25, 0.25],
-    help="Control weights: VIS EDGE DEPTH SEG",
+    help="Control weights: VIS EDGE DEPTH SEG (default: 0.25 0.25 0.25 0.25)",
 )
-@click.option("--steps", default=35, help="Number of inference steps")
-@click.option("--guidance", default=7.0, help="Guidance scale (CFG)")
-@click.option("--seed", default=1, help="Random seed for reproducibility")
-@click.option("--fps", default=24, help="Output video FPS")
+@click.option("--steps", default=35, help="Number of inference steps (default: 35)")
+@click.option("--guidance", default=7.0, help="Guidance scale (CFG) (default: 7.0)")
+@click.option("--seed", default=1, help="Random seed for reproducibility (default: 1)")
+@click.option("--fps", default=24, help="Output video FPS (default: 24)")
 @click.option("--output", help="Custom output path")
 @click.pass_context
 @handle_errors

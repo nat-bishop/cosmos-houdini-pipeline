@@ -30,7 +30,7 @@ from .helpers import (
     shell_complete=complete_directories,
 )
 @click.option("--name", help="Name for output (AI-generated if not provided)")
-@click.option("--fps", default=24, help="Frame rate for output videos")
+@click.option("--fps", default=24, help="Frame rate for output videos (default: 24)")
 @click.option("--description", help="Description for metadata")
 @click.option("--no-ai", is_flag=True, help="Skip AI analysis")
 @click.option(

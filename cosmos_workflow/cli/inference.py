@@ -34,9 +34,11 @@ from .helpers import (
 @click.option(
     "--upscale/--no-upscale",
     default=True,
-    help="Enable/disable 4K upscaling after inference (default: enabled)",
+    help="Enable/disable 4K upscaling after inference (default: --upscale)",
 )
-@click.option("--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0)")
+@click.option(
+    "--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0) (default: 0.5)"
+)
 @click.option(
     "--dry-run",
     is_flag=True,

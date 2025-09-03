@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Python workflow orchestration for Nvidia Cosmos Transfer"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 dependencies = [
     "paramiko>=3.0.0",
     "toml>=0.10.2",
@@ -17,8 +17,13 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
-# CLI scripts are provided as standalone executables (cosmos.bat for Windows, cosmos for Unix)
-# No pip installation required - see README.md for setup instructions
+[project.scripts]
+cosmos = "cosmos_workflow.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cosmos_workflow*"]
+exclude = ["tests*", "inputs*", "outputs*", "test_notes*"]
 
 [project.optional-dependencies]
 dev = [

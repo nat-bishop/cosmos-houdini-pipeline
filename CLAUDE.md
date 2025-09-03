@@ -5,40 +5,33 @@ See @README.md for project overview. Most directorys also contain a README.md
 **Stop immediately if you're not following TDD.** Here are the six gates you must pass:
 
 ### Gate 1: Write Tests First
-- We are doing Test Driven Development, this is very important
-- Write tests based on expected input/output pairs, You will use these expectations to iterate on
+- Write tests based on expected input/output pairs
 - Real tests only - no mocks, even if code doesn't exist yet
 - **PASS**: Tests are comprehensive, consider edge cases and error codes
 
 ### Gate 2: Verify Tests Fail
 - Run tests - they should fail (that's good!)
-- Don't write implementation code yet
 - **PASS**: All tests failing
 
 ### Gate 3: Commit Failing Tests
-- Tests are the contract - commit them once I am satisfied
-- use the commit-handler subagent to commit tests
+- Tests are the contract
+- Commit the failing tests
 - **PASS**: Tests committed
 
 ### Gate 4: Make Tests Pass
-- Now write implementation code
-- Keep iterating: write the code → run the tests → adjust → run the tests again
-- Run BOTH agents IN PARALLEL for faster feedback:
-  - test-runner subagent: validates tests pass
-  - overfit-verifier subagent: checks for overfitting (starts immediately, not after tests pass)
+- Write implementation code iteratively until tests pass
+- Run tests and verify for overfitting in parallel
 - Don't change tests - they're the spec
-- Keep iterating until both agents pass
-- **PASS**: 100% tests passing, tests verified for overfitting and tests unchanged
+- **PASS**: 100% tests passing, no overfitting, tests unchanged
 
 ### Gate 5: Document and Commit
-- Fully update all documentation with the doc-drafter subagent
-- Commit the changes to github once I am satisfied with the commit-handler subagent
-- **PASS**: Everything fully documented with clean commit
+- Update all documentation
+- Commit the implementation
+- **PASS**: Documentation updated and changes committed
 
 ### Gate 6: Code Review
-- Review code for high standards of code quality and security after every code commit
-- Use the code-reviewer subagent
-- **PASS**: Code of high standard with no Critical Issues
+- Review code for quality and security
+- **PASS**: Code of high standard with no critical issues
 
 **Break a gate? STOP. ASK ME FOR REVIEW. No exceptions.**
 **ALL GATES MUST PASS**
@@ -102,6 +95,7 @@ cosmos status                     # Check GPU status
 - 80% Code Coverage
 - Consider edge cases and error codes
 - Tests should follow TDD rules
+- Prefer running single tests for speed during development
 # Run tests
 pytest tests/ -m unit --cov=cosmos_workflow
 

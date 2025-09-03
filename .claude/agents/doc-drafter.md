@@ -13,7 +13,6 @@ When invoked:
 1. Analyze what changed using `git diff HEAD --name-only`
 2. Determine documentation impact based on the changes
 3. Update all affected documentation files
-4. Stage updated files for commit
 
 Documentation mapping - where to document what:
 - **New CLI commands** → README.md (usage section) + CHANGELOG.md

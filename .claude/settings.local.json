@@ -23,7 +23,8 @@
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []

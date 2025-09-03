@@ -58,7 +58,10 @@ class TestPromptSpecManager:
             assert prompt_spec.id == "ps_test123"
             assert prompt_spec.name == "test_prompt"
             assert prompt_spec.prompt == "A beautiful sunset over the ocean"
-            assert prompt_spec.negative_prompt == "bad quality, blurry, low resolution, cartoonish"
+            assert (
+                prompt_spec.negative_prompt
+                == "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
+            )
             assert prompt_spec.input_video_path == "inputs/videos/test_prompt/color.mp4"
             assert prompt_spec.is_upsampled is False
             assert prompt_spec.parent_prompt_text is None
@@ -334,7 +337,7 @@ class TestPromptSpecManager:
 
             prompt_spec = self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
 
-            expected_negative = "bad quality, blurry, low resolution, cartoonish"
+            expected_negative = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
             assert prompt_spec.negative_prompt == expected_negative
 
     def test_create_prompt_spec_custom_negative_prompt(self):

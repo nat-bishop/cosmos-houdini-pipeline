@@ -40,7 +40,7 @@ def create(ctx):
 @click.option("--name", "-n", help="Name for the prompt (auto-generated if not provided)")
 @click.option(
     "--negative",
-    default="bad quality, blurry, low resolution, cartoonish",
+    default="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
     help="Negative prompt for quality improvement",
 )
 @click.option(

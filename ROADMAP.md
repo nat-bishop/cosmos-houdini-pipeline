@@ -27,9 +27,10 @@
   - Implement checkpoint validation
 
 ### Code Quality
-- [ ] **Fix hardcoded negative prompt**
-  - Currently hardcoded as "bad quality, blurry, low resolution, cartoonish"
-  - Make configurable via config.toml or command line
+- [x] **~~Fix hardcoded negative prompt~~** ✅ COMPLETED 2025-01-03
+  - Changed default to more specific gaming/cartoon-focused prompt
+  - Updated all code locations and test assertions
+  - Users can still override via `--negative` CLI flag
 
 ## Priority 2: Features & Enhancements
 

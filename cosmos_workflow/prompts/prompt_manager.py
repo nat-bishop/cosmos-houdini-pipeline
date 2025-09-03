@@ -50,7 +50,7 @@ class PromptManager:
         self,
         name: str | None = None,
         prompt_text: str = "",
-        negative_prompt: str = "bad quality, blurry, low resolution, cartoonish",
+        negative_prompt: str = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
         input_video_path: str | None = None,
         control_inputs: dict[str, str] | None = None,
         is_upsampled: bool = False,
@@ -121,7 +121,7 @@ def main():
     create_spec_parser.add_argument("prompt_text", help="The text prompt for generation")
     create_spec_parser.add_argument(
         "--negative-prompt",
-        default="bad quality, blurry, low resolution, cartoonish",
+        default="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
         help="Negative prompt for improved quality",
     )
     create_spec_parser.add_argument("--video-path", help="Custom video path override")

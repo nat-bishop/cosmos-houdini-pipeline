@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+import toml
 
 from cosmos_workflow.prompts.prompt_manager import PromptManager
 from cosmos_workflow.prompts.schemas import PromptSpec
@@ -85,7 +86,10 @@ image = "test-image"
 
         assert prompt_spec is not None
         assert prompt_spec.prompt == "A beautiful sunset"
-        assert prompt_spec.negative_prompt == "bad quality, blurry, low resolution, cartoonish"
+        assert (
+            prompt_spec.negative_prompt
+            == "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
+        )
         assert prompt_spec.id.startswith("ps_")
 
     def test_create_prompt_spec_full(self, prompt_manager, temp_dir):
@@ -324,7 +328,7 @@ image = "test"
         config_file = temp_dir / "bad_config.toml"
         config_file.write_text("invalid toml content{")
 
-        with pytest.raises(Exception):  # Should raise some parsing error
+        with pytest.raises((toml.TomlDecodeError, ValueError)):  # Should raise parsing error
             PromptManager(str(config_file))
 
 

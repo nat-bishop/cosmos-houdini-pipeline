@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder
-from cosmos_workflow.prompts.schemas import PromptSpec
+from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
+from cosmos_workflow.prompts.schemas import DirectoryManager, PromptSpec, SchemaUtils
+from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 log = logging.getLogger(__name__)
 
@@ -181,24 +183,24 @@ class UpsampleWorkflowMixin:
             matching_spec = next((s for s in prompt_specs if s.id == result.get("spec_id")), None)
 
             if matching_spec:
-                # Create new spec with upsampled prompt
-                # Generate a new ID for the enhanced prompt
-                from cosmos_workflow.prompts.schemas import SchemaUtils
+                # Create new spec with upsampled prompt using PromptSpecManager
+                upsampled_prompt = result.get("upsampled_prompt", matching_spec.prompt)
 
-                enhanced_id = SchemaUtils.generate_prompt_id(
-                    result.get("upsampled_prompt", matching_spec.prompt),
-                    matching_spec.input_video_path,
-                    matching_spec.control_inputs,
-                )
+                # Generate smart name from enhanced prompt content
+                enhanced_name = generate_smart_name(upsampled_prompt, max_length=30)
 
-                updated_spec = PromptSpec(
-                    id=enhanced_id,
-                    name=f"{matching_spec.name}_enhanced",
-                    prompt=result.get("upsampled_prompt", matching_spec.prompt),
+                # Get config and create DirectoryManager for PromptSpecManager
+                local_config = self.config_manager.get_local_config()
+                dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
+
+                # Create spec using manager for proper handling
+                spec_manager = PromptSpecManager(dir_manager)
+                updated_spec = spec_manager.create_prompt_spec(
+                    name=enhanced_name,  # Use smart name instead of "_enhanced" suffix
+                    prompt_text=upsampled_prompt,
                     negative_prompt=matching_spec.negative_prompt,
                     input_video_path=matching_spec.input_video_path,
                     control_inputs=matching_spec.control_inputs,
-                    timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     is_upsampled=True,
                     parent_prompt_text=matching_spec.prompt,
                 )

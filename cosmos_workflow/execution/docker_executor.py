@@ -177,3 +177,40 @@ class DockerExecutor:
         except Exception as e:
             logger.error("Failed to get container logs: %s", e)
             return f"Error retrieving logs: {e}"
+
+    def stream_container_logs(self, container_id: str | None = None) -> None:
+        """Stream container logs in real-time.
+
+        Args:
+            container_id: Optional container ID. If not provided, auto-detects
+                         the most recent container for the configured Docker image.
+
+        Raises:
+            RuntimeError: If no running containers are found.
+        """
+        if not container_id:
+            # Auto-detect the most recent container matching our image
+            logger.info("Auto-detecting most recent container for image %s", self.docker_image)
+            cmd = f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"'
+            container_id = self.ssh_manager.execute_command_success(
+                cmd, stream_output=False
+            ).strip()
+
+            if not container_id:
+                raise RuntimeError("No running containers found")
+
+        logger.info("Streaming logs from container %s", container_id)
+        print(f"[INFO] Streaming logs from container {container_id[:12]}...")
+        print("[INFO] Press Ctrl+C to stop streaming\n")
+
+        try:
+            # Stream logs using existing SSH streaming infrastructure
+            self.ssh_manager.execute_command(
+                f"sudo docker logs -f {container_id}",
+                timeout=86400,  # 24 hour timeout for long-running streams
+                stream_output=True,
+            )
+        except KeyboardInterrupt:
+            # Handle Ctrl+C gracefully
+            print("\n[INFO] Stopped streaming logs")
+            logger.info("Log streaming interrupted by user")

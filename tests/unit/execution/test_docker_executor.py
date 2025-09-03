@@ -321,7 +321,7 @@ class TestDockerExecutor:
 
         # Should stream logs from the specified container
         self.mock_ssh_manager.execute_command.assert_called_once_with(
-            f"sudo docker logs -f {container_id}", timeout=0, stream_output=True
+            f"sudo docker logs -f {container_id}", timeout=86400, stream_output=True
         )
 
     def test_stream_container_logs_auto_detect_latest_container(self):
@@ -340,7 +340,7 @@ class TestDockerExecutor:
 
         # Then stream logs from detected container
         self.mock_ssh_manager.execute_command.assert_called_once_with(
-            f"sudo docker logs -f {detected_container}", timeout=0, stream_output=True
+            f"sudo docker logs -f {detected_container}", timeout=86400, stream_output=True
         )
 
     def test_stream_container_logs_no_running_containers(self):
@@ -372,7 +372,7 @@ class TestDockerExecutor:
 
         # Should have attempted to stream
         self.mock_ssh_manager.execute_command.assert_called_once_with(
-            f"sudo docker logs -f {container_id}", timeout=0, stream_output=True
+            f"sudo docker logs -f {container_id}", timeout=86400, stream_output=True
         )
 
     def test_stream_container_logs_strips_whitespace_from_detected_id(self):
@@ -386,7 +386,7 @@ class TestDockerExecutor:
 
         # Should stream with trimmed container ID
         self.mock_ssh_manager.execute_command.assert_called_once_with(
-            "sudo docker logs -f container789", timeout=0, stream_output=True
+            "sudo docker logs -f container789", timeout=86400, stream_output=True
         )
 
 

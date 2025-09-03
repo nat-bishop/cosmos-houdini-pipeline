@@ -237,7 +237,7 @@ class TestCosmosConverter:
             name="test",
             control_weights={
                 "depth": 0.6,
-                "edge": 0.4
+                "edge": 0.4,
                 # No vis or seg
             },
             parameters={},

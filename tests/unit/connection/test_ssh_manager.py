@@ -7,6 +7,7 @@ that handles connections to remote instances using paramiko.
 
 from unittest.mock import Mock, patch
 
+import paramiko
 import pytest
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
@@ -101,7 +102,7 @@ class TestSSHManager:
         """Test is_connected returns False when command execution fails."""
         # Mock SSH client with failed exec_command
         mock_client = Mock()
-        mock_client.exec_command.side_effect = Exception("Connection lost")
+        mock_client.exec_command.side_effect = paramiko.SSHException("Connection lost")
         self.ssh_manager.ssh_client = mock_client
 
         assert self.ssh_manager.is_connected() is False

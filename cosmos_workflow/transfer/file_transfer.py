@@ -140,8 +140,8 @@ class FileTransferService:
         try:
             with self.ssh_manager.get_sftp() as sftp:
                 return sftp.listdir(remote_dir)
-        except Exception:
-            logger.error("Failed to list remote directory %s: {e}", remote_dir)
+        except Exception as e:
+            logger.error("Failed to list remote directory %s: %s", remote_dir, e)
             return []
 
     # ------------------------------------------------------------------ #
@@ -184,8 +184,8 @@ class FileTransferService:
             # List remote directory contents
             try:
                 items = sftp.listdir_attr(remote_abs_dir)
-            except Exception:
-                logger.error("Failed to list directory %s: {e}", remote_abs_dir)
+            except Exception as e:
+                logger.error("Failed to list directory %s: %s", remote_abs_dir, e)
                 return
 
             for item in items:

@@ -253,9 +253,9 @@ class TestResourceCleanup:
 
         # Memory increase should be reasonable (< 100MB for this test)
         memory_increase = final_memory - initial_memory
-        assert (
-            memory_increase < 100
-        ), f"Memory not properly released: {memory_increase:.1f}MB increase"
+        assert memory_increase < 100, (
+            f"Memory not properly released: {memory_increase:.1f}MB increase"
+        )
 
     def test_file_cleanup(self, tmp_path):
         """Test that temporary files are cleaned up."""

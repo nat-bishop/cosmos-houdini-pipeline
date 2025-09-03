@@ -33,7 +33,7 @@ class SSHManager:
 
         except Exception as e:
             logger.error("Failed to establish SSH connection: %s", e)
-            raise ConnectionError(f"SSH connection failed: {e}")
+            raise ConnectionError(f"SSH connection failed: {e}") from e
 
     def disconnect(self) -> None:
         """Close SSH connection."""
@@ -56,7 +56,7 @@ class SSHManager:
             # Try to execute a simple command to test connection
             self.ssh_client.exec_command("echo 'test'", timeout=5)
             return True
-        except:
+        except (paramiko.SSHException, OSError, AttributeError):
             return False
 
     def ensure_connected(self) -> None:
@@ -147,7 +147,7 @@ class SSHManager:
 
         except Exception as e:
             logger.error("Command execution failed: %s", e)
-            raise RuntimeError(f"Command execution failed: {e}")
+            raise RuntimeError(f"Command execution failed: {e}") from e
 
     def execute_command_success(
         self, command: str, timeout: int = 300, stream_output: bool = True

@@ -1,6 +1,7 @@
 """
 Reusable mock objects for testing.
 """
+
 import json
 import time
 from pathlib import Path
@@ -108,7 +109,9 @@ Output saved to: output.mp4
         else:
             return (1, "", "CUDA out of memory")
 
-    def run_upsampling(self, prompts: list[str], video_path: str | None = None) -> tuple[int, str, str]:
+    def run_upsampling(
+        self, prompts: list[str], video_path: str | None = None
+    ) -> tuple[int, str, str]:
         """Mock prompt upsampling."""
         if self.success:
             upsampled = [f"Detailed and enhanced: {p}" for p in prompts]

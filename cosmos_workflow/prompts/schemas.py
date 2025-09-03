@@ -392,7 +392,8 @@ class DirectoryManager:
 
         # Additional validation to ensure valid date
         try:
-            datetime.strptime(dirname, "%Y-%m-%d")
+            # Just validating format, not using the datetime object
+            datetime.strptime(dirname, "%Y-%m-%d")  # noqa: DTZ007
             return True
         except ValueError:
             return False

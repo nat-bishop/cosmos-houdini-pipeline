@@ -126,9 +126,7 @@ class TestPromptSpecManager:
 
             # Mock the save method
             with patch.object(PromptSpec, "save") as mock_save:
-                self.prompt_spec_manager.create_prompt_spec(
-                    "test_prompt", "Test prompt"
-                )
+                self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
 
                 # Verify save was called
                 mock_save.assert_called_once()
@@ -299,7 +297,7 @@ class TestPromptSpecManager:
         incomplete_file = self.prompts_dir / "incomplete.json"
         incomplete_data = {
             "id": "ps_test123",
-            "name": "test_prompt"
+            "name": "test_prompt",
             # Missing other required fields
         }
 
@@ -324,8 +322,8 @@ class TestPromptSpecManager:
 
             prompt_spec = self.prompt_spec_manager.create_prompt_spec("test_prompt", "Test prompt")
 
-            # Check timestamp format
-            assert prompt_spec.timestamp.endswith("Z")
+            # Check timestamp format - should be timezone-aware ISO format
+            assert prompt_spec.timestamp.endswith("+00:00") or prompt_spec.timestamp.endswith("Z")
             # Should be parseable as ISO format
             datetime.fromisoformat(prompt_spec.timestamp.replace("Z", "+00:00"))
 

@@ -7,6 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-02 (CLI Migration Complete)
+- **Migrated to modular CLI structure**
+  - Switched from monolithic `cli.py` (800+ lines) to modular `cli/` directory
+  - Maintained 100% backward compatibility
+  - Improved display with Rich formatting and emojis
+  - Better error handling and consistent output
+  - Maximum file size reduced by 76% (217 lines vs 800+)
+
+### Added - 2025-09-01 (CLI Refactoring Complete)
+- **Phase 1: Created modular CLI architecture foundation**
+  - New `cosmos_workflow/cli_new/` directory structure for refactored CLI
+  - `base.py`: Core utilities including CLIContext class and error handling decorator
+  - `completions.py`: All autocomplete functions consolidated in one place
+  - `helpers.py`: Rich display utilities for tables, progress, and formatting
+  - Foundation for splitting 935-line CLI into manageable ~100-200 line modules
+
+- **Phase 2 & 3: Migrated all commands to modular structure**
+  - `status.py` (63 lines): Remote GPU status checking
+  - `prepare.py` (156 lines): Video sequence preparation
+  - `enhance.py` (164 lines): Prompt enhancement with AI
+  - `inference.py` (117 lines): Inference execution
+  - `create.py` (217 lines): Create prompt and run specifications
+  - Main CLI integration in `__init__.py` (71 lines)
+  - Successfully reduced max file size by 76% (935 → 217 lines)
+  - All 23 tests still passing, 100% functionality preserved
+
+- **Display Utilities Added**
+  - Success/error/warning/info display functions with consistent styling
+  - Table creation helpers for structured output
+  - Progress context managers for long operations
+  - Formatting utilities for paths, IDs, file sizes, and durations
+  - Dry-run mode display helpers
+
+- **Error Handling Improvements**
+  - Centralized error handling decorator for consistent error messages
+  - UTF-8 encoding support for Windows terminals
+  - Graceful handling of keyboard interrupts
+
+### Changed - 2025-09-01 (Documentation)
+- **Streamlined CLAUDE.md**
+  - Reduced from 192 to 83 lines (57% reduction)
+  - Moved documentation & commit policy to top with red emphasis
+  - Simplified structure while keeping all critical information
+  - Added clear "commit as you go" requirement
+
+### Changed - 2025-09-01 (Major CLI Improvements)
+- **Merged Commands for Simplicity**
+  - Combined `run`, `inference`, and `upscale` into single `inference` command
+  - Default behavior: run both inference and upscaling (most common use case)
+  - Use `--no-upscale` flag for inference only
+  - Removed deprecated `run` and `upscale` commands completely
+
+- **Autocomplete System Overhaul**
+  - Created reusable autocomplete functions, eliminating ~25 lines of duplicate code
+  - Added smart autocomplete for video files, directories, and prompt specs
+  - Fixed pattern matching to use prefix matching instead of substring
+  - Added proper autocomplete for `--videos-dir` and `--video` options
+  - Autocomplete now works properly in Git Bash and CMD on Windows
+
+- **Parameter Simplification**
+  - Removed `--num-gpu` and `--cuda-devices` from all commands (always uses 1 GPU)
+  - Simplified `prompt-enhance`: `--resolution` now implies preprocessing
+  - Removed unnecessary flags: `--save-dir`, `--num-frames`, `--preprocess`
+  - `prompt-enhance` now accepts multiple files as arguments
+
+- **Bug Fixes**
+  - Fixed critical PromptSpec metadata bug in upsample_integration.py
+  - Fixed prompt-enhance to properly create new PromptSpecs with `_enhanced` suffix
+  - Properly generates new IDs for enhanced PromptSpecs
+  - Fixed `is_upsampled` and `parent_prompt_text` fields
+
+### Removed - 2025-09-01 (Codebase Cleanup)
+- **Old CLI Files**
+  - Removed `cli_old.py` (obsolete argparse-based CLI)
+  - Removed deprecated `run` and `upscale` commands
+  - Removed `setup_completion.py` (integrated into main CLI)
+
+- **Test Files & Directories**
+  - Removed obsolete CLI tests that referenced old argparse-based CLI
+  - Deleted `tests/unit/cli/` directory with outdated test files
+  - Removed `test_bash_script_execution_workflow` and `TestCLIWorkflow` class from integration tests
+  - Deleted all root-level test scripts (`test_resolution_*.py`, `quick_resolution_test.py`, etc.)
+  - Removed unused test directories (`resolution_tests/`, `test_videos/`, `test_images/`, `testing/`)
+
+- **Scripts & Utilities**
+  - Deleted redundant scripts from `scripts/` directory (kept only essential remote execution files)
+  - Removed `check_remote_results.py`, `deploy_and_test_upsampler.py`, `test_actual_resolution_limits.py`
+  - Deleted unused shell scripts (`ssh_lambda.sh`, `upsample_prompt.sh`, `run_upsampler_docker.sh`)
+  - Removed linting helper scripts (`lint.py`, `fix_all_linting.py`)
+
+- **Build Artifacts & Cache**
+  - Cleaned up all cache directories (`.mypy_cache/`, `.ruff_cache/`, `htmlcov/`)
+  - Removed all log files and test JSON outputs
+  - Deleted empty directories (`notes/`, `art/`, `test_notes/`)
+
+### Added - 2025-09-01 (Documentation)
+- **Documentation & Commit Policy** in CLAUDE.md
+  - Added mandatory documentation update requirement before commits
+  - Clear policy: update CHANGELOG.md immediately after features
+  - Requirement to update README.md for user-facing changes
+  - "Document as you code" principle
+
+### Changed - 2025-09-01 (CLI Refactor)
+- **Complete CLI Overhaul**
+  - Migrated from argparse to Click framework for better UX
+  - Reorganized commands into logical groups (`create prompt`, `create run`)
+  - Added rich console output with colors and progress indicators
+  - Renamed `upsample` command to `prompt-enhance` for clarity
+  - Removed deprecated `convert-sequence` command (use `prepare` instead)
+  - Added shell completion support for Bash, Zsh, Fish, PowerShell, and Git Bash
+  - Improved help text and command examples throughout
+
+- **Simplified Installation**
+  - Removed pip package configuration - now using standalone scripts
+  - Created `cosmos` Python script and `cosmos.bat` for direct execution
+  - Updated documentation with manual setup instructions
+  - No pip installation required - just install dependencies and run
+
+- **Documentation Updates**
+  - Updated README.md with new command structure and examples
+  - Updated CLAUDE.md with simplified setup instructions
+  - Added shell completion setup instructions for all platforms
+  - Clarified that pip is not required for CLI usage
+
 ### Added - 2025-09-01 (Resolution Discovery)
 - **Major Resolution Limit Discovery**
   - Found actual maximum resolution: 940×529 (497,260 pixels)

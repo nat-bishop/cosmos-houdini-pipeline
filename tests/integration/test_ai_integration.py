@@ -107,9 +107,9 @@ class TestAIIntegration:
 
             # Check that we got a real description, not the fallback
             assert description is not None
-            assert (
-                "Sequence with" not in description
-            ), f"AI generation failed for {img_type}, got fallback: {description}"
+            assert "Sequence with" not in description, (
+                f"AI generation failed for {img_type}, got fallback: {description}"
+            )
 
             # Descriptions should be meaningful (more than 3 words)
             word_count = len(description.split())
@@ -304,9 +304,9 @@ class TestSmartNameAlgorithm:
             # Check that at least some expected words appear
             # (algorithm takes top 3 words, so not all may appear)
             matches = sum(1 for word in expected_words if any(word in part for part in name_parts))
-            assert (
-                matches >= 1
-            ), f"Expected at least one of {expected_words} in name '{name}' from '{description}'"
+            assert matches >= 1, (
+                f"Expected at least one of {expected_words} in name '{name}' from '{description}'"
+            )
 
     def test_length_constraints(self):
         """Test that names respect length constraints."""
@@ -339,9 +339,9 @@ class TestSmartNameAlgorithm:
             name = converter._generate_smart_name(description)
 
             # Should only contain alphanumeric and underscores
-            assert all(
-                c.isalnum() or c == "_" for c in name
-            ), f"Invalid characters in '{name}' from '{description}'"
+            assert all(c.isalnum() or c == "_" for c in name), (
+                f"Invalid characters in '{name}' from '{description}'"
+            )
 
     def test_priority_word_selection(self):
         """Test that meaningful words are prioritized."""

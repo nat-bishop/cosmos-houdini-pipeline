@@ -58,8 +58,8 @@ class CosmosSequenceValidator:
     """
 
     REQUIRED_MODALITY = "color"
-    OPTIONAL_MODALITIES = ["depth", "segmentation", "vis", "edge"]
-    ALL_MODALITIES = [REQUIRED_MODALITY, *OPTIONAL_MODALITIES]
+    OPTIONAL_MODALITIES = ("depth", "segmentation", "vis", "edge")  # Tuple - immutable
+    ALL_MODALITIES = (REQUIRED_MODALITY, *OPTIONAL_MODALITIES)
 
     def __init__(self):
         """Initialize the validator."""
@@ -322,11 +322,11 @@ class CosmosVideoConverter:
                 else:
                     logger.warning("Cannot read frame: %s", frame_path)
 
-            logger.info("Created %s video with {frames_written} frames", modality)
+            logger.info("Created %s video with %d frames", modality, frames_written)
             return True, output_path
 
-        except Exception:
-            logger.error("Error creating %s video: {e}", modality)
+        except Exception as e:
+            logger.error("Error creating %s video: %s", modality, e)
             return False, None
 
         finally:
@@ -370,9 +370,9 @@ class CosmosVideoConverter:
             else:
                 name = "sequence"
 
-        # Generate quick hash ID
+        # Generate quick hash ID (MD5 is fine for non-cryptographic ID generation)
         hash_input = f"{name}_{datetime.now(timezone.utc).isoformat()}_{sequence_info.frame_count}"
-        id_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
+        id_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]  # noqa: S324
 
         # Get resolution from first color frame
         resolution = (1920, 1080)  # Default

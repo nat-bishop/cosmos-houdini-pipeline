@@ -4,7 +4,7 @@ Handles RunSpec creation, validation, and file operations.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +61,7 @@ class RunSpecManager:
         final_output_path = output_path or f"outputs/{name}"
 
         # Create RunSpec
-        timestamp = datetime.now().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat()
         run_spec = RunSpec(
             id=run_id,
             prompt_id=prompt_id,
@@ -135,5 +135,5 @@ class RunSpecManager:
             "output_path": run_data.get("output_path", ""),
             "file_path": str(run_path),
             "file_size": run_path.stat().st_size,
-            "created_time": datetime.fromtimestamp(run_path.stat().st_ctime),
+            "created_time": datetime.fromtimestamp(run_path.stat().st_ctime, tz=timezone.utc),
         }

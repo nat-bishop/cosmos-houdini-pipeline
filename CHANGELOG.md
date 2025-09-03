@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-09-03 (Docker Log Streaming)
+- **Docker log streaming feature**
+  - New `--stream` flag for `cosmos status` command to stream container logs in real-time
+  - Auto-detection of most recent container when no container ID specified
+  - Graceful Ctrl+C handling to stop streaming
+  - Helpful error messages when no containers are running
+  - 24-hour timeout for long-running log streams
+
 ### Changed - 2025-09-02 (CLI Migration Complete)
 - **Migrated to modular CLI structure**
   - Switched from monolithic `cli.py` (800+ lines) to modular `cli/` directory

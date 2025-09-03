@@ -55,6 +55,7 @@ cosmos status
 - `cosmos prompt-enhance` - Enhance prompts with AI
 - `cosmos prepare` - Prepare renders for inference
 - `cosmos status` - Check remote GPU status
+- `cosmos status --stream` - Stream Docker container logs in real-time
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 

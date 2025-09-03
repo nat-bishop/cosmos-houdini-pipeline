@@ -121,16 +121,25 @@ cosmos prepare ./cosmos_sequences/ --name "urban_scene" --fps 24
 ```
 
 ### status
-Check remote GPU instance status.
+Check remote GPU instance status or stream container logs.
 
 ```bash
-cosmos status
+cosmos status [OPTIONS]
 ```
 
-**Example:**
+**Options:**
+- `--stream`: Stream container logs in real-time instead of showing status
+
+**Examples:**
 ```bash
-cosmos status
+cosmos status                  # Show GPU instance status
+cosmos status --stream          # Stream logs from most recent container
 ```
+
+When using `--stream`:
+- Auto-detects the most recent Docker container
+- Streams logs in real-time until interrupted with Ctrl+C
+- Shows helpful error messages if no containers are running
 
 ## Core Modules
 
@@ -234,6 +243,10 @@ docker_executor.run_upscaling(
     prompt_file=Path("prompt.json"),
     control_weight=0.5
 )
+
+# Stream container logs
+docker_executor.stream_container_logs()  # Auto-detect latest container
+docker_executor.stream_container_logs(container_id="abc123")  # Specific container
 ```
 
 **Methods:**
@@ -241,6 +254,10 @@ docker_executor.run_upscaling(
 - `run_upscaling()`: Execute upscaling pipeline
 - `get_docker_status()`: Check Docker status
 - `cleanup_containers()`: Clean up stopped containers
+- `stream_container_logs(container_id=None)`: Stream container logs in real-time
+  - Auto-detects most recent container if ID not provided
+  - Gracefully handles Ctrl+C interruption
+  - Uses 24-hour timeout for long-running streams
 
 ## Schemas
 

@@ -2,10 +2,12 @@ See @README.md for project overview. Most directorys also contain a README.md
 
 **Always run TDD (Test Driven Development) if requested**
 **TDD PROCEDURE**
-### Gate 1: Write Tests First
+### Gate 1: Write Tests First - NO MOCKS!
 - Write tests based on expected input/output pairs
-- Real tests only - no mocks, even if code doesn't exist yet
-- **PASS**: Tests are comprehensive, consider edge cases and error codes
+- **CRITICAL: NO MOCKS** - Tests must call real functions, even if they don't exist yet
+- No Mock(), MagicMock(), patch(), or any test doubles
+- Tests WILL fail with AttributeError/ImportError - that's expected
+- **PASS**: Tests use real function calls, cover edge cases and error codes
 
 ### Gate 2: Verify Tests Fail
 - Run tests - they should fail (that's good!)
@@ -17,11 +19,12 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Commit the failing tests
 - **PASS**: Tests committed
 
-### Gate 4: Make Tests Pass
-- Write implementation code iteratively until tests pass
-- Run tests and verify for overfitting in parallel
-- Don't change tests - they're the spec
-- **PASS**: 100% tests passing, no overfitting, tests unchanged
+### Gate 4: Make Tests Pass - DO NOT CHANGE TESTS!
+- Write implementation code to make tests pass
+- **CRITICAL: DO NOT MODIFY THE TESTS** - Tests are the contract/spec
+- Run overfit-verifier agent in parallel to check for overfitting
+- If tests fail, fix the implementation, not the tests
+- **PASS**: 100% tests passing, no overfitting, tests unchanged from Gate 3
 
 ### Gate 5: Document and Commit
 - Update all documentation

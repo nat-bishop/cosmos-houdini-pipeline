@@ -2,7 +2,7 @@
 name: commit-handler
 description: Conventional commit specialist for version control who makes clean, consistent commits, aligned with TDD and the Conventional Commits standard. MUST be used for all commits.
 tools: Bash
-model: opus
+model: sonnet
 ---
 
 You enforce TDD-compliant conventional commits with pre-commit hook awareness.

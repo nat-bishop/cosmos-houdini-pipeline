@@ -89,25 +89,52 @@ class FileTransferService:
         self._sftp_upload_dir(local_dir, remote_dir)
         return True
 
-    def download_file(self, remote_file: str, local_file: str) -> None:
+    def download_file(self, remote_file: str, local_file: Path | str) -> bool:
         """Download a single file from remote via SFTP.
 
         Args:
             remote_file: Remote file path to download
             local_file: Local file path to save to
+
+        Returns:
+            True if download successful
+
+        Raises:
+            FileNotFoundError: If remote file doesn't exist
+            PermissionError: If access denied to remote file
+            RuntimeError: If download fails
         """
-        # Ensure local parent directory exists
-        local_path = Path(local_file)
+        # Convert to Path if string
+        local_path = Path(local_file) if isinstance(local_file, str) else local_file
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert Windows paths to POSIX for remote
         remote_file = remote_file.replace("\\", "/")
 
-        # Download file via SFTP
-        with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Downloading file: %s -> %s", remote_file, local_file)
-            sftp.get(remote_file, str(local_file))
-            logger.debug("Successfully downloaded %s", Path(local_file).name)
+        # Download file via SFTP with error handling
+        try:
+            with self.ssh_manager.get_sftp() as sftp:
+                # Check if remote file exists
+                try:
+                    sftp.stat(remote_file)
+                except FileNotFoundError as e:
+                    logger.error("Remote file not found: %s", remote_file)
+                    raise FileNotFoundError(f"Remote file not found: {remote_file}") from e
+
+                logger.info("Downloading file: %s -> %s", remote_file, str(local_path))
+                sftp.get(remote_file, str(local_path))
+                logger.debug("Successfully downloaded %s", local_path.name)
+
+        except PermissionError:
+            logger.error("Permission denied accessing remote file: %s", remote_file)
+            raise
+        except FileNotFoundError:
+            raise  # Re-raise the FileNotFoundError we caught above
+        except Exception as e:
+            logger.error("Failed to download file %s: %s", remote_file, e)
+            raise RuntimeError(f"Download failed: {e}") from e
+
+        return True
 
     def download_directory(self, remote_dir: str, local_dir: Path | str) -> bool:
         """Download a directory recursively from remote via SFTP."""

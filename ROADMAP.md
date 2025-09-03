@@ -38,6 +38,12 @@
   - Tests must call real functions even if they don't exist yet
   - Need to debug why instructions are being ignored
 
+- [ ] **Fix doc-drafter agent overstepping boundaries**
+  - doc-drafter agent is modifying code files, not just documentation
+  - Agent has Bash access allowing it to make git commits
+  - Agent added implementation code when it should only update docs
+  - Need to restrict permissions: remove Bash access or limit to doc files only
+
 ## Priority 2: Features & Enhancements
 
 ### Performance Optimization

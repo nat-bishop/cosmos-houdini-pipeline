@@ -1,7 +1,6 @@
 ---
 name: doc-drafter
 description: Documentation specialist and technical writer. PROACTIVELY updates docs after code changes. MUST BE USED before commits.
-tools: Read, Edit, Glob, Bash
 model: opus
 ---
 

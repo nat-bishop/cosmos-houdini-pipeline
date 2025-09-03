@@ -30,8 +30,8 @@ cosmos create prompt "PROMPT_TEXT" [OPTIONS]
 
 **Example:**
 ```bash
-cosmos create prompt "A futuristic city at night"
-cosmos create prompt "Transform to anime style" --video input.mp4
+cosmos create prompt "A futuristic city at night" inputs/videos/scene1
+cosmos create prompt "Transform to anime style" /path/to/video_dir
 ```
 
 ### create run

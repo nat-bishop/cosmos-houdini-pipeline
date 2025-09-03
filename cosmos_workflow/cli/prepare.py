@@ -160,4 +160,4 @@ def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
     if metadata.description:
         console.print(f"\n[dim]Description:[/dim] {metadata.description}")
 
-    display_next_step(f'cosmos create prompt "Your prompt here" --video {metadata.video_path}')
+    display_next_step(f'cosmos create prompt "Your prompt here" {Path(metadata.video_path).parent}')

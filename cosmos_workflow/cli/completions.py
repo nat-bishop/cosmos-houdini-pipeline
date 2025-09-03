@@ -68,3 +68,20 @@ def complete_directories(_ctx, _param, incomplete):
             if not prefix or item.name.startswith(prefix):
                 results.append(dir_path + "/")
     return sorted(results)
+
+
+def complete_video_dirs_smart(_ctx, _param, incomplete):
+    """Autocomplete for video directories in inputs/videos/."""
+    videos_dir = Path("inputs/videos")
+    if not videos_dir.exists():
+        return []
+
+    results = []
+    for subdir in videos_dir.iterdir():
+        if subdir.is_dir():
+            # Use forward slashes for consistency
+            dir_path = str(subdir).replace("\\", "/")
+            if not incomplete or dir_path.startswith(incomplete):
+                results.append(dir_path)
+
+    return sorted(results)

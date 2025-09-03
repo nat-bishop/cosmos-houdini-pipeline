@@ -15,7 +15,7 @@ from cosmos_workflow.prompts.schemas import (
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 from .base import CLIContext, handle_errors
-from .completions import complete_prompt_specs, complete_video_files
+from .completions import complete_prompt_specs, complete_video_dirs_smart, complete_video_files
 from .helpers import (
     console,
     display_next_step,
@@ -37,32 +37,31 @@ def create(ctx):
 
 @create.command("prompt")
 @click.argument("prompt_text")
+@click.argument(
+    "video_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    shell_complete=complete_video_dirs_smart,
+)
 @click.option("--name", "-n", help="Name for the prompt (auto-generated if not provided)")
 @click.option(
     "--negative",
     default="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
     help="Negative prompt for quality improvement (default: provided)",
 )
-@click.option(
-    "--video",
-    required=True,
-    help="Path to input video file",
-    shell_complete=complete_video_files,
-)
 @click.pass_context
 @handle_errors
-def create_prompt(ctx, prompt_text, name, negative, video):
+def create_prompt(ctx, prompt_text, video_dir, name, negative):
     r"""Create a new prompt specification.
 
     Creates a PromptSpec JSON file for use with Cosmos Transfer inference.
-    The video file must exist and contain the source material to transform.
+    The VIDEO_DIR must contain the video files (color.mp4, depth.mp4, segmentation.mp4).
     Use 'cosmos prompt-enhance' to create enhanced versions of existing prompts.
 
     \b
     Examples:
-      cosmos create prompt "A futuristic city at night" --video input.mp4
-      cosmos create prompt "Transform to anime style" --video /path/to/source.mp4
-      cosmos create prompt "Cyberpunk street scene" --video renders/color.mp4
+      cosmos create prompt "A futuristic city at night" inputs/videos/scene1
+      cosmos create prompt "Transform to anime style" /path/to/video_dir
+      cosmos create prompt "Cyberpunk street scene" renders/my_scene
     """
     ctx_obj: CLIContext = ctx.obj
 
@@ -72,13 +71,16 @@ def create_prompt(ctx, prompt_text, name, negative, video):
             name = generate_smart_name(prompt_text, max_length=30)
             console.print(f"[cyan]Generated name:[/cyan] {name}")
 
-        # Use provided video path
-        video_path = video
+        # Build video paths from directory
+        from pathlib import Path
 
-        # Default control inputs
+        video_dir_path = Path(video_dir)
+        video_path = str(video_dir_path / "color.mp4")
+
+        # Build control inputs from same directory
         control_inputs_dict = {
-            "depth": f"inputs/videos/{name}/depth.mp4",
-            "seg": f"inputs/videos/{name}/segmentation.mp4",
+            "depth": str(video_dir_path / "depth.mp4"),
+            "seg": str(video_dir_path / "segmentation.mp4"),
         }
 
         # Generate unique ID

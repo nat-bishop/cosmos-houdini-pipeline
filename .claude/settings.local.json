@@ -22,7 +22,8 @@
       "Bash(time pytest:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
-      "Bash(mypy:*)"
+      "Bash(mypy:*)",
+      "Bash(cosmos:*)"
     ],
     "deny": [],
     "ask": []

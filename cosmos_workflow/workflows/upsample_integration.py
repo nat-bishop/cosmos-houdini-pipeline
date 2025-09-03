@@ -98,16 +98,14 @@ class UpsampleWorkflowMixin:
         self.ssh_manager.execute_command_success(f"mkdir -p {scripts_dir}")
 
         # Upload the working upsampler script
-        local_script = (
-            Path(__file__).parent.parent.parent / "scripts" / "working_prompt_upsampler.py"
-        )
+        local_script = Path(__file__).parent.parent.parent / "scripts" / "prompt_upsampler.py"
         if local_script.exists():
-            remote_script_path = f"{scripts_dir}/working_prompt_upsampler.py"
+            remote_script_path = f"{scripts_dir}/prompt_upsampler.py"
             log.info("Uploading upsampler script to %s", remote_script_path)
             self.file_transfer.upload_file(local_script, scripts_dir)
         else:
-            log.error("Working upsampler script not found at %s", local_script)
-            return {"success": False, "error": "Working upsampler script not found"}
+            log.error("Upsampler script not found at %s", local_script)
+            return {"success": False, "error": "Upsampler script not found"}
 
         # Create output directory on remote
         remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
@@ -132,7 +130,7 @@ class UpsampleWorkflowMixin:
         # Note: The script uses --no-offload flag, not --offload
         # By default (without flag) it offloads, with --no-offload it keeps model in memory
         upsample_cmd = (
-            f"python /workspace/scripts/working_prompt_upsampler.py "
+            f"python /workspace/scripts/prompt_upsampler.py "
             f"--batch /workspace/inputs/{batch_filename} "
             f"--output-dir /workspace/outputs "
             f"--checkpoint-dir /workspace/checkpoints"
@@ -179,8 +177,12 @@ class UpsampleWorkflowMixin:
         # Update PromptSpecs with upsampled prompts
         updated_specs = []
         for result in upsampled_results:
-            # Find matching spec
-            matching_spec = next((s for s in prompt_specs if s.id == result.get("spec_id")), None)
+            # Find matching spec - try spec_id first, fall back to name
+            spec_id = result.get("spec_id")
+            name = result.get("name")
+            matching_spec = next(
+                (s for s in prompt_specs if s.id == spec_id or s.name == name), None
+            )
 
             if matching_spec:
                 # Create new spec with upsampled prompt using PromptSpecManager

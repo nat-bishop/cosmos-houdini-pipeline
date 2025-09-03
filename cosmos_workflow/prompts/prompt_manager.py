@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Prompt management system for Cosmos-Transfer1 workflow.
 Orchestrates PromptSpec and RunSpec operations using specialized managers.
+
+DEPRECATED: This module is deprecated and will be removed in a future version.
+Use PromptSpecManager directly instead of PromptManager.
+The prompt_manager_compat.py file provides temporary backward compatibility.
 """
 
 import argparse

@@ -91,15 +91,26 @@ cosmos create prompt "desc"       # Create prompt spec
 cosmos inference prompt.json      # Run on GPU
 cosmos status                     # Check GPU status
 
+## Smart Test Execution by TDD Gate
+
+**Gate 2 (Verify Tests Fail):** Run only the new test file you created
+**Gate 4 (Make Tests Pass):** Run the specific failing tests, stop on first failure
+**Gate 5 (Pre-Commit):** Run unit tests for changed modules only
+**PR/Full Validation:** Run complete test suite with coverage
+
 ## Testing Rules
-- 80% Code Coverage
+- 80% Code Coverage (for full validation)
 - Consider edge cases and error codes
 - Tests should follow TDD rules
-- Prefer running single tests for speed during development
-# Run tests
-pytest tests/ -m unit --cov=cosmos_workflow
+- Use focused testing during development for speed
 
-# Full validation (if changing core logic)
+# Focused test commands for TDD
+pytest path/to/test_file.py -v           # Single test file
+pytest path/to/test_file.py -x           # Stop on first failure
+pytest tests/unit/module_name/ -v        # Module tests only
+pytest -k "test_function_name"           # Specific test function
+
+# Full validation (PR/CI)
 pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
 
 ## Documentation

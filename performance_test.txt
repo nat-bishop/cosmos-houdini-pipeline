@@ -1,2 +1,0 @@
-Testing commit performance with sonnet model
-This is a simple test file to measure commit time improvements.

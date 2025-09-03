@@ -24,7 +24,8 @@
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Bash(test:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(time pytest:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,9 +1,7 @@
 See @README.md for project overview. Most directorys also contain a README.md
 
-## Test-Driven Development is Non-Negotiable and MUST BE followed
-
-**Stop immediately if you're not following TDD.** Here are the six gates you must pass:
-
+**Always run TDD (Test Driven Development) if requested**
+**TDD PROCEDURE**
 ### Gate 1: Write Tests First
 - Write tests based on expected input/output pairs
 - Real tests only - no mocks, even if code doesn't exist yet
@@ -33,8 +31,8 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Review code for quality and security
 - **PASS**: Code of high standard with no critical issues
 
-**Break a gate? STOP. ASK ME FOR REVIEW. No exceptions.**
-**ALL GATES MUST PASS**
+**Break a gate during TDD? STOP. ASK ME FOR REVIEW. No exceptions.**
+**ALL GATES MUST PASS for TDD**
 
 ## Project Structure
 - Main package @cosmos_workflow/

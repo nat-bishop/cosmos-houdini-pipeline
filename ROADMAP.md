@@ -32,6 +32,12 @@
   - Updated all code locations and test assertions
   - Users can still override via `--negative` CLI flag
 
+- [ ] **Investigate Claude Code not following TDD no-mock instructions**
+  - Claude Code is using mocks in TDD Gate 1 tests despite explicit instructions
+  - CLAUDE.md clearly states "NO MOCKS" for Gate 1
+  - Tests must call real functions even if they don't exist yet
+  - Need to debug why instructions are being ignored
+
 ## Priority 2: Features & Enhancements
 
 ### Performance Optimization

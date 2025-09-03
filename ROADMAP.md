@@ -1,5 +1,29 @@
 # ROADMAP - Cosmos Workflow Orchestrator
 
+## 🚀 Priority 0: Architecture Refactoring (NEW)
+
+### Service-Oriented Architecture
+- [ ] **Phase 0: Foundation (Week 1)**
+  - [ ] Create SQLite database schema with SQLAlchemy models
+  - [ ] Implement service layer (WorkflowService, PromptService)
+  - [ ] Refactor CLI to use services instead of direct orchestrator calls
+  - [ ] Add unit tests for service layer
+
+- [ ] **Phase 1: Core Features (Week 2)**
+  - [ ] Implement unified `cosmos run` command (single-step workflow)
+  - [ ] Add `cosmos list` command to view recent runs
+  - [ ] Add `cosmos search` command for full-text prompt search
+  - [ ] Implement progress tracking in database
+  - [ ] Add smart defaults and auto-discovery
+
+- [ ] **Phase 2: API & UI (Week 3, Optional)**
+  - [ ] Create FastAPI application with endpoints
+  - [ ] Implement WebSocket for real-time progress
+  - [ ] Build simple web dashboard (HTML + Alpine.js)
+  - [ ] Add gallery view for outputs
+
+**See `docs/COSMOS_REFACTORING_PLAN.md` for full implementation details**
+
 ## Priority 1: Critical Issues
 
 ### Remote Environment Setup

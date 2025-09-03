@@ -68,6 +68,9 @@ select = [
     # Helpful - Catch timezone and other gotchas
     "DTZ",   # flake8-datetimez (timezone aware datetime)
     "RUF",   # Ruff-specific rules (helpful checks)
+    "RUF001", # ambiguous-unicode-character-string
+    "RUF002", # ambiguous-unicode-character-docstring
+    "RUF003", # ambiguous-unicode-character-comment
 ]
 
 ignore = [

@@ -42,7 +42,7 @@ from .helpers import (
 @click.pass_context
 @handle_errors
 def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
-    r"""✨ Enhance prompts using Pixtral AI model.
+    r"""Enhance prompts using Pixtral AI model.
 
     Creates new enhanced PromptSpecs with improved prompt quality.
     Enhanced specs are saved with smart names based on the enhanced content.
@@ -57,7 +57,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
     ctx_obj: CLIContext = ctx.obj
 
     if not prompt_specs:
-        console.print("[bold red]❌ No prompt specs provided![/bold red]")
+        console.print("[bold red][ERROR] No prompt specs provided![/bold red]")
         console.print("Usage: cosmos prompt-enhance <spec1.json> [spec2.json ...]")
         sys.exit(1)
 
@@ -75,7 +75,7 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
             console.print(f"[yellow]Warning: Failed to load {spec_path}: {e}[/yellow]")
 
     if not specs_to_enhance:
-        console.print("[bold red]❌ No valid prompt specs to enhance![/bold red]")
+        console.print("[bold red][ERROR] No valid prompt specs to enhance![/bold red]")
         sys.exit(1)
 
     # Handle dry-run mode
@@ -83,13 +83,13 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
         display_dry_run_header()
 
         dry_run_data = {
-            "📁 Would enhance": f"{len(specs_to_enhance)} prompt(s)",
-            "🤖 AI Model": "Pixtral for prompt enhancement",
-            "💾 Output": "Save with smart names based on content",
+            "Would enhance": f"{len(specs_to_enhance)} prompt(s)",
+            "AI Model": "Pixtral for prompt enhancement",
+            "Output": "Save with smart names based on content",
         }
 
         if preprocess:
-            dry_run_data["🎬 Preprocessing"] = f"Resize videos to {max_resolution}p"
+            dry_run_data["Preprocessing"] = f"Resize videos to {max_resolution}p"
 
         table = create_info_table(dry_run_data)
         console.print(table)
@@ -135,12 +135,14 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
                     # The spec was already saved by PromptSpecManager with a smart name
                     # We just need to report success - no need to save again
                     enhanced_count += 1
-                    console.print(f"  [green]✓[/green] Enhanced: {spec.name} → {updated_spec.name}")
+                    console.print(
+                        f"  [green][OK][/green] Enhanced: {spec.name} -> {updated_spec.name}"
+                    )
                 else:
-                    console.print(f"  [yellow]⚠[/yellow] Failed: {spec.name}")
+                    console.print(f"  [yellow][WARNING][/yellow] Failed: {spec.name}")
 
             except Exception as e:
-                console.print(f"  [red]✗[/red] Error enhancing {spec.name}: {e}")
+                console.print(f"  [red][ERROR][/red] Error enhancing {spec.name}: {e}")
 
         progress.update(task, completed=True)
 

@@ -77,6 +77,7 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Type hints: Always add them - `func(x: type) -> type:`
 - Docstrings: Google-style with Args/Returns/Raises sections (one-line summary, then details)
 - Exceptions: Catch specific ones - `except SpecificError:`
+- Emojis and Unicode: Don't use emojis or Unicode symbols - causes Windows encoding errors, use ASCII like `"[OK]"` not `"✓"`
 
 ## Operating Procedures
 - **MUST DO** Write all temporary files and reports to .claude/workspace/

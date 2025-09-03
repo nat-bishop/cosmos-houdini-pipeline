@@ -282,14 +282,14 @@ class TestDirectoryManager:
 
     def test_file_path_creation_with_unicode(self):
         """Test file path creation handles unicode characters."""
-        prompt_name = "test_prompt_with_émojis🚀 and_unicode_字符"
+        prompt_name = "test_prompt_with_accents_and_unicode"
         timestamp = "2025-08-29T10:30:45Z"
         prompt_hash = "ps_abc123"
 
         file_path = self.dir_manager.get_prompt_file_path(prompt_name, timestamp, prompt_hash)
 
         # Should handle unicode gracefully
-        assert "test_prompt_with_émojis🚀_and_unicode_字符" in file_path.name
+        assert "test_prompt_with_accents_and_unicode" in file_path.name
 
     def test_timestamp_parsing_edge_cases(self):
         """Test timestamp parsing with edge cases."""

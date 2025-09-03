@@ -51,12 +51,12 @@ def handle_errors(func):
         try:
             return func(ctx, *args, **kwargs)
         except FileNotFoundError as e:
-            console.print(f"[bold red]❌ File not found:[/bold red] {e}")
+            console.print(f"[bold red][ERROR] File not found:[/bold red] {e}")
             if ctx_obj.verbose:
                 console.print_exception()
             sys.exit(1)
         except PermissionError as e:
-            console.print(f"[bold red]❌ Permission denied:[/bold red] {e}")
+            console.print(f"[bold red][ERROR] Permission denied:[/bold red] {e}")
             if ctx_obj.verbose:
                 console.print_exception()
             sys.exit(1)
@@ -64,7 +64,7 @@ def handle_errors(func):
             console.print("\n[yellow]Interrupted by user[/yellow]")
             sys.exit(1)
         except Exception as e:
-            console.print(f"[bold red]❌ Operation failed:[/bold red] {e}")
+            console.print(f"[bold red][ERROR] Operation failed:[/bold red] {e}")
             if ctx_obj.verbose:
                 console.print_exception()
             sys.exit(1)

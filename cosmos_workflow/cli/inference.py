@@ -47,7 +47,7 @@ from .helpers import (
 @click.pass_context
 @handle_errors
 def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
-    r"""🔮 Run Cosmos Transfer inference with optional upscaling.
+    r"""Run Cosmos Transfer inference with optional upscaling.
 
     By default, this command runs both inference and 4K upscaling.
     Use --no-upscale to run inference only.
@@ -71,23 +71,23 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
 
         # Show what would happen
         dry_run_data = {
-            "📁 Would load": f"Prompt: {prompt_spec.name}",
-            "📝 Prompt text": format_prompt_text(prompt_spec.prompt),
-            "🎬 Input video": prompt_spec.input_video_path,
+            "Would load": f"Prompt: {prompt_spec.name}",
+            "Prompt text": format_prompt_text(prompt_spec.prompt),
+            "Input video": prompt_spec.input_video_path,
         }
 
         if videos_dir:
-            dry_run_data["📂 Videos from"] = videos_dir
+            dry_run_data["Videos from"] = videos_dir
 
-        dry_run_data["⬆️ Would upload"] = "Prompt spec and video files to remote GPU"
+        dry_run_data["Would upload"] = "Prompt spec and video files to remote GPU"
 
         if upscale:
-            dry_run_data["🚀 Would execute"] = "Inference + 4K upscaling"
-            dry_run_data["⚖️ Upscale weight"] = str(upscale_weight)
+            dry_run_data["Would execute"] = "Inference + 4K upscaling"
+            dry_run_data["Upscale weight"] = str(upscale_weight)
         else:
-            dry_run_data["🚀 Would execute"] = "Inference only (no upscaling)"
+            dry_run_data["Would execute"] = "Inference only (no upscaling)"
 
-        dry_run_data["⬇️ Would download"] = "Generated video results"
+        dry_run_data["Would download"] = "Generated video results"
 
         table = create_info_table(dry_run_data)
         console.print(table)

@@ -41,7 +41,7 @@ from .helpers import (
 @click.pass_context
 @handle_errors
 def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
-    r"""🎥 Prepare renders for Cosmos inference.
+    r"""Prepare renders for Cosmos inference.
 
     Validates Houdini/Blender renders and converts control modality
     PNG sequences to videos ready for Cosmos Transfer.
@@ -70,12 +70,12 @@ def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
         sequence_info = validator.validate(input_path)
 
         if not sequence_info.valid:
-            console.print("[bold red]❌ Invalid sequence:[/bold red]")
+            console.print("[bold red][ERROR] Invalid sequence:[/bold red]")
             for issue in sequence_info.issues:
                 console.print(f"  • {issue}")
             sys.exit(1)
 
-        progress.update(task, completed=True, description="[green]✓ Validation complete")
+        progress.update(task, completed=True, description="[green][OK] Validation complete")
 
     # Handle dry-run mode
     if dry_run:
@@ -83,17 +83,17 @@ def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
 
         # Show sequence details
         dry_run_data = {
-            "📂 Input": str(input_path),
-            "🎬 Sequences": ", ".join(sequence_info.sequences.keys()),
-            "🖼️ Frames": str(sequence_info.frame_count),
-            "📐 Resolution": f"{sequence_info.resolution[0]}x{sequence_info.resolution[1]}",
-            "⏱️ FPS": str(fps),
+            "Input": str(input_path),
+            "Sequences": ", ".join(sequence_info.sequences.keys()),
+            "Frames": str(sequence_info.frame_count),
+            "Resolution": f"{sequence_info.resolution[0]}x{sequence_info.resolution[1]}",
+            "FPS": str(fps),
         }
 
         if name:
-            dry_run_data["📝 Name"] = name
+            dry_run_data["Name"] = name
         else:
-            dry_run_data["📝 Name"] = "[dim]Would be AI-generated[/dim]"
+            dry_run_data["Name"] = "[dim]Would be AI-generated[/dim]"
 
         table = create_info_table(dry_run_data)
         console.print(table)
@@ -127,7 +127,7 @@ def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
         if not result["success"]:
             raise Exception("Conversion failed")
 
-        progress.update(task, completed=True, description="[green]✓ Videos created")
+        progress.update(task, completed=True, description="[green][OK] Videos created")
 
         # Generate metadata
         task = progress.add_task("[cyan]Generating metadata...", total=None)
@@ -141,7 +141,7 @@ def prepare(ctx, input_dir, name, fps, description, no_ai, dry_run):
             use_ai=not no_ai,
         )
 
-        progress.update(task, completed=True, description="[green]✓ Metadata generated")
+        progress.update(task, completed=True, description="[green][OK] Metadata generated")
 
     # Display results
     results_data = {

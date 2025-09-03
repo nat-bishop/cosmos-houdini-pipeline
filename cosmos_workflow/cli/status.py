@@ -15,7 +15,7 @@ from .helpers import console, create_info_table, create_progress_context
 @click.pass_context
 @handle_errors
 def status(ctx, stream):
-    """📊 Check remote GPU instance status or stream container logs.
+    """Check remote GPU instance status or stream container logs.
 
     Shows SSH connectivity, Docker status, and available resources
     on the configured remote GPU instance.
@@ -34,7 +34,7 @@ def status(ctx, stream):
 
             progress.update(task, completed=True)
 
-        console.print("\n[bold]📋 Streaming Docker Container Logs[/bold]\n")
+        console.print("\n[bold][STREAMING] Docker Container Logs[/bold]\n")
 
         try:
             # Stream logs from most recent container
@@ -61,7 +61,7 @@ def status(ctx, stream):
         progress.update(task, completed=True)
 
     # Display status
-    console.print("\n[bold]🖥️  Remote Instance Status[/bold]")
+    console.print("\n[bold]Remote Instance Status[/bold]")
 
     # Build status data for table
     status_data = {}

@@ -29,7 +29,7 @@ from .helpers import (
 @click.group()
 @click.pass_context
 def create(ctx):
-    """📝 Create prompts and run specifications.
+    """Create prompts and run specifications.
 
     Use these commands to create the JSON specifications needed for
     Cosmos Transfer inference and upscaling workflows.

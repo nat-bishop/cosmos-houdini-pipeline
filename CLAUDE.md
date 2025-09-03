@@ -9,6 +9,7 @@ See @README.md for project overview. Most directorys also contain a README.md
 
 ### Gate 2: Verify Tests Fail
 - Run tests - they should fail (that's good!)
+- Use: `pytest <test_file> --tb=no -q` (no subagents needed)
 - **PASS**: All tests failing
 
 ### Gate 3: Commit Failing Tests

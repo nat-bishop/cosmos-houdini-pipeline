@@ -38,9 +38,9 @@ class TestSmartNameGeneration:
             # Check that at least some key words are present
             name_words = name.split("_")
             matched = sum(1 for word in possible_words if word in name_words)
-            assert (
-                matched >= 1
-            ), f"Expected at least one of {possible_words} in name '{name}' from description '{description}'"
+            assert matched >= 1, (
+                f"Expected at least one of {possible_words} in name '{name}' from description '{description}'"
+            )
 
     def test_generate_smart_name_max_length(self):
         """Test name truncation at max length."""
@@ -73,9 +73,9 @@ class TestSmartNameGeneration:
         name = converter._generate_smart_name(description)
 
         # Name should only contain alphanumeric and underscores
-        assert all(
-            c.isalnum() or c == "_" for c in name
-        ), f"Name '{name}' contains invalid characters"
+        assert all(c.isalnum() or c == "_" for c in name), (
+            f"Name '{name}' contains invalid characters"
+        )
 
     def test_generate_smart_name_empty_description(self):
         """Test handling of empty description."""
@@ -320,9 +320,9 @@ class TestDirectoryNaming:
                 # Handle Windows path separators
                 normalized_dir = output_dir.replace("\\", "/")
                 pattern = r"^/test/\w+_\d{8}_\d{6}$"
-                assert re.match(
-                    pattern, normalized_dir
-                ), f"Directory '{normalized_dir}' doesn't match expected format"
+                assert re.match(pattern, normalized_dir), (
+                    f"Directory '{normalized_dir}' doesn't match expected format"
+                )
 
                 # Specifically check for our mocked timestamp
                 assert "20250830_143025" in output_dir
@@ -339,9 +339,9 @@ class TestDirectoryNaming:
 
         # Verify pattern
         pattern = r"^\d{8}_\d{6}$"
-        assert re.match(
-            pattern, timestamp
-        ), f"Timestamp '{timestamp}' doesn't match YYYYMMDD_HHMMSS format"
+        assert re.match(pattern, timestamp), (
+            f"Timestamp '{timestamp}' doesn't match YYYYMMDD_HHMMSS format"
+        )
 
 
 if __name__ == "__main__":

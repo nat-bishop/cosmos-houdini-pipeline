@@ -437,9 +437,9 @@ class TestSchemaUtils:
                 "fps": 24,
                 "seed": 1,
             }
-            assert SchemaUtils.validate_parameters(
-                params
-            ), f"Failed for blur_strength: {blur_strength}"
+            assert SchemaUtils.validate_parameters(params), (
+                f"Failed for blur_strength: {blur_strength}"
+            )
 
         for canny_threshold in valid_canny_thresholds:
             params = {
@@ -451,9 +451,9 @@ class TestSchemaUtils:
                 "fps": 24,
                 "seed": 1,
             }
-            assert SchemaUtils.validate_parameters(
-                params
-            ), f"Failed for canny_threshold: {canny_threshold}"
+            assert SchemaUtils.validate_parameters(params), (
+                f"Failed for canny_threshold: {canny_threshold}"
+            )
 
     def test_validate_parameters_type_checking(self):
         """Test that parameter validation checks types correctly."""

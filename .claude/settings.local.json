@@ -25,7 +25,10 @@
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Bash(test:*)",
       "Bash(sed:*)",
-      "Bash(time pytest:*)"
+      "Bash(time pytest:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(mypy:*)"
     ],
     "deny": [],
     "ask": []

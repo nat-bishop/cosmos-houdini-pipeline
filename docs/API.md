@@ -268,6 +268,48 @@ docker_executor.stream_container_logs(container_id="abc123")  # Specific contain
 
 ## Schemas
 
+### PromptSpecManager
+Manages creation, validation, and file operations for PromptSpec objects.
+
+```python
+from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
+from cosmos_workflow.prompts.schemas import DirectoryManager
+
+# Initialize with directory manager
+dir_manager = DirectoryManager(prompts_dir, runs_dir)
+spec_manager = PromptSpecManager(dir_manager)
+
+# Create a prompt spec with automatic smart naming
+spec = spec_manager.create_prompt_spec(
+    prompt_text="A futuristic city with neon lights",
+    input_video_path="inputs/videos/city.mp4",
+    control_inputs={
+        "vis": "path/to/vis",
+        "edge": "path/to/edge",
+        "depth": "path/to/depth",
+        "seg": "path/to/seg"
+    }
+)
+# Automatically saved with smart name: "futuristic_city_neon"
+
+# Create enhanced prompt (from upsampling)
+enhanced_spec = spec_manager.create_prompt_spec(
+    prompt_text="A breathtaking futuristic metropolis bathed in vibrant neon",
+    input_video_path="inputs/videos/city.mp4",
+    control_inputs=control_inputs,
+    is_upsampled=True,
+    parent_prompt_text="A futuristic city with neon lights"
+)
+# Smart name generated from content: "breathtaking_metropolis"
+```
+
+**Key Features:**
+- Automatic smart name generation from prompt content
+- Consistent ID generation using SchemaUtils
+- Automatic file saving to proper directory structure
+- Support for upsampled/enhanced prompts with parent tracking
+- Centralized API for all prompt spec creation
+
 ### PromptSpec
 Prompt specification schema.
 

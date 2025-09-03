@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-03 (PromptSpecManager Refactor)
+- **Refactored prompt specification creation to use PromptSpecManager**
+  - CLI `create prompt` command now uses PromptSpecManager instead of direct PromptSpec creation
+  - Enhanced prompts now get smart names based on content (e.g., "futuristic_city") instead of generic "_enhanced" suffix
+  - Upsampling workflow uses PromptSpecManager for consistent spec creation
+  - Improved separation of concerns with centralized spec management
+  - All prompt spec creation now goes through a single, consistent API
+
 ### Added - 2025-09-03 (File Transfer)
 - **New `download_file()` method in FileTransferService**
   - Downloads single files from remote instance via SFTP

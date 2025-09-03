@@ -1,0 +1,14 @@
+{
+  "id": "ps_c2e9e46032bf",
+  "name": "golden_hour_warmth",
+  "prompt": "Warm low-angle sunlight grazing facades; gentle rim light on metal trims and window mullions; long soft shadows; color separation between warm sunlit areas and cooler skylit normals; moderate contrast without clipping; textures read with pleasant micro-contrast.",
+  "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs\\videos\\city_scene_20250830_203504\\depth.mp4",
+    "seg": "inputs\\videos\\city_scene_20250830_203504\\segmentation.mp4"
+  },
+  "timestamp": "2025-09-03T07:55:25.548245Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

@@ -1,13 +1,38 @@
 #!/usr/bin/env python3
-"""Working prompt upsampler for NVIDIA Cosmos-Transfer1.
-Based on user's previous working approach - sets VLLM spawn method BEFORE imports.
+"""Prompt upsampler for NVIDIA Cosmos-Transfer1.
+Handles both single prompts and batch processing with automatic offload mode selection.
 """
 
 import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any, Optional
+
+
+def determine_offload_mode(batch_size: int, requested_offload: bool = True) -> bool:
+    """Determine the actual offload mode based on batch size.
+
+    Pure logic function that can be tested without GPU dependencies.
+
+    Args:
+        batch_size: Number of items in the batch
+        requested_offload: User's requested offload setting
+
+    Returns:
+        bool: Actual offload mode to use
+
+    Logic:
+        - For batch_size > 1: Always return False (no offload) to ensure unique results
+        - For batch_size <= 1: Return requested_offload value
+    """
+    if batch_size > 1:
+        # Force no-offload for multiple items to prevent duplicate results
+        return False
+    return requested_offload
+
 
 # Add cosmos-transfer1 to Python path if running in Docker
 if os.path.exists("/workspace"):
@@ -33,21 +58,24 @@ _defaults = {
     "TORCHELASTIC_MAX_RESTARTS": "0",
     "TORCHELASTIC_RUN_ID": "local",
     "TORCH_NCCL_ASYNC_ERROR_HANDLING": "1",
-    "TORCHELASTIC_ERROR_FILE": "/tmp/torch_error.log",
+    "TORCHELASTIC_ERROR_FILE": os.path.join(tempfile.gettempdir(), "torch_error.log"),
 }
 for k, v in _defaults.items():
     os.environ.setdefault(k, v)
 
-# NOW we can import the upsampler after environment is prepared
+# Try to import the upsampler, but don't exit if it fails (for testing)
+PixtralPromptUpsampler = None
 try:
     from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
 except ImportError as e:
-    print(f"[ERROR] Failed to import PixtralPromptUpsampler: {e}", file=sys.stderr)
-    print(
-        "Make sure you're in the cosmos-transfer1 directory or have it in PYTHONPATH",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+    # Only exit if we're running as main script, not when imported for testing
+    if __name__ == "__main__":
+        print(f"[ERROR] Failed to import PixtralPromptUpsampler: {e}", file=sys.stderr)
+        print(
+            "Make sure you're in the cosmos-transfer1 directory or have it in PYTHONPATH",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def upsample_prompt(
@@ -67,6 +95,9 @@ def upsample_prompt(
     Returns:
         Upsampled prompt text
     """
+    if PixtralPromptUpsampler is None:
+        raise ImportError("PixtralPromptUpsampler not available. Please run on GPU instance.")
+
     print("[INFO] Initializing Pixtral upsampler...", flush=True)
     print(f"[INFO] Checkpoint dir: {checkpoint_dir}", flush=True)
     print(f"[INFO] Offload mode: {offload}", flush=True)
@@ -90,8 +121,8 @@ def upsample_prompt(
 
 
 def process_batch(
-    input_file: str,
-    output_dir: str,
+    input_file: str | Path,
+    output_dir: str | Path,
     checkpoint_dir: str = "/workspace/checkpoints",
     offload: bool = True,
 ) -> None:
@@ -117,9 +148,20 @@ def process_batch(
 
     print(f"[INFO] Processing {len(batch_data)} prompts", flush=True)
 
+    # Use logic function to determine actual offload mode
+    actual_offload = determine_offload_mode(len(batch_data), offload)
+    if actual_offload != offload:
+        print(
+            f"[INFO] Batch mode detected: forcing offload={actual_offload} for {len(batch_data)} prompts",
+            flush=True,
+        )
+    offload = actual_offload
+
     # Initialize upsampler once if not offloading
     upsampler = None
     if not offload:
+        if PixtralPromptUpsampler is None:
+            raise ImportError("PixtralPromptUpsampler not available. Please run on GPU instance.")
         print("[INFO] Loading Pixtral model (keeping in memory)...", flush=True)
         upsampler = PixtralPromptUpsampler(
             checkpoint_dir=checkpoint_dir, offload_prompt_upsampler=False

@@ -1,0 +1,14 @@
+{
+  "id": "ps_6735c160431f",
+  "name": "subtle_metal_patina",
+  "prompt": "Existing metal elements gain a light oxidized sheen\u2014matte microtexture with gentle green-brown hints in creases; softened highlights; surrounding materials untouched; overall feel gently weathered, not distressed.",
+  "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs\\videos\\city_scene_20250830_203504\\depth.mp4",
+    "seg": "inputs\\videos\\city_scene_20250830_203504\\segmentation.mp4"
+  },
+  "timestamp": "2025-09-03T07:56:33.954488Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

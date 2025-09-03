@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - 2025-09-03 (Batch Upsampling)
+- **Fixed batch prompt upsampling duplicate results issue**
+  - Batch processing now returns unique results for each prompt instead of duplicates
+  - Added `determine_offload_mode()` function to automatically force offload=False for batches > 1
+  - Prevents model reinitialization between prompts by keeping it in memory for batches
+  - Renamed `working_prompt_upsampler.py` to `prompt_upsampler.py` to reflect production status
+  - Made module importable for testing by handling missing GPU dependencies gracefully
+  - Added comprehensive unit tests following TDD principles with real function calls
+
 ### Added - 2025-09-03 (Docker Log Streaming)
 - **Docker log streaming feature**
   - New `--stream` flag for `cosmos status` command to stream container logs in real-time

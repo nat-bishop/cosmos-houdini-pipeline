@@ -1,0 +1,14 @@
+{
+  "id": "ps_cc5871ac91f9",
+  "name": "foggy_early_morning",
+  "prompt": "Low-lying mist with gradual falloff; aerial perspective increasing with distance; far edges soften and desaturate; nearby materials retain clear texture; luminance uniform; speculars subdued by moisture in the air.",
+  "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs\\videos\\city_scene_20250830_203504\\depth.mp4",
+    "seg": "inputs\\videos\\city_scene_20250830_203504\\segmentation.mp4"
+  },
+  "timestamp": "2025-09-03T07:55:58.239504Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

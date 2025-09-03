@@ -208,12 +208,19 @@ file_transfer.upload_for_inference(
     video_dirs=[Path("videos/scene1")]
 )
 
+# Download a single file
+file_transfer.download_file(
+    remote_file="/remote/path/to/file.mp4",
+    local_file="local/path/to/file.mp4"
+)
+
 # Download results
 file_transfer.download_results(Path("prompt.json"))
 ```
 
 **Methods:**
 - `upload_for_inference()`: Upload prompt and videos
+- `download_file()`: Download a single file from remote
 - `download_results()`: Download generated outputs
 - `file_exists_remote()`: Check if remote file exists
 - `list_remote_directory()`: List remote directory

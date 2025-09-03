@@ -89,6 +89,26 @@ class FileTransferService:
         self._sftp_upload_dir(local_dir, remote_dir)
         return True
 
+    def download_file(self, remote_file: str, local_file: str) -> None:
+        """Download a single file from remote via SFTP.
+
+        Args:
+            remote_file: Remote file path to download
+            local_file: Local file path to save to
+        """
+        # Ensure local parent directory exists
+        local_path = Path(local_file)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert Windows paths to POSIX for remote
+        remote_file = remote_file.replace("\\", "/")
+
+        # Download file via SFTP
+        with self.ssh_manager.get_sftp() as sftp:
+            logger.info("Downloading file: %s -> %s", remote_file, local_file)
+            sftp.get(remote_file, str(local_file))
+            logger.debug("Successfully downloaded %s", Path(local_file).name)
+
     def download_directory(self, remote_dir: str, local_dir: Path | str) -> bool:
         """Download a directory recursively from remote via SFTP."""
         local_dir = Path(local_dir) if isinstance(local_dir, str) else local_dir

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-09-03 (File Transfer)
+- **New `download_file()` method in FileTransferService**
+  - Downloads single files from remote instance via SFTP
+  - Automatically creates parent directories if needed
+  - Handles Windows path conversion for cross-platform compatibility
+  - Provides granular file download control alongside existing directory download
+
 ### Fixed - 2025-09-03 (Batch Upsampling)
 - **Fixed batch prompt upsampling duplicate results issue**
   - Batch processing now returns unique results for each prompt instead of duplicates

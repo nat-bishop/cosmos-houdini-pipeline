@@ -5,23 +5,25 @@ This module provides intelligent name generation from text descriptions using
 semantic keyword extraction. It uses KeyBERT with SBERT embeddings to identify
 the most relevant keywords, creating concise filesystem-friendly names.
 
+Requirements:
+- keybert>=0.8.0
+- sentence-transformers>=2.2.0
+
 Key features:
 - Semantic keyword extraction using all-MiniLM-L6-v2 SBERT model
 - N-gram support (1-2) for single words and phrases
 - MMR diversity (0.7) to avoid duplicate keywords
 - Comprehensive stopword filtering (common English + VFX domain terms)
-- Fallback to simple extraction when KeyBERT is unavailable
 - Maximum 3 words per name for better conciseness
 """
 
 import logging
 import re
 from functools import lru_cache
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Try to load KeyBERT and SBERT
+# Load KeyBERT and SBERT (required)
 try:
     from keybert import KeyBERT
     from sentence_transformers import SentenceTransformer
@@ -31,11 +33,13 @@ try:
     sentence_model = SentenceTransformer(MODEL_NAME)
     kw_model = KeyBERT(model=sentence_model)
     logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
-    KEYBERT_AVAILABLE = True
 except ImportError as e:
-    logger.warning("KeyBERT not available, using fallback: %s", e)
-    kw_model = None
-    KEYBERT_AVAILABLE = False
+    error_msg = (
+        "KeyBERT is required for smart naming functionality. "
+        "Please install it with: pip install keybert sentence-transformers"
+    )
+    logger.error(error_msg)
+    raise ImportError(error_msg) from e
 
 # Common English stop words
 COMMON_STOPWORDS = {
@@ -156,32 +160,6 @@ DOMAIN_STOPWORDS = {
 ALL_STOPWORDS = COMMON_STOPWORDS | DOMAIN_STOPWORDS
 
 
-def fallback_extraction(text: str) -> list[str]:
-    """Simple fallback keyword extraction when KeyBERT is not available.
-
-    Extracts meaningful words from text by:
-    - Converting to lowercase
-    - Extracting all alphabetic words
-    - Filtering out stopwords (common English + VFX domain terms)
-    - Keeping words longer than 2 characters
-    - Returning up to 3 words
-
-    Args:
-        text: Input text to extract keywords from.
-
-    Returns:
-        List of extracted keywords (max 3 words).
-    """
-    text_lower = text.lower()
-
-    # Extract all words
-    words = re.findall(r"\b[a-z]+\b", text_lower)
-
-    # Filter using combined stopwords
-    meaningful = [w for w in words if w not in ALL_STOPWORDS and len(w) > 2]
-    return meaningful[:3]  # Take first 3 meaningful words (not 5)
-
-
 @lru_cache(maxsize=128)
 def generate_smart_name(text: str, max_length: int = 50) -> str:
     """Generate smart name using KeyBERT semantic keyword extraction.
@@ -199,11 +177,13 @@ def generate_smart_name(text: str, max_length: int = 50) -> str:
 
     Returns:
         Smart name derived from extracted keywords (underscore-separated).
-        Falls back to "sequence" for empty input.
+        Returns "sequence" for empty input.
 
     Raises:
         AttributeError: If text is None.
         ValueError: If max_length is not a positive integer.
+        RuntimeError: If KeyBERT extraction fails.
+        ImportError: If KeyBERT is not installed.
 
     Examples:
         >>> generate_smart_name("Low-lying mist with gradual falloff")
@@ -241,81 +221,69 @@ def generate_smart_name(text: str, max_length: int = 50) -> str:
             word = word[:max_length]
         return word
 
-    if KEYBERT_AVAILABLE and kw_model:
-        try:
-            # Extract keywords using KeyBERT
-            # Use n-grams (1-2) for shorter phrases and MMR for diversity
-            keywords = kw_model.extract_keywords(
-                text,
-                keyphrase_ngram_range=(1, 2),  # 1-2 word phrases (shorter)
-                stop_words=list(ALL_STOPWORDS),  # Filter ALL stopwords
-                use_mmr=True,  # Use MMR for diversity
-                diversity=0.7,  # High diversity to avoid duplicates
-                top_n=5,  # Get top 5 candidates
-            )
+    # Extract keywords using KeyBERT
+    try:
+        # Extract keywords using KeyBERT
+        # Use n-grams (1-2) for shorter phrases and MMR for diversity
+        keywords = kw_model.extract_keywords(
+            text,
+            keyphrase_ngram_range=(1, 2),  # 1-2 word phrases (shorter)
+            stop_words=list(ALL_STOPWORDS),  # Filter ALL stopwords
+            use_mmr=True,  # Use MMR for diversity
+            diversity=0.7,  # High diversity to avoid duplicates
+            top_n=5,  # Get top 5 candidates
+        )
 
-            if keywords:
-                # Extract just the keyword strings (not scores)
-                keyword_strings = [kw[0] for kw in keywords]
+        if keywords:
+            # Extract just the keyword strings (not scores)
+            keyword_strings = [kw[0] for kw in keywords]
 
-                # Process keywords for naming
-                name_parts = []
-                seen_words = set()  # Track unique words to avoid duplicates
+            # Process keywords for naming
+            name_parts = []
+            seen_words = set()  # Track unique words to avoid duplicates
 
-                for keyword in keyword_strings:
-                    # Clean and convert to name format
-                    cleaned = re.sub(r"[^a-z0-9\s]", "", keyword.lower())
-                    # Split multi-word phrases
-                    words = cleaned.split()
+            for keyword in keyword_strings:
+                # Clean and convert to name format
+                cleaned = re.sub(r"[^a-z0-9\s]", "", keyword.lower())
+                # Split multi-word phrases
+                words = cleaned.split()
 
-                    for word in words:
-                        # Check constraints before adding
-                        if word and word not in seen_words and len(name_parts) < 3:
-                            # Check if adding would exceed max_length
-                            potential_name = "_".join([*name_parts, word])
-                            if len(potential_name) <= max_length:
-                                name_parts.append(word)
-                                seen_words.add(word)
-                            else:
-                                break  # Stop if would exceed length
+                for word in words:
+                    # Check constraints before adding
+                    if word and word not in seen_words and len(name_parts) < 3:
+                        # Check if adding would exceed max_length
+                        potential_name = "_".join([*name_parts, word])
+                        if len(potential_name) <= max_length:
+                            name_parts.append(word)
+                            seen_words.add(word)
+                        else:
+                            break  # Stop if would exceed length
 
-                    if len(name_parts) >= 3:
-                        break  # Stop once we have 3 words
+                if len(name_parts) >= 3:
+                    break  # Stop once we have 3 words
 
-                if name_parts:
-                    name = "_".join(name_parts)
+            if name_parts:
+                name = "_".join(name_parts)
 
-                    # Ensure it fits max_length
+                # Ensure it fits max_length
+                if len(name) > max_length:
+                    # Try with fewer parts
+                    for num_parts in [2, 1]:
+                        name = "_".join(name_parts[:num_parts])
+                        if len(name) <= max_length:
+                            break
+                    # If still too long, truncate
                     if len(name) > max_length:
-                        # Try with fewer parts
-                        for num_parts in [2, 1]:
-                            name = "_".join(name_parts[:num_parts])
-                            if len(name) <= max_length:
-                                break
-                        # If still too long, truncate
-                        if len(name) > max_length:
-                            name = name[:max_length]
+                        name = name[:max_length]
 
-                    return name if name else "sequence"
+                return name if name else "sequence"
 
-        except Exception as e:
-            logger.warning("KeyBERT extraction failed: %s, using fallback", e)
+    except Exception as e:
+        logger.error("KeyBERT extraction failed: %s", e)
+        raise RuntimeError(f"Failed to generate smart name: {e}") from e
 
-    # Fallback to simple extraction
-    keywords = fallback_extraction(text)
-    if keywords:
-        name = "_".join(keywords[:3])  # Limit to 3 words
-        if len(name) > max_length:
-            # Try with fewer words before truncating
-            for num_words in [2, 1]:
-                name = "_".join(keywords[:num_words])
-                if len(name) <= max_length:
-                    break
-            # If still too long, truncate
-            if len(name) > max_length:
-                name = name[:max_length]
-        return name if name else "sequence"
-
+    # If we get here, no keywords were extracted
+    logger.warning("No keywords extracted from text: %s", text[:100])
     return "sequence"
 
 

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "foggy_early_morning",
+    "original_prompt": "Low-lying mist with gradual falloff; aerial perspective increasing with distance; far edges soften and desaturate; nearby materials retain clear texture; luminance uniform; speculars subdued by moisture in the air.",
+    "upsampled_prompt": "The video captures a serene scene of a rural landscape from an aerial perspective. The foreground is dominated by a dense collection of trees with varying shades of green, indicating a mix of foliage and possibly autumnal changes. The middle ground is a patchwork of fields, some of which are enclosed by fences, while others are open and expansive. The fields exhibit different shades of green and brown, suggesting different types of crops or stages of cultivation. A road runs parallel to the fields, and a few vehicles can be seen traveling along it. The background is filled with a low-lying mist that adds a sense of depth and mystery to the scene. The colors are natural and muted, with the greens of the trees and fields contrasting with the grays and whites of the mist and the road.",
+    "video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+    "success": true
+  },
+  {
+    "name": "night_active_practicals",
+    "original_prompt": "Deep, clean shadows punctuated by existing luminaires and interior lighting; high dynamic range; tight speculars on glossy materials; warm practicals balanced by cool ambient; shadow noise low and natural.",
+    "upsampled_prompt": "The video presents a series of frames that depict a room with a dark, moody atmosphere. The room is furnished with a desk, a chair, and a lamp, all of which are positioned in relation to the light source. The light source appears to be a window with blinds, casting a warm glow into the room. The color palette is dominated by dark tones, with the exception of the light source which provides a contrasting brightness. The room's design includes architectural details such as moldings and a ceiling with a unique pattern. The lighting creates a dramatic effect, with shadows and highlights that add to the room's ambiance.",
+    "video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+    "success": true
+  }
+]

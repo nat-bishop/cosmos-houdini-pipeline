@@ -1,0 +1,9 @@
+[
+  {
+    "name": "simple_foggy_scene",
+    "original_prompt": "A foggy morning in the mountains",
+    "upsampled_prompt": "The video captures a serene and picturesque scene of a mountainous region. The mountains are covered in dense greenery, indicating a rich, natural environment. The sky is overcast, with a blanket of clouds that adds to the tranquil atmosphere. In the foreground, there is a small settlement with buildings that appear to be residential or commercial structures. The buildings are closely packed together, suggesting a close-knit community. The color palette of the video is dominated by shades of green from the vegetation, grey from the clouds and mountains, and the muted colors of the buildings.",
+    "video_path": "inputs/videos/test/color.mp4",
+    "success": true
+  }
+]

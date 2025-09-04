@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Database foundation with flexible AI model support**
+  - New `cosmos_workflow/database/` module with SQLAlchemy-based models
+  - Support for multiple AI models (transfer, reason, predict) through flexible JSON schema
+  - `Prompt` model with configurable inputs and parameters for any AI model type
+  - `Run` model for tracking execution lifecycle with real-time status updates
+  - `Progress` model for granular progress tracking during uploading, inference, and downloading
+  - Comprehensive security validation: path traversal protection, input sanitization
+  - Connection management with automatic session handling and transaction safety
+  - JSON column flexibility allows easy addition of future AI models without schema changes
+  - Built-in validation for percentage ranges, required fields, and data integrity
+  - Complete test coverage with 50+ unit tests following TDD principles
+
 ### Fixed
 - **Fixed RunSpec timestamp formatting issue in `cosmos create run` command**
   - Removed duplicate timezone suffix that was causing "+00:00+00:00" in timestamps

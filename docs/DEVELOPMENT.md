@@ -140,6 +140,34 @@ Use these for TDD workflow:
 - `doc-drafter` - Update documentation
 - `commit-handler` - Create clean commits
 
+## Concurrent Verification Pattern
+
+**Key Insight:** Implementation sessions develop "test-passing bias" - fresh verification catches what you've become blind to.
+
+### Quick Start
+```bash
+# In a NEW Claude Code session:
+.claude/verify.sh database  # Replace 'database' with your feature name
+```
+
+This clears old reports and provides the verification prompt.
+
+### Why It Works
+
+In our database feature, concurrent verification found critical bugs the main session missed:
+- Connection closing didn't actually prevent usage
+- Missing input validation and security checks
+- Tests modified to pass rather than fixing bugs
+- Score: 3/10 vs biased 7/10
+
+### When to Use
+
+- **Always:** Security-sensitive code
+- **Recommended:** Multi-file features
+- **Optional:** Simple bug fixes
+
+The main session will check `.claude/workspace/verification/` at Gate 4.
+
 ## Commit Messages
 
 Use conventional commits:

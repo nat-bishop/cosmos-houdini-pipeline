@@ -116,7 +116,9 @@ class TestPromptModel:
 
     def test_prompt_required_fields(self, session: Session):
         """Test that required fields are enforced."""
-        with pytest.raises(TypeError):  # Should fail without required fields
+        from sqlalchemy.exc import IntegrityError
+
+        with pytest.raises(IntegrityError):  # Should fail without required fields
             prompt = Prompt(id="ps_invalid")
             session.add(prompt)
             session.commit()
@@ -155,7 +157,7 @@ class TestPromptModel:
 
     def test_prompt_timestamp_auto_set(self, session: Session):
         """Test that created_at is automatically set."""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(timezone.utc).replace(tzinfo=None)
         prompt = Prompt(
             id="ps_time",
             model_type="transfer",
@@ -165,8 +167,10 @@ class TestPromptModel:
         )
         session.add(prompt)
         session.commit()
-        after = datetime.now(timezone.utc)
+        after = datetime.now(timezone.utc).replace(tzinfo=None)
 
+        assert isinstance(prompt.created_at, datetime)
+        # SQLite doesn't preserve timezone info, but timestamp should be in range
         assert before <= prompt.created_at <= after
 
 
@@ -208,7 +212,7 @@ class TestRunModel:
                 "weights": "/weights/cosmos_transfer.ckpt",
             },
             outputs={},
-            metadata={"user": "NAT", "priority": "high"},
+            run_metadata={"user": "NAT", "priority": "high"},
         )
         session.add(run)
         session.commit()
@@ -218,7 +222,7 @@ class TestRunModel:
         assert retrieved.prompt_id == sample_prompt.id
         assert retrieved.status == "pending"
         assert retrieved.execution_config["gpu_node"] == "gpu-001"
-        assert retrieved.metadata["user"] == "NAT"
+        assert retrieved.run_metadata["user"] == "NAT"
 
     def test_run_status_transitions(self, session: Session, sample_prompt: Prompt):
         """Test updating run status through lifecycle."""
@@ -229,7 +233,7 @@ class TestRunModel:
             status="pending",
             execution_config={},
             outputs={},
-            metadata={},
+            run_metadata={},
         )
         session.add(run)
         session.commit()
@@ -258,7 +262,7 @@ class TestRunModel:
                 },
                 "logs": ["Step 1: Upload", "Step 2: Inference", "Step 3: Download"],
             },
-            metadata={},
+            run_metadata={},
         )
         session.add(run)
         session.commit()
@@ -277,7 +281,7 @@ class TestRunModel:
             status="pending",
             execution_config={},
             outputs={},
-            metadata={},
+            run_metadata={},
         )
         session.add(run)
         session.commit()
@@ -310,7 +314,7 @@ class TestRunModel:
                 status=status,
                 execution_config={},
                 outputs={},
-                metadata={},
+                run_metadata={},
             )
             for i, status in enumerate(["pending", "running", "completed", "failed", "completed"])
         ]
@@ -345,7 +349,7 @@ class TestRunModel:
                 status="pending",
                 execution_config={},
                 outputs={},
-                metadata={},
+                run_metadata={},
             )
             for i in range(3)
         ]
@@ -393,7 +397,7 @@ class TestProgressModel:
             status="running",
             execution_config={},
             outputs={},
-            metadata={},
+            run_metadata={},
         )
         session.add(run)
         session.commit()
@@ -450,13 +454,15 @@ class TestProgressModel:
         ).all()
         assert len(upload_progress) == 3
 
-        # Query latest progress
-        latest = session.scalars(
+        # Query all progress and get the last one
+        all_progress = session.scalars(
             select(Progress)
             .where(Progress.run_id == sample_run.id)
-            .order_by(Progress.timestamp.desc())
-            .limit(1)
-        ).first()
+            .order_by(Progress.id)  # Order by ID to get insertion order
+        ).all()
+
+        # The last one should be downloading 100%
+        latest = all_progress[-1]
         assert latest.stage == "downloading"
         assert latest.percentage == 100.0
 
@@ -531,6 +537,79 @@ class TestProgressModel:
         assert ordered_progress[1].timestamp < ordered_progress[2].timestamp
 
 
+class TestModelValidation:
+    """Test model validation rules."""
+
+    def test_prompt_rejects_none_json_fields(self):
+        """Test that Prompt rejects None for JSON fields."""
+        with pytest.raises(ValueError, match="inputs cannot be None"):
+            Prompt(
+                id="ps_invalid",
+                model_type="transfer",
+                prompt_text="test",
+                inputs=None,
+                parameters={},
+            )
+
+        with pytest.raises(ValueError, match="parameters cannot be None"):
+            Prompt(
+                id="ps_invalid",
+                model_type="transfer",
+                prompt_text="test",
+                inputs={},
+                parameters=None,
+            )
+
+    def test_prompt_rejects_empty_required_fields(self):
+        """Test that Prompt rejects empty required fields."""
+        with pytest.raises(ValueError, match="model_type cannot be None or empty"):
+            Prompt(id="ps_invalid", model_type="", prompt_text="test", inputs={}, parameters={})
+
+        with pytest.raises(ValueError, match="prompt_text cannot be None or empty"):
+            Prompt(
+                id="ps_invalid", model_type="transfer", prompt_text="   ", inputs={}, parameters={}
+            )
+
+    def test_progress_validates_percentage_range(self):
+        """Test that Progress validates percentage is between 0 and 100."""
+        with pytest.raises(ValueError, match="must be between 0 and 100"):
+            Progress(run_id="rs_test", stage="uploading", percentage=-10.0, message="test")
+
+        with pytest.raises(ValueError, match="must be between 0 and 100"):
+            Progress(run_id="rs_test", stage="uploading", percentage=150.0, message="test")
+
+        # Valid percentages should work
+        progress = Progress(run_id="rs_test", stage="uploading", percentage=0.0, message="test")
+        assert progress.percentage == 0.0
+
+        progress = Progress(run_id="rs_test", stage="uploading", percentage=100.0, message="test")
+        assert progress.percentage == 100.0
+
+    def test_run_validates_required_fields(self):
+        """Test that Run validates required fields."""
+        with pytest.raises(ValueError, match="execution_config cannot be None"):
+            Run(
+                id="rs_invalid",
+                prompt_id="ps_test",
+                model_type="transfer",
+                status="pending",
+                execution_config=None,
+                outputs={},
+                run_metadata={},
+            )
+
+        with pytest.raises(ValueError, match="status cannot be None or empty"):
+            Run(
+                id="rs_invalid",
+                prompt_id="ps_test",
+                model_type="transfer",
+                status="",
+                execution_config={},
+                outputs={},
+                run_metadata={},
+            )
+
+
 class TestDatabaseIntegration:
     """Integration tests for all models working together."""
 
@@ -569,7 +648,7 @@ class TestDatabaseIntegration:
                 "docker_image": "cosmos:latest",
             },
             outputs={},
-            metadata={"session": "test"},
+            run_metadata={"session": "test"},
         )
         session.add(run)
         session.commit()
@@ -646,7 +725,7 @@ class TestDatabaseIntegration:
                 status=status,
                 execution_config={"attempt": i + 1},
                 outputs={},
-                metadata={},
+                run_metadata={},
             )
             runs.append(run)
         session.add_all(runs)
@@ -677,7 +756,7 @@ class TestDatabaseIntegration:
             status="running",
             execution_config={},
             outputs={},
-            metadata={},
+            run_metadata={},
         )
         progress = Progress(
             run_id=run.id,

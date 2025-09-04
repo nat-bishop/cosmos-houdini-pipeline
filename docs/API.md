@@ -143,6 +143,112 @@ When using `--stream`:
 
 ## Core Modules
 
+### Database System
+
+The database system provides flexible data persistence supporting multiple AI models through extensible JSON schemas.
+
+```python
+from cosmos_workflow.database import init_database, get_database_url
+from cosmos_workflow.database.connection import DatabaseConnection
+from cosmos_workflow.database.models import Prompt, Run, Progress
+
+# Initialize database with all tables
+conn = init_database()
+
+# Create a workflow
+with conn.get_session() as session:
+    # Create prompt for any AI model type
+    prompt = Prompt(
+        id="ps_example",
+        model_type="transfer",  # or "reason", "predict", future models
+        prompt_text="A futuristic cityscape",
+        inputs={
+            "video": "/inputs/cityscape.mp4",
+            "depth": "/inputs/cityscape_depth.mp4"
+        },
+        parameters={
+            "num_steps": 35,
+            "cfg_scale": 7.5
+        }
+    )
+
+    # Create run for execution tracking
+    run = Run(
+        id="rs_example",
+        prompt_id=prompt.id,
+        model_type="transfer",
+        status="pending",
+        execution_config={
+            "gpu_node": "gpu-001",
+            "docker_image": "cosmos:latest"
+        },
+        outputs={},
+        run_metadata={"user": "NAT", "session": "workflow"}
+    )
+
+    # Track progress
+    progress = Progress(
+        run_id=run.id,
+        stage="uploading",
+        percentage=25.0,
+        message="Uploading video files..."
+    )
+
+    session.add_all([prompt, run, progress])
+    session.commit()
+```
+
+#### DatabaseConnection
+Manages secure database connections with automatic session handling.
+
+**Methods:**
+- `create_tables()`: Create all database tables
+- `get_session()`: Context manager for database sessions with auto-rollback
+- `close()`: Close database connection
+
+**Security Features:**
+- Path traversal protection for database URLs
+- Input validation for all operations
+- Automatic transaction rollback on exceptions
+
+#### Database Models
+
+**Prompt Model:**
+- Flexible schema supporting multiple AI models (transfer, reason, predict)
+- JSON columns for model-specific inputs and parameters
+- Built-in validation for required fields and data integrity
+
+**Run Model:**
+- Execution lifecycle tracking (pending → uploading → running → downloading → completed/failed)
+- JSON storage for execution configuration and outputs
+- Automatic timestamp management for audit trail
+
+**Progress Model:**
+- Real-time progress tracking through execution stages
+- Percentage-based progress (0.0-100.0) with validation
+- Human-readable status messages for dashboard display
+
+#### Helper Functions
+
+```python
+# Get database URL from environment or default
+database_url = get_database_url()
+
+# Initialize with custom URL
+conn = init_database("/custom/path/cosmos.db")
+
+# Environment configuration
+os.environ["COSMOS_DATABASE_URL"] = ":memory:"  # For testing
+```
+
+**Features:**
+- Environment-based configuration via `COSMOS_DATABASE_URL`
+- Automatic directory creation for file-based databases
+- In-memory database support for testing
+- Comprehensive error handling and validation
+
+See [docs/DATABASE.md](docs/DATABASE.md) for detailed documentation.
+
 ### WorkflowOrchestrator
 Main orchestrator for workflow execution.
 

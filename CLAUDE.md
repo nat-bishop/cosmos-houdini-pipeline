@@ -24,8 +24,8 @@ Tests are the contract. Commit them unchanged.
 
 ### **Gate 4 — Make Tests Pass**
 - Implement minimal code to pass all tests.
-- Do **not** modify tests.
-- Run the `overfit-verifier` sub-agent to ensure generalization.
+- Do **not** modify tests, they are a contract.
+- Run `/overfit-check` to verify implementation (checks both internal and external verification).
 
 ### **Gate 5 — Document**
 - Update [README.md](README.md)
@@ -116,6 +116,7 @@ from cosmos_workflow.transfer import FileTransferService
  - `code-reviewer`: Reviews code for quality, security, and maintainability.
 
 ---
+
 
 ## **Code Conventions**
  - Path ops: `Path(a) / b` (never `os.path.join`)

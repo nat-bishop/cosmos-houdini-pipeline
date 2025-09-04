@@ -66,10 +66,29 @@ cosmos_workflow/
 ├── workflows/       # Orchestration logic
 ├── connection/      # SSH/SFTP management
 ├── execution/       # Docker execution
+├── database/        # SQLAlchemy models & connection management
 ├── prompts/         # Schema definitions
 ├── local_ai/        # AI processing
 └── config/          # Configuration
 ```
+
+## 🗄️ Database System
+
+The Cosmos Workflow System includes a flexible database foundation supporting multiple AI models:
+
+### Key Features
+- **Multi-Model Support**: Extensible schema for transfer, reason, predict, and future AI models
+- **Flexible JSON Storage**: Model-specific inputs and parameters stored in JSON columns
+- **Real-Time Progress**: Granular tracking through uploading, inference, and downloading stages
+- **Security First**: Path traversal protection and input validation
+- **Transaction Safety**: Automatic rollback on errors with session management
+
+### Database Models
+- **`Prompt`**: AI model prompts with flexible inputs and parameters
+- **`Run`**: Execution tracking with status lifecycle management
+- **`Progress`**: Real-time progress updates for dashboard visualization
+
+See [docs/DATABASE.md](docs/DATABASE.md) for detailed database documentation.
 
 ## 📚 Documentation
 

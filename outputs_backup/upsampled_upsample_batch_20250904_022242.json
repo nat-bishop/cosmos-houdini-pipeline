@@ -1,0 +1,9 @@
+[
+  {
+    "name": "test_cyberpunk",
+    "original_prompt": "Test cyberpunk city scene with neon lights and rain",
+    "upsampled_prompt": "The video presents a series of frames that depict a cityscape under a dark, overcast sky. The buildings are tall and closely packed, with a variety of architectural styles. The most prominent feature is the neon lights that adorn the buildings, creating a vibrant and dynamic atmosphere. The lights are in various colors, including red, green, blue, and yellow, and they form different shapes and patterns. The city appears to be in a state of alertness or emergency, as suggested by the presence of emergency vehicles and the overall somber mood.",
+    "video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+    "success": true
+  }
+]

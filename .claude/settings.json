@@ -6,6 +6,7 @@
       "Edit(./**)",
       "Read(~/.bashrc)",
       "Glob(./**)",
+      "Search(./**)",
       "Grep(./**)",
       "Bash(ls:*)",
       "Bash(ruff:*)",
@@ -20,6 +21,7 @@
       "Bash(grep:*)",
       "Bash(timeout:*)",
       "Bash(cosmos:*)",
+      "Bash(find:*)",
       "Bash(pre-commit:*)",
       "Bash(mypy:*)"
     ],

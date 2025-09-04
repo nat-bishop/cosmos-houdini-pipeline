@@ -80,6 +80,13 @@
   - Integrate with CI/CD pipeline for ongoing maintenance
   - Focus on single entry point (CLI) to identify truly unused code
 
+- [ ] **Review and standardize CLI defaults architecture**
+  - Audit all CLI commands for sensible defaults (e.g., --resolution behavior)
+  - Determine whether defaults should be at CLI level vs business logic level
+  - Check other system defaults beyond CLI (config files, environment variables)
+  - Ensure consistent user experience across all commands
+  - Document default value rationale and override mechanisms
+
 ## Priority 2: Features & Enhancements
 
 ### Performance Optimization

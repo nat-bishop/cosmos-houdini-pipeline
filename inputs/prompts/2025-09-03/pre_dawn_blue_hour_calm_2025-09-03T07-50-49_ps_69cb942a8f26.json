@@ -1,0 +1,14 @@
+{
+  "id": "ps_69cb942a8f26",
+  "name": "pre_dawn_blue_hour_calm",
+  "prompt": "Cool slate-blue ambient light before sunrise; low overall luminance; faint tungsten or LED warmth from existing interior sources; colors slightly desaturated; air crisp and clear; metal and glass respond with subtle, cold reflections; deep, quiet shadows with soft edges.",
+  "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs\\videos\\city_scene_20250830_203504\\depth.mp4",
+    "seg": "inputs\\videos\\city_scene_20250830_203504\\segmentation.mp4"
+  },
+  "timestamp": "2025-09-03T07:50:49.113447Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

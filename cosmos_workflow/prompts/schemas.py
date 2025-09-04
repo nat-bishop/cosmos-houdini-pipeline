@@ -323,14 +323,14 @@ class DirectoryManager:
         else:
             dt = timestamp
 
-        # Create filename-safe timestamp (replace colons and spaces with hyphens)
-        safe_timestamp = dt.strftime("%Y-%m-%dT%H-%M-%S")
+        # Create filename-safe timestamp with milliseconds
+        safe_timestamp = dt.strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]  # Keep milliseconds
 
         # Sanitize the prompt name
         safe_prompt_name = self._sanitize_filename(prompt_name)
 
-        # Create descriptive filename with hash for uniqueness
-        filename = f"{safe_prompt_name}_{safe_timestamp}_{prompt_hash}.json"
+        # Create descriptive filename WITHOUT hash (using milliseconds for uniqueness)
+        filename = f"{safe_prompt_name}_{safe_timestamp}.json"
 
         return self.base_prompts_dir / date_dir / filename
 
@@ -345,14 +345,14 @@ class DirectoryManager:
         else:
             dt = timestamp
 
-        # Create filename-safe timestamp (replace colons and spaces with hyphens)
-        safe_timestamp = dt.strftime("%Y-%m-%dT%H-%M-%S")
+        # Create filename-safe timestamp with milliseconds
+        safe_timestamp = dt.strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]  # Keep milliseconds
 
         # Sanitize the prompt name
         safe_prompt_name = self._sanitize_filename(prompt_name)
 
-        # Create descriptive filename with hash for uniqueness
-        filename = f"{safe_prompt_name}_{safe_timestamp}_{run_hash}.json"
+        # Create descriptive filename WITHOUT hash (using milliseconds for uniqueness)
+        filename = f"{safe_prompt_name}_{safe_timestamp}.json"
 
         return self.base_runs_dir / date_dir / filename
 

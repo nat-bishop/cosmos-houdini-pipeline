@@ -11,6 +11,49 @@ from pathlib import Path
 from typing import Any
 
 
+class FakeSFTPClient:
+    """Fake SFTP client for testing file transfer operations."""
+
+    def __init__(self, ssh_manager):
+        self.ssh_manager = ssh_manager
+        self.fake_files = {}  # Store fake remote files
+
+    def stat(self, remote_path: str):
+        """Fake stat - check if file exists."""
+        # Always raise FileNotFoundError for testing download behavior
+        # This simulates remote files not existing
+        raise FileNotFoundError(f"Remote file not found: {remote_path}")
+
+    def get(self, remote_path: str, local_path: str):
+        """Fake download file."""
+        self.ssh_manager.files_downloaded.append((remote_path, Path(local_path)))
+        # Create a fake file locally for testing
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(local_path).write_text("fake downloaded content")
+
+    def put(self, local_path: str, remote_path: str):
+        """Fake upload file."""
+        self.ssh_manager.files_uploaded.append((Path(local_path), remote_path))
+        self.fake_files[remote_path] = (
+            Path(local_path).read_bytes() if Path(local_path).exists() else b""
+        )
+
+    def listdir(self, remote_path: str):
+        """Fake list directory."""
+        return [Path(p).name for p in self.fake_files.keys() if p.startswith(remote_path + "/")]
+
+    def listdir_attr(self, remote_path: str):
+        """Fake list directory with attributes."""
+
+        @dataclass
+        class FakeAttr:
+            filename: str
+            st_mode: int
+
+        # Return empty list to simulate no files
+        return []
+
+
 class FakeSSHManager:
     """Fake SSH manager that maintains behavior without real connections.
 
@@ -45,8 +88,14 @@ class FakeSSHManager:
 
     def get_sftp(self):
         """Get SFTP client (fake)."""
-        self.ensure_connected()
-        return self  # Return self as a mock SFTP client
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_sftp_context():
+            self.ensure_connected()
+            yield FakeSFTPClient(self)
+
+        return fake_sftp_context()
 
     def execute_command(self, command: str, timeout: int = 30) -> tuple[int, str, str]:
         """Execute command and return predictable output based on command type."""
@@ -321,6 +370,16 @@ class FakeDockerExecutor:
                 "running_containers": [],
             }
         return {"docker_running": False, "error": "Not connected"}
+
+    def stream_container_logs(self, container_id: str | None = None) -> None:
+        """Stream container logs (stub)."""
+        if not container_id:
+            container_id = "auto-detected-container"
+        # Simulate streaming logs
+        print(f"[INFO] Streaming logs from container {container_id[:12]}...")
+        print("[INFO] Container started successfully")
+        print("[INFO] Processing...")
+        print("[INFO] Container completed")
 
 
 class FakeRemoteExecutor:

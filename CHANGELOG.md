@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Switched to read-only pre-commit hooks for predictable formatting workflow**
+  - Pre-commit hooks now only check formatting/linting, never modify files
+  - Prevents unexpected changes and commit-stash-reapply churn
+  - Developers format manually with `ruff format .` and `ruff check . --fix`
+  - Recommended: Configure editor to format on save for seamless workflow
+  - Updated pyproject.toml to set `fix = false` globally
+  - Updated .pre-commit-config.yaml with explicit read-only arguments
+
+### Changed - 2025-09-04 (Smart Naming Refactor)
+- **Refactored smart naming from spaCy to KeyBERT for improved semantic extraction**
+  - Replaced spaCy dependency parsing with KeyBERT semantic keyword extraction
+  - Now uses all-MiniLM-L6-v2 SBERT model for lightweight embeddings
+  - Configured with n-grams (1-2) and MMR diversity (0.7) to avoid duplicate keywords
+  - Added comprehensive stopword filtering for both common English and VFX domain terms
+  - Fallback to simple keyword extraction when KeyBERT is unavailable
+  - Names limited to 3 words maximum for better conciseness
+  - New dependencies: keybert and sentence-transformers (replacing spacy)
+
+### Changed - 2025-09-03 (PromptSpecManager Refactor)
+- **Refactored prompt specification creation to use PromptSpecManager**
+  - CLI `create prompt` command now uses PromptSpecManager instead of direct PromptSpec creation
+  - Enhanced prompts now get smart names based on content (e.g., "futuristic_city") instead of generic "_enhanced" suffix
+  - Upsampling workflow uses PromptSpecManager for consistent spec creation
+  - Improved separation of concerns with centralized spec management
+  - All prompt spec creation now goes through a single, consistent API
+
+### Added - 2025-09-03 (File Transfer)
+- **New `download_file()` method in FileTransferService**
+  - Downloads single files from remote instance via SFTP
+  - Automatically creates parent directories if needed
+  - Handles Windows path conversion for cross-platform compatibility
+  - Provides granular file download control alongside existing directory download
+
+### Fixed - 2025-09-03 (Batch Upsampling)
+- **Fixed batch prompt upsampling duplicate results issue**
+  - Batch processing now returns unique results for each prompt instead of duplicates
+  - Added `determine_offload_mode()` function to automatically force offload=False for batches > 1
+  - Prevents model reinitialization between prompts by keeping it in memory for batches
+  - Renamed `working_prompt_upsampler.py` to `prompt_upsampler.py` to reflect production status
+  - Made module importable for testing by handling missing GPU dependencies gracefully
+  - Added comprehensive unit tests following TDD principles with real function calls
+
+### Added - 2025-09-03 (Docker Log Streaming)
+- **Docker log streaming feature**
+  - New `--stream` flag for `cosmos status` command to stream container logs in real-time
+  - Auto-detection of most recent container when no container ID specified
+  - Graceful Ctrl+C handling to stop streaming
+  - Helpful error messages when no containers are running
+  - 24-hour timeout for long-running log streams
+
 ### Changed - 2025-09-02 (CLI Migration Complete)
 - **Migrated to modular CLI structure**
   - Switched from monolithic `cli.py` (800+ lines) to modular `cli/` directory

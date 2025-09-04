@@ -4,8 +4,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from cosmos_workflow.cli.completions import (
     complete_directories,
     complete_prompt_specs,
@@ -48,7 +46,7 @@ class TestCompletePromptSpecs:
             result = complete_prompt_specs(None, None, "")
             assert result == []
 
-    def test_complete_all_specs(self):
+    def test_complete_all_specs(self, monkeypatch):
         """Test returns all JSON files when no filter."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create test structure
@@ -59,15 +57,19 @@ class TestCompletePromptSpecs:
             (prompts_dir / "test2.json").touch()
             (prompts_dir / "other.txt").touch()  # Should be ignored
 
-            with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-                mock_path.return_value = prompts_dir
-                prompts_dir.exists = MagicMock(return_value=True)
+            # Replace Path constructor to return our test directory
+            def mock_path(path_str):
+                if "prompts" in str(path_str):
+                    return prompts_dir
+                return Path(path_str)
 
-                result = complete_prompt_specs(None, None, "")
-                # Should return only JSON files
-                assert len([r for r in result if r.endswith(".json")]) == 2
+            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
 
-    def test_complete_filtered_specs(self):
+            result = complete_prompt_specs(None, None, "")
+            # Should return only JSON files
+            assert len([r for r in result if r.endswith(".json")]) == 2
+
+    def test_complete_filtered_specs(self, monkeypatch):
         """Test returns filtered JSON files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             prompts_dir = Path(tmpdir) / "inputs" / "prompts"
@@ -77,14 +79,22 @@ class TestCompletePromptSpecs:
             (prompts_dir / "test2.json").touch()
             (prompts_dir / "other.json").touch()
 
-            with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-                mock_path.return_value = prompts_dir
-                prompts_dir.exists = MagicMock(return_value=True)
+            # Replace Path constructor to return our test directory
+            def mock_path(path_str):
+                if "prompts" in str(path_str):
+                    return prompts_dir
+                return Path(path_str)
 
-                # Filter by prefix - this test depends on implementation
-                # In actual implementation, we'd need to mock the full path
-                complete_prompt_specs(None, None, "inputs/prompts/test")
-                # Would filter to test1.json and test2.json in real scenario
+            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
+
+            # The actual paths will be like "inputs/prompts/test1.json"
+            # So we test with empty string to get all, then verify content
+            result = complete_prompt_specs(None, None, "")
+            # Should return all 3 JSON files
+            assert len(result) == 3  # test1.json, test2.json, other.json
+            # Check that test files are included
+            test_files = [r for r in result if "test" in r]
+            assert len(test_files) == 2
 
 
 class TestCompleteVideoFiles:
@@ -100,7 +110,7 @@ class TestCompleteVideoFiles:
             result = complete_video_files(None, None, "")
             assert result == []
 
-    def test_complete_color_videos(self):
+    def test_complete_color_videos(self, monkeypatch):
         """Test returns only color.mp4 files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             videos_dir = Path(tmpdir) / "inputs" / "videos"
@@ -114,13 +124,18 @@ class TestCompleteVideoFiles:
             (scene1_dir / "depth.mp4").touch()  # Should be ignored
             (scene2_dir / "color.mp4").touch()
 
-            with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-                mock_path.return_value = videos_dir
-                videos_dir.exists = MagicMock(return_value=True)
+            # Replace Path constructor to return our test directory
+            def mock_path(path_str):
+                if "videos" in str(path_str):
+                    return videos_dir
+                return Path(path_str)
 
-                result = complete_video_files(None, None, "")
-                # Should return only color.mp4 files
-                assert all("color.mp4" in r for r in result)
+            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
+
+            result = complete_video_files(None, None, "")
+            # Should return only color.mp4 files
+            assert len(result) == 2
+            assert all("color.mp4" in r for r in result)
 
 
 class TestCompleteVideoDirs:
@@ -136,7 +151,7 @@ class TestCompleteVideoDirs:
             result = complete_video_dirs(None, None, "")
             assert result == []
 
-    def test_complete_all_dirs(self):
+    def test_complete_all_dirs(self, monkeypatch):
         """Test returns all subdirectories."""
         with tempfile.TemporaryDirectory() as tmpdir:
             videos_dir = Path(tmpdir) / "inputs" / "videos"
@@ -146,22 +161,18 @@ class TestCompleteVideoDirs:
             (videos_dir / "scene2").mkdir()
             (videos_dir / "file.txt").touch()  # Should be ignored
 
-            with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-                mock_path.return_value = videos_dir
-                videos_dir.exists = MagicMock(return_value=True)
+            # Replace Path constructor to return our test directory
+            def mock_path(path_str):
+                if "videos" in str(path_str):
+                    return videos_dir
+                return Path(path_str)
 
-                # Mock iterdir to return our test dirs
-                mock_iterdir = MagicMock()
-                mock_iterdir.return_value = [
-                    videos_dir / "scene1",
-                    videos_dir / "scene2",
-                    videos_dir / "file.txt",
-                ]
-                videos_dir.iterdir = mock_iterdir
+            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
 
-                result = complete_video_dirs(None, None, "")
-                # Should return only directories
-                assert len(result) >= 0  # Depends on mock behavior
+            result = complete_video_dirs(None, None, "")
+            # Should return only directories (scene1 and scene2)
+            assert len(result) == 2
+            assert all("scene" in r for r in result)
 
 
 class TestCompleteDirectories:
@@ -231,7 +242,7 @@ class TestCompleteVideoDirsConsolidated:
             result = complete_video_dirs(None, None, "")
             assert result == []
 
-    def test_complete_videos_dirs(self):
+    def test_complete_videos_dirs(self, monkeypatch):
         """Test returns directories from inputs/videos."""
         with tempfile.TemporaryDirectory() as tmpdir:
             videos_dir = Path(tmpdir) / "inputs" / "videos"
@@ -240,20 +251,16 @@ class TestCompleteVideoDirsConsolidated:
             (videos_dir / "scene1").mkdir()
             (videos_dir / "scene2").mkdir()
 
-            with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-                mock_path.return_value = videos_dir
-                videos_dir.exists = MagicMock(return_value=True)
+            # Replace Path constructor to return our test directory
+            def mock_path(path_str):
+                if "videos" in str(path_str):
+                    return videos_dir
+                return Path(path_str)
 
-                # Mock iterdir
-                mock_iterdir = MagicMock()
-                mock_iterdir.return_value = [
-                    videos_dir / "scene1",
-                    videos_dir / "scene2",
-                ]
-                videos_dir.iterdir = mock_iterdir
+            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
 
-                result = complete_video_dirs(None, None, "")
-                assert len(result) >= 0  # Depends on mock
+            result = complete_video_dirs(None, None, "")
+            assert len(result) == 2  # Two directories created
 
     def test_complete_with_filter(self):
         """Test filters results by prefix."""

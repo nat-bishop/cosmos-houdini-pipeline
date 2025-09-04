@@ -121,16 +121,25 @@ cosmos prepare ./cosmos_sequences/ --name "urban_scene" --fps 24
 ```
 
 ### status
-Check remote GPU instance status.
+Check remote GPU instance status or stream container logs.
 
 ```bash
-cosmos status
+cosmos status [OPTIONS]
 ```
 
-**Example:**
+**Options:**
+- `--stream`: Stream container logs in real-time instead of showing status
+
+**Examples:**
 ```bash
-cosmos status
+cosmos status                  # Show GPU instance status
+cosmos status --stream          # Stream logs from most recent container
 ```
+
+When using `--stream`:
+- Auto-detects the most recent Docker container
+- Streams logs in real-time until interrupted with Ctrl+C
+- Shows helpful error messages if no containers are running
 
 ## Core Modules
 
@@ -199,12 +208,19 @@ file_transfer.upload_for_inference(
     video_dirs=[Path("videos/scene1")]
 )
 
+# Download a single file
+file_transfer.download_file(
+    remote_file="/remote/path/to/file.mp4",
+    local_file="local/path/to/file.mp4"
+)
+
 # Download results
 file_transfer.download_results(Path("prompt.json"))
 ```
 
 **Methods:**
 - `upload_for_inference()`: Upload prompt and videos
+- `download_file()`: Download a single file from remote
 - `download_results()`: Download generated outputs
 - `file_exists_remote()`: Check if remote file exists
 - `list_remote_directory()`: List remote directory
@@ -234,6 +250,10 @@ docker_executor.run_upscaling(
     prompt_file=Path("prompt.json"),
     control_weight=0.5
 )
+
+# Stream container logs
+docker_executor.stream_container_logs()  # Auto-detect latest container
+docker_executor.stream_container_logs(container_id="abc123")  # Specific container
 ```
 
 **Methods:**
@@ -241,8 +261,54 @@ docker_executor.run_upscaling(
 - `run_upscaling()`: Execute upscaling pipeline
 - `get_docker_status()`: Check Docker status
 - `cleanup_containers()`: Clean up stopped containers
+- `stream_container_logs(container_id=None)`: Stream container logs in real-time
+  - Auto-detects most recent container if ID not provided
+  - Gracefully handles Ctrl+C interruption
+  - Uses 24-hour timeout for long-running streams
 
 ## Schemas
+
+### PromptSpecManager
+Manages creation, validation, and file operations for PromptSpec objects.
+
+```python
+from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
+from cosmos_workflow.prompts.schemas import DirectoryManager
+
+# Initialize with directory manager
+dir_manager = DirectoryManager(prompts_dir, runs_dir)
+spec_manager = PromptSpecManager(dir_manager)
+
+# Create a prompt spec with automatic smart naming
+spec = spec_manager.create_prompt_spec(
+    prompt_text="A futuristic city with neon lights",
+    input_video_path="inputs/videos/city.mp4",
+    control_inputs={
+        "vis": "path/to/vis",
+        "edge": "path/to/edge",
+        "depth": "path/to/depth",
+        "seg": "path/to/seg"
+    }
+)
+# Automatically saved with smart name: "futuristic_city_neon"
+
+# Create enhanced prompt (from upsampling)
+enhanced_spec = spec_manager.create_prompt_spec(
+    prompt_text="A breathtaking futuristic metropolis bathed in vibrant neon",
+    input_video_path="inputs/videos/city.mp4",
+    control_inputs=control_inputs,
+    is_upsampled=True,
+    parent_prompt_text="A futuristic city with neon lights"
+)
+# Smart name generated from content: "breathtaking_metropolis"
+```
+
+**Key Features:**
+- Automatic smart name generation from prompt content
+- Consistent ID generation using SchemaUtils
+- Automatic file saving to proper directory structure
+- Support for upsampled/enhanced prompts with parent tracking
+- Centralized API for all prompt spec creation
 
 ### PromptSpec
 Prompt specification schema.
@@ -409,17 +475,34 @@ is_valid = validate_gpu_request(requested=8, available=4)
 ```
 
 ### SmartNaming
-Generate intelligent names from descriptions.
+Generate intelligent names from descriptions using semantic keyword extraction.
+
+**Features:**
+- Uses KeyBERT with SBERT embeddings for semantic understanding
+- Extracts up to 3 most relevant keywords/phrases
+- Filters common English and VFX-specific stopwords
+- Falls back to simple extraction when KeyBERT unavailable
 
 ```python
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 name = generate_smart_name(
     "A beautiful sunset over the ocean with waves",
-    max_length=20
+    max_length=50
 )
 # Returns: "sunset_ocean_waves"
+
+# More examples:
+generate_smart_name("Low-lying mist with gradual falloff")
+# Returns: "low_lying_mist"
+
+generate_smart_name("Golden hour light creating long shadows")
+# Returns: "golden_hour_shadows"
 ```
+
+**Dependencies:**
+- keybert>=0.8.0
+- sentence-transformers>=2.2.0 (for SBERT model)
 
 ### VideoProcessor
 Process video files and PNG sequences.

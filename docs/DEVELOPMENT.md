@@ -12,13 +12,18 @@ pip install -r requirements-dev.txt
 ```
 
 ### Pre-commit Hooks
+
+We use **read-only** pre-commit hooks that check but never modify files. This ensures predictability and prevents unexpected changes during commits.
+
 ```bash
 # Install hooks (one-time setup)
 pre-commit install
 
-# Run manually on all files
+# Run manually on all files (checks only, no fixes)
 pre-commit run --all-files
 ```
+
+**Important:** Pre-commit hooks will fail if formatting or linting issues are found. Fix them manually before committing (see Code Quality section).
 
 ## Test-Driven Development (TDD)
 
@@ -51,14 +56,29 @@ Coverage requirement: 80% minimum
 
 ## Code Quality
 
-### Linting & Formatting
+### Formatting & Linting Philosophy
+
+We use a **manual formatting workflow** with read-only pre-commit hooks:
+- Pre-commit hooks check but never modify files (no surprises)
+- Developers format code manually or via editor integration
+- This avoids the commit-stash-reapply churn of auto-fixing hooks
+
+### Formatting Workflow
+
+See [FORMATTING.md](FORMATTING.md) for detailed formatting guide.
+
+**Quick Reference:**
 ```bash
-# Auto-format code
-ruff format cosmos_workflow/
+# Before committing
+ruff format .            # Format code
+ruff check . --fix      # Fix linting
+git commit              # Commit changes
+```
 
-# Fix linting issues
-ruff check cosmos_workflow/ --fix
+**Editor Integration:** Configure format-on-save for best workflow (see [FORMATTING.md](FORMATTING.md))
 
+### Other Quality Checks
+```bash
 # Type checking
 mypy cosmos_workflow/
 

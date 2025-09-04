@@ -1,0 +1,14 @@
+{
+  "id": "ps_b354780635c9",
+  "name": "night_after_rain_reflective",
+  "prompt": "Dark, glossy ground planes carry crisp reflections of existing light sources; saturated color blooms are controlled and local; textures beneath remain readable; contrast deep yet stable; slight atmospheric humidity supports halation.",
+  "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+  "input_video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
+  "control_inputs": {
+    "depth": "inputs\\videos\\city_scene_20250830_203504\\depth.mp4",
+    "seg": "inputs\\videos\\city_scene_20250830_203504\\segmentation.mp4"
+  },
+  "timestamp": "2025-09-03T07:56:54.216899Z",
+  "is_upsampled": false,
+  "parent_prompt_text": null
+}

@@ -312,6 +312,83 @@ class TestDockerExecutor:
         assert "Error retrieving logs: Log retrieval failed" in logs
         self.mock_ssh_manager.execute_command_success.assert_called_once()
 
+    def test_stream_container_logs_with_specific_container_id(self):
+        """Test streaming logs with a specific container ID."""
+        container_id = "abc123def456"
+
+        # Call stream_container_logs with specific ID
+        self.docker_executor.stream_container_logs(container_id)
+
+        # Should stream logs from the specified container
+        self.mock_ssh_manager.execute_command.assert_called_once_with(
+            f"sudo docker logs -f {container_id}", timeout=86400, stream_output=True
+        )
+
+    def test_stream_container_logs_auto_detect_latest_container(self):
+        """Test auto-detecting and streaming from the latest container."""
+        # Mock auto-detection to return a container ID
+        detected_container = "xyz789abc123"
+        self.mock_ssh_manager.execute_command_success.return_value = detected_container
+
+        # Call stream_container_logs without container ID
+        self.docker_executor.stream_container_logs()
+
+        # Should first detect the container
+        self.mock_ssh_manager.execute_command_success.assert_called_once_with(
+            f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"', stream_output=False
+        )
+
+        # Then stream logs from detected container
+        self.mock_ssh_manager.execute_command.assert_called_once_with(
+            f"sudo docker logs -f {detected_container}", timeout=86400, stream_output=True
+        )
+
+    def test_stream_container_logs_no_running_containers(self):
+        """Test error handling when no containers are running."""
+        # Mock auto-detection to return empty (no containers)
+        self.mock_ssh_manager.execute_command_success.return_value = ""
+
+        # Should raise RuntimeError when no containers found
+        with pytest.raises(RuntimeError, match="No running containers found"):
+            self.docker_executor.stream_container_logs()
+
+        # Should have attempted to detect container
+        self.mock_ssh_manager.execute_command_success.assert_called_once_with(
+            f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"', stream_output=False
+        )
+
+        # Should not attempt to stream logs
+        self.mock_ssh_manager.execute_command.assert_not_called()
+
+    def test_stream_container_logs_handles_keyboard_interrupt(self):
+        """Test graceful handling of Ctrl+C during streaming."""
+        container_id = "interrupt123"
+
+        # Mock KeyboardInterrupt during streaming
+        self.mock_ssh_manager.execute_command.side_effect = KeyboardInterrupt()
+
+        # Should handle interrupt gracefully (no exception raised)
+        self.docker_executor.stream_container_logs(container_id)
+
+        # Should have attempted to stream
+        self.mock_ssh_manager.execute_command.assert_called_once_with(
+            f"sudo docker logs -f {container_id}", timeout=86400, stream_output=True
+        )
+
+    def test_stream_container_logs_strips_whitespace_from_detected_id(self):
+        """Test that whitespace is stripped from auto-detected container ID."""
+        # Mock auto-detection with whitespace
+        detected_container = "  container789  \n"
+        self.mock_ssh_manager.execute_command_success.return_value = detected_container
+
+        # Call stream_container_logs
+        self.docker_executor.stream_container_logs()
+
+        # Should stream with trimmed container ID
+        self.mock_ssh_manager.execute_command.assert_called_once_with(
+            "sudo docker logs -f container789", timeout=86400, stream_output=True
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

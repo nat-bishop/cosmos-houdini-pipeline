@@ -2,13 +2,16 @@ See @README.md for project overview. Most directorys also contain a README.md
 
 **Always run TDD (Test Driven Development) if requested**
 **TDD PROCEDURE**
-### Gate 1: Write Tests First
+### Gate 1: Write Tests First - NO MOCKS!
 - Write tests based on expected input/output pairs
-- Real tests only - no mocks, even if code doesn't exist yet
-- **PASS**: Tests are comprehensive, consider edge cases and error codes
+- **CRITICAL: NO MOCKS** - Tests must call real functions, even if they don't exist yet
+- No Mock(), MagicMock(), patch(), or any test doubles
+- Tests WILL fail with AttributeError/ImportError - that's expected
+- **PASS**: Tests use real function calls, cover edge cases and error codes
 
 ### Gate 2: Verify Tests Fail
 - Run tests - they should fail (that's good!)
+- Use: `pytest <test_file> --tb=no -q` (no subagents needed)
 - **PASS**: All tests failing
 
 ### Gate 3: Commit Failing Tests
@@ -16,11 +19,12 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Commit the failing tests
 - **PASS**: Tests committed
 
-### Gate 4: Make Tests Pass
-- Write implementation code iteratively until tests pass
-- Run tests and verify for overfitting in parallel
-- Don't change tests - they're the spec
-- **PASS**: 100% tests passing, no overfitting, tests unchanged
+### Gate 4: Make Tests Pass - DO NOT CHANGE TESTS!
+- Write implementation code to make tests pass
+- **CRITICAL: DO NOT MODIFY THE TESTS** - Tests are the contract/spec
+- Run overfit-verifier agent in parallel to check for overfitting
+- If tests fail, fix the implementation, not the tests
+- **PASS**: 100% tests passing, no overfitting, tests unchanged from Gate 3
 
 ### Gate 5: Document and Commit
 - Update all documentation
@@ -73,6 +77,7 @@ See @README.md for project overview. Most directorys also contain a README.md
 - Type hints: Always add them - `func(x: type) -> type:`
 - Docstrings: Google-style with Args/Returns/Raises sections (one-line summary, then details)
 - Exceptions: Catch specific ones - `except SpecificError:`
+- Emojis and Unicode: Don't use emojis or Unicode symbols - causes Windows encoding errors, use ASCII like `"[OK]"` not `"✓"`
 
 ## Operating Procedures
 - **MUST DO** Write all temporary files and reports to .claude/workspace/
@@ -80,9 +85,9 @@ See @README.md for project overview. Most directorys also contain a README.md
 - When completing features from @ROADMAP.md, remove them from the file
 
 ## Quick Commands
-# Formatting and Linting
-ruff format cosmos_workflow/      # Format code
-ruff check cosmos_workflow/ --fix # Fix linting
+# Formatting and Linting (Manual - hooks are read-only)
+ruff format .                     # Format all code
+ruff check . --fix               # Fix all linting issues
 
 # Cosmos CLI
 cosmos create prompt "desc"       # Create prompt spec
@@ -115,3 +120,10 @@ pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
 - Gate 5 of TDD: Update documentation with doc-drafter subagent before commits
 - Documentation must stay synchronized with code changes
 - Never create new documentation files without explicit request
+
+## Formatting Philosophy
+- Pre-commit hooks are READ-ONLY (check but don't modify)
+- Format manually with `ruff format .` before committing
+- Fix linting with `ruff check . --fix` before committing
+- This prevents commit-stash-reapply churn from auto-fixing hooks
+- Configure editor to format on save for best workflow

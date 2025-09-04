@@ -55,6 +55,7 @@ cosmos status
 - `cosmos prompt-enhance` - Enhance prompts with AI
 - `cosmos prepare` - Prepare renders for inference
 - `cosmos status` - Check remote GPU status
+- `cosmos status --stream` - Stream Docker container logs in real-time
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 
@@ -73,6 +74,7 @@ cosmos_workflow/
 ## 📚 Documentation
 
 - **[Development Guide](docs/DEVELOPMENT.md)** - Setup, testing, TDD workflow
+- **[Formatting Guide](docs/FORMATTING.md)** - Code formatting philosophy and workflow
 - **[API Reference](docs/API.md)** - Complete API documentation
 - **[Changelog](CHANGELOG.md)** - Version history
 - **[Roadmap](ROADMAP.md)** - Planned features and improvements
@@ -86,9 +88,9 @@ pip install -r requirements-dev.txt
 # Run tests
 pytest --cov=cosmos_workflow
 
-# Format & lint
-ruff format cosmos_workflow/
-ruff check cosmos_workflow/ --fix
+# Format & lint (manual - pre-commit hooks are read-only)
+ruff format .
+ruff check . --fix
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instructions.

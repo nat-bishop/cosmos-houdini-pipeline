@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 
+from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
 from cosmos_workflow.prompts.schemas import (
     DirectoryManager,
     ExecutionStatus,
@@ -28,7 +29,7 @@ from .helpers import (
 @click.group()
 @click.pass_context
 def create(ctx):
-    """📝 Create prompts and run specifications.
+    """Create prompts and run specifications.
 
     Use these commands to create the JSON specifications needed for
     Cosmos Transfer inference and upscaling workflows.
@@ -83,36 +84,35 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
             "seg": str(video_dir_path / "segmentation.mp4"),
         }
 
-        # Generate unique ID
-        prompt_id = SchemaUtils.generate_prompt_id(prompt_text, video_path, control_inputs_dict)
-
-        # Create PromptSpec
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        prompt_spec = PromptSpec(
-            id=prompt_id,
-            name=name,
-            prompt=prompt_text,
-            negative_prompt=negative,
-            input_video_path=video_path,
-            control_inputs=control_inputs_dict,
-            timestamp=timestamp,
-            is_upsampled=False,
-            parent_prompt_text=None,
-        )
-
-        # Save to file
+        # Get config and create manager
         config_manager = ctx_obj.get_config_manager()
         local_config = config_manager.get_local_config()
 
         dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
         dir_manager.ensure_directories_exist()
 
-        file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_id)
-        prompt_spec.save(file_path)
+        # Use PromptSpecManager to create the spec
+        spec_manager = PromptSpecManager(dir_manager)
+
+        # Create the prompt spec using the manager
+        # Note: The manager will save it automatically
+        prompt_spec = spec_manager.create_prompt_spec(
+            name=name,
+            prompt_text=prompt_text,
+            negative_prompt=negative,
+            input_video_path=video_path,
+            control_inputs=control_inputs_dict,
+            is_upsampled=False,
+            parent_prompt_text=None,
+        )
+
+        # Get the file path where it was saved
+        timestamp = prompt_spec.timestamp
+        file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_spec.id)
 
     # Display success with rich formatting
     results_data = {
-        "ID": format_id(prompt_id),
+        "ID": format_id(prompt_spec.id),
         "Name": name,
         "File": str(file_path),
         "Video": video_path,

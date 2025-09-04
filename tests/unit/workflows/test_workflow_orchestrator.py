@@ -221,7 +221,7 @@ class TestWorkflowOrchestratorHelpers:
 
                 # Mock Path.rglob to find prompt spec
                 with patch.object(Path, "rglob") as mock_rglob:
-                    mock_rglob.return_value = [Path("inputs/prompts/test_ps_123.json")]
+                    mock_rglob.return_value = [Path("inputs/prompts/test_123.json")]
 
                     # Mock Path.parent.exists() for the video path
                     with patch.object(Path, "exists", return_value=True):

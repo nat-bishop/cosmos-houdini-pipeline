@@ -18,7 +18,7 @@ def display_success(message: str, details: dict[str, Any] | None = None):
         message: Success message to display.
         details: Optional dictionary of additional details to show in a table.
     """
-    console.print(f"\n[bold green]✅ {message}[/bold green]")
+    console.print(f"\n[bold green][SUCCESS] {message}[/bold green]")
 
     if details:
         table = create_info_table(details)
@@ -33,7 +33,7 @@ def display_error(message: str, error: str | None = None, verbose: bool = False)
         error: Optional error details string.
         verbose: If True, print full exception traceback.
     """
-    console.print(f"[bold red]❌ {message}[/bold red]")
+    console.print(f"[bold red][ERROR] {message}[/bold red]")
 
     if error:
         console.print(f"  {error}")
@@ -48,7 +48,7 @@ def display_warning(message: str):
     Args:
         message: Warning message to display.
     """
-    console.print(f"[yellow]⚠️  {message}[/yellow]")
+    console.print(f"[yellow][WARNING] {message}[/yellow]")
 
 
 def display_info(message: str):
@@ -165,7 +165,7 @@ def display_dry_run_header():
 
     Shows a styled header indicating dry run mode is active.
     """
-    console.print("\n[bold yellow]🔍 DRY RUN MODE[/bold yellow]")
+    console.print("\n[bold yellow][DRY RUN MODE][/bold yellow]")
     console.print("This is a preview of what would happen:\n")
 
 

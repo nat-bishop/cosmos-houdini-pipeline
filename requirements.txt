@@ -4,3 +4,7 @@ paramiko>=3.0.0
 pyyaml>=6.0
 rich>=13.0.0
 toml>=0.10.2
+
+# Keyword extraction for smart naming
+keybert>=0.8.0
+sentence-transformers>=2.2.0  # For SBERT embeddings

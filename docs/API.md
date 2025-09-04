@@ -504,32 +504,6 @@ generate_smart_name("Golden hour light creating long shadows")
 - keybert>=0.8.0
 - sentence-transformers>=2.2.0 (for SBERT model)
 
-### VideoProcessor
-Process video files and PNG sequences.
-
-```python
-from cosmos_workflow.local_ai.video_metadata import VideoProcessor
-
-processor = VideoProcessor(use_ai=True)
-
-# Extract metadata
-metadata = processor.extract_metadata(Path("video.mp4"))
-
-# Standardize video
-processor.standardize_video(
-    input_path=Path("input.mp4"),
-    output_path=Path("output.mp4"),
-    target_fps=24,
-    target_resolution=(1920, 1080)
-)
-
-# Create video from frames
-processor.create_video_from_frames(
-    frame_paths=[Path("frame1.png"), Path("frame2.png")],
-    output_path=Path("output.mp4"),
-    fps=24
-)
-```
 
 ### CosmosSequenceValidator
 Validate and process Cosmos control sequences.

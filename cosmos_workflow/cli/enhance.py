@@ -116,33 +116,38 @@ def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
             f"[cyan]Enhancing {len(specs_to_enhance)} prompt(s)...", total=None
         )
 
-        # Process all specs
-        enhanced_count = 0
-        for spec, _ in specs_to_enhance:
-            try:
-                result = orchestrator.run_single_prompt_upsampling(
-                    prompt_spec=spec,
-                    preprocess_videos=preprocess,
-                    max_resolution=max_resolution,
-                    num_frames=2,  # Fixed value
-                    num_gpu=1,
-                    cuda_devices="0",
+        # Extract just the specs for batch processing
+        specs_only = [spec for spec, _ in specs_to_enhance]
+
+        # Process all specs in a single batch
+        try:
+            result = orchestrator.run_prompt_upsampling(
+                prompt_specs=specs_only,
+                preprocess_videos=preprocess,
+                max_resolution=max_resolution,
+                num_frames=2,  # Fixed value
+                num_gpu=1,
+                cuda_devices="0",
+            )
+
+            enhanced_count = 0
+            if result["success"] and result.get("updated_specs"):
+                for i, updated_spec in enumerate(result["updated_specs"]):
+                    if updated_spec:
+                        original_spec = specs_only[i]
+                        enhanced_count += 1
+                        console.print(
+                            f"  [green][OK][/green] Enhanced: {original_spec.name} -> {updated_spec.name}"
+                        )
+                    else:
+                        console.print(f"  [yellow][WARNING][/yellow] Failed: {specs_only[i].name}")
+            else:
+                console.print(
+                    f"  [red][ERROR][/red] Batch processing failed: {result.get('error', 'Unknown error')}"
                 )
 
-                if result["success"] and result.get("updated_spec"):
-                    updated_spec = result["updated_spec"]
-
-                    # The spec was already saved by PromptSpecManager with a smart name
-                    # We just need to report success - no need to save again
-                    enhanced_count += 1
-                    console.print(
-                        f"  [green][OK][/green] Enhanced: {spec.name} -> {updated_spec.name}"
-                    )
-                else:
-                    console.print(f"  [yellow][WARNING][/yellow] Failed: {spec.name}")
-
-            except Exception as e:
-                console.print(f"  [red][ERROR][/red] Error enhancing {spec.name}: {e}")
+        except Exception as e:
+            console.print(f"  [red][ERROR][/red] Error during batch enhancement: {e}")
 
         progress.update(task, completed=True)
 

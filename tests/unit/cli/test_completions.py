@@ -4,8 +4,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from cosmos_workflow.cli.completions import (
     complete_directories,
     complete_prompt_specs,

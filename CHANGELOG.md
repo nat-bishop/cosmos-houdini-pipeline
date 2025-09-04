@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Switched to read-only pre-commit hooks for predictable formatting workflow**
+  - Pre-commit hooks now only check formatting/linting, never modify files
+  - Prevents unexpected changes and commit-stash-reapply churn
+  - Developers format manually with `ruff format .` and `ruff check . --fix`
+  - Recommended: Configure editor to format on save for seamless workflow
+  - Updated pyproject.toml to set `fix = false` globally
+  - Updated .pre-commit-config.yaml with explicit read-only arguments
+
 ### Changed - 2025-09-04 (Smart Naming Refactor)
 - **Refactored smart naming from spaCy to KeyBERT for improved semantic extraction**
   - Replaced spaCy dependency parsing with KeyBERT semantic keyword extraction

@@ -68,6 +68,18 @@
   - Agent added implementation code when it should only update docs
   - Need to restrict permissions: remove Bash access or limit to doc files only
 
+- [ ] **Investigate test-runner subagent test specificity**
+  - Verify if test-runner subagent runs specific tests vs entire suite
+  - Ensure it follows TDD gate-specific testing (e.g., only new test file in Gate 2)
+  - Optimize test execution for focused development workflow
+  - Document expected test-runner behavior for different scenarios
+
+- [ ] **Investigate dead code analysis with tools like Vulture**
+  - Analyze codebase for unused functions, classes, and imports
+  - Configure Vulture or deadcode for CLI-centric architecture
+  - Integrate with CI/CD pipeline for ongoing maintenance
+  - Focus on single entry point (CLI) to identify truly unused code
+
 ## Priority 2: Features & Enhancements
 
 ### Performance Optimization

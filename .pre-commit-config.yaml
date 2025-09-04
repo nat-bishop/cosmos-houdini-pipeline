@@ -20,18 +20,16 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: mixed-line-ending
-        # Just check, don't fix (prevents uncommitted changes)
+        args: ['--fix=no']  # ensure read-only, no modifications
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8, etc.)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.4
     hooks:
-      # Check only - don't auto-fix (prevents uncommitted changes)
       - id: ruff
-        args: [--exit-non-zero-on-fix]  # Fail if fixes needed, don't apply them
-      # Check formatting only - don't auto-format
+        # check-only, no --fix
       - id: ruff-format
-        args: [--check]  # Check only, don't modify files
+        args: [--check]  # check-only, no auto-format
 
 # That's it! Just the essentials:
 # - Files stay clean and consistent

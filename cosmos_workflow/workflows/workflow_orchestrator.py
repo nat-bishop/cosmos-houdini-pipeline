@@ -3,6 +3,7 @@
 Coordinates all services to run complete workflows with proper error handling and logging.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -237,7 +238,7 @@ class WorkflowOrchestrator:
         if videos_subdir:
             return [Path(f"inputs/videos/{videos_subdir}")]
 
-        # Check if this is a RunSpec file
+        # Check if this is a RunSpec file (check for rs_ in the stem or if it matches a run ID pattern)
         if prompt_file.stem.endswith("_rs_") or "_rs_" in prompt_file.stem:
             # This is a RunSpec, load it to get the PromptSpec
             try:
@@ -245,10 +246,18 @@ class WorkflowOrchestrator:
 
                 run_spec = RunSpec.load(prompt_file)
 
-                # Find the corresponding PromptSpec
-                prompt_spec_files = list(
-                    Path("inputs/prompts").rglob(f"*{run_spec.prompt_id}*.json")
-                )
+                # Find the corresponding PromptSpec by loading files and checking ID
+                # Since hash is no longer in filename, we need to search by content
+                prompt_spec_files = []
+                for prompt_file in Path("inputs/prompts").rglob("*.json"):
+                    try:
+                        with open(prompt_file) as f:
+                            data = json.load(f)
+                            if data.get("id") == run_spec.prompt_id:
+                                prompt_spec_files.append(prompt_file)
+                                break
+                    except (OSError, json.JSONDecodeError):
+                        continue
                 if prompt_spec_files:
                     prompt_spec = PromptSpec.load(prompt_spec_files[0])
 

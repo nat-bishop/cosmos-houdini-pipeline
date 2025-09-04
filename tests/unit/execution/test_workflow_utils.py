@@ -6,8 +6,6 @@ Test workflow utilities module.
 from pathlib import Path
 from unittest.mock import mock_open, patch
 
-import pytest
-
 from cosmos_workflow.utils.workflow_utils import (
     ensure_path_exists,
     format_duration,

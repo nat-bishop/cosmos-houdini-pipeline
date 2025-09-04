@@ -85,9 +85,9 @@ See @README.md for project overview. Most directorys also contain a README.md
 - When completing features from @ROADMAP.md, remove them from the file
 
 ## Quick Commands
-# Formatting and Linting
-ruff format cosmos_workflow/      # Format code
-ruff check cosmos_workflow/ --fix # Fix linting
+# Formatting and Linting (Manual - hooks are read-only)
+ruff format .                     # Format all code
+ruff check . --fix               # Fix all linting issues
 
 # Cosmos CLI
 cosmos create prompt "desc"       # Create prompt spec
@@ -120,3 +120,10 @@ pytest tests/ --cov=cosmos_workflow --cov-report=term-missing
 - Gate 5 of TDD: Update documentation with doc-drafter subagent before commits
 - Documentation must stay synchronized with code changes
 - Never create new documentation files without explicit request
+
+## Formatting Philosophy
+- Pre-commit hooks are READ-ONLY (check but don't modify)
+- Format manually with `ruff format .` before committing
+- Fix linting with `ruff check . --fix` before committing
+- This prevents commit-stash-reapply churn from auto-fixing hooks
+- Configure editor to format on save for best workflow

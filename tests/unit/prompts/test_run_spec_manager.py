@@ -238,9 +238,9 @@ class TestRunSpecManager:
 
         # Create test JSON files with different timestamps to ensure proper sorting
         test_files = [
-            ("run1_2025-08-29T10-00-00_rs_abc123.json", 1000),  # oldest
-            ("run2_2025-08-29T11-00-00_rs_def456.json", 2000),  # middle
-            ("run3_2025-08-29T12-00-00_rs_ghi789.json", 3000),  # newest
+            ("run1_2025-08-29_10-00-00-000_abc123.json", 1000),  # oldest
+            ("run2_2025-08-29_11-00-00-000_def456.json", 2000),  # middle
+            ("run3_2025-08-29_12-00-00-000_ghi789.json", 3000),  # newest
         ]
 
         for filename, timestamp in test_files:
@@ -259,7 +259,7 @@ class TestRunSpecManager:
         assert len(runs) == 3
         assert all(r.name in [f[0] for f in test_files] for r in runs)
         # Should be sorted by modification time (most recent first)
-        assert runs[0].name == "run3_2025-08-29T12-00-00_rs_ghi789.json"
+        assert runs[0].name == "run3_2025-08-29_12-00-00-000_ghi789.json"
 
     def test_list_runs_with_pattern(self):
         """Test listing runs with pattern filter."""
@@ -271,9 +271,9 @@ class TestRunSpecManager:
 
         # Create test files
         test_files = [
-            "cyberpunk_run_2025-08-29T10-00-00_rs_abc123.json",
-            "building_run_2025-08-29T11-00-00_rs_def456.json",
-            "cyberpunk_run_2025-08-29T12-00-00_rs_ghi789.json",
+            "cyberpunk_run_2025-08-29_10-00-00-000_abc123.json",
+            "building_run_2025-08-29_11-00-00-000_def456.json",
+            "cyberpunk_run_2025-08-29_12-00-00-000_ghi789.json",
         ]
 
         for filename in test_files:
@@ -297,8 +297,8 @@ class TestRunSpecManager:
 
         # Create test files
         test_files = [
-            "CYBERPUNK_RUN_2025-08-29T10-00-00_rs_abc123.json",
-            "building_run_2025-08-29T11-00-00_rs_def456.json",
+            "CYBERPUNK_RUN_2025-08-29_10-00-00-000_abc123.json",
+            "building_run_2025-08-29_11-00-00-000_def456.json",
         ]
 
         for filename in test_files:

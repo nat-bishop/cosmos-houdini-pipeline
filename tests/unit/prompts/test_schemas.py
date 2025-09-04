@@ -372,23 +372,17 @@ class TestDirectoryManager:
 
             timestamp = "2024-04-30T12:00:00Z"
 
-            # Test prompt file path
+            # Test prompt file path (NO hash in filename)
             prompt_path = dir_manager.get_prompt_file_path("test_prompt", timestamp, "ps_test123")
             expected_prompt_path = (
-                temp_path
-                / "prompts"
-                / "2024-04-30"
-                / "test_prompt_2024-04-30T12-00-00_ps_test123.json"
+                temp_path / "prompts" / "2024-04-30" / "test_prompt_2024-04-30_12-00-00-000.json"
             )
             assert prompt_path == expected_prompt_path
 
-            # Test run file path
+            # Test run file path (NO hash in filename)
             run_path = dir_manager.get_run_file_path("test_prompt", timestamp, "rs_test123")
             expected_run_path = (
-                temp_path
-                / "runs"
-                / "2024-04-30"
-                / "test_prompt_2024-04-30T12-00-00_rs_test123.json"
+                temp_path / "runs" / "2024-04-30" / "test_prompt_2024-04-30_12-00-00-000.json"
             )
             assert run_path == expected_run_path
 

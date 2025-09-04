@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash F:\\Art\\cosmos-houdini-experiments\\.claude\\statusline-command.sh"
+  }
+}

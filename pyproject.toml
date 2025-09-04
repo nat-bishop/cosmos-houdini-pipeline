@@ -46,53 +46,30 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-fix = true
+fix = false   # disable auto-fix globally
 
 [tool.ruff.lint]
 # Philosophy: Catch real bugs and security issues, not style opinions
 select = [
-    # Essential - Find real bugs
-    "F",     # pyflakes (undefined names, unused imports, etc.)
-    "E",     # pycodestyle errors (syntax, indentation)
-    "W",     # pycodestyle warnings (whitespace, deprecated)
-
-    # Important - Prevent common mistakes
-    "B",     # flake8-bugbear (likely bugs and design problems)
-    "I",     # isort (import sorting - consistency matters)
-    "UP",    # pyupgrade (outdated Python syntax)
-    "G",     # flake8-logging-format (logging performance)
-
-    # Security - Critical for remote execution tool
-    "S",     # flake8-bandit (security vulnerabilities)
-
-    # Helpful - Catch timezone and other gotchas
-    "DTZ",   # flake8-datetimez (timezone aware datetime)
-    "RUF",   # Ruff-specific rules (helpful checks)
-    "RUF001", # ambiguous-unicode-character-string
-    "RUF002", # ambiguous-unicode-character-docstring
-    "RUF003", # ambiguous-unicode-character-comment
+    "E","F","I",     # errors, pyflakes, import sort
+    "B",             # bugbear
+    "UP",            # pyupgrade
+    "DTZ",           # datetime/timezone
+    "G",             # logging-format
+    "S",             # security (bandit)
+    "RUF",           # Ruff-specific rules
+    "T20",           # print statements
 ]
 
 ignore = [
-    # Line length handled by formatter
-    "E501",   # line-too-long
-
-    # Complexity metrics are subjective
-    "B905",   # zip-without-explicit-strict
-
-    # Allow assert (used for invariant checking)
-    "S101",   # assert-used
-
-    # Import flexibility needed
-    "F401",   # unused-import (in __init__.py files)
+    "E501",          # line-too-long handled by formatter
+    "B905",          # subjective zip-without-strict
+    "S101",          # assert-used (needed for tests)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Test files have different rules
-"tests/*" = [
-    "S",       # Security checks not needed in tests
-    "DTZ",     # Timezone awareness not critical in tests
-]
+"tests/*" = ["S","DTZ","T20"]    # no security/TZ/print checks in tests
+"scripts/*" = ["T20"]            # scripts need print statements
 
 # CLI and workflow modules legitimately use print for output
 "cosmos_workflow/cli/*" = ["T20"]  # CLI needs print statements
@@ -100,9 +77,9 @@ ignore = [
 "cosmos_workflow/connection/ssh_manager.py" = ["T20"]  # SSH output streaming
 "cosmos_workflow/prompts/*" = ["T20"]  # Prompt creation feedback
 "cosmos_workflow/local_ai/*" = ["T20"]  # AI processing output
+"cosmos_workflow/execution/docker_executor.py" = ["T20"]  # Docker log streaming
 
-# Init files can have unused imports (for public API)
-"**/__init__.py" = ["F401"]
+"**/__init__.py" = ["F401"]      # unused imports allowed only in __init__.py
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -137,13 +114,7 @@ pretty = true
 show_error_context = true
 show_column_numbers = true
 show_error_codes = true
-exclude = [
-    "tests/",
-    "build/",
-    "dist/",
-    ".venv/",
-    "venv/",
-]
+exclude = "(^tests/|^build/|^dist/|^\\.venv/|^venv/)"
 
 [[tool.mypy.overrides]]
 module = "tests.*"

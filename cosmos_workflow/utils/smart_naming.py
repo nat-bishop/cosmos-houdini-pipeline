@@ -161,7 +161,7 @@ ALL_STOPWORDS = COMMON_STOPWORDS | DOMAIN_STOPWORDS
 
 
 @lru_cache(maxsize=128)
-def generate_smart_name(text: str, max_length: int = 50) -> str:
+def generate_smart_name(text: str, max_length: int = 20) -> str:
     """Generate smart name using KeyBERT semantic keyword extraction.
 
     Uses KeyBERT with SBERT embeddings to extract semantically important
@@ -243,8 +243,8 @@ def generate_smart_name(text: str, max_length: int = 50) -> str:
             seen_words = set()  # Track unique words to avoid duplicates
 
             for keyword in keyword_strings:
-                # Clean and convert to name format
-                cleaned = re.sub(r"[^a-z0-9\s]", "", keyword.lower())
+                # Clean and convert to name format - exclude numbers
+                cleaned = re.sub(r"[^a-z\s]", "", keyword.lower())
                 # Split multi-word phrases
                 words = cleaned.split()
 

@@ -249,6 +249,92 @@ os.environ["COSMOS_DATABASE_URL"] = ":memory:"  # For testing
 
 See [docs/DATABASE.md](docs/DATABASE.md) for detailed documentation.
 
+### WorkflowService
+
+The service layer provides business logic for managing prompts and runs with transaction safety and comprehensive validation.
+
+```python
+from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.database import DatabaseConnection
+from cosmos_workflow.config import ConfigManager
+
+# Initialize service
+db_connection = DatabaseConnection(":memory:")
+db_connection.create_tables()
+config_manager = ConfigManager()
+service = WorkflowService(db_connection, config_manager)
+
+# Create prompts for any AI model
+prompt_data = service.create_prompt(
+    model_type="transfer",  # or "reason", "predict", future models
+    prompt_text="A futuristic cityscape at night",
+    inputs={
+        "video_path": "/inputs/scene.mp4",
+        "depth_path": "/inputs/scene_depth.mp4"
+    },
+    parameters={
+        "num_steps": 35,
+        "guidance_scale": 7.5,
+        "cfg_scale": 8.0
+    }
+)
+# Returns: {"id": "ps_abcd1234", "model_type": "transfer", ...}
+
+# Create execution runs
+run_data = service.create_run(
+    prompt_id=prompt_data["id"],
+    execution_config={
+        "gpu_node": "gpu-001",
+        "docker_image": "cosmos:latest",
+        "output_dir": "/outputs/run_001"
+    },
+    metadata={"user": "NAT", "priority": "high"},
+    initial_status="pending"  # or "queued", "running", etc.
+)
+# Returns: {"id": "rs_wxyz5678", "prompt_id": "ps_abcd1234", ...}
+
+# Retrieve entities
+prompt = service.get_prompt("ps_abcd1234")
+run = service.get_run("rs_wxyz5678")
+```
+
+**Methods:**
+
+- `create_prompt(model_type, prompt_text, inputs, parameters)`: Create AI model prompts
+  - Supports multiple model types: "transfer", "reason", "predict", future models
+  - Validates required fields and JSON structure
+  - Returns dictionary optimized for CLI display
+  - Generates deterministic IDs based on content hash
+
+- `create_run(prompt_id, execution_config, metadata=None, initial_status="pending")`: Create execution runs
+  - Links to existing prompts with foreign key validation
+  - Configurable initial status for workflow control
+  - Flexible execution configuration via JSON
+  - Optional metadata for user tracking and priority
+
+- `get_prompt(prompt_id)`: Retrieve prompts by ID
+  - Returns dictionary representation or None if not found
+  - Includes all fields: id, model_type, prompt_text, inputs, parameters, created_at
+
+- `get_run(run_id)`: Retrieve runs by ID
+  - Returns dictionary with all run data including optional timestamps
+  - Fields: id, prompt_id, model_type, status, execution_config, outputs, metadata
+  - Includes created_at, updated_at, started_at, completed_at when available
+
+**Features:**
+- Transaction safety with automatic rollback on database errors
+- Comprehensive input validation with descriptive error messages
+- Dictionary returns optimized for CLI display (not raw ORM objects)
+- Support for flexible JSON fields enabling future model extensibility
+- Deterministic ID generation for consistent prompt identification
+- Configurable initial status for runs enabling queue management
+
+**Error Handling:**
+- Validates all required parameters with clear error messages
+- Checks for existing prompt references when creating runs
+- Handles database connection failures with automatic rollback
+- Returns None for not-found entities instead of raising exceptions
+
 ### WorkflowOrchestrator
 Main orchestrator for workflow execution.
 

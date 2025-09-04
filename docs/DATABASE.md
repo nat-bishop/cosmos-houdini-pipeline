@@ -264,7 +264,51 @@ All models include comprehensive validation:
 
 ## Usage Patterns
 
-### Basic Workflow Execution
+### Service Layer (Recommended)
+
+The `WorkflowService` provides a high-level business logic layer for database operations with comprehensive validation and error handling:
+
+```python
+from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.database import DatabaseConnection
+from cosmos_workflow.config import ConfigManager
+
+# Initialize service
+db_connection = DatabaseConnection("outputs/cosmos_workflow.db")
+db_connection.create_tables()
+config_manager = ConfigManager()
+service = WorkflowService(db_connection, config_manager)
+
+# Create prompts with validation
+prompt_data = service.create_prompt(
+    model_type="transfer",
+    prompt_text="A cyberpunk cityscape at night",
+    inputs={"video_path": "/inputs/city.mp4"},
+    parameters={"num_steps": 35, "cfg_scale": 7.5}
+)
+# Returns dictionary optimized for CLI display
+
+# Create runs with transaction safety
+run_data = service.create_run(
+    prompt_id=prompt_data["id"],
+    execution_config={"gpu_node": "gpu-001"},
+    metadata={"user": "NAT"},
+    initial_status="pending"
+)
+
+# Retrieve entities safely
+prompt = service.get_prompt(prompt_data["id"])
+run = service.get_run(run_data["id"])
+```
+
+**Benefits of Service Layer:**
+- Transaction safety with automatic rollback on errors
+- Comprehensive input validation with descriptive error messages
+- Dictionary returns optimized for CLI display (not raw ORM objects)
+- Deterministic ID generation for consistent identification
+- Support for configurable initial status enabling queue management
+
+### Basic Workflow Execution (Direct Database Access)
 
 ```python
 from cosmos_workflow.database import init_database

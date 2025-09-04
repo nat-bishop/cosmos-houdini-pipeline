@@ -22,6 +22,7 @@
       "Bash(timeout:*)",
       "Bash(cosmos:*)",
       "Bash(find:*)",
+      "Bash(python -m pytest:*)",
       "Bash(pre-commit:*)",
       "Bash(mypy:*)"
     ],

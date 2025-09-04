@@ -64,6 +64,7 @@ For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION
 cosmos_workflow/
 ├── cli/             # CLI commands
 ├── workflows/       # Orchestration logic
+├── services/        # Business logic layer
 ├── connection/      # SSH/SFTP management
 ├── execution/       # Docker execution
 ├── database/        # SQLAlchemy models & connection management

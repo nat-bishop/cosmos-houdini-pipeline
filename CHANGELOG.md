@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Service layer implementation for workflow operations**
+  - New `WorkflowService` class providing business logic for prompt and run management
+  - `create_prompt()` method for creating AI model prompts with flexible schema validation
+  - `create_run()` method for creating execution runs with configurable initial status
+  - `get_prompt()` and `get_run()` methods for retrieving entities by ID
+  - Returns dictionaries optimized for CLI display instead of raw ORM objects
+  - Transaction safety with automatic rollback on database errors
+  - Comprehensive input validation and error handling with descriptive messages
+  - Support for multiple AI models (transfer, reason, predict) through model_type parameter
+  - Flexible JSON fields for model-specific inputs and execution configurations
+  - Complete test coverage with 50+ unit tests following TDD Gate 1-3 principles
+
 - **Database foundation with flexible AI model support**
   - New `cosmos_workflow/database/` module with SQLAlchemy-based models
   - Support for multiple AI models (transfer, reason, predict) through flexible JSON schema

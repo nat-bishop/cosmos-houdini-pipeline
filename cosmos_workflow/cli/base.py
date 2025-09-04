@@ -6,9 +6,6 @@ from functools import wraps
 
 from rich.console import Console
 
-from cosmos_workflow.config.config_manager import ConfigManager
-from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
-
 console = Console()
 
 
@@ -17,8 +14,8 @@ class CLIContext:
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-        self.orchestrator: WorkflowOrchestrator | None = None
-        self.config_manager: ConfigManager | None = None
+        self.orchestrator = None
+        self.config_manager = None
 
     def setup_logging(self):
         """Setup logging configuration."""
@@ -29,15 +26,19 @@ class CLIContext:
             handlers=[logging.StreamHandler(sys.stdout)],
         )
 
-    def get_orchestrator(self) -> WorkflowOrchestrator:
-        """Get or create workflow orchestrator."""
+    def get_orchestrator(self):
+        """Get or create workflow orchestrator (lazy-loaded)."""
         if self.orchestrator is None:
+            from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+
             self.orchestrator = WorkflowOrchestrator()
         return self.orchestrator
 
-    def get_config_manager(self) -> ConfigManager:
-        """Get or create config manager."""
+    def get_config_manager(self):
+        """Get or create config manager (lazy-loaded)."""
         if self.config_manager is None:
+            from cosmos_workflow.config.config_manager import ConfigManager
+
             self.config_manager = ConfigManager()
         return self.config_manager
 

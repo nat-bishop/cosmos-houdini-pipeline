@@ -11,7 +11,9 @@ All work follows a **gated TDD flow**. If a gate fails, stop and request review.
 
 ### **Gate 1 — Write Tests First**
 - Tests are written before implementation.
-- **No mocks.** All calls must be to real functions.
+- **Test the behavior of the system, not its implementation details.**
+- **Use real implementations, not mocks.**
+- **Write enough behavioral tests that only a general solution can pass them all.**
 - Coverage target: ≥ 80%.
 - Always test error paths and consider edge cases.
 - Expected: all tests fail.

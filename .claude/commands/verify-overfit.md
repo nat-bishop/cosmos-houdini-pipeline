@@ -1,49 +1,42 @@
 ---
 name: verify-overfit
-description: Run independent overfit verification in a fresh session and save to standard location
+description: Run overfitting verification from a fresh context
 ---
 
-You are performing an independent overfit verification. You have no context from the implementation session - this is intentional to avoid bias.
+You are performing overfitting verification without implementation context.
 
-First, clear old verification reports and prepare directory:
+Setup:
 ```bash
 mkdir -p .claude/workspace/verification
 rm -f .claude/workspace/verification/EXTERNAL_*.md
 ```
 
-Then gather context about what to verify:
-1. Identify current feature from: `git status` and `git diff --name-only HEAD`
-2. Check what test files have changed: `git diff --name-only HEAD -- "**/*test*.py"`
-3. Get current git HEAD: `git rev-parse HEAD`
+Gather information:
+1. Identify changed files: `git diff --name-only HEAD`
+2. Get current git HEAD: `git rev-parse HEAD`
+3. Identify the feature being verified from the changed files
 
-Now perform the verification:
-1. Use the overfit-verifier agent to analyze the implementation against the tests
-2. Be EXTREMELY critical - you are the independent verifier, not the implementer
-3. Compare implementation files to their test files - does the implementation truly solve the general problem?
-4. Look especially for:
-   - Tests that were modified to pass instead of fixing implementation
-   - Implementation that only handles specific test cases
-   - Missing validation, error handling, or security checks
-   - Resource management issues (unclosed connections, memory leaks)
-   - Any code written just to make tests green
+Perform verification:
+1. **Static analysis only - do NOT generate test scripts**
+2. Use the overfit-verifier agent to check the implementation
+3. Focus question: Would this code work with inputs other than the test cases?
+4. Document any code that appears tailored to specific test values
 
-Build your complete report including this header:
+Build and save report:
 ```markdown
 # EXTERNAL OVERFIT VERIFICATION
 Generated: [timestamp]
 Feature: [what was analyzed]
 Changed files: [list of files analyzed]
 Git HEAD: [commit hash]
-Session: Independent verification session
+
+## Verdict
+[PASS/FAIL]
 
 ## Findings
-[Your detailed analysis]
+[Specific overfitting patterns found with line numbers, or "No overfitting detected"]
 ```
 
-**IMPORTANT**: Only write the report once your analysis is complete. Save to:
-`.claude/workspace/verification/EXTERNAL_overfit_check.md`
+Save to: `.claude/workspace/verification/EXTERNAL_overfit_check.md`
 
-After saving, tell the user:
-"External overfit verification complete - report saved to `.claude/workspace/verification/EXTERNAL_overfit_check.md`"
-
-Remember: Implementation sessions develop "test-passing bias" and miss critical issues. Your fresh perspective is valuable. Be harsh but fair.
+Note: You have no context from the implementation session. This allows objective evaluation of whether the code is general or test-specific.

@@ -87,9 +87,16 @@
   - Ensure consistent user experience across all commands
   - Document default value rationale and override mechanisms
 
-- [ ] **Investigate if overfit-verifier agent scope is too broad (check code-reviewer too)**
+- [x] **Fixed overfit-verifier agent scope and clarified TDD workflow**
 
-  **Role Confusion Issues:**
+  **Changes Made (2025-09-04):**
+  - Updated Gate 1 to emphasize behavioral testing and real implementations
+  - Clarified overfit-verifier to only check for hardcoded test values via static analysis
+  - Added explicit "do NOT generate test scripts" to both agent and command
+  - Removed "Suggest Edge Cases" section that was expanding scope
+  - Made clear distinction: overfitting = memorized tests, not missing features
+
+  **Original Issues:**
   - Internal vs external verification not clearly distinguished in workflow
   - Claude mistakenly tries to write EXTERNAL reports (should only check if they exist)
   - Agent name doesn't clarify it's for internal self-checking only

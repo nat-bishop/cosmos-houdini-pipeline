@@ -208,39 +208,84 @@ class WorkflowService:
 
 ---
 
-### Chunk 3: Update Existing CLI Commands (2-3 hours)
-**Goal:** Switch existing commands to use WorkflowService
+### Chunk 3: CLI Migration with Comprehensive Testing (3-4 hours) ⏳ IN PROGRESS
+**Goal:** Add CLI tests, switch to WorkflowService, simplify system
 
-**Commands to Update:**
-- `cosmos create prompt` → Use WorkflowService
-- `cosmos create run` → Use WorkflowService
-- `cosmos inference` → Use service for run creation
+**Core Simplifications:**
+- WorkflowService: Data operations AND query logic (pragmatic approach)
+- WorkflowOrchestrator: ONLY GPU execution coordination
+- Clear separation of concerns - no mixed responsibilities
 
-**Approach:** Dual-write (database + JSON) for backward compatibility
+**Testing Strategy:**
+1. **Service tests** - Already complete from Chunk 2 ✅
+2. **CLI behavioral tests** - Tests for TARGET behavior (database/service)
+3. **Integration tests** - Test CLI→Service→Database flow
+4. **Manager tests** - DELETE with managers
+
+**Target CLI Behavior:**
+- Commands work with database IDs as primary identifiers
+- No JSON files created or used (except for dry-run preview)
+- Smart naming continues for user-friendly names
+- Comprehensive output for technical CLI users
+- Clear error messages, no silent failures
+- Trust prepare.py validation, light validation at CLI level
+
+**Implementation Phases:**
+
+**Phase 1: Write Target Behavior Tests**
+- Write tests for desired service-based behavior
+- Tests define the future CLI contract
+- Skip making them pass with current JSON implementation
+- These tests will initially FAIL (that's expected!)
+
+**Phase 2: Service Migration**
+- Update CLI commands to use WorkflowService directly
+- Commands accept/return database IDs
+- Add query methods to WorkflowService as needed
+- Simplify orchestrator - remove data management responsibilities
+- Update orchestrator upsampling to use service
+
+**Phase 3: Immediate Cleanup**
+- Delete PromptSpecManager, RunSpecManager, DirectoryManager
+- Delete their associated test files
+- Remove all JSON file management code
+- No deferred cleanup - clean as we go!
+
+**Important Distinctions:**
+- **Logging**: Operational info → log files/stdout
+- **Run Tracking**: AI model executions → database
+- Database tracks ONLY concrete model runs, not CLI invocations
+
+**NO dual-write, NO backward compatibility complexity**
 
 ---
 
 ### Chunk 4: Query Methods (2 hours)
 **Goal:** List and search functionality
 
-**Commands:**
+**Service Query Methods to Add:**
+```python
+class WorkflowService:
+    # Existing methods (create, get)
+    def list_prompts(self, model_type=None, limit=50)
+    def list_runs(self, status=None, prompt_id=None)
+    def search_prompts(self, query: str)
+    def get_prompt_with_runs(self, prompt_id)  # Joined query
+```
+
+**CLI Commands:**
 - `cosmos list prompts [--model transfer]` - Filter by model
 - `cosmos list runs [--status completed]` - Filter by status
 - `cosmos search "cyberpunk"` - Search across everything
 
----
-
-### Chunk 5: Update Existing Commands (2 hours)
-**Goal:** Switch existing commands to use service
-
-**Changes:**
-- `cosmos create prompt` → Uses service
-- `cosmos inference` → Uses service
-- Remove old managers
+**Implementation:**
+- Query methods in WorkflowService (pragmatic, no over-engineering)
+- Support filtering and pagination
+- Rich formatted output for CLI users
 
 ---
 
-### Chunk 6: Progress Tracking (2 hours)
+### Chunk 5: Progress Tracking (2 hours)
 **Goal:** Real-time progress for dashboard
 
 **What It Tracks:**
@@ -258,18 +303,13 @@ Progress(
 
 ---
 
-### ~~Chunk 7: Migration~~ SKIP!
+### ~~Chunk 6: Migration~~ SKIP!
 **Just manually recreate the ~15 prompts you care about**
 
 ---
 
-### Chunk 8: Cleanup (1 hour)
-**Goal:** Remove old code
-
-- Delete PromptSpecManager
-- Delete RunSpecManager
-- Delete DirectoryManager
-- Archive in `_legacy/` folder
+### ~~Chunk 7: Cleanup~~ MERGED INTO CHUNK 3!
+**Cleanup happens immediately in Chunk 3, not deferred**
 
 ---
 
@@ -329,14 +369,18 @@ Chunk 10: Web Dashboard
 |-------|-------------|------|--------|
 | 1 | Database with flexible schema | 3h | ✅ Completed |
 | 2 | Service core with CRUD methods | 3h | ✅ Completed |
-| 3 | Update existing CLI commands | 2-3h | ⏳ Next |
+| 3 | CLI Migration with Testing | 3-4h | ⏳ In Progress |
 | 4 | List/search commands | 2h | ⏳ |
 | 5 | Progress tracking | 2h | ⏳ |
-| 6 | ~~Migration~~ Manual recreate | 0h | ⏭️ SKIP |
-| 7 | Cleanup old code | 1h | ⏳ |
 
-**Progress:** 6h / 14h (43% complete)
-**Total:** ~14 hours (actual time tracking)
+**Progress:** 6h / 13-14h (43% complete)
+**Total:** ~13-14 hours (reduced from original estimate)
+
+**Simplifications Made:**
+- Removed duplicate work (old Chunk 5 was redundant)
+- Merged cleanup into Chunk 3 (immediate, not deferred)
+- No dual-write complexity
+- Clear separation of concerns
 
 ---
 
@@ -347,12 +391,17 @@ Chunk 10: Web Dashboard
 2. **Flexible JSON columns** - Easy to add new models
 3. **Fresh start** - No complex migration
 4. **Focus on dashboard** - Design for analytics queries
+5. **Behavioral CLI tests** - Test the contract, not implementation
+6. **Immediate cleanup** - Remove old code as soon as replaced
+7. **Clear separation** - Each component has one responsibility
 
 ### ❌ What We're NOT Doing
 1. **No Protocol/Interface layer** - Unnecessary complexity
-2. **No dual-write** - Just switch to database
+2. **No dual-write** - Direct switch to database (confirmed)
 3. **No `cosmos run` command** - Two-step process is fine
 4. **No migration script** - Just recreate ~15 prompts
+5. **No deferred cleanup** - Delete old code immediately
+6. **No mixed responsibilities** - WorkflowOrchestrator won't manage data
 
 ### 🎯 Success Criteria
 1. **Extensible:** Adding Cosmos Reason = new else-if branch

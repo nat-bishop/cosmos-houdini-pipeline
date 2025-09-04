@@ -301,14 +301,18 @@ run = service.get_run("rs_wxyz5678")
 **Methods:**
 
 - `create_prompt(model_type, prompt_text, inputs, parameters)`: Create AI model prompts
-  - Supports multiple model types: "transfer", "reason", "predict", future models
+  - Validates model_type against supported types: "transfer", "reason", "predict"
+  - Enforces maximum prompt_text length of 10,000 characters
+  - Sanitizes input text by removing null bytes and control characters
   - Validates required fields and JSON structure
   - Returns dictionary optimized for CLI display
   - Generates deterministic IDs based on content hash
 
 - `create_run(prompt_id, execution_config, metadata=None, initial_status="pending")`: Create execution runs
   - Links to existing prompts with foreign key validation
-  - Configurable initial status for workflow control
+  - Raises PromptNotFoundError if prompt doesn't exist
+  - Configurable initial status for workflow control (default: "pending")
+  - Generates unique IDs using UUID4 to prevent collisions
   - Flexible execution configuration via JSON
   - Optional metadata for user tracking and priority
 
@@ -322,18 +326,23 @@ run = service.get_run("rs_wxyz5678")
   - Includes created_at, updated_at, started_at, completed_at when available
 
 **Features:**
-- Transaction safety with automatic rollback on database errors
-- Comprehensive input validation with descriptive error messages
+- Transaction safety with flush/commit pattern for data consistency
+- Comprehensive input validation including model type and text length checks
+- Input sanitization to prevent security issues
 - Dictionary returns optimized for CLI display (not raw ORM objects)
 - Support for flexible JSON fields enabling future model extensibility
-- Deterministic ID generation for consistent prompt identification
+- Deterministic prompt ID generation, UUID-based run ID generation
 - Configurable initial status for runs enabling queue management
+- Parameterized logging throughout for debugging and audit trails
 
 **Error Handling:**
 - Validates all required parameters with clear error messages
-- Checks for existing prompt references when creating runs
+- Enforces supported model types ("transfer", "reason", "predict")
+- Raises custom PromptNotFoundError when prompt references don't exist
 - Handles database connection failures with automatic rollback
-- Returns None for not-found entities instead of raising exceptions
+- Returns None for not-found entities in get operations
+- Input length validation (max 10,000 chars for prompt_text)
+- Null byte and control character sanitization
 
 ### WorkflowOrchestrator
 Main orchestrator for workflow execution.

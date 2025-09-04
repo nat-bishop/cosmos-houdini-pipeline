@@ -184,7 +184,7 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
         output_path = output or f"outputs/{prompt_spec.name}_{run_id}"
 
         # Create RunSpec
-        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat()
         run_spec = RunSpec(
             id=run_id,
             prompt_id=prompt_spec.id,

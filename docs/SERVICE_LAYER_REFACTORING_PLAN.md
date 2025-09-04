@@ -192,23 +192,31 @@ class WorkflowService:
 
 ---
 
-### Chunk 2: Service Core (2 hours)
+### Chunk 2: Service Core ✅ COMPLETED (3 hours)
 **Goal:** Simple service implementation
 
-**Files to Create:**
-- `cosmos_workflow/services/workflow_service.py`
-- `tests/unit/services/test_workflow_service.py`
+**Completed Files:**
+- ✅ `cosmos_workflow/services/workflow_service.py` - Full implementation
+- ✅ `cosmos_workflow/services/__init__.py` - Module exports
+- ✅ `tests/unit/services/test_workflow_service.py` - 27 passing tests
 
-**No interfaces, just direct implementation!**
+**Implemented Methods:**
+- ✅ `create_prompt()` - With validation and sanitization
+- ✅ `create_run()` - With UUID-based IDs
+- ✅ `get_prompt()` - Returns dict or None
+- ✅ `get_run()` - Returns dict or None
 
 ---
 
-### Chunk 3: Service Methods (2 hours)
-**Goal:** Implement create_prompt, create_run
+### Chunk 3: Update Existing CLI Commands (2-3 hours)
+**Goal:** Switch existing commands to use WorkflowService
 
-**Key Point:** Start fresh! No dual-write to JSON.
-- Just write to database
-- Old JSON files can be manually recreated if needed
+**Commands to Update:**
+- `cosmos create prompt` → Use WorkflowService
+- `cosmos create run` → Use WorkflowService
+- `cosmos inference` → Use service for run creation
+
+**Approach:** Dual-write (database + JSON) for backward compatibility
 
 ---
 
@@ -320,15 +328,14 @@ Chunk 10: Web Dashboard
 | Chunk | Description | Time | Status |
 |-------|-------------|------|--------|
 | 1 | Database with flexible schema | 3h | ✅ Completed |
-| 2 | Simple service implementation | 2h | ⏳ Next |
-| 3 | Service methods | 2h | ⏳ |
+| 2 | Service core with CRUD methods | 3h | ✅ Completed |
+| 3 | Update existing CLI commands | 2-3h | ⏳ Next |
 | 4 | List/search commands | 2h | ⏳ |
-| 5 | Update existing commands | 2h | ⏳ |
-| 6 | Progress tracking | 2h | ⏳ |
-| 7 | ~~Migration~~ Manual recreate | 0h | ⏭️ SKIP |
-| 8 | Cleanup old code | 1h | ⏳ |
+| 5 | Progress tracking | 2h | ⏳ |
+| 6 | ~~Migration~~ Manual recreate | 0h | ⏭️ SKIP |
+| 7 | Cleanup old code | 1h | ⏳ |
 
-**Progress:** 3h / 14h (21% complete)
+**Progress:** 6h / 14h (43% complete)
 **Total:** ~14 hours (actual time tracking)
 
 ---

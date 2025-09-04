@@ -5,7 +5,7 @@ description: Run overfitting verification from a fresh context
 
 You are performing overfitting verification without implementation context.
 
-Setup:
+Required Setup:
 ```bash
 mkdir -p .claude/workspace/verification
 rm -f .claude/workspace/verification/EXTERNAL_*.md
@@ -37,6 +37,6 @@ Git HEAD: [commit hash]
 [Specific overfitting patterns found with line numbers, or "No overfitting detected"]
 ```
 
-Save to: `.claude/workspace/verification/EXTERNAL_overfit_check.md`
+Save to: `.claude/workspace/verification/EXTERNAL_overfit_check.md` Do not save until finished with your analysis.
 
 Note: You have no context from the implementation session. This allows objective evaluation of whether the code is general or test-specific.

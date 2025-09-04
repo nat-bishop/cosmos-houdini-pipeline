@@ -1,586 +1,680 @@
-# Cosmos Workflow Architecture Refactoring Plan
+# Cosmos Workflow Complete Architecture Refactoring Plan v3
 
-## 📋 Executive Summary
+## 🎯 Executive Summary
 
-This document outlines a comprehensive refactoring of the Cosmos Workflow system to address current pain points and enable future scalability. The refactoring moves from a file-based, tightly-coupled CLI to a service-oriented architecture with database persistence and optional web UI.
+Complete architectural overhaul replacing JSON file-based system with SQLAlchemy database and service layer. This is a **comprehensive change** that will touch ~60% of the codebase but is designed to be implemented **incrementally without breaking existing functionality**.
 
-### Key Changes
-- **Replace JSON files with SQLite database** for prompt/run tracking
-- **Introduce service layer** to decouple business logic from CLI
-- **Add unified `cosmos run` command** to simplify workflow from 5 steps to 1
-- **Enable web UI** through FastAPI without duplicating logic
-- **No backwards compatibility** - fresh start for simplicity
+### Scope of Changes
+- **Remove**: 5 manager classes (~800 lines)
+- **Add**: Database layer + service layer (~400 lines)
+- **Modify**: CLI commands to use service layer
+- **Keep**: SSH, Docker, file transfer infrastructure
 
-### Timeline: 2-3 weeks total
-- Week 1: Foundation (database, services, basic CLI)
-- Week 2: Features (smart defaults, search, progress tracking, API)
-- Week 3: Optional web UI
-
----
-
-## 🔴 Current Problems
-
-### Pain Points Identified
-1. **Manual Directory Management**: Users must manually specify paths like `inputs/videos/city_scene_20250830_203504/`
-2. **No Discovery**: Can't search or list previous prompts/runs
-3. **Complex Multi-Step Process**:
-   ```bash
-   cosmos prepare ./renders/
-   cosmos create prompt "text" inputs/videos/xxx
-   cosmos inference prompt_spec.json
-   ```
-4. **No Progress Visibility**: Can't track what's running or see history
-5. **Scattered JSON Files**: Prompts organized by date folders, hard to find
-6. **Tight CLI Coupling**: Business logic mixed with presentation
-
-### Technical Debt
-- CLI directly instantiates orchestrator
-- No abstraction between storage and business logic
-- File I/O scattered throughout codebase
-- No concurrent access protection
+### Risk Level: MEDIUM
+- Can be implemented incrementally on feature branch
+- Each phase is independently testable
+- Rollback strategy: Keep branch separate until fully working
 
 ---
 
-## 🏗️ Proposed Architecture
+## 🏗️ Final Architecture
 
-### Clean Architecture Principles
 ```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│     CLI     │  │   Web UI    │  │     API     │  <- Presentation
-└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-       └─────────────────┴─────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │   Service Layer     │              <- Business Logic
-              │  WorkflowService    │
-              │  PromptService      │
-              └──────────┬──────────┘
-                         │
-              ┌──────────▼──────────┐
-              │   SQLAlchemy ORM    │              <- Data Access
-              └──────────┬──────────┘
-                         │
-              ┌──────────▼──────────┐
-              │      SQLite DB      │              <- Storage
-              └─────────────────────┘
-```
-
-### Database Schema
-```sql
--- Core tables
-CREATE TABLE prompts (
-    id VARCHAR PRIMARY KEY,
-    name VARCHAR,
-    prompt_text TEXT,
-    negative_prompt TEXT,
-    video_path VARCHAR,
-    control_inputs JSON,
-    created_at TIMESTAMP,
-    INDEX idx_name (name),
-    INDEX idx_created (created_at),
-    FULLTEXT INDEX idx_prompt_text (prompt_text)
-);
-
-CREATE TABLE runs (
-    id VARCHAR PRIMARY KEY,
-    prompt_id VARCHAR REFERENCES prompts(id),
-    status VARCHAR, -- 'pending', 'running', 'success', 'failed'
-    output_path VARCHAR,
-    metrics JSON, -- timing, GPU usage, etc
-    created_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    INDEX idx_status (status),
-    INDEX idx_prompt (prompt_id)
-);
-
-CREATE TABLE run_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id VARCHAR REFERENCES runs(id),
-    stage VARCHAR, -- 'uploading', 'inference', 'downloading'
-    progress FLOAT, -- 0.0 to 1.0
-    message TEXT,
-    timestamp TIMESTAMP
-);
+BEFORE (Current):                    AFTER (Clean):
+┌──────────────┐                    ┌──────────────┐
+│     CLI      │                    │     CLI      │
+└──────┬───────┘                    └──────┬───────┘
+       │                                    │
+       ├──> PromptSpecManager               │
+       ├──> RunSpecManager                  ▼
+       ├──> DirectoryManager         ┌──────────────┐
+       └──> WorkflowOrchestrator     │WorkflowService│
+                │                    └──────┬───────┘
+                │                           │
+                ▼                           ├──> SQLAlchemy DB
+           JSON Files                       └──> RemoteExecutor
+                                                    │
+                                                    ▼
+                                              SSH/Docker
 ```
 
 ---
 
-## 📝 Implementation Plan
+## 📋 What Gets Removed vs Kept
 
-### Phase 0: Foundation (3 days)
-
-#### Day 1: Database Setup
-**File**: `cosmos_workflow/database/models.py`
+### ❌ REMOVE (Replace with Service + DB)
 ```python
-from sqlalchemy import create_engine, Column, String, Text, DateTime, JSON, Float, ForeignKey
+cosmos_workflow/prompts/
+├── prompt_spec_manager.py  # ~150 lines - REMOVE
+├── run_spec_manager.py     # ~140 lines - REMOVE
+├── schemas.py              # ~400 lines - REMOVE most (keep utils)
+└── (DirectoryManager)      # ~100 lines - REMOVE
+
+# Total removed: ~800 lines
+```
+
+### ✅ KEEP (Infrastructure)
+```python
+cosmos_workflow/
+├── config/config_manager.py       # KEEP - reads config.toml
+├── connection/ssh_manager.py      # KEEP - SSH connections
+├── transfer/file_transfer.py      # KEEP - SFTP operations
+├── execution/docker_executor.py   # KEEP - Docker commands
+├── utils/smart_naming.py          # KEEP - name generation
+└── local_ai/                      # KEEP - AI utilities
+```
+
+### 🆕 ADD (New Clean Architecture)
+```python
+cosmos_workflow/
+├── database/
+│   ├── __init__.py
+│   ├── models.py           # ~100 lines - SQLAlchemy models
+│   └── connection.py       # ~30 lines - DB setup
+├── services/
+│   ├── __init__.py
+│   └── workflow_service.py # ~300 lines - ALL business logic
+└── execution/
+    └── remote_executor.py  # RENAME from workflow_orchestrator
+```
+
+---
+
+## 💻 Complete Implementation Guide
+
+### Phase 0: Setup Database Layer (Day 1)
+
+#### Step 1: Install SQLAlchemy
+```bash
+pip install sqlalchemy
+```
+
+#### Step 2: Create Database Models
+```python
+# cosmos_workflow/database/models.py
+from datetime import datetime
+from sqlalchemy import create_engine, Column, String, Text, DateTime, JSON, Float, ForeignKey, Enum
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import relationship, sessionmaker
+import enum
 
 Base = declarative_base()
+
+class RunStatus(enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 class Prompt(Base):
     __tablename__ = 'prompts'
 
-    id = Column(String, primary_key=True)
-    name = Column(String, index=True)
-    prompt_text = Column(Text)
+    id = Column(String, primary_key=True)  # Generated hash
+    name = Column(String, nullable=False, index=True)
+    prompt_text = Column(Text, nullable=False)
     negative_prompt = Column(Text)
-    video_path = Column(String)
-    control_inputs = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    video_path = Column(String, nullable=False)
+    control_inputs = Column(JSON)  # {"depth": "path", "seg": "path"}
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    runs = relationship("Run", back_populates="prompt")
+    # Relationships
+    runs = relationship("Run", back_populates="prompt", cascade="all, delete-orphan")
 
 class Run(Base):
     __tablename__ = 'runs'
 
-    id = Column(String, primary_key=True)
-    prompt_id = Column(String, ForeignKey('prompts.id'))
-    status = Column(String)
+    id = Column(String, primary_key=True)  # UUID
+    prompt_id = Column(String, ForeignKey('prompts.id'), nullable=False)
+    status = Column(Enum(RunStatus), default=RunStatus.PENDING)
+    control_weights = Column(JSON)  # {"vis": 0.25, "edge": 0.25, ...}
+    parameters = Column(JSON)  # {"num_steps": 35, "guidance": 7.0, ...}
     output_path = Column(String)
-    metrics = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    error_message = Column(Text)
+    metrics = Column(JSON)  # {"duration": 120, "gpu_usage": 0.95, ...}
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime)
 
+    # Relationships
     prompt = relationship("Prompt", back_populates="runs")
-    progress = relationship("RunProgress", back_populates="run")
+    progress_updates = relationship("Progress", back_populates="run", cascade="all, delete-orphan")
+
+class Progress(Base):
+    __tablename__ = 'progress'
+
+    id = Column(String, primary_key=True)
+    run_id = Column(String, ForeignKey('runs.id'), nullable=False)
+    stage = Column(String)  # "uploading", "inference", "downloading"
+    progress = Column(Float)  # 0.0 to 1.0
+    message = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    run = relationship("Run", back_populates="progress_updates")
+
+# cosmos_workflow/database/connection.py
+def get_db_engine(db_path="cosmos.db"):
+    """Create database engine"""
+    return create_engine(f'sqlite:///{db_path}', echo=False)
+
+def init_database(engine):
+    """Initialize database tables"""
+    Base.metadata.create_all(engine)
+
+def get_session(engine):
+    """Get database session"""
+    Session = sessionmaker(bind=engine)
+    return Session()
 ```
 
-#### Day 2: Service Layer
-**File**: `cosmos_workflow/services/workflow_service.py`
+### Phase 1: Create Service Layer (Day 2)
+
 ```python
+# cosmos_workflow/services/workflow_service.py
+import hashlib
+import uuid
+from pathlib import Path
+from typing import Optional, List
+from datetime import datetime
+from sqlalchemy.orm import Session
+from cosmos_workflow.database.models import Prompt, Run, Progress, RunStatus
+from cosmos_workflow.utils.smart_naming import generate_smart_name
+from cosmos_workflow.execution.remote_executor import RemoteExecutor
+from cosmos_workflow.config.config_manager import ConfigManager
+
 class WorkflowService:
-    def __init__(self, db_session):
+    """Central service handling all business logic"""
+
+    def __init__(self, db_session: Session, config_manager=None):
         self.db = db_session
-        self.orchestrator = WorkflowOrchestrator()
+        self.config = config_manager or ConfigManager()
+        self.executor = None  # Lazy load
 
-    def create_and_run(self, prompt_text: str, video_dir: Path) -> Run:
-        """Single method to handle entire workflow"""
-        # Create prompt, create run, execute, track progress
-        pass
+    def _get_executor(self):
+        """Lazy load executor"""
+        if not self.executor:
+            self.executor = RemoteExecutor(self.config)
+        return self.executor
 
-    def list_recent_runs(self, limit: int = 10) -> List[Run]:
-        return self.db.query(Run).order_by(Run.created_at.desc()).limit(limit).all()
+    # === Prompt Management ===
+
+    def create_prompt(self,
+                     prompt_text: str,
+                     video_dir: Path,
+                     negative_prompt: str = None) -> Prompt:
+        """Create a new prompt (replaces PromptSpecManager)"""
+
+        # Validation
+        video_dir = Path(video_dir)
+        if not video_dir.exists():
+            raise ValueError(f"Video directory not found: {video_dir}")
+
+        color_video = video_dir / "color.mp4"
+        if not color_video.exists():
+            raise ValueError(f"Color video not found: {color_video}")
+
+        # Generate smart name
+        name = generate_smart_name(prompt_text, max_length=30)
+
+        # Build paths
+        control_inputs = {
+            "depth": str(video_dir / "depth.mp4"),
+            "seg": str(video_dir / "segmentation.mp4")
+        }
+
+        # Generate ID (hash of content)
+        content = f"{prompt_text}:{video_dir}:{control_inputs}"
+        prompt_id = f"ps_{hashlib.md5(content.encode()).hexdigest()[:12]}"
+
+        # Check for duplicates
+        existing = self.db.query(Prompt).filter_by(id=prompt_id).first()
+        if existing:
+            return existing
+
+        # Create in database
+        prompt = Prompt(
+            id=prompt_id,
+            name=name,
+            prompt_text=prompt_text,
+            negative_prompt=negative_prompt or self._get_default_negative(),
+            video_path=str(color_video),
+            control_inputs=control_inputs
+        )
+
+        self.db.add(prompt)
+        self.db.commit()
+        return prompt
+
+    # === Run Management ===
+
+    def create_run(self,
+                  prompt_id: str,
+                  control_weights: dict = None,
+                  parameters: dict = None) -> Run:
+        """Create a new run (replaces RunSpecManager)"""
+
+        # Verify prompt exists
+        prompt = self.db.query(Prompt).filter_by(id=prompt_id).first()
+        if not prompt:
+            raise ValueError(f"Prompt not found: {prompt_id}")
+
+        # Use defaults if not provided
+        if control_weights is None:
+            control_weights = {
+                "vis": 0.25, "edge": 0.25,
+                "depth": 0.25, "seg": 0.25
+            }
+
+        if parameters is None:
+            parameters = {
+                "num_steps": 35,
+                "guidance": 7.0,
+                "seed": 1,
+                "fps": 24
+            }
+
+        # Create run
+        run = Run(
+            id=str(uuid.uuid4())[:12],
+            prompt_id=prompt_id,
+            status=RunStatus.PENDING,
+            control_weights=control_weights,
+            parameters=parameters
+        )
+
+        self.db.add(run)
+        self.db.commit()
+        return run
+
+    # === Workflow Execution ===
+
+    def execute_run(self, run_id: str) -> Run:
+        """Execute a run on remote GPU"""
+        run = self.db.query(Run).filter_by(id=run_id).first()
+        if not run:
+            raise ValueError(f"Run not found: {run_id}")
+
+        # Update status
+        run.status = RunStatus.RUNNING
+        self.db.commit()
+
+        try:
+            # Get executor
+            executor = self._get_executor()
+
+            # Execute remotely (executor handles SSH/Docker)
+            result = executor.execute(
+                prompt=run.prompt,
+                control_weights=run.control_weights,
+                parameters=run.parameters,
+                progress_callback=lambda s, p: self._update_progress(run.id, s, p)
+            )
+
+            # Update run with results
+            run.status = RunStatus.SUCCESS
+            run.output_path = result['output_path']
+            run.metrics = result['metrics']
+            run.completed_at = datetime.utcnow()
+
+        except Exception as e:
+            run.status = RunStatus.FAILED
+            run.error_message = str(e)
+            run.completed_at = datetime.utcnow()
+            raise
+        finally:
+            self.db.commit()
+
+        return run
+
+    # === Unified Workflow ===
+
+    def create_and_run(self,
+                      prompt_text: str,
+                      video_dir: Path = None) -> Run:
+        """One-step workflow: create prompt and run inference"""
+
+        # Auto-detect video if not provided
+        if not video_dir:
+            video_dir = self._find_most_recent_video()
+            if not video_dir:
+                raise ValueError("No video directory found")
+
+        # Create prompt
+        prompt = self.create_prompt(prompt_text, video_dir)
+
+        # Create run
+        run = self.create_run(prompt.id)
+
+        # Execute
+        return self.execute_run(run.id)
+
+    # === Query Methods ===
+
+    def list_prompts(self, limit: int = 20) -> List[Prompt]:
+        """List recent prompts"""
+        return (self.db.query(Prompt)
+                .order_by(Prompt.created_at.desc())
+                .limit(limit)
+                .all())
+
+    def list_runs(self, limit: int = 20) -> List[Run]:
+        """List recent runs with prompt info"""
+        return (self.db.query(Run)
+                .join(Prompt)
+                .order_by(Run.created_at.desc())
+                .limit(limit)
+                .all())
 
     def search_prompts(self, query: str) -> List[Prompt]:
-        return self.db.query(Prompt).filter(
-            Prompt.prompt_text.contains(query)
-        ).all()
+        """Search prompts by text"""
+        return (self.db.query(Prompt)
+                .filter(Prompt.prompt_text.contains(query))
+                .all())
+
+    # === Helper Methods ===
+
+    def _update_progress(self, run_id: str, stage: str, progress: float):
+        """Update run progress"""
+        prog = Progress(
+            id=str(uuid.uuid4())[:12],
+            run_id=run_id,
+            stage=stage,
+            progress=progress
+        )
+        self.db.add(prog)
+        self.db.commit()
+
+    def _find_most_recent_video(self) -> Optional[Path]:
+        """Find most recently used video directory"""
+        recent_prompt = (self.db.query(Prompt)
+                        .order_by(Prompt.created_at.desc())
+                        .first())
+        if recent_prompt:
+            video_path = Path(recent_prompt.video_path)
+            return video_path.parent
+        return None
+
+    def _get_default_negative(self) -> str:
+        """Get default negative prompt"""
+        return "The video captures a game playing, with bad crappy graphics and cartoonish frames..."
 ```
 
-#### Day 3: Refactored CLI
-**File**: `cosmos_workflow/cli/commands.py`
+### Phase 2: Refactor CLI (Day 3-4)
+
 ```python
+# cosmos_workflow/cli/commands.py (NEW)
+import click
+from pathlib import Path
+from rich.console import Console
+from rich.table import Table
+from cosmos_workflow.database.connection import get_db_engine, init_database, get_session
+from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.config.config_manager import ConfigManager
+
+console = Console()
+
+def get_service():
+    """Get workflow service with database"""
+    engine = get_db_engine()
+    init_database(engine)
+    session = get_session(engine)
+    config = ConfigManager()
+    return WorkflowService(session, config)
+
 @click.command()
 @click.argument('prompt_text')
 @click.argument('video_dir', required=False)
 def run(prompt_text, video_dir):
-    """Single command to run entire workflow"""
-    service = get_workflow_service()
-    run = service.create_and_run(prompt_text, video_dir)
-    console.print(f"✅ Complete! Output: {run.output_path}")
+    """🚀 One-step workflow execution"""
+    try:
+        service = get_service()
+        video_path = Path(video_dir) if video_dir else None
+        run = service.create_and_run(prompt_text, video_path)
+        console.print(f"✅ Success! Output: {run.output_path}")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
 
 @click.command()
-def list():
-    """List recent runs with their status"""
-    service = get_workflow_service()
-    runs = service.list_recent_runs()
-    # Display pretty table
+@click.option('--limit', default=10)
+def list(limit):
+    """📋 List recent runs"""
+    service = get_service()
+    runs = service.list_runs(limit)
+
+    table = Table(title="Recent Runs")
+    table.add_column("ID", style="cyan")
+    table.add_column("Prompt", style="white")
+    table.add_column("Status", style="green")
+    table.add_column("Created", style="dim")
+
+    for run in runs:
+        status_color = {
+            'pending': 'yellow',
+            'running': 'blue',
+            'success': 'green',
+            'failed': 'red'
+        }.get(run.status.value, 'white')
+
+        table.add_row(
+            run.id,
+            run.prompt.name[:30],
+            f"[{status_color}]{run.status.value}[/{status_color}]",
+            run.created_at.strftime("%Y-%m-%d %H:%M")
+        )
+
+    console.print(table)
 
 @click.command()
 @click.argument('query')
 def search(query):
-    """Search prompts by text"""
-    service = get_workflow_service()
-    results = service.search_prompts(query)
-    # Display results
+    """🔍 Search prompts"""
+    service = get_service()
+    prompts = service.search_prompts(query)
+
+    if not prompts:
+        console.print(f"No prompts found for: {query}")
+        return
+
+    for prompt in prompts:
+        console.print(f"[cyan]{prompt.id}[/cyan]: {prompt.name}")
+        console.print(f"  {prompt.prompt_text[:100]}...")
 ```
 
-### Phase 1: Core Features (3 days)
+### Phase 3: Create Remote Executor (Day 4)
 
-#### Smart Defaults
 ```python
-class WorkflowService:
-    def smart_run(self, text: str, video_path: str = None):
-        """Intelligently handle missing parameters"""
-        if not video_path:
-            # Use most recent video or prompt for path
-            video_path = self.find_most_recent_video()
+# cosmos_workflow/execution/remote_executor.py
+# (Simplified version of current WorkflowOrchestrator)
+from cosmos_workflow.connection.ssh_manager import SSHManager
+from cosmos_workflow.transfer.file_transfer import FileTransferService
+from cosmos_workflow.execution.docker_executor import DockerExecutor
 
-        # Auto-generate name from prompt
-        name = generate_smart_name(text)
+class RemoteExecutor:
+    """Handles remote GPU execution only - no business logic"""
 
-        # Use optimal defaults based on video characteristics
-        params = self.get_optimal_params_for_video(video_path)
+    def __init__(self, config_manager):
+        self.config = config_manager
+        self.ssh = None
+        self.transfer = None
+        self.docker = None
 
-        return self.create_and_run(text, video_path, params)
-```
+    def execute(self, prompt, control_weights, parameters, progress_callback=None):
+        """Execute inference on remote GPU"""
 
-#### Progress Tracking
-```python
-class ProgressTracker:
-    def update(self, run_id: str, stage: str, progress: float, message: str = ""):
-        """Update run progress in database"""
-        progress = RunProgress(
-            run_id=run_id,
-            stage=stage,
-            progress=progress,
-            message=message,
-            timestamp=datetime.utcnow()
-        )
-        self.db.add(progress)
-        self.db.commit()
+        # Initialize connections
+        self._init_connections()
 
-        # Emit websocket event if connected
-        if self.websocket_manager:
-            self.websocket_manager.broadcast(run_id, {
-                'stage': stage,
-                'progress': progress,
-                'message': message
-            })
-```
+        with self.ssh:
+            # Upload files
+            if progress_callback:
+                progress_callback("uploading", 0.2)
+            self.transfer.upload_prompt_and_videos(prompt)
 
-### Phase 2: API Layer (2 days)
+            # Run inference
+            if progress_callback:
+                progress_callback("inference", 0.5)
+            result = self.docker.run_inference(
+                prompt, control_weights, parameters
+            )
 
-**File**: `cosmos_workflow/api/app.py`
-```python
-from fastapi import FastAPI, WebSocket
-from cosmos_workflow.services import WorkflowService
+            # Download results
+            if progress_callback:
+                progress_callback("downloading", 0.8)
+            output_path = self.transfer.download_results(result)
 
-app = FastAPI()
+            if progress_callback:
+                progress_callback("complete", 1.0)
 
-@app.post("/api/run")
-async def run_workflow(prompt: str, video_path: str = None):
-    """Start a new workflow run"""
-    run = service.smart_run(prompt, video_path)
-    return {"run_id": run.id, "status": run.status}
-
-@app.get("/api/runs")
-async def list_runs(skip: int = 0, limit: int = 20):
-    """List recent runs"""
-    runs = service.list_recent_runs(skip, limit)
-    return runs
-
-@app.get("/api/runs/{run_id}")
-async def get_run(run_id: str):
-    """Get run details with progress"""
-    run = service.get_run_with_progress(run_id)
-    return run
-
-@app.websocket("/ws/progress/{run_id}")
-async def progress_websocket(websocket: WebSocket, run_id: str):
-    """Stream real-time progress updates"""
-    await websocket.accept()
-    async for progress in service.stream_progress(run_id):
-        await websocket.send_json(progress)
-```
-
-### Phase 3: Web UI (Optional, 3-4 days)
-
-**Simple HTML + Alpine.js Interface**
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <title>Cosmos Workflow</title>
-</head>
-<body>
-    <div x-data="cosmosApp()">
-        <!-- Prompt Input Section -->
-        <section class="prompt-input">
-            <h2>Generate Video</h2>
-            <textarea x-model="prompt" placeholder="Describe your vision..."></textarea>
-            <input type="file" @change="selectVideo($event)" accept="video/*">
-            <button @click="runWorkflow()" :disabled="running">
-                <span x-show="!running">Generate</span>
-                <span x-show="running">Running...</span>
-            </button>
-        </section>
-
-        <!-- Progress Display -->
-        <section x-show="currentRun" class="progress">
-            <h3>Progress</h3>
-            <div class="progress-bar">
-                <div :style="`width: ${progress}%`"></div>
-            </div>
-            <p x-text="statusMessage"></p>
-        </section>
-
-        <!-- Gallery -->
-        <section class="gallery">
-            <h2>Recent Runs</h2>
-            <div class="grid">
-                <template x-for="run in recentRuns">
-                    <div class="card">
-                        <video :src="`/outputs/${run.output_path}`" controls></video>
-                        <h4 x-text="run.prompt.name"></h4>
-                        <p x-text="run.prompt.prompt_text"></p>
-                        <small x-text="run.created_at"></small>
-                    </div>
-                </template>
-            </div>
-        </section>
-    </div>
-
-    <script>
-    function cosmosApp() {
-        return {
-            prompt: '',
-            videoPath: null,
-            running: false,
-            currentRun: null,
-            progress: 0,
-            statusMessage: '',
-            recentRuns: [],
-            ws: null,
-
-            async init() {
-                await this.loadRecentRuns();
-            },
-
-            async runWorkflow() {
-                this.running = true;
-
-                const response = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        prompt: this.prompt,
-                        video_path: this.videoPath
-                    })
-                });
-
-                const data = await response.json();
-                this.currentRun = data.run_id;
-                this.connectWebSocket(data.run_id);
-            },
-
-            connectWebSocket(runId) {
-                this.ws = new WebSocket(`ws://localhost:8000/ws/progress/${runId}`);
-                this.ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    this.progress = data.progress * 100;
-                    this.statusMessage = data.message;
-
-                    if (data.status === 'completed') {
-                        this.running = false;
-                        this.loadRecentRuns();
-                    }
-                };
-            },
-
-            async loadRecentRuns() {
-                const response = await fetch('/api/runs');
-                this.recentRuns = await response.json();
+            return {
+                'output_path': output_path,
+                'metrics': {
+                    'duration': result.get('duration'),
+                    'gpu_usage': result.get('gpu_usage')
+                }
             }
-        }
-    }
-    </script>
-</body>
-</html>
+
+    def _init_connections(self):
+        """Initialize SSH/Docker/Transfer services"""
+        if not self.ssh:
+            ssh_options = self.config.get_ssh_options()
+            self.ssh = SSHManager(ssh_options)
+            self.transfer = FileTransferService(self.ssh, self.config.remote_dir)
+            self.docker = DockerExecutor(self.ssh, self.config.remote_dir, self.config.docker_image)
 ```
 
 ---
 
 ## 🧪 Testing Strategy
 
-### Unit Tests
+### Unit Tests (In-Memory SQLite)
 ```python
-def test_workflow_service_create_and_run():
-    # Use in-memory SQLite for tests
-    service = WorkflowService(test_db_session)
-    run = service.create_and_run("test prompt", Path("test/video"))
-    assert run.status == "success"
-    assert run.prompt.prompt_text == "test prompt"
+# tests/test_service.py
+import pytest
+from sqlalchemy import create_engine
+from cosmos_workflow.database.connection import init_database, get_session
+from cosmos_workflow.database.models import RunStatus
+from cosmos_workflow.services.workflow_service import WorkflowService
 
-def test_search_prompts():
-    service = WorkflowService(test_db_session)
-    # Add test data
-    service.create_prompt("cyberpunk city", ...)
-    service.create_prompt("foggy morning", ...)
+def test_workflow_service():
+    # Use in-memory database for tests
+    engine = create_engine('sqlite:///:memory:')
+    init_database(engine)
+    session = get_session(engine)
 
-    results = service.search_prompts("cyberpunk")
+    service = WorkflowService(session)
+
+    # Test prompt creation
+    prompt = service.create_prompt("test prompt", Path("test/video"))
+    assert prompt.name
+    assert prompt.id
+
+    # Test run creation
+    run = service.create_run(prompt.id)
+    assert run.status == RunStatus.PENDING
+
+    # Test search
+    results = service.search_prompts("test")
     assert len(results) == 1
-    assert "cyberpunk" in results[0].prompt_text
-```
-
-### Integration Tests
-```python
-def test_full_workflow_with_mocked_ssh():
-    # Mock SSH/Docker but test full flow
-    with mock_ssh_connection():
-        service = WorkflowService(test_db)
-        run = service.smart_run("test prompt")
-        assert run.output_path.exists()
-```
-
-### API Tests
-```python
-def test_api_run_endpoint():
-    client = TestClient(app)
-    response = client.post("/api/run", json={"prompt": "test"})
-    assert response.status_code == 200
-    assert "run_id" in response.json()
 ```
 
 ---
 
-## 📊 Success Metrics
+## ⚠️ Risk Assessment & Mitigation
 
-### Immediate Wins (Week 1)
-- ✅ `cosmos run "prompt"` works end-to-end
-- ✅ `cosmos list` shows recent runs
-- ✅ Database tracks all operations
+### What Could Break?
+1. **Existing CLI commands** → Keep old commands during migration
+2. **File paths** → Database stores absolute paths, handle carefully
+3. **SSH/Docker** → These remain unchanged, low risk
+4. **Progress tracking** → Add gradually, not critical for v1
 
-### Medium Term (Week 2)
-- ✅ Full-text search across all prompts
-- ✅ Real-time progress tracking
-- ✅ API endpoints functional
-- ✅ Smart defaults reduce input requirements by 70%
+### Rollback Strategy
+1. Develop on feature branch: `git checkout -b refactor/service-architecture`
+2. Keep old code intact until new code fully works
+3. Test extensively before merging
+4. Database is just a file - can delete and start over
 
-### Long Term (Week 3+)
-- ✅ Web UI provides visual feedback
-- ✅ Gallery view for browsing outputs
-- ✅ Workflow time reduced from 5 commands to 1
-
----
-
-## 🚨 Risk Mitigation
-
-### Technical Risks
-1. **Database Corruption**: Regular backups, WAL mode for SQLite
-2. **Concurrent Access**: Use database transactions, row-level locking
-3. **Large Files**: Stream video uploads, chunked transfers
-4. **Network Issues**: Retry logic with exponential backoff
-
-### Migration Risks
-- **No automatic migration** - manually import important prompts if needed
-- **Keep old JSON files** as backup until confident in new system
-- **Parallel operation** - can run old and new systems side by side initially
+### Success Criteria
+- [ ] `cosmos run "prompt"` executes full workflow
+- [ ] `cosmos list` shows recent runs
+- [ ] `cosmos search` finds prompts
+- [ ] All tests pass
+- [ ] No regression in existing functionality
 
 ---
 
-## 📅 Development Schedule
+## 📊 Implementation Checklist
 
 ### Week 1: Foundation
-- **Monday**: Database schema and models
-- **Tuesday**: Service layer implementation
-- **Wednesday**: Basic CLI commands (run, list, search)
-- **Thursday**: Unit tests and integration tests
-- **Friday**: Bug fixes and documentation
+- [ ] Day 1: Create database models
+- [ ] Day 1: Write database tests
+- [ ] Day 2: Create WorkflowService
+- [ ] Day 2: Write service tests
+- [ ] Day 3: Add new CLI commands (run, list, search)
+- [ ] Day 3: Test CLI commands
+- [ ] Day 4: Create RemoteExecutor
+- [ ] Day 4: Integration testing
+- [ ] Day 5: Fix bugs, polish
 
-### Week 2: Enhancement
-- **Monday**: Smart defaults and auto-discovery
-- **Tuesday**: Progress tracking system
-- **Wednesday**: Output organization
-- **Thursday**: FastAPI implementation
-- **Friday**: API testing and polish
-
-### Week 3: UI (Optional)
-- **Monday**: HTML template and styling
-- **Tuesday**: JavaScript functionality
-- **Wednesday**: WebSocket integration
-- **Thursday**: Gallery and comparison views
-- **Friday**: Final testing and deployment
+### Week 2: Migration (Optional)
+- [ ] Port old CLI commands to use service
+- [ ] Remove old managers
+- [ ] Add progress tracking
+- [ ] Add error recovery
+- [ ] Documentation
 
 ---
 
-## 🎯 Key Decisions
+## 🎯 Why This Will Work
 
-### Why SQLite?
-- Zero configuration
-- Single file database
-- Full-text search built-in
-- Good enough for single user
-- Easy testing with in-memory DB
+1. **Incremental**: Each phase works independently
+2. **Testable**: In-memory DB for unit tests
+3. **Reversible**: Feature branch until proven
+4. **Clear boundaries**: Service/Database/Executor separation
+5. **Proven patterns**: Standard SQLAlchemy + service layer
 
-### Why No Backwards Compatibility?
-- Reduces complexity by 50%
-- Faster implementation (2-3 weeks vs 6-8)
-- Cleaner codebase
-- Solo project with no external users
+## 🚀 Quick Start Commands
 
-### Why Service Layer?
-- Enables multiple frontends (CLI, API, UI)
-- Testable business logic
-- Single source of truth
-- Future extensibility
-
-### Why Simple UI?
-- No build process needed
-- Fast to implement
-- Good enough for visual feedback
-- Can enhance later if needed
-
----
-
-## 📝 Next Steps
-
-1. **Review and approve this plan** ✅
-2. **Create feature branch**: `git checkout -b refactor/service-architecture`
-3. **Start with database schema** (most critical piece)
-4. **Implement incrementally** with tests at each step
-5. **Deploy when Phase 1 complete** (usable at that point)
-
----
-
-## 📚 Appendix
-
-### File Structure After Refactoring
-```
-cosmos_workflow/
-├── database/
-│   ├── __init__.py
-│   ├── models.py          # SQLAlchemy models
-│   └── connection.py      # Database setup
-├── services/
-│   ├── __init__.py
-│   ├── workflow_service.py
-│   ├── prompt_service.py
-│   └── progress_tracker.py
-├── api/
-│   ├── __init__.py
-│   ├── app.py            # FastAPI application
-│   └── websocket.py      # WebSocket handlers
-├── cli/
-│   ├── __init__.py
-│   └── commands.py       # Simplified CLI commands
-├── web/
-│   ├── index.html        # Simple web UI
-│   └── static/
-└── tests/
-    ├── test_services.py
-    ├── test_api.py
-    └── test_cli.py
-```
-
-### Example Usage After Refactoring
-
-**Before (current)**:
 ```bash
-cosmos prepare ./renders/city_scene/
-cosmos create prompt "cyberpunk transformation" inputs/videos/city_scene_20250830_203504
-cosmos inference inputs/prompts/2025-09-03/cyberpunk_transformation_ps_abc123.json
-# Check status in another terminal
-cosmos status
-# Manually find output files later
-```
+# Start implementation
+git checkout -b refactor/service-architecture
+pip install sqlalchemy
 
-**After (new)**:
-```bash
-cosmos run "cyberpunk transformation" ./renders/city_scene/
-# That's it! Progress shown inline, output path returned
-```
+# Create files
+mkdir -p cosmos_workflow/database
+mkdir -p cosmos_workflow/services
+touch cosmos_workflow/database/__init__.py
+touch cosmos_workflow/database/models.py
+touch cosmos_workflow/database/connection.py
+touch cosmos_workflow/services/__init__.py
+touch cosmos_workflow/services/workflow_service.py
 
-Or for repeat/exploration:
-```bash
-cosmos list                          # See recent runs
-cosmos search "cyberpunk"            # Find old prompts
-cosmos run --like ps_abc123          # Rerun with same settings
-cosmos compare run_123 run_456       # Compare two outputs
+# Test as you go
+pytest tests/test_database.py -xvs
+pytest tests/test_service.py -xvs
+
+# When ready
+git add .
+git commit -m "feat: add service layer architecture with SQLAlchemy"
+git checkout main
+git merge refactor/service-architecture
 ```
 
 ---
 
-This document represents a complete architectural overhaul that solves the identified pain points while maintaining simplicity and fast implementation timeline. The plan is modular - each phase delivers value independently.
+## 📝 Notes for Implementation
+
+### Database Decisions
+- **SQLAlchemy over Peewee**: Industry standard, better long-term
+- **SQLite**: Simple, single file, good enough for single user
+- **JSON columns**: For flexible storage of control_inputs, parameters
+
+### Service Layer Decisions
+- **Single WorkflowService**: Not separate Prompt/Run services
+- **Lazy executor loading**: Only create SSH connection when needed
+- **Progress as separate table**: Allows historical tracking
+
+### CLI Decisions
+- **New commands only initially**: Don't break existing workflow
+- **Rich for output**: Better tables and formatting
+- **Click for commands**: Already in use, familiar
+
+This refactoring is comprehensive but manageable. The key is working incrementally on a feature branch and testing each phase before moving on.

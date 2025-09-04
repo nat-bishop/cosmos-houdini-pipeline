@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-09-04 (Smart Naming Refactor)
+- **Refactored smart naming from spaCy to KeyBERT for improved semantic extraction**
+  - Replaced spaCy dependency parsing with KeyBERT semantic keyword extraction
+  - Now uses all-MiniLM-L6-v2 SBERT model for lightweight embeddings
+  - Configured with n-grams (1-2) and MMR diversity (0.7) to avoid duplicate keywords
+  - Added comprehensive stopword filtering for both common English and VFX domain terms
+  - Fallback to simple keyword extraction when KeyBERT is unavailable
+  - Names limited to 3 words maximum for better conciseness
+  - New dependencies: keybert and sentence-transformers (replacing spacy)
+
 ### Changed - 2025-09-03 (PromptSpecManager Refactor)
 - **Refactored prompt specification creation to use PromptSpecManager**
   - CLI `create prompt` command now uses PromptSpecManager instead of direct PromptSpec creation

@@ -475,17 +475,34 @@ is_valid = validate_gpu_request(requested=8, available=4)
 ```
 
 ### SmartNaming
-Generate intelligent names from descriptions.
+Generate intelligent names from descriptions using semantic keyword extraction.
+
+**Features:**
+- Uses KeyBERT with SBERT embeddings for semantic understanding
+- Extracts up to 3 most relevant keywords/phrases
+- Filters common English and VFX-specific stopwords
+- Falls back to simple extraction when KeyBERT unavailable
 
 ```python
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 name = generate_smart_name(
     "A beautiful sunset over the ocean with waves",
-    max_length=20
+    max_length=50
 )
 # Returns: "sunset_ocean_waves"
+
+# More examples:
+generate_smart_name("Low-lying mist with gradual falloff")
+# Returns: "low_lying_mist"
+
+generate_smart_name("Golden hour light creating long shadows")
+# Returns: "golden_hour_shadows"
 ```
+
+**Dependencies:**
+- keybert>=0.8.0
+- sentence-transformers>=2.2.0 (for SBERT model)
 
 ### VideoProcessor
 Process video files and PNG sequences.

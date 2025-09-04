@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Read(F:\\Art\\cosmos-houdini-experiments/**)",
-      "Read(F:\\Art\\cosmos-transfer1/**)",
       "Bash(pytest:*)",
       "Bash(python -m pytest:*)",
       "Bash(ruff:*)",

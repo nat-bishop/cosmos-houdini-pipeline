@@ -5,13 +5,17 @@ Windows implementation using SFTP for file transfers.
 
 from __future__ import annotations
 
+import json
 import logging
 import stat
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cosmos_workflow.connection.ssh_manager import SSHManager
+
+from cosmos_workflow.prompts import CosmosConverter, PromptSpec
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,7 @@ class FileTransferService:
     def upload_prompt_and_videos(self, prompt_file: Path, video_dirs: list[Path]) -> None:
         """Upload prompt file, video directories, and scripts/ via SFTP.
         Creates remote directories if missing and uploads all files.
+        Converts PromptSpec to NVIDIA Cosmos format before uploading.
         """
         if not prompt_file.exists():
             raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
@@ -42,9 +47,33 @@ class FileTransferService:
         # Ensure required remote directories exist
         self._remote_mkdirs([remote_prompts_dir, remote_videos_dir, remote_scripts_dir])
 
-        # 1) Prompt JSON → inputs/prompts/<name>.json
+        # 1) Convert PromptSpec to Cosmos format and upload
         prompt_name = prompt_file.stem
-        self._sftp_upload_file(prompt_file, f"{remote_prompts_dir}/{prompt_name}.json")
+
+        # Load the PromptSpec
+        try:
+            prompt_spec = PromptSpec.load(prompt_file)
+
+            # Convert to Cosmos format
+            cosmos_spec = CosmosConverter.prompt_spec_to_cosmos(prompt_spec)
+
+            # Create temporary file with converted format
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp_file:
+                json.dump(cosmos_spec, tmp_file, indent=2)
+                tmp_path = Path(tmp_file.name)
+
+            # Upload the converted file
+            self._sftp_upload_file(tmp_path, f"{remote_prompts_dir}/{prompt_name}.json")
+
+            # Clean up temporary file
+            tmp_path.unlink()
+
+            logger.info("Uploaded converted prompt spec: %s", prompt_name)
+
+        except Exception as e:
+            logger.warning("Failed to convert prompt spec, uploading original: %s", e)
+            # Fall back to uploading original if conversion fails
+            self._sftp_upload_file(prompt_file, f"{remote_prompts_dir}/{prompt_name}.json")
 
         # 2) Videos → inputs/videos/<dir_name>/...
         for vd in video_dirs:

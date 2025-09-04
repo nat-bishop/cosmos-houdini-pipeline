@@ -23,6 +23,7 @@
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(mypy:*)",
+      "Bash(ls:*)",
       "Bash(cosmos:*)"
     ],
     "deny": [],

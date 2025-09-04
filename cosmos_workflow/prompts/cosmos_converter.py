@@ -29,9 +29,10 @@ class CosmosConverter:
             Dictionary in Cosmos Transfer controlnet_specs format
         """
         # Start with base structure
+        # Convert Windows paths to Unix paths for remote system
         cosmos_spec = {
             "prompt": prompt_spec.prompt,
-            "input_video_path": prompt_spec.input_video_path,
+            "input_video_path": prompt_spec.input_video_path.replace("\\", "/"),
         }
 
         # Note: negative_prompt is handled as a command-line parameter to the inference script,
@@ -67,7 +68,8 @@ class CosmosConverter:
 
                 # Add input_control for modalities that need explicit input
                 if modality in ["depth", "seg", "keypoint"] and input_path:
-                    control_entry["input_control"] = input_path
+                    # Convert Windows paths to Unix paths for remote system
+                    control_entry["input_control"] = input_path.replace("\\", "/")
 
                 cosmos_spec[modality] = control_entry
 

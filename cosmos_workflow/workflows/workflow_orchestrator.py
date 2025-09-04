@@ -238,42 +238,54 @@ class WorkflowOrchestrator:
         if videos_subdir:
             return [Path(f"inputs/videos/{videos_subdir}")]
 
-        # Check if this is a RunSpec file (check for rs_ in the stem or if it matches a run ID pattern)
-        if prompt_file.stem.endswith("_rs_") or "_rs_" in prompt_file.stem:
-            # This is a RunSpec, load it to get the PromptSpec
-            try:
-                from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
+        # Try to load the file to get video paths
+        try:
+            from cosmos_workflow.prompts.schemas import PromptSpec, RunSpec
 
+            # Try loading as PromptSpec first
+            prompt_spec = None
+            try:
+                prompt_spec = PromptSpec.load(prompt_file)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # Not a PromptSpec, might be a RunSpec
+                pass
+
+            # If not a PromptSpec, check if this is a RunSpec file
+            if not prompt_spec and (
+                prompt_file.stem.endswith("_rs_") or "_rs_" in prompt_file.stem
+            ):
+                # This is a RunSpec, load it to get the PromptSpec
                 run_spec = RunSpec.load(prompt_file)
 
                 # Find the corresponding PromptSpec by loading files and checking ID
                 # Since hash is no longer in filename, we need to search by content
                 prompt_spec_files = []
-                for prompt_file in Path("inputs/prompts").rglob("*.json"):
+                for pf in Path("inputs/prompts").rglob("*.json"):
                     try:
-                        with open(prompt_file) as f:
+                        with open(pf) as f:
                             data = json.load(f)
                             if data.get("id") == run_spec.prompt_id:
-                                prompt_spec_files.append(prompt_file)
+                                prompt_spec_files.append(pf)
                                 break
                     except (OSError, json.JSONDecodeError):
                         continue
                 if prompt_spec_files:
                     prompt_spec = PromptSpec.load(prompt_spec_files[0])
 
-                    # Extract video directory from the video path
-                    if prompt_spec.input_video_path:
-                        video_path = Path(prompt_spec.input_video_path)
-                        if video_path.parent.exists():
-                            return [video_path.parent]
+            # If we have a prompt_spec (either directly loaded or from RunSpec), get video directory
+            if prompt_spec and prompt_spec.input_video_path:
+                video_path = Path(prompt_spec.input_video_path)
+                if video_path.parent.exists():
+                    return [video_path.parent]
 
-                        # Try to find the video directory by name
-                        video_dir_name = video_path.parent.name
-                        video_dir = Path(f"inputs/videos/{video_dir_name}")
-                        if video_dir.exists():
-                            return [video_dir]
-            except Exception as e:
-                logger.warning("Could not load RunSpec/PromptSpec to find videos: %s", e)
+                # Try to find the video directory by name
+                video_dir_name = video_path.parent.name
+                video_dir = Path(f"inputs/videos/{video_dir_name}")
+                if video_dir.exists():
+                    return [video_dir]
+
+        except Exception as e:
+            logger.warning("Could not load PromptSpec/RunSpec to find videos: %s", e)
 
         # Default behavior: use prompt file stem
         prompt_name = prompt_file.stem

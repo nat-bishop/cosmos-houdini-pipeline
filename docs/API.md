@@ -402,6 +402,38 @@ status = ExecutionStatus.COMPLETED  # Successful
 status = ExecutionStatus.FAILED     # Error occurred
 ```
 
+## File Naming Conventions
+
+### PromptSpec Files
+PromptSpec files are saved with a standardized naming format for easy identification and sorting.
+
+**Format:** `{name}_{date}_{time}-{milliseconds}.json`
+- `name`: Sanitized prompt name (alphanumeric and underscores only)
+- `date`: Date in `YYYY-MM-DD` format
+- `time`: Time in `HH-MM-SS` format
+- `milliseconds`: 3-digit milliseconds for uniqueness
+
+**Example:** `golden_hour_warmth_2025-09-03_07-55-25-548.json`
+
+**Directory Structure:** `inputs/prompts/YYYY-MM-DD/`
+
+### RunSpec Files
+RunSpec files follow the same naming convention as PromptSpec files.
+
+**Format:** `{name}_{date}_{time}-{milliseconds}.json`
+
+**Example:** `test_run_2025-09-03_10-30-45-567.json`
+
+**Directory Structure:** `inputs/runs/YYYY-MM-DD/`
+
+### Internal ID Format
+While filenames use the above format, internally the specs maintain unique IDs:
+- **PromptSpec ID:** `ps_{hash}` - 12-character hash based on content
+- **RunSpec ID:** `rs_{hash}` - 12-character hash based on content
+- **RunSpec.prompt_id:** References the PromptSpec ID (e.g., `ps_c2e9e46032bf`)
+
+These IDs are stored in the JSON file's `id` field and used for cross-referencing between specs.
+
 ## Configuration
 
 ### ConfigManager

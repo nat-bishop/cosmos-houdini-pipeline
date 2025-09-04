@@ -229,27 +229,12 @@ class TestVideoPipeline:
         seq_dir = create_cosmos_sequence(["color", "depth"], 24)
         output_dir = temp_dir / "output"
 
-        with (
-            patch(
-                "cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter"
-            ) as mock_processor,
-            patch(
-                "cosmos_workflow.local_ai.video_metadata.VideoMetadataExtractor"
-            ) as mock_extractor,
-        ):
+        with patch(
+            "cosmos_workflow.local_ai.cosmos_sequence.CosmosVideoConverter"
+        ) as mock_processor:
             mock_processor_instance = MagicMock()
             mock_processor.return_value = mock_processor_instance
             mock_processor_instance.create_video_from_frames.return_value = True
-
-            mock_extractor_instance = MagicMock()
-            mock_extractor.return_value = mock_extractor_instance
-            mock_extractor_instance.extract_metadata.return_value = {
-                "duration": 1.0,
-                "fps": 24,
-                "resolution": "1920x1080",
-                "frame_count": 24,
-            }
-            mock_extractor_instance.generate_description.return_value = "Test scene"
 
             converter = CosmosVideoConverter(fps=24)
 

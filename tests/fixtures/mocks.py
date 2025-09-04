@@ -5,7 +5,6 @@ Reusable mock objects for testing.
 import json
 import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, Mock
 
 
@@ -118,49 +117,6 @@ Output saved to: output.mp4
             return (0, json.dumps({"upsampled_prompts": upsampled}), "")
         else:
             return (1, "", "Upsampling failed")
-
-
-class MockVideoProcessor:
-    """Mock video processor for testing."""
-
-    def __init__(self, valid: bool = True):
-        self.valid = valid
-        self.videos_created = []
-
-    def validate_sequence(self, input_dir: str) -> tuple[bool, list[str]]:
-        """Mock sequence validation."""
-        if self.valid:
-            return (True, [])
-        else:
-            return (False, ["Missing frames: 4, 5", "Corrupted frame: 10"])
-
-    def create_video_from_frames(self, input_pattern: str, output_path: str, fps: int = 24) -> bool:
-        """Mock video creation."""
-        if self.valid:
-            self.videos_created.append({"input": input_pattern, "output": output_path, "fps": fps})
-            # Create mock file
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(output_path).touch()
-        return self.valid
-
-    def standardize_video(
-        self,
-        input_path: str,
-        output_path: str,
-        target_fps: int | None = None,
-        target_resolution: str | None = None,
-    ) -> bool:
-        """Mock video standardization."""
-        return self.valid
-
-    def extract_frame(
-        self, video_path: str, frame_number: int, output_path: str | None = None
-    ) -> Any | None:
-        """Mock frame extraction."""
-        if self.valid:
-            # Return mock frame data
-            return b"\x89PNG\r\n\x1a\n" + b"\x00" * 1000
-        return None
 
 
 class MockAIGenerator:

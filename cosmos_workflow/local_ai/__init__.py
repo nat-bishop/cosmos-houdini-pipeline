@@ -1,11 +1,20 @@
 """Local AI methods for Cosmos workflow.
 
 This module provides local AI functionality for:
-- Video metadata extraction and analysis
-- Video processing and standardization
-- PNG sequence to video conversion
+- Cosmos sequence validation and conversion
+- PNG sequence to video conversion for Cosmos Transfer
 """
 
-from .video_metadata import VideoMetadata, VideoMetadataExtractor, VideoProcessor
+from .cosmos_sequence import (
+    CosmosMetadata,
+    CosmosSequenceInfo,
+    CosmosSequenceValidator,
+    CosmosVideoConverter,
+)
 
-__all__ = ["VideoMetadata", "VideoMetadataExtractor", "VideoProcessor"]
+__all__ = [
+    "CosmosMetadata",
+    "CosmosSequenceInfo",
+    "CosmosSequenceValidator",
+    "CosmosVideoConverter",
+]

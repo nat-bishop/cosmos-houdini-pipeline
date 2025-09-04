@@ -1,6 +1,34 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "bash F:\\Art\\cosmos-houdini-experiments\\.claude\\statusline-command.sh"
+  "permissions": {
+    "allow": [
+      "WebFetch",
+      "Read(./**)",
+      "Edit(./**)",
+      "Read(~/.bashrc)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Bash(ls:*)",
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(timeout:*)",
+      "Bash(cosmos:*)",
+      "Bash(pre-commit:*)",
+      "Bash(mypy:*)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ],
+    "ask": []
   }
 }

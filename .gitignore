@@ -167,6 +167,10 @@ docs/_build/
 docs/.doctrees/
 site/
 
+# Claude Code workspace
+.claude/workspace/
+.claude/settings.local.json
+
 # Temporary files
 *.pid
 *.seed

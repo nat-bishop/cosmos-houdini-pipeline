@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Fixed RunSpec timestamp formatting issue in `cosmos create run` command**
+  - Removed duplicate timezone suffix that was causing "+00:00+00:00" in timestamps
+  - Now correctly uses `datetime.now(timezone.utc).isoformat()` without extra timezone indicator
+  - Ensures timestamps are properly formatted for JSON serialization
+
+### Changed
+- **Improved `cosmos prompt-enhance` command to use true batch processing**
+  - Now processes multiple prompts in a single batch instead of one at a time
+  - Significantly improves performance when enhancing multiple prompts
+  - Reduces GPU initialization overhead by keeping model in memory for entire batch
+  - Maintains progress tracking while processing all prompts together
+
+### Fixed
+- **Integrated CosmosConverter for NVIDIA Cosmos Transfer format compatibility**
+  - FileTransferService now automatically converts PromptSpec to NVIDIA format during upload
+  - Ensures proper field mapping (prompt_text → prompt, control_paths → control_path)
+  - Handles path separator conversion from Windows to Unix for remote systems
+  - Falls back to original format if conversion fails, ensuring robustness
+  - Video directories are now correctly detected from PromptSpec's input_video_path field
+
 ### Changed
 - **Switched to read-only pre-commit hooks for predictable formatting workflow**
   - Pre-commit hooks now only check formatting/linting, never modify files

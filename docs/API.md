@@ -195,15 +195,15 @@ with ssh_manager:
 - `get_sftp()`: Get SFTP client
 
 ### FileTransferService
-Handles file transfers via SFTP.
+Handles file transfers via SFTP with automatic format conversion.
 
 ```python
 from cosmos_workflow.transfer.file_transfer import FileTransferService
 
 file_transfer = FileTransferService(ssh_manager, remote_dir)
 
-# Upload files for inference
-file_transfer.upload_for_inference(
+# Upload files for inference (automatically converts to NVIDIA Cosmos format)
+file_transfer.upload_prompt_and_videos(
     prompt_file=Path("prompt.json"),
     video_dirs=[Path("videos/scene1")]
 )
@@ -219,9 +219,14 @@ file_transfer.download_results(Path("prompt.json"))
 ```
 
 **Methods:**
-- `upload_for_inference()`: Upload prompt and videos
+- `upload_prompt_and_videos()`: Upload prompt and videos with automatic PromptSpec to NVIDIA Cosmos format conversion
 - `download_file()`: Download a single file from remote
 - `download_results()`: Download generated outputs
+
+**Features:**
+- Automatic conversion from PromptSpec to NVIDIA Cosmos Transfer format during upload
+- Path separator conversion from Windows to Unix for cross-platform compatibility
+- Fallback to original format if conversion fails
 - `file_exists_remote()`: Check if remote file exists
 - `list_remote_directory()`: List remote directory
 

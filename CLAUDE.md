@@ -25,7 +25,9 @@ Tests are the contract. Commit them unchanged.
 ### **Gate 4 — Make Tests Pass**
 - Implement minimal code to pass all tests.
 - Do **not** modify tests, they are a contract.
-- Run `/overfit-check` to verify implementation (checks both internal and external verification).
+- Run the `overfit-verifier` sub-agent to ensure generalization.
+- **MUST** check for external verification at `.claude/workspace/verification/EXTERNAL_overfit_check.md`.
+  - Only proceed if report exists and matches current changes. If missing/outdated, ask user first.
 
 ### **Gate 5 — Document**
 - Update [README.md](README.md)
@@ -35,6 +37,8 @@ Tests are the contract. Commit them unchanged.
 
 ### **Gate 6 — Review**
 - Run `code-reviewer` agent.
+- Check for external review at `.claude/workspace/verification/EXTERNAL_code_review.md`.
+  - Only proceed if report exists and matches current changes. If missing/outdated, ask user first.
 - Must pass lint, coverage, and security checks.
 
 ---

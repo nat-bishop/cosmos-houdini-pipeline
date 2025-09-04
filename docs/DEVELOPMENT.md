@@ -145,12 +145,12 @@ Use these for TDD workflow:
 **Key Insight:** Implementation sessions develop "test-passing bias" - fresh verification catches what you've become blind to.
 
 ### Quick Start
-```bash
-# In a NEW Claude Code session:
-.claude/verify.sh database  # Replace 'database' with your feature name
-```
 
-This clears old reports and provides the verification prompt.
+In a NEW Claude Code session, use slash commands:
+- `/verify-overfit` - Run independent overfit verification (Gate 4)
+- `/verify-review` - Run independent code review (Gate 6)
+
+Reports are saved to `.claude/workspace/verification/EXTERNAL_*.md` for the main session to check.
 
 ### Why It Works
 
@@ -166,7 +166,7 @@ In our database feature, concurrent verification found critical bugs the main se
 - **Recommended:** Multi-file features
 - **Optional:** Simple bug fixes
 
-The main session will check `.claude/workspace/verification/` at Gate 4.
+The main session checks for these external reports at Gates 4 and 6.
 
 ## Commit Messages
 

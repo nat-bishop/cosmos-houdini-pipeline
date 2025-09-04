@@ -13,6 +13,10 @@ Overfitting patterns to detect:
 - If/else conditions checking for specific test inputs
 - Lookup tables or arrays containing exact test values
 - Any code that would break with slightly different inputs
+- Switch/if chains that enumerate concrete literals drawn from tests
+- Direct parsing of test file names or paths
+- Data tables keyed by sample inputs rather than domain identifiers
+- Regexes that accept only the test strings (anchored to exact shapes)
 
 **NOT overfitting (don't flag these):**
 - Missing features not covered by tests

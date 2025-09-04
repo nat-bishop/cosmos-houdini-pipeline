@@ -10,16 +10,19 @@ It specifies TDD workflow, best practices, and safety practices.
 All work follows a **gated TDD flow**. If a gate fails, stop and request review.
 
 ### **Gate 1 — Write Tests First**
-- Tests are written before implementation.
 - **Test the behavior of the system, not its implementation details.**
-- **Use real implementations, not mocks.**
-- **Write enough behavioral tests that only a general solution can pass them all.**
-- Coverage target: ≥ 80%.
-- Always test error paths and consider edge cases.
+- **Generalization pressure**: add enough behavioral cases (happy path + boundaries + error paths) that only a general solution can pass.
+- Control nondeterminism via our wrappers (**no third-party mocking**):
+  - Prefer fakes that implement wrapper interfaces where determinism is required (e.g., FakeClock, FixedRNG(seed), loopback/no-op network/SSH/Docker).
+  - Apply the same approach to filesystem/env access when needed.
+- Always consider edge cases.
+- **Prohibited**: raw mocks of core domain behavior; global state; bypassing wrappers.
 - Expected: all tests fail.
 
 ### **Gate 2 — Verify Tests Fail**
-pytest path/to/new_test.py --tb=no -q
+ - Verify tests introduced or modified in this TDD cycle fail.
+ - The pre-existing suite remains unchanged (no legacy tests were modified).
+ - **Do Not** run coverage of the full test suite in this gate
 
 ### **Gate 3 — Commit Failing Tests**
 Tests are the contract. Commit them unchanged.
@@ -29,7 +32,7 @@ Tests are the contract. Commit them unchanged.
 - Do **not** modify tests, they are a contract.
 - Run the `overfit-verifier` sub-agent to ensure generalization.
 - **MUST** check for external verification at `.claude/workspace/verification/EXTERNAL_overfit_check.md`.
-  - Only proceed if report exists and matches current changes. If missing/outdated, ask user first.
+  - Only proceed if report exists and matches current changes. If report is missing or outdated, STOP and ask user for advice.
 
 ### **Gate 5 — Document**
 - Update [README.md](README.md)
@@ -40,7 +43,7 @@ Tests are the contract. Commit them unchanged.
 ### **Gate 6 — Review**
 - Run `code-reviewer` agent.
 - Check for external review at `.claude/workspace/verification/EXTERNAL_code_review.md`.
-  - Only proceed if report exists and matches current changes. If missing/outdated, ask user first.
+  - Only proceed if report exists and matches current changes. If report is missing or outdated, STOP and ask user for advice.
 - Must pass lint, coverage, and security checks.
 
 ---
@@ -50,6 +53,7 @@ Tests are the contract. Commit them unchanged.
   - [workflows/](cosmos_workflow/workflows/) — orchestration & GPU flows
   - [connection/](cosmos_workflow/connection/) — SSH & file transfer
   - [execution/](cosmos_workflow/execution/) — Docker & command exec
+  - [transfer/](cosmos_workflow/transfer/) — File Transfer
   - [config/](cosmos_workflow/config/) — config and `config.toml`
   - [prompts/](cosmos_workflow/prompts/) — prompt specs
   - [local_ai/](cosmos_workflow/local_ai/) — local AI utils

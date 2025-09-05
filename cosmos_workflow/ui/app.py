@@ -102,12 +102,15 @@ def list_prompts_for_dropdown():
     try:
         prompts = service.list_prompts(limit=100)
         # Return list of tuples (display_name, value)
-        choices = [
-            (f"{p['id'][:8]}... - {p['name']} - {p['prompt_text'][:50]}...", p["id"])
-            for p in prompts
-        ]
+        choices = []
+        for p in prompts:
+            # Get name from parameters or use default
+            name = p.get("parameters", {}).get("name", "unnamed")
+            display = f"{p['id'][:8]}... - {name} - {p['prompt_text'][:50]}..."
+            choices.append((display, p["id"]))
         return choices
-    except Exception:
+    except Exception as e:
+        logger.error("Error listing prompts for dropdown: %s", e)
         return []
 
 
@@ -120,7 +123,8 @@ def get_prompt_details(prompt_id):
         prompt = service.get_prompt(prompt_id)
 
         details = f"**ID:** {prompt['id']}\n"
-        details += f"**Name:** {prompt['name']}\n"
+        name = prompt.get("parameters", {}).get("name", "unnamed")
+        details += f"**Name:** {name}\n"
         details += f"**Text:** {prompt['prompt_text']}\n"
         details += f"**Negative:** {prompt.get('parameters', {}).get('negative_prompt', 'None')}\n"
 
@@ -129,7 +133,7 @@ def get_prompt_details(prompt_id):
         if inputs:
             details += "\n**Video Inputs:**\n"
             for key, path in inputs.items():
-                exists = "✓" if Path(path).exists() else "✗"
+                exists = "[Yes]" if Path(path).exists() else "[No]"
                 details += f"- {key}: {Path(path).name} {exists}\n"
 
         return details
@@ -307,12 +311,15 @@ def list_prompts_table():
         inputs = prompt.get("inputs", {})
         if inputs:
             all_exist = all(Path(path).exists() for path in inputs.values())
-            video_status = "✓" if all_exist else "✗"
+            video_status = "Yes" if all_exist else "No"
+
+        # Get name from parameters or use default
+        name = prompt.get("parameters", {}).get("name", "unnamed")
 
         data.append(
             [
                 prompt["id"][:12] + "...",
-                prompt["name"],
+                name,
                 prompt["prompt_text"][:50] + "...",
                 video_status,
                 prompt["created_at"],
@@ -349,7 +356,7 @@ def get_gpu_status():
 
             if docker_status["docker_running"]:
                 status_text += "### Docker Status\n"
-                status_text += "✅ Docker is running\n\n"
+                status_text += "[OK] Docker is running\n\n"
 
                 containers = docker_status.get("running_containers", "")
                 if "CONTAINER ID" in containers:
@@ -360,7 +367,7 @@ def get_gpu_status():
                     status_text += "**Active Containers:** 0\n"
             else:
                 status_text += "### Docker Status\n"
-                status_text += "❌ Docker is not running\n"
+                status_text += "[ERROR] Docker is not running\n"
 
             status_text += "\n*Auto-refreshing every 5 seconds*"
             return status_text
@@ -412,7 +419,7 @@ def create_interface():
                                 label="Prompt Name (Optional)", placeholder="my_awesome_prompt"
                             )
 
-                            create_prompt_btn = gr.Button("✨ Create Prompt", variant="primary")
+                            create_prompt_btn = gr.Button("Create Prompt", variant="primary")
                             prompt_id_output = gr.Textbox(
                                 label="Created Prompt ID", interactive=False
                             )

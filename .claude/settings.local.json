@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "WebSearch",
+      "Read(//f/Art/cosmos-transfer1/server/**)"
     ],
     "deny": [],
     "ask": []

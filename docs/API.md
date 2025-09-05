@@ -11,17 +11,19 @@ Complete API documentation for the Cosmos Workflow System.
 
 ## CLI Commands
 
-**Important: Service Layer Architecture**
+**Service Layer Architecture - Production Ready**
 
-As of the Chunk 3 refactoring, all CLI commands follow a database-first approach:
+The Cosmos Workflow System uses a clean database-first service layer architecture:
 
-- **Database IDs**: Commands work with database IDs (ps_xxxxx for prompts, rs_xxxxx for runs) instead of JSON file paths
-- **No JSON Storage**: Data is stored in the database; JSON files are only created temporarily for GPU execution
-- **Clear Separation**: WorkflowService handles all data operations, WorkflowOrchestrator handles only GPU execution
-- **Lifecycle Tracking**: All operations (including prompt enhancement) are tracked as runs in the database
-- **Transaction Safety**: All database operations include proper error handling and rollback mechanisms
+- **Database-First Design**: All data stored in SQLAlchemy database with no persistent JSON files
+- **Database IDs**: Commands work with database IDs (ps_xxxxx for prompts, rs_xxxxx for runs)
+- **Service Layer**: WorkflowService handles all business logic and data operations
+- **Execution Layer**: WorkflowOrchestrator handles ONLY GPU execution (inference, upscaling, AI enhancement)
+- **Temporary JSON**: NVIDIA-format JSON files created only temporarily for GPU script compatibility
+- **Transaction Safety**: Comprehensive error handling with automatic rollback
+- **Multi-Model Ready**: Extensible design supports current transfer model and future AI models
 
-This architecture provides better data consistency, easier querying, and cleaner separation of concerns between data management and GPU execution.
+This architecture provides excellent data consistency, enables analytics dashboards, and maintains clean separation between data management and GPU execution. The system is production-ready with 453 passing tests.
 
 ### create prompt
 Create a new prompt in the database.
@@ -38,11 +40,12 @@ cosmos create prompt "PROMPT_TEXT" VIDEO_DIR [OPTIONS]
 - `-n, --name`: Name for the prompt (auto-generated from content if not provided)
 - `--negative`: Negative prompt for quality improvement (has comprehensive default)
 
-**Database-First Approach:**
-- Creates prompt directly in database with generated ID (ps_xxxxx)
-- No JSON files created - all data stored in database
-- Returns prompt ID for use with other commands
-- Smart name generation from prompt content using semantic analysis
+**Database-First Architecture:**
+- Creates prompt directly in SQLAlchemy database with generated ID (ps_xxxxx)
+- All data persisted in database - no JSON file management
+- Returns prompt ID for use with other commands and tracking
+- Smart name generation using KeyBERT semantic analysis
+- Extensible JSON columns support multiple AI model types
 
 **Example:**
 ```bash
@@ -69,11 +72,12 @@ cosmos create run PROMPT_ID [OPTIONS]
 - `--guidance-scale`: CFG guidance scale (default: 8.0)
 - `--output-path`: Custom output path
 
-**Database-First Approach:**
+**Database-First Architecture:**
 - Works with prompt IDs from database, not JSON files
-- Creates run directly in database with generated ID (rs_xxxxx)
+- Creates run directly in database with UUID-based ID (rs_xxxxx)
 - Links run to existing prompt via foreign key relationship
-- Stores execution configuration in database for later use
+- Stores execution configuration in database for analytics and tracking
+- Run lifecycle tracked: pending → running → completed/failed
 
 **Example:**
 ```bash
@@ -101,9 +105,10 @@ cosmos inference RUN_ID [OPTIONS]
 
 **Database-First Execution:**
 - Works with run IDs from database, not JSON files
-- Retrieves run and linked prompt data automatically from database
-- Updates run status in database throughout execution lifecycle
-- Only creates temporary JSON files during GPU execution, not for storage
+- Retrieves run and linked prompt data automatically via WorkflowService
+- Updates run status in real-time: pending → running → completed/failed
+- Creates temporary NVIDIA-format JSON only for GPU script compatibility
+- All execution results stored back in database for persistence and analytics
 
 **Example:**
 ```bash
@@ -126,12 +131,13 @@ cosmos prompt-enhance PROMPT_IDS... [OPTIONS]
 - `--resolution`: Max resolution for preprocessing (e.g., 480)
 - `--dry-run`: Preview without calling AI API
 
-**Database-First Enhancement:**
+**Database-First AI Enhancement:**
 - Works with prompt IDs from database, not JSON files
-- Creates new enhanced prompts in database with smart names
-- Creates enhancement runs in database to track AI processing
-- Links enhanced prompts to original prompts via parent relationship
-- Updates run status throughout enhancement lifecycle
+- Creates new enhanced prompts in database with KeyBERT-generated smart names
+- Creates enhancement runs in database to track Pixtral AI processing
+- Links enhanced prompts to original prompts for traceability
+- Full lifecycle tracking: pending → running → completed with enhanced results
+- All AI operations treated as trackable runs in the system
 
 **Example:**
 ```bash
@@ -298,14 +304,20 @@ When using `--stream`:
 
 ### WorkflowService
 
-The WorkflowService provides all business logic for managing prompts and runs in the database.
+The WorkflowService provides the complete business logic layer for managing prompts and runs in the database. This is the core service class that handles all data operations, validation, and transaction management.
 
 #### Query Methods
 
 ```python
 from cosmos_workflow.services.workflow_service import WorkflowService
 
-# Initialize service
+# Initialize service (used by CLI commands)
+from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.database import DatabaseConnection
+from cosmos_workflow.config import ConfigManager
+
+db_connection = DatabaseConnection()
+config_manager = ConfigManager()
 service = WorkflowService(db_connection, config_manager)
 
 # List prompts with optional filtering
@@ -565,29 +577,37 @@ orchestrator = WorkflowOrchestrator()
 
 # Execute a run from database data
 result = orchestrator.execute_run(
-    run_dict={"id": "rs_abc123", "status": "pending"},
+    run_dict={"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
     prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}},
     upscale=True,
     upscale_weight=0.5
 )
-# Returns: {"status": "completed", "output_path": "/outputs/...", "duration": 120.5}
+# Returns: {"status": "completed", "output_path": "/outputs/result.mp4", "duration": 362.1}
 
-# Enhance a single prompt text
+# Enhance prompt text with Pixtral AI
 enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
-# Returns: "A breathtaking metropolis with gleaming skyscrapers..."
+# Returns: "A breathtaking futuristic metropolis with gleaming skyscrapers and neon lights"
 ```
 
-**Methods:**
-- `execute_run(run_dict, prompt_dict, upscale, upscale_weight)`: Execute GPU workflow from database data
-- `run_prompt_upsampling(prompt_text)`: Enhance prompt text using Pixtral AI
-- `check_remote_status()`: Check remote GPU system status
+**Core Methods:**
+- `execute_run(run_dict, prompt_dict, upscale=True, upscale_weight=0.5)`: Execute complete GPU workflow
+  - Converts database dictionaries to NVIDIA Cosmos format
+  - Creates temporary JSON files for GPU scripts
+  - Handles SSH connection, file upload, Docker execution, result download
+  - Returns execution results for WorkflowService to persist
 
-**Key Changes in Service Layer Refactoring:**
-- Removed all JSON file management and PromptSpec/RunSpec dependencies
-- No longer handles data persistence - purely executes on GPU infrastructure
-- Takes database dictionaries as input instead of file paths
-- Returns execution results as dictionaries for service layer to persist
-- Clear separation: data operations handled by WorkflowService
+- `run_prompt_upsampling(prompt_text)`: AI-powered prompt enhancement
+  - Uses Pixtral vision-language model for prompt improvement
+  - Returns enhanced text for WorkflowService to create new prompt
+
+- `check_remote_status()`: Check remote GPU system health and container status
+
+**Architecture Principles:**
+- **Pure Execution Layer**: No data persistence or business logic
+- **Stateless**: Takes input dictionaries, returns result dictionaries
+- **NVIDIA Compatible**: Creates temporary JSON in required format for GPU scripts
+- **Clean Separation**: Data operations handled entirely by WorkflowService
+- **Error Handling**: Returns error status in result dictionary for service layer processing
 
 ### SSHManager
 Manages SSH connections to remote instances.
@@ -691,173 +711,156 @@ docker_executor.stream_container_logs(container_id="abc123")  # Specific contain
   - Gracefully handles Ctrl+C interruption
   - Uses 24-hour timeout for long-running streams
 
-## Schemas
+## Database Schema
 
-### PromptSpecManager
-Manages creation, validation, and file operations for PromptSpec objects.
+The system uses SQLAlchemy database models instead of JSON file schemas. All data is stored in the database with flexible JSON columns for extensibility.
+
+### Prompt Model
+Database model for storing AI prompts with flexible JSON columns.
 
 ```python
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.schemas import DirectoryManager
+from cosmos_workflow.database.models import Prompt
+from datetime import datetime, timezone
 
-# Initialize with directory manager
-dir_manager = DirectoryManager(prompts_dir, runs_dir)
-spec_manager = PromptSpecManager(dir_manager)
-
-# Create a prompt spec with automatic smart naming
-spec = spec_manager.create_prompt_spec(
+# Create prompt via WorkflowService (recommended)
+service = WorkflowService(db_connection, config_manager)
+prompt_data = service.create_prompt(
+    model_type="transfer",
     prompt_text="A futuristic city with neon lights",
-    input_video_path="inputs/videos/city.mp4",
-    control_inputs={
-        "vis": "path/to/vis",
-        "edge": "path/to/edge",
-        "depth": "path/to/depth",
-        "seg": "path/to/seg"
-    }
-)
-# Automatically saved with smart name: "futuristic_city_neon"
-
-# Create enhanced prompt (from upsampling)
-enhanced_spec = spec_manager.create_prompt_spec(
-    prompt_text="A breathtaking futuristic metropolis bathed in vibrant neon",
-    input_video_path="inputs/videos/city.mp4",
-    control_inputs=control_inputs,
-    is_upsampled=True,
-    parent_prompt_text="A futuristic city with neon lights"
-)
-# Smart name generated from content: "breathtaking_metropolis"
-```
-
-**Key Features:**
-- Automatic smart name generation from prompt content
-- Consistent ID generation using SchemaUtils
-- Automatic file saving to proper directory structure
-- Support for upsampled/enhanced prompts with parent tracking
-- Centralized API for all prompt spec creation
-
-### PromptSpec
-Prompt specification schema.
-
-```python
-from cosmos_workflow.prompts.schemas import PromptSpec
-
-spec = PromptSpec(
-    id="unique_id",
-    name="scene_name",
-    prompt="Generation prompt",
-    negative_prompt="Negative prompt",
-    input_video_path="path/to/video.mp4",
-    control_inputs={
-        "vis": "path/to/vis",
-        "edge": "path/to/edge",
-        "depth": "path/to/depth",
-        "segmentation": "path/to/segmentation"
-    },
-    timestamp="2024-12-30T10:00:00Z"
-)
-
-# Save to JSON
-spec.save("prompt_spec.json")
-
-# Load from JSON
-loaded_spec = PromptSpec.load("prompt_spec.json")
-```
-
-**Fields:**
-- `id`: Unique identifier (auto-generated)
-- `name`: Human-readable name
-- `prompt`: Main generation prompt
-- `negative_prompt`: Optional negative prompt
-- `input_video_path`: Optional input video
-- `control_inputs`: Control modality paths
-- `timestamp`: Creation timestamp
-
-### RunSpec
-Run configuration schema.
-
-```python
-from cosmos_workflow.prompts.schemas import RunSpec, ExecutionStatus
-
-run_spec = RunSpec(
-    id="run_id",
-    prompt_id="prompt_id",
-    name="run_name",
-    control_weights={
-        "vis": 0.3,
-        "edge": 0.4,
-        "depth": 0.2,
-        "segmentation": 0.1
+    inputs={
+        "video": "inputs/videos/city.mp4",
+        "depth": "inputs/videos/city_depth.mp4",
+        "segmentation": "inputs/videos/city_seg.mp4"
     },
     parameters={
-        "num_steps": 50,
-        "guidance_scale": 10.0,
-        "seed": 42
-    },
-    execution_status=ExecutionStatus.PENDING,
-    output_path="outputs/run_001"
+        "negative_prompt": "blurry, low quality, distorted",
+        "num_steps": 35,
+        "guidance_scale": 8.0
+    }
 )
-
-# Update status
-run_spec.execution_status = ExecutionStatus.COMPLETED
-run_spec.save("run_spec.json")
+# Returns: {"id": "ps_abc123", "model_type": "transfer", "created_at": "...", ...}
 ```
 
-**Fields:**
-- `id`: Unique run identifier
-- `prompt_id`: Reference to PromptSpec
-- `name`: Run name
-- `control_weights`: Weight for each modality
-- `parameters`: Inference parameters
-- `execution_status`: Current status
-- `output_path`: Output directory
-- `timestamp`: Creation time
-- `start_time`: Execution start
-- `end_time`: Execution end
-- `error_message`: Error details if failed
+**Database Fields:**
+- `id`: Database primary key (ps_xxxxx format)
+- `model_type`: AI model type ("transfer", "enhancement", "reason", "predict")
+- `prompt_text`: Main generation prompt text
+- `inputs`: JSON column for model-specific inputs (videos, images, etc.)
+- `parameters`: JSON column for model-specific parameters
+- `created_at`: Timestamp of creation
 
-### ExecutionStatus
-Enum for execution states.
+### Run Model
+Database model for tracking execution runs with complete lifecycle management.
 
 ```python
-from cosmos_workflow.prompts.schemas import ExecutionStatus
+from cosmos_workflow.database.models import Run
 
-status = ExecutionStatus.PENDING    # Not started
-status = ExecutionStatus.RUNNING    # In progress
-status = ExecutionStatus.COMPLETED  # Successful
-status = ExecutionStatus.FAILED     # Error occurred
+# Create run via WorkflowService (recommended)
+run_data = service.create_run(
+    prompt_id="ps_abc123",
+    execution_config={
+        "weights": [0.3, 0.4, 0.2, 0.1],  # vis, edge, depth, segmentation
+        "num_steps": 50,
+        "guidance_scale": 10.0,
+        "upscale": True,
+        "upscale_weight": 0.5
+    },
+    metadata={"user": "NAT", "priority": "high"}
+)
+# Returns: {"id": "rs_xyz789", "prompt_id": "ps_abc123", "status": "pending", ...}
+
+# Update run status (done automatically by WorkflowOrchestrator)
+service.update_run_status("rs_xyz789", "completed")
+service.update_run("rs_xyz789", outputs={"video_path": "/outputs/result.mp4"})
 ```
 
-## File Naming Conventions
+**Database Fields:**
+- `id`: Database primary key (rs_xxxxx format)
+- `prompt_id`: Foreign key reference to Prompt model
+- `model_type`: AI model type (inherited from linked prompt)
+- `status`: Current execution status ("pending", "running", "completed", "failed")
+- `execution_config`: JSON column for run-specific configuration
+- `outputs`: JSON column for execution results and output paths
+- `run_metadata`: JSON column for additional metadata
+- `created_at`, `updated_at`, `started_at`, `completed_at`: Lifecycle timestamps
 
-### PromptSpec Files
-PromptSpec files are saved with a standardized naming format for easy identification and sorting.
+### Progress Model
+Database model for real-time progress tracking during execution.
 
-**Format:** `{name}_{date}_{time}-{milliseconds}.json`
-- `name`: Sanitized prompt name (alphanumeric and underscores only)
-- `date`: Date in `YYYY-MM-DD` format
-- `time`: Time in `HH-MM-SS` format
-- `milliseconds`: 3-digit milliseconds for uniqueness
+```python
+from cosmos_workflow.database.models import Progress
 
-**Example:** `golden_hour_warmth_2025-09-03_07-55-25-548.json`
+# Progress is automatically created by WorkflowOrchestrator during execution
+# Example progress entries for a run:
 
-**Directory Structure:** `inputs/prompts/YYYY-MM-DD/`
+# Upload stage
+Progress(run_id="rs_xyz789", stage="uploading", percentage=25.0,
+         message="Uploading video files to GPU instance...")
 
-### RunSpec Files
-RunSpec files follow the same naming convention as PromptSpec files.
+# Inference stage
+Progress(run_id="rs_xyz789", stage="inference", percentage=60.0,
+         message="Running Cosmos Transfer inference...")
 
-**Format:** `{name}_{date}_{time}-{milliseconds}.json`
+# Download stage
+Progress(run_id="rs_xyz789", stage="downloading", percentage=90.0,
+         message="Downloading generated video results...")
+```
 
-**Example:** `test_run_2025-09-03_10-30-45-567.json`
+**Database Fields:**
+- `id`: Auto-incrementing primary key
+- `run_id`: Foreign key reference to Run model
+- `stage`: Execution stage ("uploading", "inference", "downloading")
+- `percentage`: Progress percentage (0.0-100.0)
+- `message`: Human-readable status message
+- `timestamp`: When this progress update was recorded
 
-**Directory Structure:** `inputs/runs/YYYY-MM-DD/`
+## Database ID Format
 
-### Internal ID Format
-While filenames use the above format, internally the specs maintain unique IDs:
-- **PromptSpec ID:** `ps_{hash}` - 12-character hash based on content
-- **RunSpec ID:** `rs_{hash}` - 12-character hash based on content
-- **RunSpec.prompt_id:** References the PromptSpec ID (e.g., `ps_c2e9e46032bf`)
+### ID Generation Strategy
+The system uses deterministic and UUID-based ID generation for database entities:
 
-These IDs are stored in the JSON file's `id` field and used for cross-referencing between specs.
+**Prompt IDs:** `ps_{hash}` format
+- Generated deterministically based on prompt content
+- Example: `ps_a1b2c3d4` (content-based hash ensures uniqueness)
+- Allows duplicate detection and consistent references
+
+**Run IDs:** `rs_{uuid}` format
+- Generated using UUID4 for guaranteed uniqueness
+- Example: `rs_x9y8z7w6` (random UUID prevents collisions)
+- Each run gets a unique ID regardless of configuration
+
+### Database Relationships
+```sql
+-- Prompts table
+CREATE TABLE prompts (
+    id VARCHAR PRIMARY KEY,           -- ps_xxxxx format
+    model_type VARCHAR NOT NULL,      -- "transfer", "enhancement", etc.
+    prompt_text TEXT NOT NULL,
+    inputs JSON,                      -- Model-specific inputs
+    parameters JSON,                  -- Model-specific parameters
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Runs table with foreign key to prompts
+CREATE TABLE runs (
+    id VARCHAR PRIMARY KEY,           -- rs_xxxxx format
+    prompt_id VARCHAR REFERENCES prompts(id),
+    model_type VARCHAR NOT NULL,
+    status VARCHAR NOT NULL,          -- "pending", "running", "completed", "failed"
+    execution_config JSON,            -- Run-specific configuration
+    outputs JSON,                     -- Execution results
+    run_metadata JSON,                -- Additional metadata
+    created_at TIMESTAMP DEFAULT NOW(),
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+```
+
+### No File Management
+- **No JSON files**: All data stored in database, JSON only created temporarily for GPU scripts
+- **No directory structure**: Database provides organization and querying
+- **Easy relationships**: Foreign keys link runs to prompts automatically
+- **Analytics ready**: SQL queries enable dashboard creation and usage analytics
 
 ## Configuration
 

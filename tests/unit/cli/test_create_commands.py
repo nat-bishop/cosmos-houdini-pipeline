@@ -6,9 +6,9 @@ Following TDD Gate 1: Write tests for desired behavior.
 These tests will initially FAIL until we implement the service integration.
 """
 
-import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -107,9 +107,9 @@ class TestCreatePromptCommand:
 
             result = runner.invoke(cli, ["create", "prompt", "test prompt", str(video_dir)])
 
-            # Current implementation creates prompt anyway (doesn't validate files exist)
-            # This is actually a potential issue but reflects current behavior
-            assert result.exit_code == 0
+            # Current implementation validates that required files exist
+            assert result.exit_code != 0
+            assert "missing" in result.output.lower() or "not found" in result.output.lower()
 
     def test_create_prompt_auto_generates_name(self, runner, test_video_dir):
         """Test that name is auto-generated when not provided."""
@@ -132,51 +132,57 @@ class TestCreateRunCommand:
         return CliRunner()
 
     @pytest.fixture
-    def test_prompt_file(self):
-        """Create a temporary prompt spec file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            prompt_spec = {
-                "id": "ps_test123",
-                "name": "test_prompt",
-                "prompt": "test prompt text",
-                "negative_prompt": "bad quality",
-                "input_video_path": "/path/to/video.mp4",
-                "control_inputs": {"depth": "/path/to/depth.mp4", "seg": "/path/to/seg.mp4"},
-            }
-            json.dump(prompt_spec, f)
-            f.flush()
-            yield Path(f.name)
-            # Cleanup
-            Path(f.name).unlink(missing_ok=True)
+    def setup_test_service(self, test_service, created_prompt):
+        """Setup the test service with a created prompt."""
+        with patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service") as mock_get_service:
+            mock_get_service.return_value = test_service
+            yield test_service, created_prompt
 
-    def test_create_run_basic(self, runner, test_prompt_file):
+    def test_create_run_basic(self, runner, setup_test_service):
         """Test creating a basic run specification."""
-        result = runner.invoke(cli, ["create", "run", str(test_prompt_file)])
+        test_service, prompt = setup_test_service
+
+        result = runner.invoke(cli, ["create", "run", prompt["id"]])
 
         assert result.exit_code == 0
-        assert "Run specification created!" in result.output or "Run created" in result.output
-        # Should reference the prompt it's based on
-        assert "test_prompt" in result.output or "ps_test123" in result.output
+        assert "created" in result.output.lower()
+        # Should show the run ID
+        assert "rs_" in result.output
 
-    def test_create_run_with_weights(self, runner, test_prompt_file):
+        # Verify run was created in database
+        runs = test_service.list_runs(prompt_id=prompt["id"])
+        assert len(runs) == 1
+        assert runs[0]["prompt_id"] == prompt["id"]
+
+    def test_create_run_with_weights(self, runner, setup_test_service):
         """Test creating a run with custom control weights."""
+        test_service, prompt = setup_test_service
+
         result = runner.invoke(
-            cli, ["create", "run", str(test_prompt_file), "--weights", "0.3", "0.3", "0.2", "0.2"]
+            cli, ["create", "run", prompt["id"], "--weights", "0.3", "0.3", "0.2", "0.2"]
         )
 
         assert result.exit_code == 0
-        assert "Run specification created!" in result.output or "Run created" in result.output
-        # Weights should be reflected in output
-        assert "0.3" in result.output or "Weights" in result.output
+        assert "created" in result.output.lower()
 
-    def test_create_run_with_parameters(self, runner, test_prompt_file):
+        # Verify weights were set correctly
+        runs = test_service.list_runs(prompt_id=prompt["id"])
+        assert len(runs) == 1
+        assert runs[0]["execution_config"]["weights"]["vis"] == 0.3
+        assert runs[0]["execution_config"]["weights"]["edge"] == 0.3
+        assert runs[0]["execution_config"]["weights"]["depth"] == 0.2
+        assert runs[0]["execution_config"]["weights"]["seg"] == 0.2
+
+    def test_create_run_with_parameters(self, runner, setup_test_service):
         """Test creating a run with custom inference parameters."""
+        test_service, prompt = setup_test_service
+
         result = runner.invoke(
             cli,
             [
                 "create",
                 "run",
-                str(test_prompt_file),
+                prompt["id"],
                 "--steps",
                 "50",
                 "--guidance",
@@ -187,37 +193,47 @@ class TestCreateRunCommand:
         )
 
         assert result.exit_code == 0
-        assert "Run specification created!" in result.output or "Run created" in result.output
+        assert "created" in result.output.lower()
 
-    def test_create_run_missing_prompt_file(self, runner):
-        """Test that missing prompt file causes error."""
-        result = runner.invoke(cli, ["create", "run", "/nonexistent/prompt.json"])
+        # Verify parameters were set correctly
+        runs = test_service.list_runs(prompt_id=prompt["id"])
+        assert len(runs) == 1
+        assert runs[0]["execution_config"]["num_steps"] == 50
+        assert runs[0]["execution_config"]["guidance"] == 8.5
+        assert runs[0]["execution_config"]["seed"] == 42
+
+    def test_create_run_missing_prompt(self, runner, setup_test_service):
+        """Test that missing prompt ID causes error."""
+        test_service, _ = setup_test_service
+
+        result = runner.invoke(cli, ["create", "run", "ps_nonexistent"])
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower() or "error" in result.output.lower()
 
-    def test_create_run_invalid_prompt_file(self, runner):
-        """Test that invalid prompt file causes error."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write("not valid json {[}")
-            f.flush()
+    def test_create_run_invalid_weights_sum(self, runner, setup_test_service):
+        """Test that weights not summing to 1.0 causes error."""
+        test_service, prompt = setup_test_service
 
-            result = runner.invoke(cli, ["create", "run", f.name])
+        result = runner.invoke(
+            cli, ["create", "run", prompt["id"], "--weights", "0.5", "0.3", "0.1", "0.05"]
+        )
 
-            assert result.exit_code != 0
-            # Should have error about invalid JSON or format
+        assert result.exit_code != 0
+        assert (
+            "weights must sum to 1.0" in result.output.lower() or "error" in result.output.lower()
+        )
 
-            # Cleanup
-            Path(f.name).unlink(missing_ok=True)
-
-    def test_create_run_invalid_weights(self, runner, test_prompt_file):
+    def test_create_run_invalid_weights(self, runner, setup_test_service):
         """Test that invalid weight count causes error."""
+        test_service, prompt = setup_test_service
+
         result = runner.invoke(
             cli,
             [
                 "create",
                 "run",
-                str(test_prompt_file),
+                prompt["id"],
                 "--weights",
                 "0.5",
                 "0.5",  # Only 2 weights instead of 4

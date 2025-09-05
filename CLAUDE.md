@@ -46,12 +46,13 @@ Tests are the contract. Commit them unchanged.
 
 ## **Project Structure**
 - [cosmos_workflow/](cosmos_workflow/) — package root
+  - [services/](cosmos_workflow/services/) — business logic & data operations
+  - [database/](cosmos_workflow/database/) — SQLAlchemy models & connection
   - [workflows/](cosmos_workflow/workflows/) — orchestration & GPU flows
   - [connection/](cosmos_workflow/connection/) — SSH & file transfer
   - [execution/](cosmos_workflow/execution/) — Docker & command exec
   - [transfer/](cosmos_workflow/transfer/) — File Transfer
   - [config/](cosmos_workflow/config/) — config and `config.toml`
-  - [prompts/](cosmos_workflow/prompts/) — prompt specs
   - [local_ai/](cosmos_workflow/local_ai/) — local AI utils
   - [cli/](cosmos_workflow/cli/) — CLI entry points
   - [utils/](cosmos_workflow/utils/) — helpers
@@ -72,9 +73,11 @@ If functionality is missing, extend the wrapper instead of bypassing it.
 ```python
 from cosmos_workflow.connection import SSHManager, RemoteCommandExecutor
 from cosmos_workflow.execution import DockerExecutor, DockerCommandBuilder, BashScriptBuilder
-from cosmos_workflow.config import ConfigManager, SchemaValidator
-from cosmos_workflow.prompts import PromptSpecManager, RunSpecManager, CosmosConverter, CosmosSequenceValidator
+from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.transfer import FileTransferService
+from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.database import DatabaseConnection, init_database
+from cosmos_workflow.utils import nvidia_format
 ```
 
 ### **Responsibilities & Enforcement**
@@ -95,19 +98,10 @@ from cosmos_workflow.transfer import FileTransferService
   Always use for multi-step shell workflows. Never concatenate raw shell strings.
 
 * **ConfigManager** — load/validate config files and environment.
-  Always use with **SchemaValidator**. Never parse environment variables or JSON manually.
+  Always use for configuration. Never parse environment variables manually.
 
-* **SchemaValidator** — enforce schema integrity for configs and specs.
-  Always validate configs and specs here. Never skip schema validation.
-
-* **PromptSpecManager / RunSpecManager** — manage prompt and run specifications.
-  Always use for reading/writing specs. Never use free-form JSON files.
-
-* **CosmosConverter** — convert specs to NVIDIA Cosmos format (normalize paths).
-  Always use for Cosmos conversions. Never hand-convert JSON or paths.
-
-* **CosmosSequenceValidator** — validate Cosmos control sequences.
-  Always use for sequence validation. Never assume ordering or required fields manually.
+* **WorkflowService** — manage all prompts and runs in database.
+  Always use for data operations. Never create JSON files for data storage.
 
 * **FileTransferService** — upload/download files with integrity checks.
   Always use for file transfers. Never use ad-hoc SFTP or `scp`.
@@ -131,7 +125,7 @@ from cosmos_workflow.transfer import FileTransferService
  - Docstrings: **Google-style** (`Args/Returns/Raises`)
  - Exceptions: **catch specific exceptions**; never bare `except:`
  - Encoding: **ASCII only** in code/logs; no emojis/unicode
- - Use our **wrappers** (SSHManager, DockerExecutor, ConfigManager, PromptSpecManager); never raw libs
+ - Use our **wrappers** (SSHManager, DockerExecutor, ConfigManager, WorkflowService); never raw libs
 
 ---
 
@@ -169,9 +163,11 @@ Lint & Format:
 `ruff check . --fix`
 
 Cosmos CLI:
-`cosmos create prompt "desc"`
-`cosmos inference prompt.json`
-`cosmos status`
+`cosmos create prompt "desc" video_dir`  # Returns ps_xxxxx ID
+`cosmos create run ps_xxxxx`            # Returns rs_xxxxx ID
+`cosmos inference rs_xxxxx`             # Execute run on GPU
+`cosmos list prompts`                   # List all prompts
+`cosmos status`                         # Check GPU status
 
 ---
 

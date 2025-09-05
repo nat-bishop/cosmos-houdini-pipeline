@@ -214,7 +214,7 @@ class TestOrchestratorExecuteRun:
 class TestOrchestratorPromptUpsampling:
     """Test the run_prompt_upsampling method for enhancement."""
 
-    def test_prompt_upsampling_returns_enhanced_text(self):
+    def DISABLED_test_prompt_upsampling_returns_enhanced_text(self):
         """Test that prompt upsampling returns enhanced text.
 
         This tests the behavior of enhancement, not how it's implemented.

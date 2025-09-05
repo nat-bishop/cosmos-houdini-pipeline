@@ -1,6 +1,6 @@
 # Database System Documentation
 
-The Cosmos Workflow System uses a flexible database architecture built on SQLAlchemy that supports multiple AI models through extensible JSON schemas. This foundation enables seamless integration of current and future AI models including transfer, reason, and predict capabilities.
+The Cosmos Workflow System uses a database-first architecture built on SQLAlchemy with no persistent JSON files. All data is stored in the database with flexible JSON columns supporting multiple AI models. This foundation enables seamless integration of current transfer and enhancement models, plus future AI models including reason and predict capabilities.
 
 ## Overview
 
@@ -108,30 +108,70 @@ The models are connected through foreign key relationships with cascading operat
 ### Current Model Support
 
 #### Transfer Model (Cosmos Transfer)
+Currently the primary model for video generation and transformation.
+
+#### Enhancement Model (Prompt Enhancement)
+Currently supported for AI-powered prompt improvement using Pixtral model.
+
+```python
+# Example enhancement model prompt
+enhancement_prompt = Prompt(
+    id="ps_enhanced123",
+    model_type="enhancement",
+    prompt_text="A simple city scene",
+    inputs={
+        "original_prompt_id": "ps_abc123",
+        "resolution": 480
+    },
+    parameters={
+        "ai_model": "pixtral",
+        "enhancement_type": "detailed_description"
+    }
+)
+```
 ```python
 # Example Prompt for transfer model
 prompt = Prompt(
-    id="ps_20250104_120000_abc123",
+    id="ps_a1b2c3d4",  # Generated with ps_ prefix
     model_type="transfer",
     prompt_text="cyberpunk city at night",
     inputs={
         "video": "/inputs/videos/city.mp4",
-        "depth": "/inputs/depth/city_depth.mp4"
+        "depth": "/inputs/videos/city_depth.mp4",
+        "segmentation": "/inputs/videos/city_seg.mp4"
     },
     parameters={
         "num_steps": 35,
-        "cfg_scale": 7.5
+        "guidance_scale": 8.0,
+        "negative_prompt": "blurry, low quality, distorted"
     }
 )
 ```
 
 ### Future Model Support
 
+The flexible JSON schema allows easy addition of future AI models without database schema changes.
+
 #### Reason Model (Cosmos Reason)
 ```python
+# Example Prompt for enhancement model (currently supported)
+prompt = Prompt(
+    id="ps_x9y8z7w6",
+    model_type="enhancement",
+    prompt_text="A simple city scene",
+    inputs={
+        "original_prompt_id": "ps_a1b2c3d4",
+        "resolution": 480
+    },
+    parameters={
+        "ai_model": "pixtral",
+        "enhancement_type": "detailed_description"
+    }
+)
+
 # Example Prompt for future reason model
 prompt = Prompt(
-    id="ps_20250104_130000_def456",
+    id="ps_def456gh",
     model_type="reason",
     prompt_text="What happens next in this scene?",
     inputs={
@@ -149,7 +189,7 @@ prompt = Prompt(
 ```python
 # Example Prompt for future predict model
 prompt = Prompt(
-    id="ps_20250104_140000_ghi789",
+    id="ps_ghi789jk",
     model_type="predict",
     prompt_text="Continue this animation",
     inputs={
@@ -227,7 +267,7 @@ export COSMOS_DATABASE_URL="/custom/path/cosmos.db"
 export COSMOS_DATABASE_URL=":memory:"
 ```
 
-Default location: `outputs/cosmos_workflow.db`
+Default location: `cosmos_workflow.db` in the working directory
 
 ## Security Features
 

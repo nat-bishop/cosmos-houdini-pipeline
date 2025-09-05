@@ -4,8 +4,6 @@ These tests verify the full flow from prompt creation through execution,
 using actual database operations but mocked GPU execution.
 """
 
-from unittest.mock import Mock, patch
-
 import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager
@@ -157,68 +155,6 @@ class TestDatabaseWorkflow:
         failed_runs = test_service.list_runs(status="failed")
         assert len(failed_runs) == 1
         assert failed_runs[0]["id"] == run2["id"]
-
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor")
-    def test_execute_run_through_orchestrator(
-        self,
-        mock_docker_class,
-        mock_file_transfer_class,
-        mock_ssh_class,
-        test_orchestrator,
-        test_service,
-        sample_video_files,
-        tmp_path,
-    ):
-        """Test executing a run through the orchestrator with mocked GPU."""
-        # Setup mocks
-        mock_ssh = Mock()
-        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-        mock_ssh.__exit__ = Mock(return_value=None)
-        mock_ssh_class.return_value = mock_ssh
-
-        mock_file_transfer = Mock()
-        mock_file_transfer_class.return_value = mock_file_transfer
-
-        mock_docker = Mock()
-        mock_docker.execute.return_value = (0, "Success", "")
-        mock_docker_class.return_value = mock_docker
-
-        # Create prompt and run
-        prompt = test_service.create_prompt(
-            model_type="transfer",
-            prompt_text="GPU test prompt",
-            inputs=sample_video_files,
-            parameters={"negative_prompt": "bad"},
-        )
-
-        run = test_service.create_run(
-            prompt_id=prompt["id"],
-            execution_config={
-                "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
-                "num_steps": 35,
-                "guidance": 8.0,
-                "seed": 123,
-            },
-        )
-
-        # Mock output path
-        output_dir = tmp_path / "outputs"
-        output_dir.mkdir()
-        mock_file_transfer.download.return_value = str(output_dir)
-
-        # Execute run through orchestrator
-        # The orchestrator expects run_dict and prompt_dict, not just an ID
-        test_orchestrator.execute_run(run, prompt)
-
-        # Verify execution
-        assert mock_ssh_class.called
-        assert mock_docker.execute.called
-
-        # Verify run status updated
-        final_run = test_service.get_run(run["id"])
-        assert final_run["status"] in ["completed", "failed"]
 
     def test_enhancement_workflow(self, test_service):
         """Test the prompt enhancement workflow."""

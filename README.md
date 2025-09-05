@@ -3,7 +3,8 @@
 A Python workflow orchestrator for NVIDIA Cosmos Transfer video generation with remote GPU execution.
 
 [![Test Coverage](https://img.shields.io/badge/coverage-80%25-green.svg)](tests/)
-[![Tests](https://img.shields.io/badge/tests-613%20tests-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-453%20passing-brightgreen.svg)](tests/)
+[![Architecture](https://img.shields.io/badge/architecture-service%20layer-blue.svg)](docs/API.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
 ## 🚀 Quick Start
@@ -38,11 +39,16 @@ remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
 
 ### Basic Usage
 ```bash
-# Create a prompt
-cosmos create prompt "A futuristic city at sunset"
+# Create a prompt (returns database ID)
+cosmos create prompt "A futuristic city at sunset" inputs/videos/scene1
+# Returns: Created prompt ps_a1b2c3d4 with name "futuristic_city_sunset"
 
-# Run inference (with upscaling)
-cosmos inference prompt_spec.json
+# Create a run from the prompt
+cosmos create run ps_a1b2c3d4
+# Returns: Created run rs_x9y8z7w6 for prompt ps_a1b2c3d4
+
+# Execute the run on GPU
+cosmos inference rs_x9y8z7w6
 
 # Check status
 cosmos status
@@ -50,77 +56,105 @@ cosmos status
 
 ## 📁 Commands
 
-### Data Management
-- `cosmos create prompt` - Create prompt specifications in database
-- `cosmos create run` - Create run from prompt ID
-- `cosmos list prompts` - List all prompts with optional filtering
-- `cosmos list runs` - List all runs with status/prompt filters
-- `cosmos search <query>` - Search prompts by text content
-- `cosmos show <prompt_id>` - Show detailed prompt with run history
+### Database Operations
+- `cosmos create prompt "text" video_dir` - Create prompt in database, returns ps_xxxxx ID
+- `cosmos create run ps_xxxxx` - Create run from prompt ID, returns rs_xxxxx ID
+- `cosmos list prompts [--model transfer] [--limit 50] [--json]` - List prompts with filtering
+- `cosmos list runs [--status completed] [--prompt ps_xxxxx] [--json]` - List runs with filtering
+- `cosmos search "query" [--limit 50] [--json]` - Full-text search prompts with highlighting
+- `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
 
-### Execution
-- `cosmos inference` - Run inference with optional upscaling
-- `cosmos prompt-enhance` - Enhance prompts with AI
-- `cosmos prepare` - Prepare renders for inference
-- `cosmos status` - Check remote GPU status
-- `cosmos status --stream` - Stream Docker container logs in real-time
+### GPU Execution
+- `cosmos inference rs_xxxxx [--upscale/--no-upscale]` - Execute run on GPU with status tracking
+- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt + run)
+- `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
+- `cosmos status [--stream]` - Check GPU status or stream container logs
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 
 ## 🏗️ Architecture Overview
 
-The Cosmos Workflow System follows a clean service layer architecture with clear separation of concerns:
+The Cosmos Workflow System follows a clean service layer architecture with database-first design:
 
 ```
 cosmos_workflow/
-├── cli/             # CLI commands (database-first approach)
+├── cli/             # CLI commands using database IDs (ps_xxx, rs_xxx)
 ├── services/        # Business logic layer (WorkflowService)
-├── workflows/       # GPU execution orchestrator (WorkflowOrchestrator)
-├── database/        # SQLAlchemy models & connection management
+├── workflows/       # GPU execution only (WorkflowOrchestrator)
+├── database/        # SQLAlchemy models: Prompt, Run, Progress
 ├── connection/      # SSH/SFTP management
 ├── execution/       # Docker execution
 ├── transfer/        # File transfer services
-├── prompts/         # Legacy schema definitions
-├── local_ai/        # AI processing
-└── config/          # Configuration
+├── utils/           # NVIDIA format conversion utilities
+├── local_ai/        # AI processing (prompt enhancement)
+└── config/          # Configuration management
 ```
 
-### Service Layer Architecture
+### Clean Separation of Concerns
 
-- **WorkflowService**: Handles all data operations and business logic
-  - Database CRUD operations for prompts and runs
-  - Input validation and sanitization
-  - Transaction safety with rollback on errors
-  - Returns dictionary data optimized for CLI display
+**1. Data Layer (WorkflowService)**
+- All database operations: create, read, update, delete
+- Query methods: list, search, filter prompts and runs
+- Input validation, sanitization, and security
+- Transaction safety with automatic rollback
+- Returns dictionaries optimized for CLI display
 
-- **WorkflowOrchestrator**: Handles ONLY GPU execution
-  - Inference execution on remote GPU instances
-  - Video upscaling workflows
-  - Prompt enhancement with Pixtral AI
-  - No data persistence - pure execution layer
+**2. Execution Layer (WorkflowOrchestrator)**
+- GPU execution ONLY: inference, upscaling, AI enhancement
+- Takes database dictionaries as input
+- Creates temporary NVIDIA-format JSON for GPU scripts
+- No data persistence - returns results to service layer
+- Handles remote SSH, Docker containers, file transfers
 
-- **CLI Commands**: Database-first approach
-  - All operations work with database IDs (ps_xxx, rs_xxx)
-  - No JSON files created except for dry-run preview
-  - Seamless integration between data and execution layers
+**3. Interface Layer (CLI)**
+- User-friendly commands working with database IDs
+- Rich terminal output with tables and colors
+- JSON output support for scripting (--json flag)
+- Error handling with clear, actionable messages
 
-## 🗄️ Database System
+### Workflow Example
+```bash
+# 1. Data Layer: Create prompt in database
+cosmos create prompt "cyberpunk city" inputs/videos/scene1
+# → WorkflowService.create_prompt() → Database → Returns ps_abc123
 
-The Cosmos Workflow System includes a flexible database foundation supporting multiple AI models:
+# 2. Data Layer: Create run from prompt
+cosmos create run ps_abc123
+# → WorkflowService.create_run() → Database → Returns rs_xyz789
 
-### Key Features
-- **Multi-Model Support**: Extensible schema for transfer, reason, predict, and future AI models
-- **Flexible JSON Storage**: Model-specific inputs and parameters stored in JSON columns
-- **Real-Time Progress**: Granular tracking through uploading, inference, and downloading stages
-- **Security First**: Path traversal protection and input validation
-- **Transaction Safety**: Automatic rollback on errors with session management
+# 3. Execution Layer: Execute on GPU
+cosmos inference rs_xyz789
+# → WorkflowOrchestrator.execute_run() → GPU → Results → WorkflowService.update_run()
+```
 
-### Database Models
-- **`Prompt`**: AI model prompts with flexible inputs and parameters
-- **`Run`**: Execution tracking with status lifecycle management
-- **`Progress`**: Real-time progress updates for dashboard visualization
+## 🗄️ Database-First Architecture
 
-See [docs/DATABASE.md](docs/DATABASE.md) for detailed database documentation.
+All data is stored in a SQLAlchemy database with no persistent JSON files:
+
+### Core Models
+- **Prompt Model**: AI prompts with flexible JSON for inputs/parameters
+  - ID format: ps_xxxxx (e.g., ps_a1b2c3d4)
+  - Supports multiple AI models: transfer, enhancement, reason, predict
+  - Extensible JSON columns allow future model types without schema changes
+
+- **Run Model**: Execution tracking with complete lifecycle management
+  - ID format: rs_xxxxx (e.g., rs_x9y8z7w6)
+  - Status progression: pending → running → completed/failed
+  - Links to prompts via foreign key relationships
+  - Flexible execution configuration and output storage
+
+- **Progress Model**: Real-time progress tracking for dashboard
+  - Granular updates during uploading, inference, downloading stages
+  - Percentage-based progress with human-readable messages
+
+### Key Benefits
+- **No JSON File Management**: Data lives in database, JSON only created temporarily for GPU scripts
+- **Easy Analytics**: SQL queries enable dashboard creation and usage analytics
+- **Multi-Model Ready**: Same schema supports current transfer model and future AI models
+- **Transaction Safety**: Automatic rollback on errors, consistent data state
+- **Security Built-in**: Input validation, path traversal protection, sanitization
+
+See [docs/DATABASE.md](docs/DATABASE.md) for complete schema documentation.
 
 ## 📚 Documentation
 
@@ -148,11 +182,15 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 
 ## 🎯 Features
 
-- **Remote GPU Execution** - SSH-based orchestration
-- **Multi-GPU Support** - Configurable CUDA devices
-- **AI Enhancement** - Prompt improvement with Pixtral
-- **Video Processing** - Frame extraction and metadata
-- **Progress Tracking** - Real-time transfer monitoring
+- **Database-First Architecture** - No JSON file management, all data in SQLAlchemy database
+- **Service Layer Design** - Clean separation between data operations and GPU execution
+- **Multi-AI Model Support** - Extensible schema supports transfer, enhancement, reason, predict models
+- **Remote GPU Execution** - SSH-based orchestration with Docker containers
+- **Real-Time Progress** - Granular tracking through all execution stages
+- **Rich CLI Interface** - Database IDs, colored tables, JSON output support
+- **AI Enhancement** - Prompt improvement using Pixtral with full tracking
+- **Query & Search** - List, filter, and search prompts with highlighting
+- **Production Ready** - 453 passing tests, comprehensive error handling
 
 ## ⚡ Performance
 

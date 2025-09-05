@@ -1,17 +1,177 @@
-"""
-Reusable mock objects for testing.
+"""Single source of truth for all test mocks.
+No duplication, easy to maintain.
 """
 
-import json
-import time
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
 
+def create_mock_ssh_manager():
+    """Standard SSH mock for all tests.
+
+    Returns a mock SSH manager with context manager support and
+    common SSH operations stubbed out.
+    """
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=None)
+    ssh.execute_command.return_value = (0, "Success", "")
+    ssh.execute_command_success.return_value = (0, "Success", "")
+    ssh.is_connected.return_value = True
+
+    # Add SFTP client mock
+    mock_sftp = MagicMock()
+    mock_sftp.put = MagicMock()
+    mock_sftp.get = MagicMock()
+    mock_sftp.mkdir = MagicMock()
+    mock_sftp.listdir = MagicMock(return_value=[])
+    mock_sftp.listdir_attr = MagicMock(return_value=[])
+    mock_sftp.stat = MagicMock(side_effect=FileNotFoundError())
+
+    ssh.get_sftp.return_value.__enter__ = lambda self: mock_sftp
+    ssh.get_sftp.return_value.__exit__ = lambda self, *args: None
+    ssh._sftp_client = mock_sftp  # Store reference for tests
+
+    return ssh
+
+
+def create_mock_docker_executor():
+    """Standard Docker mock for all tests.
+
+    Returns a mock Docker executor with inference and upscaling
+    operations stubbed out.
+    """
+    docker = MagicMock()
+    docker.run_inference.return_value = (0, "Inference complete", "")
+    docker.run_upscaling.return_value = (0, "Upscaling complete", "")
+    docker.get_docker_status.return_value = {"status": "ready"}
+    docker.check_gpu_availability.return_value = True
+    docker.stream_logs = MagicMock()
+    return docker
+
+
+def create_mock_file_transfer():
+    """Standard file transfer mock for all tests.
+
+    Returns a mock file transfer service with upload/download
+    operations stubbed out.
+    """
+    transfer = MagicMock()
+    transfer.upload_file.return_value = True
+    transfer.upload_directory.return_value = True
+    transfer.download_file.return_value = True
+    transfer.download_directory.return_value = True
+    transfer.download_results.return_value = {"success": True, "output_path": "/outputs/result.mp4"}
+    transfer.file_exists_remote.return_value = True
+    return transfer
+
+
+def create_mock_config_manager(temp_dir):
+    """Standard config manager mock for all tests.
+
+    Args:
+        temp_dir: Temporary directory for test files
+
+    Returns a mock config manager with standard test configuration.
+    """
+    from cosmos_workflow.config.config_manager import LocalConfig, RemoteConfig
+
+    config_manager = Mock()
+
+    # Mock remote config
+    remote_config = RemoteConfig(
+        host="test-host",
+        port=22,
+        user="test-user",
+        ssh_key=str(temp_dir / "test_key.pem"),
+        remote_dir="/remote/test",
+        docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest",
+    )
+
+    # Mock local config
+    local_config = LocalConfig(
+        prompts_dir=temp_dir / "prompts",
+        runs_dir=temp_dir / "runs",
+        outputs_dir=temp_dir / "outputs",
+        videos_dir=temp_dir / "videos",
+        notes_dir=temp_dir / "notes",
+    )
+
+    config_manager.get_remote_config.return_value = remote_config
+    config_manager.get_local_config.return_value = local_config
+    config_manager.config_path = temp_dir / "config.toml"
+
+    return config_manager
+
+
+def create_mock_workflow_service():
+    """Standard workflow service mock for tests.
+
+    Returns a mock workflow service with database operations
+    stubbed out.
+    """
+    service = MagicMock()
+
+    # Mock prompt operations
+    service.create_prompt.return_value = {
+        "id": "ps_test_123",
+        "model_type": "transfer",
+        "prompt_text": "Test prompt",
+        "created_at": datetime.now().isoformat(),
+    }
+    service.get_prompt.return_value = service.create_prompt.return_value
+
+    # Mock run operations
+    service.create_run.return_value = {
+        "id": "rs_test_456",
+        "prompt_id": "ps_test_123",
+        "status": "pending",
+        "created_at": datetime.now().isoformat(),
+    }
+    service.get_run.return_value = service.create_run.return_value
+    service.update_run_status.return_value = True
+    service.update_run.return_value = True
+
+    # Mock query operations
+    service.list_prompts.return_value = [service.create_prompt.return_value]
+    service.list_runs.return_value = [service.create_run.return_value]
+    service.search_prompts.return_value = []
+    service.get_prompt_with_runs.return_value = None
+
+    return service
+
+
+def create_mock_ai_generator():
+    """Standard AI generator mock for tests.
+
+    Returns a mock AI generator with description and name
+    generation stubbed out.
+    """
+    generator = MagicMock()
+    generator.generate_description.return_value = "A modern architectural scene"
+    generator.generate_name.return_value = "modern_architecture"
+    generator.enhance_prompt.return_value = (
+        "An elaborate and detailed modern architectural scene with stunning visuals"
+    )
+    return generator
+
+
+# Keep the old mock classes for backward compatibility during transition
+# TODO: Remove these once all tests are migrated
+
+
 class MockSSHManager:
-    """Mock SSH manager for testing."""
+    """DEPRECATED: Use create_mock_ssh_manager() instead."""
 
     def __init__(self, connected: bool = True):
+        import warnings
+
+        warnings.warn(
+            "MockSSHManager is deprecated, use create_mock_ssh_manager() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.connected = connected
         self.ssh_client = MagicMock()
         self.commands_executed = []
@@ -45,207 +205,36 @@ class MockSSHManager:
 
 
 class MockFileTransferManager:
-    """Mock file transfer manager for testing."""
+    """DEPRECATED: Use create_mock_file_transfer() instead."""
 
     def __init__(self, success: bool = True):
+        import warnings
+
+        warnings.warn(
+            "MockFileTransferManager is deprecated, use create_mock_file_transfer() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.success = success
-        self.uploaded_files = []
-        self.downloaded_files = []
-        self.transfer_speed = 10  # MB/s
+        self.files_uploaded = []
+        self.files_downloaded = []
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Mock file upload."""
-        if self.success:
-            self.uploaded_files.append((local_path, remote_path))
-            # Simulate transfer time
-            file_size = 1024 * 1024  # 1MB default
-            time.sleep(file_size / (self.transfer_speed * 1024 * 1024))
-        return self.success
-
-    def upload_directory(self, local_dir: str, remote_dir: str) -> bool:
-        """Mock directory upload."""
-        if self.success:
-            self.uploaded_files.append((local_dir, remote_dir))
+        self.files_uploaded.append((local_path, remote_path))
         return self.success
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
         """Mock file download."""
-        if self.success:
-            self.downloaded_files.append((remote_path, local_path))
+        self.files_downloaded.append((remote_path, local_path))
         return self.success
 
-    def download_directory(self, remote_dir: str, local_dir: str) -> bool:
+    def upload_directory(self, local_dir: Path, remote_dir: str) -> bool:
+        """Mock directory upload."""
+        self.files_uploaded.append((str(local_dir), remote_dir))
+        return self.success
+
+    def download_directory(self, remote_dir: str, local_dir: Path) -> bool:
         """Mock directory download."""
-        if self.success:
-            self.downloaded_files.append((remote_dir, local_dir))
+        self.files_downloaded.append((remote_dir, str(local_dir)))
         return self.success
-
-
-class MockDockerExecutor:
-    """Mock Docker executor for testing."""
-
-    def __init__(self, success: bool = True):
-        self.success = success
-        self.containers_run = []
-        self.inference_time = 60  # seconds
-
-    def run_inference(
-        self, spec_path: str, num_gpus: int = 1, verbose: bool = False
-    ) -> tuple[int, str, str]:
-        """Mock inference execution."""
-        self.containers_run.append(
-            {"spec_path": spec_path, "num_gpus": num_gpus, "verbose": verbose}
-        )
-
-        if self.success:
-            output = f"""
-Loading model...
-Processing with {num_gpus} GPU(s)...
-Inference completed in {self.inference_time} seconds
-Output saved to: output.mp4
-"""
-            return (0, output, "")
-        else:
-            return (1, "", "CUDA out of memory")
-
-    def run_upsampling(
-        self, prompts: list[str], video_path: str | None = None
-    ) -> tuple[int, str, str]:
-        """Mock prompt upsampling."""
-        if self.success:
-            upsampled = [f"Detailed and enhanced: {p}" for p in prompts]
-            return (0, json.dumps({"upsampled_prompts": upsampled}), "")
-        else:
-            return (1, "", "Upsampling failed")
-
-
-class MockAIGenerator:
-    """Mock AI description and name generator."""
-
-    def __init__(self):
-        self.descriptions = [
-            "A modern architectural masterpiece with glass facades",
-            "Futuristic cyberpunk cityscape with neon lights",
-            "Serene natural landscape with mountains and lake",
-            "Abstract geometric patterns in vibrant colors",
-            "Industrial complex with pipes and machinery",
-        ]
-        self.name_counter = 0
-
-    def generate_description(self, image_or_video_path: str) -> str:
-        """Generate mock description."""
-        import random
-
-        return random.choice(self.descriptions)
-
-    def generate_name(self, text: str) -> str:
-        """Generate mock smart name."""
-        # Extract key words from text
-        words = text.lower().split()
-        keywords = [w for w in words if len(w) > 4 and w.isalpha()][:2]
-
-        if keywords:
-            return "_".join(keywords)
-        else:
-            self.name_counter += 1
-            return f"scene_{self.name_counter:03d}"
-
-
-class MockConfigManager:
-    """Mock configuration manager."""
-
-    def __init__(self, base_dir: Path | None = None):
-        self.base_dir = base_dir or Path("/tmp/test")
-
-    def get_remote_config(self) -> Mock:
-        """Get mock remote configuration."""
-        config = Mock()
-        config.host = "test-server"
-        config.port = 22
-        config.user = "test-user"
-        config.ssh_key = str(self.base_dir / "test_key.pem")
-        config.remote_dir = "/remote/cosmos"
-        return config
-
-    def get_local_config(self) -> Mock:
-        """Get mock local configuration."""
-        config = Mock()
-        config.local_dir = str(self.base_dir)
-        config.prompts_dir = str(self.base_dir / "prompts")
-        config.runs_dir = str(self.base_dir / "runs")
-        config.outputs_dir = str(self.base_dir / "outputs")
-        config.videos_dir = str(self.base_dir / "videos")
-        return config
-
-    def get_docker_config(self) -> Mock:
-        """Get mock Docker configuration."""
-        config = Mock()
-        config.image = "cosmos-transfer:latest"
-        config.gpu_enabled = True
-        config.mount_points = {
-            str(self.base_dir / "inputs"): "/inputs",
-            str(self.base_dir / "outputs"): "/outputs",
-        }
-        return config
-
-
-class MockPromptSpecManager:
-    """Mock PromptSpec manager."""
-
-    def __init__(self):
-        self.specs = {}
-        self.next_id = 1
-
-    def create_prompt_spec(self, name: str, prompt: str, **kwargs) -> tuple[str, Mock]:
-        """Create mock PromptSpec."""
-        spec = Mock()
-        spec.id = f"ps_mock_{self.next_id:04d}"
-        spec.name = name
-        spec.prompt = prompt
-        spec.negative_prompt = kwargs.get("negative_prompt", "")
-        spec.input_video_path = kwargs.get("video_path", f"/videos/{name}/color.mp4")
-        spec.control_inputs = kwargs.get("control_inputs", {})
-        spec.timestamp = time.time()
-
-        self.specs[spec.id] = spec
-        self.next_id += 1
-
-        spec_file = f"/prompts/{spec.id}.json"
-        return (spec_file, spec)
-
-    def load_by_id(self, spec_id: str) -> Mock | None:
-        """Load mock PromptSpec by ID."""
-        return self.specs.get(spec_id)
-
-
-class MockRunSpecManager:
-    """Mock RunSpec manager."""
-
-    def __init__(self):
-        self.specs = {}
-        self.next_id = 1
-
-    def create_run_spec(self, prompt_spec_id: str, **kwargs) -> tuple[str, Mock]:
-        """Create mock RunSpec."""
-        spec = Mock()
-        spec.id = f"rs_mock_{self.next_id:04d}"
-        spec.prompt_spec_id = prompt_spec_id
-        spec.control_weights = kwargs.get("control_weights", {})
-        spec.parameters = kwargs.get(
-            "parameters", {"num_steps": 35, "guidance_scale": 8.0, "seed": 42}
-        )
-        spec.execution_status = "pending"
-        spec.output_path = f"/outputs/run_{self.next_id:04d}"
-        spec.timestamp = time.time()
-
-        self.specs[spec.id] = spec
-        self.next_id += 1
-
-        spec_file = f"/runs/{spec.id}.json"
-        return (spec_file, spec)
-
-    def load(self, spec_path: str) -> Mock | None:
-        """Load mock RunSpec."""
-        # Extract ID from path
-        spec_id = Path(spec_path).stem
-        return self.specs.get(spec_id)

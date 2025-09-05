@@ -145,6 +145,113 @@ cosmos prompt-enhance ps_a1b2c3 --dry-run
 # Preview enhancement without calling AI API or creating database entries
 ```
 
+### list prompts
+List all prompts in the database with optional filtering.
+
+```bash
+cosmos list prompts [OPTIONS]
+```
+
+**Options:**
+- `--model [transfer|enhancement|reason|predict]` - Filter by model type
+- `--limit INTEGER` - Maximum results to show (default: 50)
+- `--json` - Output in JSON format instead of rich table
+
+**Features:**
+- Rich table display with colored output
+- Automatic prompt text truncation for readability
+- Timestamp formatting for easy reading
+- Support for pagination with limit option
+
+**Examples:**
+```bash
+cosmos list prompts                    # List all prompts in rich table
+cosmos list prompts --model transfer   # Only transfer model prompts
+cosmos list prompts --limit 10         # Show first 10 prompts
+cosmos list prompts --json             # Output as JSON for scripting
+```
+
+### list runs
+List all runs in the database with optional filtering.
+
+```bash
+cosmos list runs [OPTIONS]
+```
+
+**Options:**
+- `--status [pending|running|completed|failed]` - Filter by run status
+- `--prompt PROMPT_ID` - Filter by prompt ID
+- `--limit INTEGER` - Maximum results to show (default: 50)
+- `--json` - Output in JSON format
+
+**Features:**
+- Color-coded status display (green=completed, yellow=running, red=failed)
+- Shows associated prompt IDs for tracking
+- Timestamp formatting for easy reading
+- Multiple filter combinations supported
+
+**Examples:**
+```bash
+cosmos list runs                           # List all runs
+cosmos list runs --status completed        # Only completed runs
+cosmos list runs --prompt ps_abc123        # Runs for specific prompt
+cosmos list runs --status failed --json    # Failed runs as JSON
+```
+
+### search
+Search for prompts by text content.
+
+```bash
+cosmos search QUERY [OPTIONS]
+```
+
+**Arguments:**
+- `QUERY`: Search text to find in prompts (case-insensitive)
+
+**Options:**
+- `--limit INTEGER` - Maximum results to show (default: 50)
+- `--json` - Output in JSON format
+
+**Features:**
+- Case-insensitive full-text search
+- Highlighted matches in results (yellow bold)
+- Context-aware truncation around matches
+- Rich table display with search result count
+
+**Examples:**
+```bash
+cosmos search cyberpunk              # Find prompts containing "cyberpunk"
+cosmos search "futuristic city"      # Multi-word search
+cosmos search robot --limit 20       # Limit to 20 results
+cosmos search anime --json           # Output as JSON
+```
+
+### show
+Show detailed information about a prompt and its runs.
+
+```bash
+cosmos show PROMPT_ID [OPTIONS]
+```
+
+**Arguments:**
+- `PROMPT_ID`: Database ID of prompt to show (ps_xxxxx format)
+
+**Options:**
+- `--json` - Output in JSON format
+
+**Features:**
+- Complete prompt details in formatted panel
+- List of all associated runs with status
+- Run duration calculation for completed runs
+- Output paths for successful runs
+- Rich formatting with colors and panels
+
+**Examples:**
+```bash
+cosmos show ps_abc123               # Show prompt details with runs
+cosmos show ps_xyz789 --json        # Output as JSON for processing
+```
+
 ### prepare
 Prepare renders for Cosmos inference.
 
@@ -188,6 +295,64 @@ When using `--stream`:
 - Shows helpful error messages if no containers are running
 
 ## Core Modules
+
+### WorkflowService
+
+The WorkflowService provides all business logic for managing prompts and runs in the database.
+
+#### Query Methods
+
+```python
+from cosmos_workflow.services.workflow_service import WorkflowService
+
+# Initialize service
+service = WorkflowService(db_connection, config_manager)
+
+# List prompts with optional filtering
+prompts = service.list_prompts(model_type="transfer", limit=50, offset=0)
+# Returns: List of prompt dictionaries
+
+# List runs with filtering
+runs = service.list_runs(status="completed", prompt_id="ps_abc123", limit=50)
+# Returns: List of run dictionaries with status, outputs, timestamps
+
+# Search prompts by text
+results = service.search_prompts("cyberpunk", limit=50)
+# Returns: List of matching prompts (case-insensitive search)
+
+# Get prompt with all associated runs
+details = service.get_prompt_with_runs("ps_abc123")
+# Returns: Prompt dictionary with "runs" list containing all runs
+```
+
+#### Core Methods
+
+```python
+# Create a new prompt
+prompt = service.create_prompt(
+    model_type="transfer",
+    prompt_text="A futuristic city",
+    inputs={"video": "path/to/video.mp4"},
+    parameters={"num_steps": 35}
+)
+# Returns: Dictionary with prompt data including generated ID
+
+# Create a run from prompt
+run = service.create_run(
+    prompt_id="ps_abc123",
+    execution_config={"weights": [0.25, 0.25, 0.25, 0.25]},
+    metadata={"user": "NAT"}
+)
+# Returns: Dictionary with run data and generated ID
+
+# Update run status
+updated = service.update_run_status("rs_xyz789", "completed")
+
+# Update run with outputs
+updated = service.update_run("rs_xyz789",
+    outputs={"video_path": "outputs/result.mp4"}
+)
+```
 
 ### Database System
 

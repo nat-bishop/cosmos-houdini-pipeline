@@ -50,7 +50,15 @@ cosmos status
 
 ## 📁 Commands
 
-- `cosmos create prompt` - Create prompt specifications
+### Data Management
+- `cosmos create prompt` - Create prompt specifications in database
+- `cosmos create run` - Create run from prompt ID
+- `cosmos list prompts` - List all prompts with optional filtering
+- `cosmos list runs` - List all runs with status/prompt filters
+- `cosmos search <query>` - Search prompts by text content
+- `cosmos show <prompt_id>` - Show detailed prompt with run history
+
+### Execution
 - `cosmos inference` - Run inference with optional upscaling
 - `cosmos prompt-enhance` - Enhance prompts with AI
 - `cosmos prepare` - Prepare renders for inference

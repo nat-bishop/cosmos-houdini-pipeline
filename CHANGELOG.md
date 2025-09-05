@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Query and list functionality for service layer (Chunk 4)**
+  - New `list_prompts()` method in WorkflowService with model type filtering and pagination
+  - New `list_runs()` method in WorkflowService with status and prompt_id filtering
+  - New `search_prompts()` method for full-text case-insensitive search
+  - New `get_prompt_with_runs()` method for detailed prompt view with all associated runs
+  - All query methods return dictionaries optimized for CLI display
+  - Comprehensive error handling with graceful fallback to empty results
+
+- **New CLI commands for data exploration**
+  - `cosmos list prompts` - List all prompts with rich table display and filtering options
+  - `cosmos list runs` - List all runs with color-coded status display
+  - `cosmos search <query>` - Search prompts with highlighted text matches
+  - `cosmos show <prompt_id>` - Show detailed prompt information with run history
+  - All commands support `--json` flag for machine-readable JSON output
+  - Pagination support with `--limit` option
+  - Rich terminal UI with colored tables and formatted output
+
+### Fixed
+- Fixed WorkflowService query methods to match actual database schema (removed non-existent model_config and updated_at fields from Prompt model)
+
 ### Changed
 - **BREAKING: Major service layer architecture refactoring (Chunk 3)**
   - **WorkflowOrchestrator simplified to ONLY handle GPU execution**

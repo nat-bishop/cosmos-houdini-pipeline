@@ -28,19 +28,38 @@ def to_cosmos_inference_json(
     # Extract inputs
     inputs = prompt_dict.get("inputs", {})
 
+    # Convert Windows paths to Unix paths for GPU server
+    def to_unix_path(path: str) -> str:
+        """Convert Windows path to Unix path."""
+        if path:
+            return path.replace("\\", "/")
+        return path
+
+    # Extract negative prompt from parameters if not at top level
+    negative_prompt = prompt_dict.get("negative_prompt", "")
+    if not negative_prompt and "parameters" in prompt_dict:
+        negative_prompt = prompt_dict.get("parameters", {}).get("negative_prompt", "")
+
+    # Use a default negative prompt if still empty
+    if not negative_prompt:
+        negative_prompt = "low quality, blurry, distorted"
+
     # Build Cosmos format with correct NVIDIA structure
     cosmos_json = {
         "prompt": prompt_dict.get("prompt_text", ""),
-        "negative_prompt": prompt_dict.get("negative_prompt", ""),
-        "input_video_path": inputs.get("video", ""),
+        "negative_prompt": negative_prompt,
+        "input_video_path": to_unix_path(inputs.get("video", "")),
         # Control weights as separate objects per NVIDIA format
         "vis": {"control_weight": weights.get("vis", 0.25)},
         "edge": {"control_weight": weights.get("edge", 0.25)},
         "depth": {
-            "input_control": inputs.get("depth", ""),
+            "input_control": to_unix_path(inputs.get("depth", "")),
             "control_weight": weights.get("depth", 0.25),
         },
-        "seg": {"input_control": inputs.get("seg", ""), "control_weight": weights.get("seg", 0.25)},
+        "seg": {
+            "input_control": to_unix_path(inputs.get("seg", "")),
+            "control_weight": weights.get("seg", 0.25),
+        },
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
         "guidance": execution_config.get("guidance", 7.0),

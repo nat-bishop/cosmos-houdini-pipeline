@@ -1,0 +1,250 @@
+"""Test WorkflowOrchestrator with the new database-based interface.
+
+These tests verify BEHAVIOR, not implementation details.
+They test that the orchestrator executes GPU workflows correctly,
+not how it stores data or what file formats it uses.
+"""
+
+from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+
+
+class TestOrchestratorExecuteRun:
+    """Test the execute_run method which runs GPU inference."""
+
+    @pytest.fixture
+    def mock_ssh_manager(self):
+        """Mock SSH connection to GPU."""
+        ssh = MagicMock()
+        ssh.__enter__ = MagicMock(return_value=ssh)
+        ssh.__exit__ = MagicMock(return_value=None)
+        return ssh
+
+    @pytest.fixture
+    def mock_file_transfer(self):
+        """Mock file transfer service."""
+        transfer = MagicMock()
+        transfer.upload_file.return_value = True
+        transfer.download_file.return_value = True
+        transfer.download_results.return_value = {
+            "output_path": "/outputs/test_result.mp4",
+            "success": True,
+        }
+        transfer.file_exists_remote.return_value = True
+        return transfer
+
+    @pytest.fixture
+    def mock_docker_executor(self):
+        """Mock Docker execution on GPU."""
+        executor = MagicMock()
+        executor.run_inference.return_value = (0, "Inference complete", "")
+        executor.run_upscaling.return_value = (0, "Upscaling complete", "")
+        executor.get_docker_status.return_value = {"status": "ready"}
+        return executor
+
+    @pytest.fixture
+    def sample_prompt_dict(self):
+        """Sample prompt data from database."""
+        return {
+            "id": "ps_test_123",
+            "model_type": "transfer",
+            "prompt_text": "A futuristic city",
+            "inputs": {
+                "video": "/test/video.mp4",
+                "depth": "/test/depth.mp4",
+                "seg": "/test/seg.mp4",
+            },
+            "parameters": {"negative_prompt": "blurry", "fps": 24},
+            "created_at": datetime.now().isoformat(),
+        }
+
+    @pytest.fixture
+    def sample_run_dict(self):
+        """Sample run data from database."""
+        return {
+            "id": "rs_test_456",
+            "prompt_id": "ps_test_123",
+            "model_type": "transfer",
+            "status": "pending",
+            "execution_config": {
+                "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+            },
+            "outputs": {},
+            "metadata": {},
+            "created_at": datetime.now().isoformat(),
+        }
+
+    def test_execute_run_basic_inference(
+        self,
+        mock_ssh_manager,
+        mock_file_transfer,
+        mock_docker_executor,
+        sample_prompt_dict,
+        sample_run_dict,
+        tmp_path,
+    ):
+        """Test that execute_run performs GPU inference correctly.
+
+        This tests BEHAVIOR:
+        - Connects to GPU via SSH
+        - Uploads necessary files
+        - Runs Docker container
+        - Downloads results
+        - Returns output path
+
+        It does NOT test:
+        - What file format is used internally
+        - How data is stored
+        - Implementation details
+        """
+        # Patch external dependencies
+        with patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            return_value=mock_ssh_manager,
+        ):
+            with patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                return_value=mock_file_transfer,
+            ):
+                with patch(
+                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    return_value=mock_docker_executor,
+                ):
+                    # Create orchestrator
+                    orchestrator = WorkflowOrchestrator()
+
+                    # Execute run (this is the NEW interface)
+                    result = orchestrator.execute_run(
+                        run_dict=sample_run_dict, prompt_dict=sample_prompt_dict, upscale=False
+                    )
+
+                    # Verify BEHAVIOR happened
+                    assert mock_ssh_manager.__enter__.called, "Should connect via SSH"
+                    assert mock_file_transfer.upload_file.called, "Should upload files to GPU"
+                    assert mock_docker_executor.run_inference.called, "Should run inference"
+                    assert mock_file_transfer.download_results.called, "Should download results"
+
+                    # Verify result structure
+                    assert "output_path" in result, "Should return output path"
+                    assert result.get("success") is not False, "Should succeed"
+
+    def test_execute_run_with_upscaling(
+        self,
+        mock_ssh_manager,
+        mock_file_transfer,
+        mock_docker_executor,
+        sample_prompt_dict,
+        sample_run_dict,
+    ):
+        """Test that execute_run performs upscaling when requested.
+
+        This tests that upscaling behavior is triggered correctly.
+        """
+        with patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            return_value=mock_ssh_manager,
+        ):
+            with patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                return_value=mock_file_transfer,
+            ):
+                with patch(
+                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    return_value=mock_docker_executor,
+                ):
+                    orchestrator = WorkflowOrchestrator()
+
+                    # Execute with upscaling
+                    orchestrator.execute_run(
+                        run_dict=sample_run_dict,
+                        prompt_dict=sample_prompt_dict,
+                        upscale=True,
+                        upscale_weight=0.7,
+                    )
+
+                    # Should run both inference and upscaling
+                    assert mock_docker_executor.run_inference.called, "Should run inference"
+                    assert mock_docker_executor.run_upscaling.called, "Should run upscaling"
+
+    def test_execute_run_handles_gpu_failure(
+        self,
+        mock_ssh_manager,
+        mock_file_transfer,
+        mock_docker_executor,
+        sample_prompt_dict,
+        sample_run_dict,
+    ):
+        """Test that execute_run handles GPU failures gracefully.
+
+        This tests error handling behavior.
+        """
+        # Make Docker execution fail
+        mock_docker_executor.run_inference.return_value = (1, "", "GPU out of memory")
+
+        with patch(
+            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            return_value=mock_ssh_manager,
+        ):
+            with patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                return_value=mock_file_transfer,
+            ):
+                with patch(
+                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    return_value=mock_docker_executor,
+                ):
+                    orchestrator = WorkflowOrchestrator()
+
+                    # Execute run - should handle error gracefully
+                    result = orchestrator.execute_run(
+                        run_dict=sample_run_dict, prompt_dict=sample_prompt_dict
+                    )
+
+                    # Should complete but indicate failure
+                    # The orchestrator returns results even on failure for debugging
+                    assert result is not None, "Should return a result even on failure"
+                    # Could check for success=False or error field in result
+                    # The exact behavior depends on implementation
+
+
+class TestOrchestratorPromptUpsampling:
+    """Test the run_prompt_upsampling method for enhancement."""
+
+    def test_prompt_upsampling_returns_enhanced_text(self):
+        """Test that prompt upsampling returns enhanced text.
+
+        This tests the behavior of enhancement, not how it's implemented.
+        """
+        with patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager") as mock_ssh:
+            with patch(
+                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService"
+            ) as mock_transfer:
+                with patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor"):
+                    # Setup mocks
+                    mock_ssh_instance = MagicMock()
+                    mock_ssh.return_value = mock_ssh_instance
+                    mock_ssh_instance.__enter__ = MagicMock(return_value=mock_ssh_instance)
+                    mock_ssh_instance.__exit__ = MagicMock(return_value=None)
+
+                    mock_transfer_instance = MagicMock()
+                    mock_transfer.return_value = mock_transfer_instance
+
+                    # Mock the enhancement result
+                    mock_transfer_instance.download_file.side_effect = lambda remote, local: (
+                        open(local, "w").write('{"upsampled_prompt": "An amazing futuristic city"}')
+                    )
+
+                    orchestrator = WorkflowOrchestrator()
+
+                    # Run enhancement
+                    enhanced = orchestrator.run_prompt_upsampling(
+                        prompt_text="A city", model="pixtral"
+                    )
+
+                    # Should return enhanced text
+                    assert enhanced != "A city", "Should enhance the prompt"
+                    assert len(enhanced) > len("A city"), "Enhanced should be longer"

@@ -262,6 +262,52 @@ All models include comprehensive validation:
 - Session isolation ensures concurrent operations don't interfere
 - Proper connection cleanup prevents resource leaks
 
+## Query Capabilities
+
+### List Operations
+The database system provides comprehensive list operations with filtering and pagination:
+
+- **Prompt Listing**: Filter by model type, paginate with limit/offset
+- **Run Listing**: Filter by status and/or prompt_id
+- **Ordering**: All lists ordered by created_at descending (newest first)
+- **Error Handling**: Graceful fallback to empty results on database errors
+
+### Search Functionality
+Full-text search capabilities for prompts:
+
+- **Case-Insensitive**: Uses ILIKE operator for flexible matching
+- **Prompt Text Search**: Searches within prompt_text field
+- **Result Limiting**: Default 50 results, configurable
+- **CLI Integration**: Search results show highlighted matches
+
+### Relationship Queries
+Efficient queries for related data:
+
+- **Eager Loading**: get_prompt_with_runs() loads runs efficiently
+- **Joined Data**: Returns complete prompt details with all associated runs
+- **Status Tracking**: Includes run status, timestamps, and outputs
+
+### Example Queries
+
+```python
+from cosmos_workflow.services.workflow_service import WorkflowService
+
+# List transfer model prompts
+prompts = service.list_prompts(model_type="transfer", limit=10)
+
+# Search for cyberpunk-themed prompts
+results = service.search_prompts("cyberpunk")
+
+# Get all runs for a specific prompt
+runs = service.list_runs(prompt_id="ps_abc123")
+
+# Get prompt with all its runs
+details = service.get_prompt_with_runs("ps_abc123")
+
+# List failed runs
+failed = service.list_runs(status="failed", limit=100)
+```
+
 ## Usage Patterns
 
 ### Service Layer (Recommended)

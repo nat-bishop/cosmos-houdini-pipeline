@@ -8,7 +8,14 @@ from pathlib import Path
 import pytest
 
 # Import only database fixtures - NO compatibility classes
-from tests.fixtures.database_fixtures import test_service  # noqa: F401
+from tests.fixtures.database_fixtures import (  # noqa: F401
+    created_prompt,
+    created_run,
+    sample_prompt_data,
+    sample_run_data,
+    test_db,
+    test_service,
+)
 from tests.fixtures.mocks import (
     create_mock_ai_generator,
     create_mock_config_manager,

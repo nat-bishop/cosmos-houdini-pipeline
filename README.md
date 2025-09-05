@@ -2,17 +2,39 @@
 
 A Python workflow orchestrator for NVIDIA Cosmos Transfer video generation with remote GPU execution.
 
-[![Test Coverage](https://img.shields.io/badge/coverage-80%25-green.svg)](tests/)
-[![Tests](https://img.shields.io/badge/tests-453%20passing-brightgreen.svg)](tests/)
-[![Architecture](https://img.shields.io/badge/architecture-service%20layer-blue.svg)](docs/API.md)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.10+
 - SSH access to GPU instance with NVIDIA Cosmos Transfer
-- Docker on remote instance
+- Docker on remote instance with NVIDIA Container Toolkit
+
+### Remote Instance Setup
+The remote GPU instance needs NVIDIA Cosmos Transfer set up according to NVIDIA's instructions:
+
+```bash
+# Clone the cosmos-transfer1 source code
+git clone git@github.com:nvidia-cosmos/cosmos-transfer1.git
+cd cosmos-transfer1
+git submodule update --init --recursive
+```
+
+Cosmos runs only on Linux systems (tested with Ubuntu 24.04, 22.04, and 20.04) and requires Python 3.12.x. Docker and the NVIDIA Container Toolkit must be installed.
+
+```bash
+# Build the Docker image
+docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
+
+# Generate a Hugging Face access token (set to 'Read' permission)
+# Log in to Hugging Face with the access token:
+huggingface-cli login
+
+# Accept the Llama-Guard-3-8B terms on Hugging Face website
+
+# Download the Cosmos model weights from Hugging Face:
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
+```
 
 ### Installation
 ```bash
@@ -221,6 +243,52 @@ cosmos ui
 - **Segmentation Weight**: Controls semantic segmentation influence (auto-generated if not provided)
 
 Videos are optional except for color - the model will auto-generate depth/segmentation if not provided but weights are still applied.
+
+## 📸 UI Screenshots
+
+### Generate Tab - Create & Run Inference
+![Generate Tab](docs/images/generate-tab.png)
+
+The main workflow tab with a two-step process:
+- **Step 1**: Upload video files (color required, depth/segmentation optional) and enter your prompt text
+- **Step 2**: Select a prompt from the database, configure control weights, and run inference with live Docker logs
+
+### Prompts Tab - Manage Your Prompts
+![Prompts Tab](docs/images/prompts-tab.png)
+
+Browse and manage all created prompts with:
+- Complete prompt history with text descriptions
+- Video availability indicators (✓ for available videos)
+- Creation timestamps and unique IDs
+- Quick refresh to see new prompts
+
+### Runs Tab - Track Inference Jobs
+![Runs Tab](docs/images/runs-tab.png)
+
+Monitor all inference runs with:
+- Real-time status tracking (pending, running, completed, failed)
+- Associated prompt information
+- Creation timestamps and run IDs
+- Automatic status updates during execution
+
+### Gallery Tab - View Completed Videos
+![Gallery Tab](docs/images/gallery-tab.png)
+
+Browse your generated videos:
+- Full video player with playback controls
+- Auto-refreshing gallery of completed runs
+- High-quality generated content display
+- Download option for completed videos
+- Shows generated architectural visualization with "Warm low-angle sunlight grazing facades" prompt
+
+### Status Tab - System Monitoring
+![Status Tab](docs/images/status-tab.png)
+
+Real-time system information:
+- GPU utilization and memory usage
+- Docker container status
+- Active process monitoring
+- Auto-refreshing every 5 seconds
 
 ## ⚡ Performance
 

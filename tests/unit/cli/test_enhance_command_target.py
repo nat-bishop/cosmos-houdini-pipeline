@@ -75,20 +75,17 @@ class TestPromptEnhanceCommandTarget:
 
         return service
 
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.WorkflowOrchestrator")
-    @patch("cosmos_workflow.cli.enhance.WorkflowService")
-    @patch("cosmos_workflow.cli.enhance.init_database")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_orchestrator")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
     def test_prompt_enhance_creates_enhancement_run(
-        self, mock_init_db, mock_service_class, mock_orchestrator_class, runner, mock_service
+        self, mock_get_service, mock_get_orchestrator, runner, mock_service
     ):
         """Test that prompt-enhance creates an enhancement run and new prompt."""
         # Setup mocks
-        mock_db = MagicMock()
-        mock_init_db.return_value = mock_db
-        mock_service_class.return_value = mock_service
+        mock_get_service.return_value = mock_service
 
         mock_orchestrator = MagicMock()
-        mock_orchestrator_class.return_value = mock_orchestrator
+        mock_get_orchestrator.return_value = mock_orchestrator
         mock_orchestrator.run_prompt_upsampling.return_value = (
             "A cinematic masterpiece showing..."  # Enhanced text
         )
@@ -140,16 +137,18 @@ class TestPromptEnhanceCommandTarget:
         status_calls = [args[0][1] for args in mock_service.update_run_status.call_args_list]
         assert "completed" in status_calls or "success" in status_calls
 
-    @patch("cosmos_workflow.cli.enhance.WorkflowService")
-    @patch("cosmos_workflow.cli.enhance.init_database")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_orchestrator")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
     def test_prompt_enhance_with_custom_model(
-        self, mock_init_db, mock_service_class, runner, mock_service
+        self, mock_get_service, mock_get_orchestrator, runner, mock_service
     ):
         """Test prompt-enhance with custom AI model selection."""
-        # Setup mocks
-        mock_db = MagicMock()
-        mock_init_db.return_value = mock_db
-        mock_service_class.return_value = mock_service
+        # Setup mock
+        mock_get_service.return_value = mock_service
+
+        mock_orchestrator = MagicMock()
+        mock_get_orchestrator.return_value = mock_orchestrator
+        mock_orchestrator.run_prompt_upsampling.return_value = "Enhanced text with custom model"
 
         from cosmos_workflow.cli import cli
 
@@ -171,14 +170,11 @@ class TestPromptEnhanceCommandTarget:
         run_call = create_run_calls[0]
         assert run_call.kwargs["execution_config"]["model"] == "gpt-4"
 
-    @patch("cosmos_workflow.cli.enhance.WorkflowService")
-    @patch("cosmos_workflow.cli.enhance.init_database")
-    def test_prompt_enhance_dry_run(self, mock_init_db, mock_service_class, runner, mock_service):
+    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
+    def test_prompt_enhance_dry_run(self, mock_get_service, runner, mock_service):
         """Test --dry-run shows preview without executing."""
-        # Setup mocks
-        mock_db = MagicMock()
-        mock_init_db.return_value = mock_db
-        mock_service_class.return_value = mock_service
+        # Setup mock
+        mock_get_service.return_value = mock_service
 
         from cosmos_workflow.cli import cli
 
@@ -250,20 +246,17 @@ class TestPromptEnhanceCommandTarget:
             last_status = status_calls[-1][0][1]
             assert last_status == "failed"
 
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.WorkflowOrchestrator")
-    @patch("cosmos_workflow.cli.enhance.WorkflowService")
-    @patch("cosmos_workflow.cli.enhance.init_database")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_orchestrator")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
     def test_prompt_enhance_tracks_parent_relationship(
-        self, mock_init_db, mock_service_class, mock_orchestrator_class, runner, mock_service
+        self, mock_get_service, mock_get_orchestrator, runner, mock_service
     ):
         """Test that enhanced prompts track their parent prompt."""
         # Setup mocks
-        mock_db = MagicMock()
-        mock_init_db.return_value = mock_db
-        mock_service_class.return_value = mock_service
+        mock_get_service.return_value = mock_service
 
         mock_orchestrator = MagicMock()
-        mock_orchestrator_class.return_value = mock_orchestrator
+        mock_get_orchestrator.return_value = mock_orchestrator
         mock_orchestrator.run_prompt_upsampling.return_value = "Enhanced text"
 
         from cosmos_workflow.cli import cli

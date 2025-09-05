@@ -1,8 +1,8 @@
 # Service Layer Refactoring Plan - SIMPLIFIED
-**Version:** 2.0
-**Date:** 2025-09-04
+**Version:** 2.1
+**Date:** 2025-09-05
 **Author:** NAT
-**Status:** IN PROGRESS - Chunk 1 Complete (2025-09-04)
+**Status:** IN PROGRESS - Chunk 3 Fixed, GPU Execution Untested (2025-09-05)
 
 ## Executive Summary
 
@@ -43,6 +43,20 @@ This document outlines a **simplified** refactoring plan to migrate from JSON fi
 ---
 
 ## Architecture Design
+
+### Critical Architectural Insight (Added 2025-09-05)
+
+The execution layer is **constrained by NVIDIA Cosmos requirements**:
+- NVIDIA scripts (`inference.sh`, `upscale.sh`) expect JSON files on disk
+- JSON must be in specific NVIDIA Cosmos format
+- Scripts are hardcoded to read from `inputs/prompts/${PROMPT_NAME}.json`
+- Cannot simply pass dictionaries to GPU execution
+
+**Solution: Two-Layer Architecture**
+1. **Data Layer** (Database → Service → CLI): Database-first, no JSON persistence
+2. **Execution Layer** (Orchestrator → GPU): Creates temporary NVIDIA-format JSON for scripts
+
+This requires simple format conversion utilities, not complex schema systems.
 
 ### Simplified Architecture (No Over-Engineering!)
 
@@ -208,19 +222,33 @@ class WorkflowService:
 
 ---
 
-### Chunk 3: CLI Migration with Comprehensive Testing (3-4 hours) ⏳ IN PROGRESS
+### Chunk 3: CLI Migration with Comprehensive Testing (10 hours) ✅ FIXED BUT UNTESTED
 **Goal:** Add CLI tests, switch to WorkflowService, simplify system
+
+**ISSUE DISCOVERED AND FIXED (2025-09-05):**
+Found that NVIDIA scripts require specific JSON format on disk:
+- Created `cosmos_workflow/utils/nvidia_format.py` for conversion
+- Deleted overcomplicated `cosmos_workflow/prompts/` directory
+- Orchestrator now converts dicts → NVIDIA JSON → GPU execution
+- **STATUS:** Fixed but GPU execution not yet tested
 
 **Core Simplifications:**
 - WorkflowService: Data operations AND query logic (pragmatic approach)
 - WorkflowOrchestrator: ONLY GPU execution coordination
 - Clear separation of concerns - no mixed responsibilities
+- ALL AI model operations treated as "runs" (inference, enhancement, etc.)
 
 **Testing Strategy:**
 1. **Service tests** - Already complete from Chunk 2 ✅
-2. **CLI behavioral tests** - Tests for TARGET behavior (database/service)
-3. **Integration tests** - Test CLI→Service→Database flow
-4. **Manager tests** - DELETE with managers
+2. **CLI behavioral tests** - Tests for TARGET behavior (database/service) ✅
+3. **Integration tests** - Test CLI→Service→Database flow ✅
+4. **Manager tests** - DELETE with managers ⏳
+
+**Commands to Migrate:**
+- `cosmos create prompt` → Creates prompt in database ✅
+- `cosmos create run` → Creates run from prompt ID ✅
+- `cosmos inference` → Executes run (transfer model) ✅
+- `cosmos prompt-enhance` → Executes enhancement run (Pixtral model) ✅
 
 **Target CLI Behavior:**
 - Commands work with database IDs as primary identifiers
@@ -229,6 +257,7 @@ class WorkflowService:
 - Comprehensive output for technical CLI users
 - Clear error messages, no silent failures
 - Trust prepare.py validation, light validation at CLI level
+- ALL AI operations tracked as runs in database
 
 **Implementation Phases:**
 
@@ -239,17 +268,25 @@ class WorkflowService:
 - These tests will initially FAIL (that's expected!)
 
 **Phase 2: Service Migration**
-- Update CLI commands to use WorkflowService directly
-- Commands accept/return database IDs
-- Add query methods to WorkflowService as needed
-- Simplify orchestrator - remove data management responsibilities
-- Update orchestrator upsampling to use service
+- Update CLI commands to use WorkflowService directly ✅
+- Commands accept/return database IDs ✅
+- Add enhancement run support to WorkflowService ✅
+- Simplify orchestrator - remove data management responsibilities ✅ DONE (but broken)
+- Fixed critical code issues (bare excepts, validation) ✅
+- Track ALL AI operations (inference, enhancement) as runs ✅
 
-**Phase 3: Immediate Cleanup**
-- Delete PromptSpecManager, RunSpecManager, DirectoryManager
-- Delete their associated test files
-- Remove all JSON file management code
-- No deferred cleanup - clean as we go!
+**Phase 2.5: Fix Execution Layer (NEW - Required)**
+- Create `cosmos_workflow/utils/nvidia_format.py` for format conversion
+- Simplify FileTransferService to work with raw data, not schemas
+- Fix orchestrator to properly convert and upload NVIDIA format JSON
+- Delete overcomplicated `cosmos_workflow/prompts/` directory
+- Test end-to-end execution actually works
+
+**Phase 3: Complete Cleanup**
+- ✅ Deleted PromptSpecManager, RunSpecManager (but had to restore schemas.py)
+- ✅ Deleted test files
+- ⚠️ Cannot fully remove JSON management - NVIDIA requires it
+- Replace complex schemas with simple format conversion utils
 
 **Important Distinctions:**
 - **Logging**: Operational info → log files/stdout
@@ -257,6 +294,23 @@ class WorkflowService:
 - Database tracks ONLY concrete model runs, not CLI invocations
 
 **NO dual-write, NO backward compatibility complexity**
+
+---
+
+**Run Types in the System:**
+```python
+# Transfer Run (video generation)
+run = {
+    "model_type": "transfer",
+    "outputs": {"video_path": "/outputs/result.mp4"}
+}
+
+# Enhancement Run (prompt improvement)
+run = {
+    "model_type": "enhancement",
+    "outputs": {"enhanced_prompt_id": "ps_enhanced_123"}
+}
+```
 
 ---
 
@@ -369,12 +423,12 @@ Chunk 10: Web Dashboard
 |-------|-------------|------|--------|
 | 1 | Database with flexible schema | 3h | ✅ Completed |
 | 2 | Service core with CRUD methods | 3h | ✅ Completed |
-| 3 | CLI Migration with Testing | 3-4h | ⏳ In Progress |
+| 3 | CLI Migration with Testing (incl. enhance) | 6-7h | ⚠️ Blocked - Critical Issue |
 | 4 | List/search commands | 2h | ⏳ |
 | 5 | Progress tracking | 2h | ⏳ |
 
-**Progress:** 6h / 13-14h (43% complete)
-**Total:** ~13-14 hours (reduced from original estimate)
+**Progress:** 9h / 17-18h (50% complete - but blocked on critical issue)
+**Total:** ~14-15 hours (adjusted for prompt-enhance inclusion)
 
 **Simplifications Made:**
 - Removed duplicate work (old Chunk 5 was redundant)
@@ -411,6 +465,55 @@ Chunk 10: Web Dashboard
 
 ---
 
+## Proposed Solution for Chunk 3 Issue
+
+### Option 2: Simple Utils Approach (Recommended)
+
+**File Structure:**
+```
+cosmos_workflow/
+  utils/
+    nvidia_format.py          # Simple conversion functions
+  workflows/
+    workflow_orchestrator.py  # Uses utils for conversion
+  transfer/
+    file_transfer.py         # Simplified, no schema knowledge
+```
+
+**Implementation:**
+1. **Create `nvidia_format.py`** with simple functions:
+```python
+def to_cosmos_inference_json(prompt_dict, run_dict):
+    """Convert database dicts to NVIDIA Cosmos format."""
+    return {
+        "prompt": prompt_dict["prompt_text"],
+        "negative_prompt": "",
+        "video_path": prompt_dict.get("inputs", {}).get("video", ""),
+        "control_weights": run_dict.get("execution_config", {}).get("weights", {}),
+        # ... other NVIDIA-required fields
+    }
+```
+
+2. **Simplify FileTransferService:**
+   - Remove schema dependencies
+   - Just upload/download files
+   - Takes paths and raw data
+
+3. **Fix orchestrator's execute_run():**
+   - Convert dicts to NVIDIA format
+   - Write temporary JSON
+   - Upload and execute
+
+4. **Delete `cosmos_workflow/prompts/` directory:**
+   - Overcomplicated and misnamed
+   - Replace with simple utils
+
+**Benefits:**
+- Clear separation: Database format vs NVIDIA format
+- Simple conversion at execution boundary
+- No coupling between data and execution layers
+- Easy to maintain and extend
+
 ## CLAUDE.md Updates Required
 
 After completion, update CLAUDE.md:
@@ -431,13 +534,46 @@ After completion, update CLAUDE.md:
 
 ## Next Steps
 
-**Start Chunk 1: Database Foundation**
-1. On branch `refactor/service-architecture`
-2. Create flexible schema supporting multiple models
-3. Use JSON columns for extensibility
-4. Test with in-memory SQLite
+**IMMEDIATE: Fix Chunk 3 Critical Issue**
+1. Implement Option 2: Simple Utils approach
+2. Create `nvidia_format.py` with conversion functions
+3. Fix FileTransferService to handle raw data
+4. Update orchestrator's execute_run to properly convert formats
+5. Delete overcomplicated prompts directory
+6. Test that execution actually works end-to-end
+
+**Then Continue with Chunk 4**
 
 **Remember:** This refactor makes ADDING FEATURES EASIER, not harder!
+
+---
+
+## Assessment: Do Remaining Chunks Still Make Sense?
+
+**YES - The remaining chunks are still valid:**
+
+### Chunk 4: Query Methods ✅
+- Adding list/search functionality to WorkflowService
+- Independent of execution layer issues
+- Still needed for dashboard analytics
+
+### Chunk 5: Progress Tracking ✅
+- Real-time progress updates for runs
+- Independent of format conversion issues
+- Critical for dashboard UX
+
+**However:** We MUST fix the Chunk 3 execution issue first, otherwise:
+- The system won't actually execute runs
+- We'd be building on a broken foundation
+- Integration testing would be impossible
+
+**Revised Timeline:**
+- Fix Chunk 3 Issue: 2-3 hours
+- Complete Chunk 4: 2 hours
+- Complete Chunk 5: 2 hours
+- **New Total:** 19-20 hours (was 14-15 hours)
+
+The discovery of NVIDIA format constraints adds complexity but doesn't invalidate the overall architecture. The service layer refactoring is still the right approach - we just need a clean boundary between data management and execution.
 
 ---
 

@@ -59,19 +59,42 @@ cosmos status
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 
-## 🏗️ Project Structure
+## 🏗️ Architecture Overview
+
+The Cosmos Workflow System follows a clean service layer architecture with clear separation of concerns:
+
 ```
 cosmos_workflow/
-├── cli/             # CLI commands
-├── workflows/       # Orchestration logic
-├── services/        # Business logic layer
+├── cli/             # CLI commands (database-first approach)
+├── services/        # Business logic layer (WorkflowService)
+├── workflows/       # GPU execution orchestrator (WorkflowOrchestrator)
+├── database/        # SQLAlchemy models & connection management
 ├── connection/      # SSH/SFTP management
 ├── execution/       # Docker execution
-├── database/        # SQLAlchemy models & connection management
-├── prompts/         # Schema definitions
+├── transfer/        # File transfer services
+├── prompts/         # Legacy schema definitions
 ├── local_ai/        # AI processing
 └── config/          # Configuration
 ```
+
+### Service Layer Architecture
+
+- **WorkflowService**: Handles all data operations and business logic
+  - Database CRUD operations for prompts and runs
+  - Input validation and sanitization
+  - Transaction safety with rollback on errors
+  - Returns dictionary data optimized for CLI display
+
+- **WorkflowOrchestrator**: Handles ONLY GPU execution
+  - Inference execution on remote GPU instances
+  - Video upscaling workflows
+  - Prompt enhancement with Pixtral AI
+  - No data persistence - pure execution layer
+
+- **CLI Commands**: Database-first approach
+  - All operations work with database IDs (ps_xxx, rs_xxx)
+  - No JSON files created except for dry-run preview
+  - Seamless integration between data and execution layers
 
 ## 🗄️ Database System
 

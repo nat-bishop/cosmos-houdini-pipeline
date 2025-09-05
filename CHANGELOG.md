@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING: Major service layer architecture refactoring (Chunk 3)**
+  - **WorkflowOrchestrator simplified to ONLY handle GPU execution**
+    - Removed all JSON file management and PromptSpec/RunSpec dependencies
+    - New `execute_run()` method takes dictionaries and returns execution results
+    - Simplified `run_prompt_upsampling()` to just take text and return enhanced text
+    - Removed deprecated methods: `run()`, `run_full_cycle()`, `run_inference_only()`, `run_upscaling_only()`
+    - Removed helper methods for video directories, workflow type detection, and completion logging
+    - Clear separation: orchestrator handles ONLY inference, upscaling, and prompt enhancement
+
+  - **CLI commands now use WorkflowService for all data operations**
+    - All commands work with database IDs (ps_xxx for prompts, rs_xxx for runs) instead of JSON files
+    - Database-first approach: no JSON files created except for dry-run preview
+    - Prompt enhancement operations tracked as runs in the database with proper lifecycle management
+    - Seamless integration between WorkflowService (data) and WorkflowOrchestrator (execution)
+
+  - **Clear architectural boundaries established**
+    - WorkflowService: Business logic, data persistence, validation, transaction safety
+    - WorkflowOrchestrator: GPU execution, inference, upscaling, prompt enhancement (no data persistence)
+    - CLI: User interface layer connecting service and orchestrator with database IDs
+    - Complete separation of concerns with no mixed responsibilities
+
 ### Added
 - **Service layer implementation for workflow operations**
   - New `WorkflowService` class providing business logic for prompt and run management

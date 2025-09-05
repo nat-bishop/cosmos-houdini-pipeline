@@ -17,7 +17,7 @@ from cosmos_workflow.database.models import Prompt, Run
 logger = logging.getLogger(__name__)
 
 # Supported AI model types
-SUPPORTED_MODEL_TYPES = {"transfer", "reason", "predict"}
+SUPPORTED_MODEL_TYPES = {"transfer", "reason", "predict", "enhancement"}
 MAX_PROMPT_LENGTH = 10000
 
 
@@ -289,6 +289,130 @@ class WorkflowService:
         hash_hex = hash_obj.hexdigest()[:20]  # Increased from 12 to reduce collision risk
 
         return f"ps_{hash_hex}"
+
+    def update_run_status(self, run_id: str, status: str) -> dict[str, Any] | None:
+        """Update the status of a run.
+
+        Args:
+            run_id: The run ID to update
+            status: New status (pending, running, completed, failed)
+
+        Returns:
+            Updated run data, or None if run not found
+
+        Raises:
+            ValueError: If run_id is None or status is invalid
+        """
+        if run_id is None:
+            raise ValueError("run_id is required")
+        if not run_id or run_id.isspace():
+            raise ValueError("run_id cannot be empty")
+        if status not in {"pending", "running", "completed", "failed"}:
+            raise ValueError(
+                f"Invalid status: {status}. Must be one of pending, running, completed, failed"
+            )
+
+        logger.info("Updating run status for id=%s to %s", run_id, status)
+
+        with self.db.get_session() as session:
+            run = session.query(Run).filter_by(id=run_id).first()
+            if not run:
+                return None
+
+            run.status = status
+
+            # Set timestamps based on status
+            from datetime import datetime, timezone
+
+            if status == "running" and run.started_at is None:
+                run.started_at = datetime.now(timezone.utc)
+            elif status in {"completed", "failed"} and run.completed_at is None:
+                run.completed_at = datetime.now(timezone.utc)
+
+            session.flush()  # Flush to ensure updated_at is set
+
+            result = {
+                "id": run.id,
+                "prompt_id": run.prompt_id,
+                "model_type": run.model_type,
+                "status": run.status,
+                "execution_config": run.execution_config,
+                "outputs": run.outputs,
+                "metadata": run.run_metadata,
+                "created_at": run.created_at.isoformat(),
+                "updated_at": run.updated_at.isoformat(),
+            }
+
+            # Add optional timestamps
+            if run.started_at:
+                result["started_at"] = run.started_at.isoformat()
+            if run.completed_at:
+                result["completed_at"] = run.completed_at.isoformat()
+
+            session.commit()
+            logger.info("Updated run %s status to %s", run_id, status)
+            return result
+
+    def update_run(self, run_id: str, **kwargs) -> dict[str, Any] | None:
+        """Update run fields.
+
+        Args:
+            run_id: The run ID to update
+            **kwargs: Fields to update (outputs, metadata, execution_config)
+
+        Returns:
+            Updated run data, or None if run not found
+
+        Raises:
+            ValueError: If run_id is None or invalid fields provided
+        """
+        if run_id is None:
+            raise ValueError("run_id is required")
+        if not run_id or run_id.isspace():
+            raise ValueError("run_id cannot be empty")
+
+        # Validate allowed fields
+        allowed_fields = {"outputs", "metadata", "execution_config", "run_metadata"}
+        invalid_fields = set(kwargs.keys()) - allowed_fields
+        if invalid_fields:
+            raise ValueError(f"Invalid fields: {invalid_fields}. Allowed: {allowed_fields}")
+
+        logger.info("Updating run id=%s with fields: %s", run_id, list(kwargs.keys()))
+
+        with self.db.get_session() as session:
+            run = session.query(Run).filter_by(id=run_id).first()
+            if not run:
+                return None
+
+            # Update fields
+            for key, value in kwargs.items():
+                if key == "metadata":
+                    key = "run_metadata"  # Map to correct column name
+                setattr(run, key, value)
+
+            session.flush()  # Flush to ensure updated_at is set
+
+            result = {
+                "id": run.id,
+                "prompt_id": run.prompt_id,
+                "model_type": run.model_type,
+                "status": run.status,
+                "execution_config": run.execution_config,
+                "outputs": run.outputs,
+                "metadata": run.run_metadata,
+                "created_at": run.created_at.isoformat(),
+                "updated_at": run.updated_at.isoformat(),
+            }
+
+            # Add optional timestamps
+            if run.started_at:
+                result["started_at"] = run.started_at.isoformat()
+            if run.completed_at:
+                result["completed_at"] = run.completed_at.isoformat()
+
+            session.commit()
+            logger.info("Updated run %s", run_id)
+            return result
 
     def _generate_run_id(self, prompt_id: str, execution_config: dict[str, Any]) -> str:
         """Generate unique ID for a run.

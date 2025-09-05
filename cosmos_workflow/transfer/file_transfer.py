@@ -5,17 +5,14 @@ Windows implementation using SFTP for file transfers.
 
 from __future__ import annotations
 
-import json
 import logging
 import stat
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cosmos_workflow.connection.ssh_manager import SSHManager
 
-from cosmos_workflow.prompts import CosmosConverter, PromptSpec
 
 logger = logging.getLogger(__name__)
 
@@ -33,70 +30,26 @@ class FileTransferService:
     # ------------------------------------------------------------------ #
 
     def upload_prompt_and_videos(self, prompt_file: Path, video_dirs: list[Path]) -> None:
-        """Upload prompt file, video directories, and scripts/ via SFTP.
-        Creates remote directories if missing and uploads all files.
-        Converts PromptSpec to NVIDIA Cosmos format before uploading.
+        """Upload prompt file and video directories via SFTP.
+
+        DEPRECATED: This method is no longer used. The orchestrator now handles
+        format conversion and uses upload_file() directly.
         """
+        logger.warning("upload_prompt_and_videos is deprecated and will be removed")
+
         if not prompt_file.exists():
             raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
 
         remote_prompts_dir = f"{self.remote_dir}/inputs/prompts"
         remote_videos_dir = f"{self.remote_dir}/inputs/videos"
-        remote_scripts_dir = f"{self.remote_dir}/bashscripts"
 
-        # Ensure required remote directories exist
-        self._remote_mkdirs([remote_prompts_dir, remote_videos_dir, remote_scripts_dir])
+        # Upload prompt file as-is
+        self.upload_file(prompt_file, remote_prompts_dir)
 
-        # 1) Convert PromptSpec to Cosmos format and upload
-        prompt_name = prompt_file.stem
-
-        # Load the PromptSpec
-        try:
-            prompt_spec = PromptSpec.load(prompt_file)
-
-            # Convert to Cosmos format
-            cosmos_spec = CosmosConverter.prompt_spec_to_cosmos(prompt_spec)
-
-            # Create temporary file with converted format
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp_file:
-                json.dump(cosmos_spec, tmp_file, indent=2)
-                tmp_path = Path(tmp_file.name)
-
-            # Upload the converted file
-            self._sftp_upload_file(tmp_path, f"{remote_prompts_dir}/{prompt_name}.json")
-
-            # Clean up temporary file
-            tmp_path.unlink()
-
-            logger.info("Uploaded converted prompt spec: %s", prompt_name)
-
-        except Exception as e:
-            logger.warning("Failed to convert prompt spec, uploading original: %s", e)
-            # Fall back to uploading original if conversion fails
-            self._sftp_upload_file(prompt_file, f"{remote_prompts_dir}/{prompt_name}.json")
-
-        # 2) Videos → inputs/videos/<dir_name>/...
+        # Upload video directories
         for vd in video_dirs:
-            if not vd.exists():
-                logger.warning("Video directory missing: %s (skipping)", vd)
-                continue
-            remote_video_path = f"{remote_videos_dir}/{vd.name}"
-            self._remote_mkdirs([remote_video_path])
-            self._sftp_upload_dir(vd, remote_video_path)
-
-        # 3) Bash scripts (*.sh) → bashscripts/
-        scripts_dir = Path("scripts")
-        if scripts_dir.exists():
-            self._sftp_upload_dir(scripts_dir, remote_scripts_dir)
-            # Make uploaded scripts executable and writable by group (for container use)
-            self.ssh_manager.execute_command_success(
-                f"chmod +x {self._q(remote_scripts_dir)}/*.sh || true", stream_output=False
-            )
-            self.ssh_manager.execute_command_success(
-                f"chmod -R g+w {self._q(remote_scripts_dir)}", stream_output=False
-            )
-        else:
-            logger.warning("Scripts directory not found; skipping script upload.")
+            if vd.exists():
+                self.upload_directory(vd, f"{remote_videos_dir}/{vd.name}")
 
     def upload_file(self, local_path: Path | str, remote_dir: str) -> bool:
         """Upload a single file to a remote directory via SFTP."""

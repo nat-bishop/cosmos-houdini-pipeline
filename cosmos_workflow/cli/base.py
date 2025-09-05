@@ -16,6 +16,8 @@ class CLIContext:
         self.verbose = verbose
         self.orchestrator = None
         self.config_manager = None
+        self.workflow_service = None
+        self.db_connection = None
 
     def setup_logging(self):
         """Setup logging configuration."""
@@ -41,6 +43,23 @@ class CLIContext:
 
             self.config_manager = ConfigManager()
         return self.config_manager
+
+    def get_workflow_service(self):
+        """Get or create workflow service with database connection (lazy-loaded)."""
+        if self.workflow_service is None:
+            from cosmos_workflow.database import init_database
+            from cosmos_workflow.services.workflow_service import WorkflowService
+
+            # Initialize database connection if not already done
+            if self.db_connection is None:
+                config_manager = self.get_config_manager()
+                local_config = config_manager.get_local_config()
+                db_path = local_config.outputs_dir / "cosmos.db"
+                self.db_connection = init_database(str(db_path))
+
+            # Create service
+            self.workflow_service = WorkflowService(self.db_connection, self.get_config_manager())
+        return self.workflow_service
 
 
 def handle_errors(func):

@@ -8,7 +8,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from cosmos_workflow.prompts.schemas import DirectoryManager
+# Import from test stubs temporarily until full migration
+from tests.test_stubs import DirectoryManager
 
 
 class TestDirectoryManager:

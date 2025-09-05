@@ -182,8 +182,8 @@ class TestSmartNamingIntegration:
         import tempfile
         from pathlib import Path
 
-        from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-        from cosmos_workflow.prompts.schemas import DirectoryManager
+        # Import from test stubs temporarily until full migration
+        from tests.test_stubs import DirectoryManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Setup directories
@@ -219,8 +219,8 @@ class TestSmartNamingIntegration:
         import tempfile
         from pathlib import Path
 
-        from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-        from cosmos_workflow.prompts.schemas import DirectoryManager
+        # Import from test stubs temporarily until full migration
+        from tests.test_stubs import DirectoryManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_dir = Path(tmpdir) / "inputs"
@@ -252,8 +252,8 @@ class TestSmartNamingIntegration:
         import tempfile
         from pathlib import Path
 
-        from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-        from cosmos_workflow.prompts.schemas import DirectoryManager
+        # Import from test stubs temporarily until full migration
+        from tests.test_stubs import DirectoryManager
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_dir = Path(tmpdir) / "inputs"

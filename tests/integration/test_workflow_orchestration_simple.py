@@ -6,7 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
+# Import from test stubs temporarily until full migration
+from tests.test_stubs import ExecutionStatus, PromptSpec, RunSpec
 
 
 class TestWorkflowOrchestrationSimple:

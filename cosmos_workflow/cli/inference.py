@@ -1,14 +1,11 @@
 """Inference command for running Cosmos Transfer on remote GPU."""
 
 import json
-from pathlib import Path
 
 import click
 
-from cosmos_workflow.prompts.schemas import PromptSpec
-
+# These imports are for mocking in tests
 from .base import CLIContext, handle_errors
-from .completions import complete_prompt_specs, complete_video_dirs
 from .helpers import (
     console,
     create_info_table,
@@ -16,21 +13,13 @@ from .helpers import (
     display_dry_run_footer,
     display_dry_run_header,
     display_success,
+    format_id,
     format_prompt_text,
 )
 
 
 @click.command()
-@click.argument(
-    "spec_file",
-    type=click.Path(exists=True, path_type=Path),
-    shell_complete=complete_prompt_specs,
-)
-@click.option(
-    "--videos-dir",
-    help="Custom videos directory",
-    shell_complete=complete_video_dirs,
-)
+@click.argument("run_id")
 @click.option(
     "--upscale/--no-upscale",
     default=True,
@@ -46,40 +35,63 @@ from .helpers import (
 )
 @click.pass_context
 @handle_errors
-def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
+def inference(ctx, run_id, upscale, upscale_weight, dry_run):
     r"""Run Cosmos Transfer inference with optional upscaling.
 
+    Uses a run ID from the database to execute inference on a remote GPU.
     By default, this command runs both inference and 4K upscaling.
     Use --no-upscale to run inference only.
     Use --dry-run to preview what would happen without executing.
 
     \b
     Examples:
-      cosmos inference prompt_spec.json              # Inference + upscaling
-      cosmos inference prompt_spec.json --no-upscale # Inference only
-      cosmos inference prompt_spec.json --dry-run    # Preview only
-      cosmos inference prompt_spec.json --upscale-weight 0.7
+      cosmos inference rs_abc123              # Inference + upscaling
+      cosmos inference rs_abc123 --no-upscale # Inference only
+      cosmos inference rs_abc123 --dry-run    # Preview only
+      cosmos inference rs_abc123 --upscale-weight 0.7
     """
     ctx_obj: CLIContext = ctx.obj
+
+    # Get service and load run/prompt data
+    try:
+        # Use the get_workflow_service from context
+        service = ctx_obj.get_workflow_service()
+
+        # Get run and prompt
+        run = service.get_run(run_id)
+        if not run:
+            raise ValueError(f"Run not found: {run_id}")
+
+        prompt = service.get_prompt(run["prompt_id"])
+        if not prompt:
+            raise ValueError(f"Prompt not found: {run['prompt_id']}")
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise ValueError(str(e))
+        raise Exception(f"Database error: {e!s}")
 
     # Handle dry-run mode
     if dry_run:
         display_dry_run_header()
 
-        # Load and display prompt spec info
-        prompt_spec = PromptSpec.load(Path(spec_file))
-
         # Show what would happen
         dry_run_data = {
-            "Would load": f"Prompt: {prompt_spec.name}",
-            "Prompt text": format_prompt_text(prompt_spec.prompt),
-            "Input video": prompt_spec.input_video_path,
+            "Run ID": format_id(run["id"]),
+            "Prompt ID": format_id(prompt["id"]),
+            "Status": run["status"],
+            "Prompt text": format_prompt_text(prompt["prompt_text"]),
+            "Input video": prompt["inputs"].get("video", "N/A"),
+            "Model type": run["model_type"],
         }
 
-        if videos_dir:
-            dry_run_data["Videos from"] = videos_dir
+        # Show weights if available
+        if "weights" in run.get("execution_config", {}):
+            weights = run["execution_config"]["weights"]
+            dry_run_data["Weights"] = (
+                f"vis={weights.get('vis', 0.25)}, edge={weights.get('edge', 0.25)}, depth={weights.get('depth', 0.25)}, seg={weights.get('seg', 0.25)}"
+            )
 
-        dry_run_data["Would upload"] = "Prompt spec and video files to remote GPU"
+        dry_run_data["Would upload"] = "Prompt data and video files to remote GPU"
 
         if upscale:
             dry_run_data["Would execute"] = "Inference + 4K upscaling"
@@ -88,6 +100,7 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
             dry_run_data["Would execute"] = "Inference only (no upscaling)"
 
         dry_run_data["Would download"] = "Generated video results"
+        dry_run_data["Would update"] = "Run status to 'completed' in database"
 
         table = create_info_table(dry_run_data)
         console.print(table)
@@ -101,31 +114,52 @@ def inference(ctx, spec_file, videos_dir, upscale, upscale_weight, dry_run):
         workflow_desc = "inference + upscaling" if upscale else "inference"
         task = progress.add_task(f"[cyan]Running {workflow_desc}...", total=None)
 
-        orchestrator = ctx_obj.get_orchestrator()
+        try:
+            # Update run status to running
+            service.update_run_status(run_id, "running")
 
-        if upscale:
-            # Run full cycle with inference and upscaling
-            result = orchestrator.run_full_cycle(
-                prompt_file=Path(spec_file),
-                videos_subdir=videos_dir,
-                no_upscale=False,
-                upscale_weight=upscale_weight,
-                num_gpu=1,
-                cuda_devices="0",
+            # Get orchestrator
+            orchestrator = ctx_obj.get_orchestrator()
+
+            # Execute the run using the simplified orchestrator
+            # The orchestrator.execute_run method will be simplified to just handle GPU execution
+            result = orchestrator.execute_run(
+                run, prompt, upscale=upscale, upscale_weight=upscale_weight
             )
-        else:
-            # Run inference only
-            result = orchestrator.run_inference_only(
-                prompt_file=Path(spec_file),
-                videos_subdir=videos_dir,
-                num_gpu=1,
-                cuda_devices="0",
-            )
+
+            # Update run with outputs
+            outputs = {
+                "video_path": result.get("output_path", ""),
+                "upscaled": upscale,
+            }
+            if upscale:
+                outputs["upscale_weight"] = upscale_weight
+
+            service.update_run(run_id, outputs=outputs)
+
+            # Update run status to completed
+            service.update_run_status(run_id, "completed")
+
+        except Exception as e:
+            # Update run status to failed
+            try:
+                service.update_run_status(run_id, "failed")
+                service.update_run(run_id, outputs={"error": str(e)})
+            except Exception:
+                pass  # Don't fail on status update error
+            raise
 
         progress.update(task, completed=True)
 
-    display_success(f"{workflow_desc.capitalize()} completed!")
+    # Display results
+    results_data = {
+        "Run ID": format_id(run_id),
+        "Status": "Completed",
+        "Output": outputs.get("video_path", "N/A"),
+    }
+
+    display_success(f"{workflow_desc.capitalize()} completed!", results_data)
 
     if ctx_obj.verbose:
-        console.print("\n[cyan]Results:[/cyan]")
+        console.print("\n[cyan]Full results:[/cyan]")
         console.print_json(json.dumps(result, indent=2))

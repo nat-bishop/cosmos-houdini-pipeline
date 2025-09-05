@@ -16,8 +16,8 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.schemas import DirectoryManager, PromptSpec
+# Import from test stubs temporarily until full migration
+from tests.test_stubs import DirectoryManager, PromptSpec
 
 
 class TestUpsamplePromptSpecIntegration(unittest.TestCase):

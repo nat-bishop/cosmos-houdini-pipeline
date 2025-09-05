@@ -15,9 +15,8 @@ from unittest.mock import MagicMock, patch
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.run_spec_manager import RunSpecManager
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
+# Import from test stubs temporarily until full migration
+from tests.test_stubs import ExecutionStatus, PromptSpec, RunSpec
 
 
 class TestCompleteUpsampleWorkflow(unittest.TestCase):
@@ -25,7 +24,8 @@ class TestCompleteUpsampleWorkflow(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        from cosmos_workflow.prompts.schemas import DirectoryManager
+        # Import from test stubs temporarily until full migration
+        from tests.test_stubs import DirectoryManager
 
         self.temp_dir = tempfile.mkdtemp()
         prompts_dir = Path(self.temp_dir) / "prompts"

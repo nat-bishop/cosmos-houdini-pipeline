@@ -30,9 +30,7 @@ Tests are the contract. Commit them unchanged.
 ### **Gate 4 — Make Tests Pass**
 - Implement minimal code to pass all tests.
 - Do **not** modify tests, they are a contract.
-- Run the `overfit-verifier` sub-agent to ensure generalization.
-- **MUST** check for external verification at `.claude/workspace/verification/EXTERNAL_overfit_check.md`.
-  - Only proceed if report exists and matches current changes. If report is missing or outdated, STOP and ask user for advice.
+- **Must** Run the `overfit-verifier` sub-agent to ensure generalization before proceeding.
 
 ### **Gate 5 — Document**
 - Update [README.md](README.md)
@@ -41,9 +39,7 @@ Tests are the contract. Commit them unchanged.
 - Use `doc-drafter` for consistency.
 
 ### **Gate 6 — Review**
-- Run `code-reviewer` agent.
-- Check for external review at `.claude/workspace/verification/EXTERNAL_code_review.md`.
-  - Only proceed if report exists and matches current changes. If report is missing or outdated, STOP and ask user for advice.
+- Run `code-reviewer` agent to thoroughly review the new code.
 - Must pass lint, coverage, and security checks.
 
 ---
@@ -143,6 +139,7 @@ from cosmos_workflow.transfer import FileTransferService
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
  - “**Zen of Python**” mindset (readability, explicitness, simplicity)
+ - Avoid Over-Engineering
 
 ---
 

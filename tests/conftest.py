@@ -11,7 +11,10 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager, LocalConfig, RemoteConfig
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
+
+# WARNING: Using test stubs after prompts module was deleted during refactoring
+# These are NOT production classes - only for test compatibility
+from tests.test_stubs import ExecutionStatus, PromptSpec, RunSpec
 
 # --- Configuration Fixtures ---
 

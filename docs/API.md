@@ -11,38 +11,57 @@ Complete API documentation for the Cosmos Workflow System.
 
 ## CLI Commands
 
+**Important: Service Layer Architecture**
+
+As of the Chunk 3 refactoring, all CLI commands follow a database-first approach:
+
+- **Database IDs**: Commands work with database IDs (ps_xxxxx for prompts, rs_xxxxx for runs) instead of JSON file paths
+- **No JSON Storage**: Data is stored in the database; JSON files are only created temporarily for GPU execution
+- **Clear Separation**: WorkflowService handles all data operations, WorkflowOrchestrator handles only GPU execution
+- **Lifecycle Tracking**: All operations (including prompt enhancement) are tracked as runs in the database
+- **Transaction Safety**: All database operations include proper error handling and rollback mechanisms
+
+This architecture provides better data consistency, easier querying, and cleaner separation of concerns between data management and GPU execution.
+
 ### create prompt
-Create a new prompt specification.
+Create a new prompt in the database.
 
 ```bash
-cosmos create prompt "PROMPT_TEXT" [OPTIONS]
+cosmos create prompt "PROMPT_TEXT" VIDEO_DIR [OPTIONS]
 ```
 
 **Arguments:**
 - `PROMPT_TEXT`: Text prompt for generation
+- `VIDEO_DIR`: Directory containing video files (color.mp4, depth.mp4, segmentation.mp4)
 
 **Options:**
-- `-n, --name`: Name for the prompt (auto-generated if not provided)
-- `--negative`: Negative prompt for quality improvement
-- `--video`: Path to input video file
-- `--enhanced`: Mark as enhanced (upsampled) prompt
-- `--parent-prompt`: Original prompt text (if enhanced)
+- `-n, --name`: Name for the prompt (auto-generated from content if not provided)
+- `--negative`: Negative prompt for quality improvement (has comprehensive default)
+
+**Database-First Approach:**
+- Creates prompt directly in database with generated ID (ps_xxxxx)
+- No JSON files created - all data stored in database
+- Returns prompt ID for use with other commands
+- Smart name generation from prompt content using semantic analysis
 
 **Example:**
 ```bash
 cosmos create prompt "A futuristic city at night" inputs/videos/scene1
-cosmos create prompt "Transform to anime style" /path/to/video_dir
+# Returns: Created prompt ps_a1b2c3 with name "futuristic_city_night"
+
+cosmos create prompt "Transform to anime style" /path/to/video_dir --name "anime_transform"
+# Returns: Created prompt ps_d4e5f6 with name "anime_transform"
 ```
 
 ### create run
-Create a run specification from a prompt spec.
+Create a run in the database from a prompt ID.
 
 ```bash
-cosmos create run PROMPT_FILE [OPTIONS]
+cosmos create run PROMPT_ID [OPTIONS]
 ```
 
 **Arguments:**
-- `PROMPT_FILE`: Path to prompt specification JSON
+- `PROMPT_ID`: Database ID of existing prompt (ps_xxxxx format)
 
 **Options:**
 - `--weights`: Control weights (4 values: vis edge depth segmentation)
@@ -50,53 +69,80 @@ cosmos create run PROMPT_FILE [OPTIONS]
 - `--guidance-scale`: CFG guidance scale (default: 8.0)
 - `--output-path`: Custom output path
 
+**Database-First Approach:**
+- Works with prompt IDs from database, not JSON files
+- Creates run directly in database with generated ID (rs_xxxxx)
+- Links run to existing prompt via foreign key relationship
+- Stores execution configuration in database for later use
+
 **Example:**
 ```bash
-cosmos create run prompt_spec.json --weights 0.3 0.4 0.2 0.1
+cosmos create run ps_a1b2c3 --weights 0.3 0.4 0.2 0.1
+# Returns: Created run rs_x9y8z7 for prompt ps_a1b2c3
+
+cosmos create run ps_d4e5f6 --num-steps 50 --guidance-scale 10.0
+# Returns: Created run rs_m5n4o3 for prompt ps_d4e5f6
 ```
 
 ### inference
-Run Cosmos Transfer inference with optional upscaling.
+Run Cosmos Transfer inference with optional upscaling using database IDs.
 
 ```bash
-cosmos inference SPEC_FILE [OPTIONS]
+cosmos inference RUN_ID [OPTIONS]
 ```
 
 **Arguments:**
-- `SPEC_FILE`: Path to prompt or run specification JSON
+- `RUN_ID`: Database ID of run to execute (rs_xxxxx format)
 
 **Options:**
-- `--videos-dir`: Custom videos directory
 - `--upscale/--no-upscale`: Enable/disable 4K upscaling (default: enabled)
-- `--upscale-weight`: Control weight for upscaling (0.0-1.0)
+- `--upscale-weight`: Control weight for upscaling (0.0-1.0, default: 0.5)
 - `--dry-run`: Preview without executing
+
+**Database-First Execution:**
+- Works with run IDs from database, not JSON files
+- Retrieves run and linked prompt data automatically from database
+- Updates run status in database throughout execution lifecycle
+- Only creates temporary JSON files during GPU execution, not for storage
 
 **Example:**
 ```bash
-cosmos inference prompt_spec.json              # Inference + upscaling
-cosmos inference prompt_spec.json --no-upscale # Inference only
-cosmos inference prompt_spec.json --upscale-weight 0.7
+cosmos inference rs_x9y8z7                    # Inference + upscaling for run
+cosmos inference rs_x9y8z7 --no-upscale       # Inference only
+cosmos inference rs_x9y8z7 --upscale-weight 0.7 --dry-run  # Preview execution plan
 ```
 
 ### prompt-enhance
-Enhance prompts using Pixtral AI model.
+Enhance prompts using Pixtral AI model with database tracking.
 
 ```bash
-cosmos prompt-enhance PROMPT_SPECS... [OPTIONS]
+cosmos prompt-enhance PROMPT_IDS... [OPTIONS]
 ```
 
 **Arguments:**
-- `PROMPT_SPECS`: One or more prompt specification JSON files
+- `PROMPT_IDS`: One or more prompt database IDs (ps_xxxxx format)
 
 **Options:**
 - `--resolution`: Max resolution for preprocessing (e.g., 480)
 - `--dry-run`: Preview without calling AI API
 
+**Database-First Enhancement:**
+- Works with prompt IDs from database, not JSON files
+- Creates new enhanced prompts in database with smart names
+- Creates enhancement runs in database to track AI processing
+- Links enhanced prompts to original prompts via parent relationship
+- Updates run status throughout enhancement lifecycle
+
 **Example:**
 ```bash
-cosmos prompt-enhance prompt_spec.json
-cosmos prompt-enhance spec1.json spec2.json spec3.json
-cosmos prompt-enhance inputs/prompts/*.json --resolution 480
+cosmos prompt-enhance ps_a1b2c3
+# Returns: Created enhanced prompt ps_g7h8i9 and enhancement run rs_j4k5l6
+
+cosmos prompt-enhance ps_a1b2c3 ps_d4e5f6 ps_m7n8o9 --resolution 480
+# Enhances multiple prompts, creates multiple enhanced prompts and runs
+
+cosmos prompt-enhance ps_a1b2c3 --dry-run
+# Preview enhancement without calling AI API or creating database entries
 ```
 
 ### prepare
@@ -345,30 +391,38 @@ run = service.get_run("rs_wxyz5678")
 - Null byte and control character sanitization
 
 ### WorkflowOrchestrator
-Main orchestrator for workflow execution.
+Simplified orchestrator handling ONLY GPU execution (no data persistence).
 
 ```python
 from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
 
 orchestrator = WorkflowOrchestrator()
 
-# Run complete workflow
-result = orchestrator.run(
-    prompt_file=Path("prompt.json"),
-    inference=True,
+# Execute a run from database data
+result = orchestrator.execute_run(
+    run_dict={"id": "rs_abc123", "status": "pending"},
+    prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}},
     upscale=True,
-    upload=True,
-    download=True,
-    num_gpu=2
+    upscale_weight=0.5
 )
+# Returns: {"status": "completed", "output_path": "/outputs/...", "duration": 120.5}
+
+# Enhance a single prompt text
+enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
+# Returns: "A breathtaking metropolis with gleaming skyscrapers..."
 ```
 
 **Methods:**
-- `run()`: Execute configurable workflow steps
-- `run_full_cycle()`: Complete pipeline (legacy)
-- `run_inference_only()`: Inference without upscaling
-- `run_upscaling_only()`: Upscale existing output
-- `check_remote_status()`: Check remote system
+- `execute_run(run_dict, prompt_dict, upscale, upscale_weight)`: Execute GPU workflow from database data
+- `run_prompt_upsampling(prompt_text)`: Enhance prompt text using Pixtral AI
+- `check_remote_status()`: Check remote GPU system status
+
+**Key Changes in Service Layer Refactoring:**
+- Removed all JSON file management and PromptSpec/RunSpec dependencies
+- No longer handles data persistence - purely executes on GPU infrastructure
+- Takes database dictionaries as input instead of file paths
+- Returns execution results as dictionaries for service layer to persist
+- Clear separation: data operations handled by WorkflowService
 
 ### SSHManager
 Manages SSH connections to remote instances.

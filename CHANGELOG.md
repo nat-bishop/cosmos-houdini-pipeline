@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Gradio UI Improvements (2025-09-05)
+- **Enhanced Gradio Web Interface**
+  - All 4 control weights now available: visual, edge, depth, segmentation (0.0-1.0 range)
+  - Optional video inputs: color required, depth/segmentation optional
+  - Smart JSON generation: only includes controls with weight > 0
+  - Efficient seek-based log tailing for better performance with large files
+  - Improved prompt details display with full video paths and status indicators
+  - ASCII-safe status indicators for Windows compatibility
+  - Video status shows missing count: "[!] Missing (3)" or "[OK] (3 videos)"
+
+- **Control Weight System**
+  - Independent control weights for all 4 modalities
+  - Weights apply even without input videos (model auto-generates)
+  - Flexible configuration matching NVIDIA Cosmos Transfer approach
+  - Only non-zero weights included in GPU JSON payload
+
+- **Database Import Tool**
+  - New script: scripts/import_json_prompts.py
+  - Imports legacy JSON prompts into database using cosmos CLI
+  - Preserves prompt names, text, and negative prompts
+  - Successfully imported 16 prompts from 2025-09-03 archive
+
 ### Added - Service Layer Architecture Complete
 - **Complete database-first service layer architecture**
   - Database-first approach: all data stored in SQLAlchemy database

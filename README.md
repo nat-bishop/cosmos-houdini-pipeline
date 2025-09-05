@@ -50,6 +50,9 @@ cosmos create run ps_a1b2c3d4
 # Execute the run on GPU
 cosmos inference rs_x9y8z7w6
 
+# Or use the Gradio UI
+cosmos ui
+
 # Check status
 cosmos status
 ```
@@ -188,9 +191,36 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 - **Remote GPU Execution** - SSH-based orchestration with Docker containers
 - **Real-Time Progress** - Granular tracking through all execution stages
 - **Rich CLI Interface** - Database IDs, colored tables, JSON output support
+- **Gradio Web UI** - Interactive web interface for prompt creation and inference
 - **AI Enhancement** - Prompt improvement using Pixtral with full tracking
 - **Query & Search** - List, filter, and search prompts with highlighting
 - **Production Ready** - 453 passing tests, comprehensive error handling
+
+## 🌐 Gradio UI
+
+Launch the interactive web interface:
+```bash
+cosmos ui
+# Opens browser at http://localhost:7860
+```
+
+### Features
+- **Two-Step Workflow**: Create prompts → Run inference with custom weights
+- **Flexible Video Inputs**: Color video required, depth/segmentation optional
+- **All Control Weights**: Configure visual, edge, depth, and segmentation weights (0.0-1.0)
+- **Live Log Streaming**: Real-time Docker output with efficient seek-based tailing
+- **Prompt Management**: View all prompts with video status indicators
+- **Run Tracking**: Monitor inference progress and status
+- **Gallery View**: Browse completed video generations
+- **GPU Status**: Real-time GPU utilization and Docker container monitoring
+
+### Control Weight System
+- **Visual Weight**: Controls visual appearance fidelity
+- **Edge Weight**: Controls edge detection influence
+- **Depth Weight**: Controls depth map influence (auto-generated if not provided)
+- **Segmentation Weight**: Controls semantic segmentation influence (auto-generated if not provided)
+
+Videos are optional except for color - the model will auto-generate depth/segmentation if not provided but weights are still applied.
 
 ## ⚡ Performance
 

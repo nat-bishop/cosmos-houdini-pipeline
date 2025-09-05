@@ -49,17 +49,6 @@ def to_cosmos_inference_json(
         "prompt": prompt_dict.get("prompt_text", ""),
         "negative_prompt": negative_prompt,
         "input_video_path": to_unix_path(inputs.get("video", "")),
-        # Control weights as separate objects per NVIDIA format
-        "vis": {"control_weight": weights.get("vis", 0.25)},
-        "edge": {"control_weight": weights.get("edge", 0.25)},
-        "depth": {
-            "input_control": to_unix_path(inputs.get("depth", "")),
-            "control_weight": weights.get("depth", 0.25),
-        },
-        "seg": {
-            "input_control": to_unix_path(inputs.get("seg", "")),
-            "control_weight": weights.get("seg", 0.25),
-        },
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
         "guidance": execution_config.get("guidance", 7.0),
@@ -67,6 +56,32 @@ def to_cosmos_inference_json(
         "seed": execution_config.get("seed", 42),
         "fps": execution_config.get("fps", 8),
     }
+
+    # Add control configurations only if weight > 0
+    # This matches NVIDIA's approach where controls are optional
+    vis_weight = weights.get("vis", 0.25)
+    if vis_weight > 0:
+        cosmos_json["vis"] = {"control_weight": vis_weight}
+
+    edge_weight = weights.get("edge", 0.25)
+    if edge_weight > 0:
+        cosmos_json["edge"] = {"control_weight": edge_weight}
+
+    depth_weight = weights.get("depth", 0.25)
+    if depth_weight > 0:
+        cosmos_json["depth"] = {"control_weight": depth_weight}
+        # Only add input_control if video path exists
+        depth_path = inputs.get("depth", "")
+        if depth_path:
+            cosmos_json["depth"]["input_control"] = to_unix_path(depth_path)
+
+    seg_weight = weights.get("seg", 0.25)
+    if seg_weight > 0:
+        cosmos_json["seg"] = {"control_weight": seg_weight}
+        # Only add input_control if video path exists
+        seg_path = inputs.get("seg", "")
+        if seg_path:
+            cosmos_json["seg"]["input_control"] = to_unix_path(seg_path)
 
     return cosmos_json
 

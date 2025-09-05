@@ -34,9 +34,12 @@ docker_executor = None
 
 
 def handle_video_uploads(color_file, depth_file, seg_file, name_prefix="ui_upload"):
-    """Handle video file uploads and save in expected structure."""
-    if not all([color_file, depth_file, seg_file]):
-        return None, "Please upload all three video files (color, depth, segmentation)"
+    """Handle video file uploads and save in expected structure.
+
+    Color video is required, depth and segmentation are optional.
+    """
+    if not color_file:
+        return None, "Color video is required"
 
     try:
         # Create directory structure expected by CLI
@@ -44,19 +47,32 @@ def handle_video_uploads(color_file, depth_file, seg_file, name_prefix="ui_uploa
         video_dir = Path(f"inputs/videos/{name_prefix}_{timestamp}")
         video_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save with expected names
+        # Save color video (required)
         color_path = video_dir / "color.mp4"
-        depth_path = video_dir / "depth.mp4"
-        seg_path = video_dir / "segmentation.mp4"
-
         with open(color_path, "wb") as f:
             f.write(color_file)
-        with open(depth_path, "wb") as f:
-            f.write(depth_file)
-        with open(seg_path, "wb") as f:
-            f.write(seg_file)
 
-        return str(video_dir), f"Videos uploaded to {video_dir}"
+        # Save depth video if provided (optional)
+        if depth_file:
+            depth_path = video_dir / "depth.mp4"
+            with open(depth_path, "wb") as f:
+                f.write(depth_file)
+
+        # Save segmentation video if provided (optional)
+        if seg_file:
+            seg_path = video_dir / "segmentation.mp4"
+            with open(seg_path, "wb") as f:
+                f.write(seg_file)
+
+        # Create status message
+        uploaded_files = ["color"]
+        if depth_file:
+            uploaded_files.append("depth")
+        if seg_file:
+            uploaded_files.append("segmentation")
+
+        status = f"Uploaded {', '.join(uploaded_files)} video(s) to {video_dir}"
+        return str(video_dir), status
 
     except Exception as e:
         return None, f"Error uploading videos: {e}"
@@ -74,11 +90,20 @@ def create_prompt_with_videos(prompt_text, negative_prompt, video_dir, name=None
         video_path = Path(video_dir)
 
         # Build inputs dictionary with full paths
+        # Always include color (required), only add depth/seg if they exist
         inputs = {
             "video": str(video_path / "color.mp4"),
-            "depth": str(video_path / "depth.mp4"),
-            "seg": str(video_path / "segmentation.mp4"),
         }
+
+        # Add depth path only if the file exists
+        depth_path = video_path / "depth.mp4"
+        if depth_path.exists():
+            inputs["depth"] = str(depth_path)
+
+        # Add segmentation path only if the file exists
+        seg_path = video_path / "segmentation.mp4"
+        if seg_path.exists():
+            inputs["seg"] = str(seg_path)
 
         # Create prompt using service
         prompt = service.create_prompt(
@@ -128,13 +153,36 @@ def get_prompt_details(prompt_id):
         details += f"**Text:** {prompt['prompt_text']}\n"
         details += f"**Negative:** {prompt.get('parameters', {}).get('negative_prompt', 'None')}\n"
 
-        # Check if videos exist
+        # Show video inputs with full paths and status
         inputs = prompt.get("inputs", {})
         if inputs:
             details += "\n**Video Inputs:**\n"
-            for key, path in inputs.items():
-                exists = "[Yes]" if Path(path).exists() else "[No]"
-                details += f"- {key}: {Path(path).name} {exists}\n"
+
+            # Always show color video (required)
+            color_path = inputs.get("video", "")
+            if color_path:
+                exists = "[OK]" if Path(color_path).exists() else "[MISSING]"
+                details += f"- **Color**: `{color_path}` {exists}\n"
+            else:
+                details += "- **Color**: Not provided [ERROR]\n"
+
+            # Show depth video (optional)
+            depth_path = inputs.get("depth", "")
+            if depth_path:
+                exists = "[OK]" if Path(depth_path).exists() else "[MISSING]"
+                details += f"- **Depth**: `{depth_path}` {exists}\n"
+            else:
+                details += "- **Depth**: Not provided (optional)\n"
+
+            # Show segmentation video (optional)
+            seg_path = inputs.get("seg", "")
+            if seg_path:
+                exists = "[OK]" if Path(seg_path).exists() else "[MISSING]"
+                details += f"- **Segmentation**: `{seg_path}` {exists}\n"
+            else:
+                details += "- **Segmentation**: Not provided (optional)\n"
+        else:
+            details += "\n**Video Inputs:** None provided [ERROR]\n"
 
         return details
 
@@ -143,7 +191,13 @@ def get_prompt_details(prompt_id):
 
 
 def run_inference_on_prompt(
-    prompt_id, vis_weight=0.25, edge_weight=0.25, enable_upscaling=False, upscale_weight=0.5
+    prompt_id,
+    vis_weight=0.25,
+    edge_weight=0.25,
+    depth_weight=0.25,
+    seg_weight=0.25,
+    enable_upscaling=False,
+    upscale_weight=0.5,
 ):
     """Run inference on selected prompt."""
     if not prompt_id:
@@ -153,8 +207,15 @@ def run_inference_on_prompt(
         # Get prompt
         prompt = service.get_prompt(prompt_id)
 
-        # Create run with execution config
-        execution_config = {"weights": {"vis": vis_weight, "edge": edge_weight}}
+        # Create run with execution config with all 4 control weights
+        execution_config = {
+            "weights": {
+                "vis": vis_weight,
+                "edge": edge_weight,
+                "depth": depth_weight,
+                "seg": seg_weight,
+            }
+        }
 
         run = service.create_run(prompt_id=prompt_id, execution_config=execution_config)
 
@@ -180,7 +241,9 @@ def run_inference_on_prompt(
         thread = threading.Thread(target=execute, daemon=True)
         thread.start()
 
-        config_summary = f"Weights: vis={vis_weight}, edge={edge_weight}"
+        config_summary = (
+            f"Weights: vis={vis_weight}, edge={edge_weight}, depth={depth_weight}, seg={seg_weight}"
+        )
         if enable_upscaling:
             config_summary += f", Upscaling: {upscale_weight}"
 
@@ -191,7 +254,11 @@ def run_inference_on_prompt(
 
 
 def tail_log_file(run_id, num_lines=100):
-    """Read last N lines from log file."""
+    """Efficiently read last N lines from log file using seek-based approach.
+
+    This implementation is optimized for large files and only reads the necessary
+    blocks from the end of the file, similar to Nvidia's approach.
+    """
     if not run_id:
         return "No run selected"
 
@@ -202,18 +269,42 @@ def tail_log_file(run_id, num_lines=100):
 
     try:
         with open(log_path, "rb") as f:
-            BLOCK_SIZE = 1024
+            # Start from the end of the file
             f.seek(0, 2)
             file_length = f.tell()
 
             if file_length == 0:
                 return "Starting..."
 
-            seek_pos = max(0, file_length - BLOCK_SIZE * 10)
-            f.seek(seek_pos)
-            content = f.read().decode("utf-8", errors="ignore")
+            # Read blocks from the end until we have enough lines
+            BLOCK_SIZE = 1024
+            blocks = []
+            lines_found = 0
+            block_end_byte = file_length
+            block_number = -1
 
-            lines = content.splitlines()
+            while lines_found < num_lines and block_end_byte > 0:
+                # Calculate how much to read
+                if block_end_byte - BLOCK_SIZE > 0:
+                    # Read a full block
+                    f.seek(block_number * BLOCK_SIZE, 2)
+                    blocks.append(f.read(BLOCK_SIZE))
+                else:
+                    # Read from beginning of file
+                    f.seek(0, 0)
+                    blocks.append(f.read(block_end_byte))
+
+                # Count lines in this block
+                lines_found += blocks[-1].count(b"\n")
+                block_end_byte -= BLOCK_SIZE
+                block_number -= 1
+
+            # Combine blocks in correct order and decode
+            all_text = b"".join(reversed(blocks))
+            text = all_text.decode("utf-8", errors="replace")
+
+            # Return only the last num_lines
+            lines = text.splitlines()
             return "\n".join(lines[-num_lines:])
 
     except Exception as e:
@@ -298,7 +389,7 @@ def delete_run(run_id):
 
 
 def list_prompts_table():
-    """Create prompts table for management."""
+    """Create prompts table for management with improved video status display."""
     prompts = service.list_prompts(limit=100)
 
     if not prompts:
@@ -306,12 +397,28 @@ def list_prompts_table():
 
     data = []
     for prompt in prompts:
-        # Check if videos exist
-        video_status = "N/A"
+        # Check which videos exist and count them
         inputs = prompt.get("inputs", {})
+        missing_videos = []
+        existing_videos = []
+
         if inputs:
-            all_exist = all(Path(path).exists() for path in inputs.values())
-            video_status = "Yes" if all_exist else "No"
+            for video_type, path in inputs.items():
+                if path:
+                    if Path(path).exists():
+                        existing_videos.append(video_type)
+                    else:
+                        missing_videos.append(video_type)
+
+        # Create video status with warning if any missing
+        if missing_videos:
+            # Show warning with count (ASCII-safe for Windows)
+            video_status = f"[!] Missing ({len(missing_videos)})"
+        elif existing_videos:
+            # Show OK with count of videos provided
+            video_status = f"[OK] ({len(existing_videos)} videos)"
+        else:
+            video_status = "No videos"
 
         # Get name from parameters or use default
         name = prompt.get("parameters", {}).get("name", "unnamed")
@@ -389,15 +496,16 @@ def create_interface():
                         gr.Markdown("### Step 1: Create New Prompt")
 
                         with gr.Group():
-                            gr.Markdown("**Upload Video Files** (Required)")
+                            gr.Markdown("**Upload Video Files**")
                             color_upload = gr.File(
-                                label="Color Video (color.mp4)", file_types=["video"]
+                                label="Color Video (color.mp4) - Required", file_types=["video"]
                             )
                             depth_upload = gr.File(
-                                label="Depth Video (depth.mp4)", file_types=["video"]
+                                label="Depth Video (depth.mp4) - Optional", file_types=["video"]
                             )
                             seg_upload = gr.File(
-                                label="Segmentation Video (segmentation.mp4)", file_types=["video"]
+                                label="Segmentation Video (segmentation.mp4) - Optional",
+                                file_types=["video"],
                             )
 
                             upload_btn = gr.Button("📤 Upload Videos", variant="secondary")
@@ -453,6 +561,22 @@ def create_interface():
                                 )
                                 edge_weight = gr.Slider(
                                     label="Edge Weight",
+                                    minimum=0.0,
+                                    maximum=1.0,
+                                    value=0.25,
+                                    step=0.05,
+                                )
+
+                            with gr.Row():
+                                depth_weight = gr.Slider(
+                                    label="Depth Weight",
+                                    minimum=0.0,
+                                    maximum=1.0,
+                                    value=0.25,
+                                    step=0.05,
+                                )
+                                seg_weight = gr.Slider(
+                                    label="Segmentation Weight",
                                     minimum=0.0,
                                     maximum=1.0,
                                     value=0.25,
@@ -524,9 +648,9 @@ def create_interface():
                     fn=get_prompt_details, inputs=[prompt_dropdown], outputs=[prompt_details]
                 )
 
-                def run_and_show_logs(prompt_id, vis, edge, upscale, up_weight):
+                def run_and_show_logs(prompt_id, vis, edge, depth, seg, upscale, up_weight):
                     run_id, status, config = run_inference_on_prompt(
-                        prompt_id, vis, edge, upscale, up_weight
+                        prompt_id, vis, edge, depth, seg, upscale, up_weight
                     )
                     return run_id, status, config, gr.update(visible=bool(run_id))
 
@@ -536,6 +660,8 @@ def create_interface():
                         prompt_dropdown,
                         vis_weight,
                         edge_weight,
+                        depth_weight,
+                        seg_weight,
                         enable_upscaling,
                         upscale_weight,
                     ],

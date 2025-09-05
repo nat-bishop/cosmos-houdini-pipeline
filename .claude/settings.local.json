@@ -3,7 +3,8 @@
     "allow": [
       "Bash(ssh:*)",
       "WebSearch",
-      "Read(//f/Art/cosmos-transfer1/server/**)"
+      "Read(//f/Art/cosmos-transfer1/server/**)",
+      "Read(//f/Art/cosmos-transfer1/**)"
     ],
     "deny": [],
     "ask": []

@@ -163,6 +163,31 @@ Users of the previous UI should note:
 - Maintains separation of concerns
 - Uses proper error handling
 
+## Recent Enhancements (2025-09-05)
+
+### Control Weight System
+- Added all 4 control weights: visual, edge, depth, segmentation
+- Each weight configurable from 0.0 to 1.0
+- Weights apply even without corresponding input videos
+- Model auto-generates depth/segmentation if not provided
+
+### Optional Video Support
+- Color video: Required
+- Depth video: Optional
+- Segmentation video: Optional
+- Smart JSON generation only includes controls with weight > 0
+
+### Performance Improvements
+- Efficient seek-based log tailing for large files
+- Only reads necessary blocks from end of file
+- Similar approach to NVIDIA's implementation
+
+### UI Enhancements
+- Improved video status indicators: "[OK] (3 videos)" or "[!] Missing (2)"
+- Full video paths shown in prompt details
+- ASCII-safe characters for Windows compatibility
+- Better workflow clarity with two-step process
+
 ## Testing Checklist
 
 - [x] Video upload creates correct directory structure
@@ -175,3 +200,6 @@ Users of the previous UI should note:
 - [x] Prompts table displays all prompts
 - [x] Runs table shows run details
 - [x] Error handling for missing videos
+- [x] All 4 control weights functional
+- [x] Optional video support working
+- [x] Seek-based log tailing performant

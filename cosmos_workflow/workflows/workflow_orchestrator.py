@@ -46,6 +46,7 @@ class WorkflowOrchestrator:
         prompt_dict: dict[str, Any],
         upscale: bool = False,
         upscale_weight: float = 0.5,
+        **kwargs,
     ) -> dict[str, Any]:
         """Execute a run on GPU infrastructure.
 
@@ -57,6 +58,7 @@ class WorkflowOrchestrator:
             prompt_dict: Prompt data from database
             upscale: Whether to run upscaling
             upscale_weight: Weight for upscaling (0.0-1.0)
+            **kwargs: Additional options (e.g., log_path for logging)
 
         Returns:
             Dictionary with execution results including output paths
@@ -65,6 +67,21 @@ class WorkflowOrchestrator:
 
         start_time = datetime.now(timezone.utc)
         prompt_name = f"run_{run_dict['id']}"
+        run_id = run_dict["id"]
+
+        # Create log directory and file if UI is being used
+        log_path = None
+        if kwargs.get("enable_logging", False):
+            log_dir = Path("logs/runs")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_path = log_dir / f"{run_id}.log"
+
+            # Write initial info to log
+            with open(log_path, "w") as f:
+                f.write(f"[{datetime.now(timezone.utc)}] Starting run {run_id}\n")
+                f.write(f"Prompt: {prompt_dict['prompt_text']}\n")
+                f.write(f"Model: {run_dict.get('model_type', 'transfer')}\n")
+                f.write("=" * 50 + "\n")
 
         try:
             with self.ssh_manager:
@@ -114,7 +131,14 @@ class WorkflowOrchestrator:
 
                 # Run inference
                 logger.info("Running inference on GPU for run %s", run_dict["id"])
-                self.docker_executor.run_inference(prompt_file, num_gpu=1, cuda_devices="0")
+                if log_path:
+                    # Use logging version if log path is provided
+                    self.docker_executor.run_inference_with_logging(
+                        prompt_file, num_gpu=1, cuda_devices="0", log_path=str(log_path)
+                    )
+                else:
+                    # Use standard version without logging
+                    self.docker_executor.run_inference(prompt_file, num_gpu=1, cuda_devices="0")
 
                 # Run upscaling if requested
                 if upscale:
@@ -146,6 +170,10 @@ class WorkflowOrchestrator:
 
         except Exception as e:
             logger.error("Execution failed for run %s: %s", run_dict["id"], e)
+            # Log errors if logging is enabled
+            if log_path and log_path.exists():
+                with open(log_path, "a") as f:
+                    f.write(f"\n[ERROR] {e}\n")
             return {
                 "status": "failed",
                 "error": str(e),

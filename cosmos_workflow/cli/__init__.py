@@ -11,6 +11,7 @@ from .prepare import prepare
 from .search import search_command
 from .show import show_command
 from .status import status
+from .ui import ui
 
 
 @click.group(
@@ -49,6 +50,7 @@ cli.add_command(prepare)
 cli.add_command(search_command)
 cli.add_command(show_command)
 cli.add_command(status)
+cli.add_command(ui)
 
 
 def main():

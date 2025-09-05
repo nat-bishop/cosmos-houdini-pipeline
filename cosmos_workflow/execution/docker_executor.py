@@ -45,6 +45,76 @@ class DockerExecutor:
 
         logger.info("Inference completed successfully for %s", prompt_name)
 
+    def run_inference_with_logging(
+        self,
+        prompt_file: Path,
+        num_gpu: int = 1,
+        cuda_devices: str = "0",
+        log_path: str | None = None,
+    ) -> None:
+        """Run inference with optional log file capture.
+
+        Args:
+            prompt_file: Name of prompt file (without path)
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs to use
+            log_path: Optional path to write logs to
+        """
+
+        prompt_name = prompt_file.stem
+        logger.info("Running inference for %s", prompt_name)
+
+        # Create output directory
+        remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
+        self.remote_executor.create_directory(remote_output_dir)
+
+        # Execute inference
+        logger.info("Starting inference...")
+        self._run_inference_script(prompt_name, num_gpu, cuda_devices)
+
+        # If log_path provided, capture Docker logs
+        if log_path:
+            # Get container ID (most recent for our image)
+            cmd = f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"'
+            container_id = self.ssh_manager.execute_command_success(
+                cmd, stream_output=False
+            ).strip()
+
+            if container_id:
+                logger.info("Capturing logs from container %s to %s", container_id, log_path)
+
+                # Stream logs to file
+                with open(log_path, "w") as log_file:
+                    # Get logs (not following, just current state)
+                    logs_cmd = f"sudo docker logs {container_id}"
+                    exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                        logs_cmd, timeout=60, stream_output=False
+                    )
+
+                    # Write to file
+                    log_file.write(stdout)
+                    if stderr:
+                        log_file.write(f"\n=== STDERR ===\n{stderr}")
+                    log_file.flush()
+
+                    # Now follow new logs
+                    follow_cmd = f"sudo docker logs -f {container_id}"
+
+                    # Custom streaming to file
+                    stdin, stdout_stream, stderr_stream = self.ssh_manager.ssh_client.exec_command(
+                        follow_cmd
+                    )
+
+                    # Stream to file in real-time
+                    for line in stdout_stream:
+                        line = line.strip()
+                        if line:
+                            print(f"  {line}")  # Console
+                            log_file.write(f"{line}\n")
+                            log_file.flush()  # Real-time
+
+        logger.info("Inference completed for %s", prompt_name)
+
     def run_upscaling(
         self,
         prompt_file: Path,

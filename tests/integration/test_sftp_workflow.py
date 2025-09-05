@@ -3,7 +3,6 @@ Integration tests for SFTP file transfer workflow.
 Tests the complete upload/download cycle with mocked SSH/SFTP connections.
 """
 
-import json
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -117,47 +116,6 @@ class TestSFTPWorkflow:
         assert mock_sftp_client.get.call_count == 2  # 2 files (output.mp4, metadata.json)
 
     @pytest.mark.integration
-    def test_upload_prompt_spec_workflow(
-        self,
-        file_transfer_manager,
-        mock_ssh_manager,
-        mock_sftp_client,
-        sample_prompt_spec,
-        temp_dir,
-    ):
-        """Test complete workflow of uploading a PromptSpec and its videos."""
-        # Setup
-        spec_file = temp_dir / "prompt_spec.json"
-        spec_file.write_text(json.dumps(sample_prompt_spec.to_dict()))
-
-        # Create mock video files
-        for video_type in ["color", "depth", "segmentation"]:
-            video_file = temp_dir / f"{video_type}.mp4"
-            video_file.write_text(f"mock {video_type} video data")
-
-        mock_ssh_manager.get_sftp.return_value.__enter__ = lambda self: mock_sftp_client
-        mock_sftp_client.stat.side_effect = FileNotFoundError()  # Dirs don't exist
-
-        # Execute workflow
-        # 1. Upload spec file
-        spec_uploaded = file_transfer_manager.upload_file(
-            str(spec_file), "/remote/test/inputs/prompt_spec.json"
-        )
-
-        # 2. Upload video files
-        videos_uploaded = True
-        for video_type in ["color", "depth", "segmentation"]:
-            result = file_transfer_manager.upload_file(
-                str(temp_dir / f"{video_type}.mp4"), f"/remote/test/inputs/videos/{video_type}.mp4"
-            )
-            videos_uploaded = videos_uploaded and result
-
-        # Verify
-        assert spec_uploaded is True
-        assert videos_uploaded is True
-        assert mock_sftp_client.put.call_count == 4  # 1 spec + 3 videos
-
-    @pytest.mark.integration
     def test_download_inference_results(self, file_transfer_manager, mock_ssh_manager, temp_dir):
         """Test downloading inference results including video and logs."""
         # Setup
@@ -223,8 +181,6 @@ class TestSFTPWorkflow:
         windows_path = temp_dir / "test\\subdir\\file.txt"
         windows_path.parent.mkdir(parents=True, exist_ok=True)
         windows_path.write_text("test content")
-
-        remote_path = "/remote/test/subdir/file.txt"
 
         # Get the mock sftp client from the fixture
         mock_sftp_client = mock_ssh_manager._sftp_client

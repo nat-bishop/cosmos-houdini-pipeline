@@ -1,29 +1,16 @@
 """Create command group for prompts and run specifications."""
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 import click
 
-from cosmos_workflow.prompts.prompt_spec_manager import PromptSpecManager
-from cosmos_workflow.prompts.schemas import (
-    DirectoryManager,
-    ExecutionStatus,
-    PromptSpec,
-    RunSpec,
-    SchemaUtils,
-)
+# These imports are for mocking in tests
+from cosmos_workflow.services.workflow_service import PromptNotFoundError
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 from .base import CLIContext, handle_errors
-from .completions import complete_prompt_specs, complete_video_dirs
-from .helpers import (
-    console,
-    display_next_step,
-    display_success,
-    format_id,
-    format_weights,
-)
+from .completions import complete_video_dirs
+from .helpers import console, display_next_step, display_success, format_id
 
 
 @click.group()
@@ -31,7 +18,7 @@ from .helpers import (
 def create(ctx):
     """Create prompts and run specifications.
 
-    Use these commands to create the JSON specifications needed for
+    Use these commands to create prompts and runs in the database for
     Cosmos Transfer inference and upscaling workflows.
     """
 
@@ -54,7 +41,7 @@ def create(ctx):
 def create_prompt(ctx, prompt_text, video_dir, name, negative):
     r"""Create a new prompt specification.
 
-    Creates a PromptSpec JSON file for use with Cosmos Transfer inference.
+    Creates a prompt in the database for use with Cosmos Transfer inference.
     The VIDEO_DIR must contain the video files (color.mp4, depth.mp4, segmentation.mp4).
     Use 'cosmos prompt-enhance' to create enhanced versions of existing prompts.
 
@@ -73,61 +60,68 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
             console.print(f"[cyan]Generated name:[/cyan] {name}")
 
         # Build video paths from directory
-        from pathlib import Path
-
         video_dir_path = Path(video_dir)
-        video_path = str(video_dir_path / "color.mp4")
 
-        # Build control inputs from same directory
-        control_inputs_dict = {
-            "depth": str(video_dir_path / "depth.mp4"),
-            "seg": str(video_dir_path / "segmentation.mp4"),
+        # Validate video files exist
+        color_path = video_dir_path / "color.mp4"
+        depth_path = video_dir_path / "depth.mp4"
+        seg_path = video_dir_path / "segmentation.mp4"
+
+        missing_files = []
+        if not color_path.exists():
+            missing_files.append("color.mp4")
+        if not depth_path.exists():
+            missing_files.append("depth.mp4")
+        if not seg_path.exists():
+            missing_files.append("segmentation.mp4")
+
+        if missing_files:
+            raise FileNotFoundError(
+                f"Missing required video files in {video_dir}: {', '.join(missing_files)}"
+            )
+
+        # Build inputs dictionary
+        inputs = {
+            "video": str(color_path),
+            "depth": str(depth_path),
+            "seg": str(seg_path),
         }
 
-        # Get config and create manager
-        config_manager = ctx_obj.get_config_manager()
-        local_config = config_manager.get_local_config()
+        # Build parameters
+        parameters = {
+            "negative_prompt": negative,
+            "name": name,
+        }
 
-        dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
-        dir_manager.ensure_directories_exist()
+        # Get service and create prompt
+        try:
+            # Use the get_workflow_service from context
+            service = ctx_obj.get_workflow_service()
 
-        # Use PromptSpecManager to create the spec
-        spec_manager = PromptSpecManager(dir_manager)
-
-        # Create the prompt spec using the manager
-        # Note: The manager will save it automatically
-        prompt_spec = spec_manager.create_prompt_spec(
-            name=name,
-            prompt_text=prompt_text,
-            negative_prompt=negative,
-            input_video_path=video_path,
-            control_inputs=control_inputs_dict,
-            is_upsampled=False,
-            parent_prompt_text=None,
-        )
-
-        # Get the file path where it was saved
-        timestamp = prompt_spec.timestamp
-        file_path = dir_manager.get_prompt_file_path(name, timestamp, prompt_spec.id)
+            # Create the prompt using service
+            prompt = service.create_prompt(
+                model_type="transfer",
+                prompt_text=prompt_text,
+                inputs=inputs,
+                parameters=parameters,
+            )
+        except Exception as e:
+            raise Exception(f"Database error: {e!s}")
 
     # Display success with rich formatting
     results_data = {
-        "ID": format_id(prompt_spec.id),
+        "ID": format_id(prompt["id"]),
         "Name": name,
-        "File": str(file_path),
-        "Video": video_path,
+        "Model Type": prompt["model_type"],
+        "Video": str(color_path),
     }
 
     display_success("Prompt created successfully!", results_data)
-    display_next_step(f"cosmos run {file_path}")
+    display_next_step(f"cosmos create run {prompt['id']}")
 
 
 @create.command("run")
-@click.argument(
-    "prompt_spec_path",
-    type=click.Path(exists=True, path_type=Path),
-    shell_complete=complete_prompt_specs,
-)
+@click.argument("prompt_id")
 @click.option(
     "--weights",
     "-w",
@@ -143,20 +137,26 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
 @click.option("--output", help="Custom output path")
 @click.pass_context
 @handle_errors
-def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, output):
+def create_run(ctx, prompt_id, weights, steps, guidance, seed, fps, output):
     r"""Create a run specification for a prompt.
+
+    Creates a run in the database for the specified prompt ID.
+    The run can then be executed using 'cosmos inference'.
 
     \b
     Examples:
-      cosmos create run prompt_spec.json
-      cosmos create run prompt_spec.json --weights 0.3 0.3 0.2 0.2
-      cosmos create run prompt_spec.json --steps 50 --guidance 8.0
+      cosmos create run ps_abc123
+      cosmos create run ps_abc123 --weights 0.3 0.3 0.2 0.2
+      cosmos create run ps_abc123 --steps 50 --guidance 8.0
     """
     ctx_obj: CLIContext = ctx.obj
 
     with console.status("[bold green]Creating run specification..."):
-        # Load the PromptSpec
-        prompt_spec = PromptSpec.load(Path(prompt_spec_path))
+        # Validate weights
+        if not all(0 <= w <= 1 for w in weights):
+            raise ValueError("All weights must be between 0 and 1")
+        if not (0.99 <= sum(weights) <= 1.01):  # Allow small floating point error
+            raise ValueError(f"Weights must sum to 1.0, got {sum(weights)}")
 
         # Build control weights
         weights_dict = {
@@ -166,8 +166,9 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
             "seg": weights[3],
         }
 
-        # Build parameters
-        parameters = {
+        # Build execution config
+        execution_config = {
+            "weights": weights_dict,
             "num_steps": steps,
             "guidance": guidance,
             "sigma_max": 70.0,
@@ -177,42 +178,41 @@ def create_run_spec(ctx, prompt_spec_path, weights, steps, guidance, seed, fps, 
             "seed": seed,
         }
 
-        # Generate unique run ID
-        run_id = SchemaUtils.generate_run_id(prompt_spec.id, weights_dict, parameters)
+        if output:
+            execution_config["output_path"] = output
 
-        # Build output path
-        output_path = output or f"outputs/{prompt_spec.name}_{run_id}"
+        # Get service
+        try:
+            # Use the get_workflow_service from context
+            service = ctx_obj.get_workflow_service()
 
-        # Create RunSpec
-        timestamp = datetime.now(timezone.utc).isoformat() + "Z"
-        run_spec = RunSpec(
-            id=run_id,
-            prompt_id=prompt_spec.id,
-            name=f"{prompt_spec.name}_{run_id}",
-            control_weights=weights_dict,
-            parameters=parameters,
-            timestamp=timestamp,
-            execution_status=ExecutionStatus.PENDING,
-            output_path=output_path,
-        )
+            # Get prompt to verify it exists
+            prompt = service.get_prompt(prompt_id)
+            if not prompt:
+                raise ValueError(f"Prompt not found: {prompt_id}")
 
-        # Save to file
-        config_manager = ctx_obj.get_config_manager()
-        local_config = config_manager.get_local_config()
-
-        dir_manager = DirectoryManager(local_config.prompts_dir, local_config.runs_dir)
-        dir_manager.ensure_directories_exist()
-
-        file_path = dir_manager.get_run_file_path(prompt_spec.name, timestamp, run_id)
-        run_spec.save(file_path)
+            # Create the run
+            run = service.create_run(
+                prompt_id=prompt_id,
+                execution_config=execution_config,
+                metadata={},
+            )
+        except PromptNotFoundError:
+            raise ValueError(f"Prompt not found: {prompt_id}")
+        except ValueError:
+            raise  # Re-raise validation errors as-is
+        except Exception as e:
+            raise Exception(f"Database error: {e!s}")
 
     # Display success
+    from .helpers import format_weights
+
     results_data = {
-        "Run ID": format_id(run_id),
-        "Prompt": prompt_spec.name,
-        "File": str(file_path),
+        "Run ID": format_id(run["id"]),
+        "Prompt": prompt.get("parameters", {}).get("name", prompt_id),
         "Weights": format_weights(weights_dict),
+        "Steps": steps,
     }
 
-    display_success("Run specification created!", results_data)
-    display_next_step(f"cosmos run {file_path}")
+    display_success("Run created successfully!", results_data)
+    display_next_step(f"cosmos inference {run['id']}")

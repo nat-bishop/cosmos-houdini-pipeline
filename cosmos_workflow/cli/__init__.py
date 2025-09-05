@@ -6,7 +6,10 @@ from .base import CLIContext, ensure_utf8_encoding
 from .create import create
 from .enhance import prompt_enhance
 from .inference import inference
+from .list_commands import list_group
 from .prepare import prepare
+from .search import search_command
+from .show import show_command
 from .status import status
 
 
@@ -40,8 +43,11 @@ def cli(ctx, verbose):
 # Register all commands
 cli.add_command(create)
 cli.add_command(inference)
+cli.add_command(list_group)
 cli.add_command(prompt_enhance)
 cli.add_command(prepare)
+cli.add_command(search_command)
+cli.add_command(show_command)
 cli.add_command(status)
 
 

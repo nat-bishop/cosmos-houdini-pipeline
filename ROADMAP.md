@@ -80,6 +80,63 @@
   - Integrate with CI/CD pipeline for ongoing maintenance
   - Focus on single entry point (CLI) to identify truly unused code
 
+- [ ] **Review and standardize CLI defaults architecture**
+  - Audit all CLI commands for sensible defaults (e.g., --resolution behavior)
+  - Determine whether defaults should be at CLI level vs business logic level
+  - Check other system defaults beyond CLI (config files, environment variables)
+  - Ensure consistent user experience across all commands
+  - Document default value rationale and override mechanisms
+
+- [x] **Fixed overfit-verifier agent scope and clarified TDD workflow**
+
+  **Changes Made (2025-09-04):**
+  - Updated Gate 1 to emphasize behavioral testing and real implementations
+  - Clarified overfit-verifier to only check for hardcoded test values via static analysis
+  - Added explicit "do NOT generate test scripts" to both agent and command
+  - Removed "Suggest Edge Cases" section that was expanding scope
+  - Made clear distinction: overfitting = memorized tests, not missing features
+
+  **Original Issues:**
+  - Internal vs external verification not clearly distinguished in workflow
+  - Claude mistakenly tries to write EXTERNAL reports (should only check if they exist)
+  - Agent name doesn't clarify it's for internal self-checking only
+  - CLAUDE.md workflow unclear about who creates EXTERNAL_overfit_check.md
+
+  **Scope Creep Problems:**
+  - Agent definition includes non-overfitting concerns:
+    - Line 13: "Missing edge case handling" (feature completeness, not overfitting)
+    - Line 26: "Missing validation/error handling" (code quality, not overfitting)
+    - Lines 27-32: "Suggest Edge Cases" (test improvement, not overfitting)
+  - Claude's prompts to agent expand scope further (transaction handling, session management)
+  - Agent performing general code review instead of focused overfitting detection
+
+  **What Agent SHOULD Check:**
+  - Hardcoded test values (e.g., `if input == "test": return expected`)
+  - Conditional logic for specific test cases
+  - Solutions that memorize rather than compute
+  - Code that would fail with slight input variations
+
+  **What Agent Should NOT Check:**
+  - Best practices (import placement)
+  - Performance considerations (hash length, concurrency)
+  - Missing features not tested
+  - Code style issues
+  - Database transaction patterns
+
+  **External Verifier Behavior:**
+  - Currently generates custom Python test scripts to detect overfitting
+  - Question: Is generating test scripts best practice vs just analyzing code?
+  - Scripts left in workspace - should they be cleaned up?
+  - May be overengineering - static analysis might suffice
+
+  **Recommended Solutions:**
+  - Rename internal agent to `tdd-overfitting-detector` (clarify internal role)
+  - Remove scope creep from agent definition (edge cases, validation, etc.)
+  - Add explicit "You do NOT evaluate" section to agent
+  - Clarify: Internal agent for self-check, external human verification separate
+  - External verifier should consider static analysis over test generation
+  - Add workflow clarification: Claude checks for report, never creates it
+
 ## Priority 2: Features & Enhancements
 
 ### Performance Optimization

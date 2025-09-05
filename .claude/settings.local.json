@@ -1,29 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pytest:*)",
-      "Bash(python -m pytest:*)",
-      "Bash(ruff:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git show:*)",
-      "Bash(dir:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(timeout:*)",
-      "Bash(pre-commit:*)",
+      "Bash(ssh:*)",
       "WebSearch",
-      "Bash(test:*)",
-      "Bash(time pytest:*)",
-      "Bash(gh run list:*)",
-      "Bash(gh run view:*)",
-      "Bash(mypy:*)",
-      "Bash(cosmos:*)"
+      "Read(//f/Art/cosmos-transfer1/server/**)"
     ],
     "deny": [],
     "ask": []

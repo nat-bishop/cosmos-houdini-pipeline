@@ -29,30 +29,54 @@ pre-commit run --all-files
 
 Follow these 6 gates for every feature:
 
-1. **Write Tests First** - Real tests, no mocks
+1. **Write Tests First** - Behavioral tests that define the contract, minimal mocking
 2. **Verify Tests Fail** - They should fail initially
-3. **Commit Tests** - Use commit-handler subagent
-4. **Make Tests Pass** - Write implementation
-5. **Document & Commit** - Use doc-drafter & commit-handler
-6. **Code Review** - Use code-reviewer subagent
+3. **Commit Tests** - Tests are the contract, commit them unchanged
+4. **Make Tests Pass** - Implement minimal code to pass all tests
+5. **Document & Commit** - Update documentation to reflect changes
+6. **Code Review** - Comprehensive review including security and maintainability
+
+**Current Testing Approach:**
+- **Service Layer Focus**: Test business logic through WorkflowService methods
+- **Database Integration**: Test actual database operations with SQLAlchemy
+- **CLI Behavior**: Test command behavior, not implementation details
+- **Minimal Mocking**: Mock only external dependencies (SSH, Docker, file system)
+- **No Test Stubs**: All tests are real, no placeholder or stub implementations
 
 ## Testing
+
+The project uses a comprehensive testing strategy with 453 passing tests covering the service layer architecture:
 
 ```bash
 # Run all tests
 pytest
 
-# With coverage
-pytest --cov=cosmos_workflow
+# With coverage (current: 80%+)
+pytest --cov=cosmos_workflow --cov-report=html
+
+# Run specific test categories
+pytest tests/unit/database/          # Database model tests
+pytest tests/unit/services/          # Service layer tests
+pytest tests/unit/cli/               # CLI command tests
+pytest tests/integration/            # Integration tests
 
 # Fast unit tests only
-pytest -m unit
+pytest tests/unit/ -v
 
-# Specific file
-pytest tests/unit/test_ssh_manager.py
+# Specific test file
+pytest tests/unit/services/test_workflow_service.py -v
 ```
 
-Coverage requirement: 80% minimum
+**Test Architecture:**
+- **Database Tests**: 49 tests covering models, connections, validation
+- **Service Tests**: 64 tests covering WorkflowService business logic
+- **CLI Tests**: Integration tests for database-first command behavior
+- **Integration Tests**: End-to-end workflows including SSH and Docker execution
+
+**Coverage Requirements:**
+- Minimum: 80% overall coverage
+- New features: 100% coverage requirement
+- Critical paths: Database operations, CLI commands, GPU execution
 
 ## Code Quality
 
@@ -87,11 +111,15 @@ bandit -r cosmos_workflow/
 ```
 
 ### Code Conventions
-- Use project wrappers: `SSHManager()` not `paramiko.SSHClient()`
-- Paths: `Path(a) / b` not `os.path.join(a, b)`
-- Logging: `logger.info("%s", var)` not f-strings
-- Always add type hints and docstrings
-- Catch specific exceptions
+- **Service Layer**: Use `WorkflowService` for all data operations, not direct database access
+- **Database-First**: Work with database IDs (ps_xxx, rs_xxx), not JSON files
+- **Wrappers**: Use project wrappers: `SSHManager()` not `paramiko.SSHClient()`
+- **Paths**: `Path(a) / b` not `os.path.join(a, b)`
+- **Logging**: `logger.info("%s", var)` not f-strings (parameterized logging)
+- **Type Hints**: Required for all public functions and methods
+- **Docstrings**: Google-style docstrings with Args/Returns/Raises
+- **Exceptions**: Catch specific exceptions, never bare `except:`
+- **Architecture**: Clear separation - service layer (data) vs orchestrator (execution)
 
 ## Debugging
 
@@ -106,7 +134,13 @@ ssh -i ~/.ssh/key.pem ubuntu@192.222.52.92
 **Import Errors:**
 ```bash
 # Verify package is installed
-python -c "import cosmos_workflow"
+python -c "import cosmos_workflow; print('✓ Package imported successfully')"
+
+# Test database connection
+python -c "from cosmos_workflow.database import init_database; init_database(); print('✓ Database initialized')"
+
+# Test service layer
+python -c "from cosmos_workflow.services import WorkflowService; print('✓ Service layer imported')"
 ```
 
 **Test Failures:**
@@ -116,6 +150,15 @@ pytest -xvs tests/failing_test.py
 
 # Debug with pdb
 pytest --pdb tests/failing_test.py
+
+# Test specific service methods
+pytest -k "test_create_prompt" -v
+
+# Test database operations only
+pytest tests/unit/database/ -v
+
+# Check test coverage for specific module
+pytest --cov=cosmos_workflow.services --cov-report=term-missing
 ```
 
 ### Useful Commands
@@ -139,6 +182,34 @@ Use these for TDD workflow:
 - `code-reviewer` - Review code quality
 - `doc-drafter` - Update documentation
 - `commit-handler` - Create clean commits
+
+## Concurrent Verification Pattern
+
+**Key Insight:** Implementation sessions develop "test-passing bias" - fresh verification catches what you've become blind to.
+
+### Quick Start
+
+In a NEW Claude Code session, use slash commands:
+- `/verify-overfit` - Run independent overfit verification (Gate 4)
+- `/verify-review` - Run independent code review (Gate 6)
+
+Reports are saved to `.claude/workspace/verification/EXTERNAL_*.md` for the main session to check.
+
+### Why It Works
+
+In our database feature, concurrent verification found critical bugs the main session missed:
+- Connection closing didn't actually prevent usage
+- Missing input validation and security checks
+- Tests modified to pass rather than fixing bugs
+- Score: 3/10 vs biased 7/10
+
+### When to Use
+
+- **Always:** Security-sensitive code
+- **Recommended:** Multi-file features
+- **Optional:** Simple bug fixes
+
+The main session checks for these external reports at Gates 4 and 6.
 
 ## Commit Messages
 

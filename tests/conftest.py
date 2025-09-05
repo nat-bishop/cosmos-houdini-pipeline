@@ -2,16 +2,20 @@
 Shared pytest fixtures and configuration for all tests.
 """
 
-import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from cosmos_workflow.config.config_manager import ConfigManager, LocalConfig, RemoteConfig
-from cosmos_workflow.prompts.schemas import ExecutionStatus, PromptSpec, RunSpec
+# Import only database fixtures - NO compatibility classes
+from tests.fixtures.database_fixtures import test_service  # noqa: F401
+from tests.fixtures.mocks import (
+    create_mock_ai_generator,
+    create_mock_config_manager,
+    create_mock_docker_executor,
+    create_mock_file_transfer,
+    create_mock_ssh_manager,
+)
 
 # --- Configuration Fixtures ---
 
@@ -26,102 +30,59 @@ def temp_dir():
 @pytest.fixture
 def mock_config_manager(temp_dir):
     """Create a mock ConfigManager with test configuration."""
-    config_manager = Mock(spec=ConfigManager)
-
-    # Mock remote config
-    remote_config = RemoteConfig(
-        host="test-host",
-        port=22,
-        user="test-user",
-        ssh_key=str(temp_dir / "test_key.pem"),
-        remote_dir="/remote/test",
-        docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest",
-    )
-
-    # Mock local config
-    local_config = LocalConfig(
-        prompts_dir=temp_dir / "prompts",
-        runs_dir=temp_dir / "runs",
-        outputs_dir=temp_dir / "outputs",
-        videos_dir=temp_dir / "videos",
-        notes_dir=temp_dir / "notes",
-    )
-
-    config_manager.get_remote_config.return_value = remote_config
-    config_manager.get_local_config.return_value = local_config
-    config_manager.config_path = temp_dir / "config.toml"
-
-    return config_manager
+    return create_mock_config_manager(temp_dir)
 
 
 @pytest.fixture
 def mock_ssh_manager():
     """Create a mock SSHManager."""
-    ssh_manager = MagicMock()
-    ssh_manager.execute_command.return_value = (0, "Success", "")
-    ssh_manager.execute_command_success.return_value = (0, "Success", "")
-    ssh_manager.is_connected.return_value = True
-
-    # Add get_sftp context manager mock with a persistent sftp client
-    mock_sftp = MagicMock()
-    mock_sftp.put = MagicMock()
-    mock_sftp.get = MagicMock()
-    mock_sftp.mkdir = MagicMock()
-    mock_sftp.listdir = MagicMock(return_value=[])
-    mock_sftp.listdir_attr = MagicMock(return_value=[])
-    mock_sftp.stat = MagicMock(side_effect=FileNotFoundError())
-
-    ssh_manager.get_sftp.return_value.__enter__ = lambda self: mock_sftp
-    ssh_manager.get_sftp.return_value.__exit__ = lambda self, *args: None
-    ssh_manager._sftp_client = mock_sftp  # Store reference for tests to access
-
-    return ssh_manager
+    return create_mock_ssh_manager()
 
 
 @pytest.fixture
 def mock_file_transfer():
     """Create a mock FileTransferManager."""
-    file_transfer = MagicMock()
-    file_transfer.upload_file.return_value = True
-    file_transfer.upload_directory.return_value = True
-    file_transfer.download_directory.return_value = True
-    return file_transfer
+    return create_mock_file_transfer()
 
 
 # --- Schema Fixtures ---
 
 
 @pytest.fixture
-def sample_prompt_spec(temp_dir):
-    """Create a sample PromptSpec for testing."""
-    return PromptSpec(
-        id="test_ps_123",
-        name="test_scene",
-        prompt="A futuristic city",
-        negative_prompt="blurry, dark",
-        input_video_path=str(temp_dir / "test_video.mp4"),
-        control_inputs={
+def sample_prompt(test_service, temp_dir):  # noqa: F811
+    """Create a sample prompt in the database.
+
+    Returns a dict with database fields.
+    No compatibility hacks - tests should use the actual fields.
+    """
+    return test_service.create_prompt(
+        model_type="transfer",
+        prompt_text="A futuristic city",
+        inputs={
+            "video": str(temp_dir / "test_video.mp4"),
             "depth": str(temp_dir / "depth.mp4"),
-            "segmentation": str(temp_dir / "segmentation.mp4"),
+            "seg": str(temp_dir / "segmentation.mp4"),
         },
-        timestamp=datetime.now().isoformat(),
-        is_upsampled=False,
-        parent_prompt_text=None,
+        parameters={"negative_prompt": "blurry, dark", "fps": 24},
     )
 
 
 @pytest.fixture
-def sample_run_spec(sample_prompt_spec):
-    """Create a sample RunSpec for testing."""
-    return RunSpec(
-        id="test_rs_456",
-        prompt_id=sample_prompt_spec.id,
-        name="test_run",
-        control_weights={"depth": 0.3, "segmentation": 0.4},
-        parameters={"num_steps": 35, "guidance": 8.0, "seed": 42},
-        timestamp=datetime.now().isoformat(),
-        execution_status=ExecutionStatus.PENDING,
-        output_path="outputs/test_run",
+def sample_run(test_service, sample_prompt):  # noqa: F811
+    """Create a sample run in the database.
+
+    Returns a dict with database fields.
+    No compatibility hacks - tests should use the actual fields.
+    """
+    return test_service.create_run(
+        prompt_id=sample_prompt["id"],
+        execution_config={
+            "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.3, "seg": 0.4},
+            "num_steps": 35,
+            "guidance": 8.0,
+            "seed": 42,
+        },
+        metadata={"purpose": "test_run"},
     )
 
 
@@ -164,59 +125,20 @@ def sample_video_files(temp_dir):
 @pytest.fixture
 def mock_docker_executor():
     """Create a mock DockerExecutor."""
-    executor = MagicMock()
-    executor.run_inference.return_value = (0, "Inference complete", "")
-    executor.run_upsampling.return_value = (0, "Upsampling complete", "")
-    return executor
+    return create_mock_docker_executor()
 
 
 @pytest.fixture
 def mock_ai_generator():
     """Create a mock AI description generator."""
-    generator = MagicMock()
-    generator.generate_description.return_value = "A modern architectural scene"
-    generator.generate_name.return_value = "modern_architecture"
-    return generator
+    return create_mock_ai_generator()
 
 
 # --- Test Data Factories ---
 
 
-@pytest.fixture
-def create_test_spec(temp_dir):
-    """Factory for creating test spec files."""
-
-    def _create_spec(spec_type="prompt", **kwargs):
-        spec_dir = temp_dir / f"{spec_type}s"
-        spec_dir.mkdir(exist_ok=True)
-
-        if spec_type == "prompt":
-            spec = PromptSpec(
-                id=kwargs.get("id", "test_ps_001"),
-                name=kwargs.get("name", "test"),
-                prompt=kwargs.get("prompt", "Test prompt"),
-                negative_prompt=kwargs.get("negative_prompt", ""),
-                input_video_path=kwargs.get("input_video_path", "test.mp4"),
-                control_inputs=kwargs.get("control_inputs", {}),
-                timestamp=kwargs.get("timestamp", datetime.now().isoformat()),
-            )
-        else:  # run spec
-            spec = RunSpec(
-                id=kwargs.get("id", "test_rs_001"),
-                prompt_id=kwargs.get("prompt_id", "test_ps_001"),
-                name=kwargs.get("name", "test_run"),
-                control_weights=kwargs.get("control_weights", {}),
-                parameters=kwargs.get("parameters", {}),
-                timestamp=kwargs.get("timestamp", datetime.now().isoformat()),
-                execution_status=kwargs.get("execution_status", ExecutionStatus.PENDING),
-                output_path=kwargs.get("output_path", "outputs/test"),
-            )
-
-        spec_file = spec_dir / f"{spec.id}.json"
-        spec_file.write_text(json.dumps(spec.to_dict(), indent=2))
-        return spec_file, spec
-
-    return _create_spec
+# Removed create_test_spec factory - it was maintaining old compatibility
+# Tests should create database objects directly using test_service
 
 
 # --- Pytest Markers ---

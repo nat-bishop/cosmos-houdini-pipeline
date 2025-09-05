@@ -23,23 +23,44 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# Load KeyBERT and SBERT (required)
-try:
-    from keybert import KeyBERT
-    from sentence_transformers import SentenceTransformer
+# Lazy-loaded globals for KeyBERT
+_kw_model = None
+_keybert_available = None
 
-    # Use a small, fast model as recommended
-    MODEL_NAME = "all-MiniLM-L6-v2"
-    sentence_model = SentenceTransformer(MODEL_NAME)
-    kw_model = KeyBERT(model=sentence_model)
-    logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
-except ImportError as e:
-    error_msg = (
-        "KeyBERT is required for smart naming functionality. "
-        "Please install it with: pip install keybert sentence-transformers"
-    )
-    logger.error(error_msg)
-    raise ImportError(error_msg) from e
+
+def _get_keybert_model():
+    """Lazy-load KeyBERT model on first use."""
+    global _kw_model, _keybert_available
+
+    if _keybert_available is False:
+        # Already tried and failed
+        raise ImportError(
+            "KeyBERT is required for smart naming functionality. "
+            "Please install it with: pip install keybert sentence-transformers"
+        )
+
+    if _kw_model is None:
+        try:
+            from keybert import KeyBERT
+            from sentence_transformers import SentenceTransformer
+
+            # Use a small, fast model as recommended
+            MODEL_NAME = "all-MiniLM-L6-v2"
+            sentence_model = SentenceTransformer(MODEL_NAME)
+            _kw_model = KeyBERT(model=sentence_model)
+            _keybert_available = True
+            logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
+        except ImportError as e:
+            _keybert_available = False
+            error_msg = (
+                "KeyBERT is required for smart naming functionality. "
+                "Please install it with: pip install keybert sentence-transformers"
+            )
+            logger.error(error_msg)
+            raise ImportError(error_msg) from e
+
+    return _kw_model
+
 
 # Common English stop words
 COMMON_STOPWORDS = {
@@ -223,6 +244,9 @@ def generate_smart_name(text: str, max_length: int = 20) -> str:
 
     # Extract keywords using KeyBERT
     try:
+        # Get lazy-loaded model
+        kw_model = _get_keybert_model()
+
         # Extract keywords using KeyBERT
         # Use n-grams (1-2) for shorter phrases and MMR for diversity
         keywords = kw_model.extract_keywords(

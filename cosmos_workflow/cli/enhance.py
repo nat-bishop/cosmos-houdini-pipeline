@@ -1,14 +1,9 @@
 """Prompt enhancement command using AI models."""
 
-import sys
-from pathlib import Path
-
 import click
 
-from cosmos_workflow.prompts.schemas import PromptSpec
-
+# These imports are for mocking in tests
 from .base import CLIContext, handle_errors
-from .completions import complete_prompt_specs
 from .helpers import (
     console,
     create_info_table,
@@ -16,23 +11,17 @@ from .helpers import (
     display_dry_run_footer,
     display_dry_run_header,
     display_success,
+    format_id,
     format_prompt_text,
 )
 
 
 @click.command("prompt-enhance")
-@click.argument(
-    "prompt_specs",
-    nargs=-1,
-    required=True,
-    type=click.Path(exists=True, path_type=Path),
-    shell_complete=complete_prompt_specs,
-)
+@click.argument("prompt_id")
 @click.option(
-    "--resolution",
-    default=None,
-    type=int,
-    help="Max resolution for preprocessing (implies preprocessing, e.g. 480)",
+    "--model",
+    default="pixtral",
+    help="AI model to use for enhancement (default: pixtral)",
 )
 @click.option(
     "--dry-run",
@@ -41,110 +30,144 @@ from .helpers import (
 )
 @click.pass_context
 @handle_errors
-def prompt_enhance(ctx, prompt_specs, resolution, dry_run):
-    r"""Enhance prompts using Pixtral AI model.
+def prompt_enhance(ctx, prompt_id, model, dry_run):
+    r"""Enhance prompts using AI models.
 
-    Creates new enhanced PromptSpecs with improved prompt quality.
-    Enhanced specs are saved with smart names based on the enhanced content.
+    Creates an enhancement run in the database, executes it to get an enhanced prompt,
+    then creates a new prompt with the enhanced text. The enhancement is tracked as
+    a run with model_type="enhancement".
 
     \b
     Examples:
-      cosmos prompt-enhance prompt_spec.json
-      cosmos prompt-enhance spec1.json spec2.json spec3.json
-      cosmos prompt-enhance inputs/prompts/*.json --resolution 480
-      cosmos prompt-enhance prompt_spec.json --dry-run
+      cosmos prompt-enhance ps_abc123
+      cosmos prompt-enhance ps_abc123 --model gpt-4
+      cosmos prompt-enhance ps_abc123 --dry-run
     """
     ctx_obj: CLIContext = ctx.obj
 
-    if not prompt_specs:
-        console.print("[bold red][ERROR] No prompt specs provided![/bold red]")
-        console.print("Usage: cosmos prompt-enhance <spec1.json> [spec2.json ...]")
-        sys.exit(1)
+    # Get service and load prompt data
+    try:
+        # Use the get_workflow_service from context
+        service = ctx_obj.get_workflow_service()
 
-    # Determine preprocessing based on resolution
-    preprocess = resolution is not None
-    max_resolution = resolution if resolution else 480
-
-    # Load all prompt specs
-    specs_to_enhance = []
-    for spec_path in prompt_specs:
-        try:
-            spec = PromptSpec.load(Path(spec_path))
-            specs_to_enhance.append((spec, Path(spec_path)))
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to load {spec_path}: {e}[/yellow]")
-
-    if not specs_to_enhance:
-        console.print("[bold red][ERROR] No valid prompt specs to enhance![/bold red]")
-        sys.exit(1)
+        # Get original prompt
+        original_prompt = service.get_prompt(prompt_id)
+        if not original_prompt:
+            raise ValueError(f"Prompt not found: {prompt_id}")
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise ValueError(str(e))
+        raise Exception(f"Database error: {e!s}")
 
     # Handle dry-run mode
     if dry_run:
         display_dry_run_header()
 
         dry_run_data = {
-            "Would enhance": f"{len(specs_to_enhance)} prompt(s)",
-            "AI Model": "Pixtral for prompt enhancement",
-            "Output": "Save with smart names based on content",
+            "Original prompt ID": format_id(prompt_id),
+            "Original text": format_prompt_text(original_prompt["prompt_text"]),
+            "AI Model": model,
+            "Would create": "Enhancement run in database",
+            "Would execute": f"Prompt enhancement using {model}",
+            "Would generate": "New enhanced prompt with improved text",
+            "Would track": "Enhancement as run with outputs",
         }
-
-        if preprocess:
-            dry_run_data["Preprocessing"] = f"Resize videos to {max_resolution}p"
 
         table = create_info_table(dry_run_data)
         console.print(table)
 
-        console.print("\n[bold]Prompts to enhance:[/bold]")
-        for spec, _ in specs_to_enhance:
-            formatted_prompt = format_prompt_text(spec.prompt)
-            console.print(f'  • {spec.name}: "{formatted_prompt}"')
-
-        console.print("\n[bold]Would create files:[/bold]")
-        console.print("  • Files with smart names based on enhanced content")
-        console.print("  • Example: 'foggy_morning' → 'misty_dawn_landscape'")
-        console.print(f"  • Total: {len(specs_to_enhance)} enhanced prompt file(s)")
+        console.print("\n[bold]Expected workflow:[/bold]")
+        console.print(f"  1. Create enhancement run for prompt {prompt_id}")
+        console.print(f"  2. Call {model} API to enhance prompt text")
+        console.print("  3. Create new prompt with enhanced text")
+        console.print("  4. Link enhanced prompt to original via run outputs")
+        console.print("  5. Mark enhancement run as completed")
 
         display_dry_run_footer()
         return
 
-    orchestrator = ctx_obj.get_orchestrator()
+    with create_progress_context("[cyan]Enhancing prompt...") as progress:
+        task = progress.add_task("[cyan]Enhancing prompt...", total=None)
 
-    with create_progress_context(
-        f"[cyan]Enhancing {len(specs_to_enhance)} prompt(s)..."
-    ) as progress:
-        task = progress.add_task(
-            f"[cyan]Enhancing {len(specs_to_enhance)} prompt(s)...", total=None
-        )
+        try:
+            # Create enhancement run
+            enhancement_run = service.create_run(
+                prompt_id=prompt_id,
+                execution_config={
+                    "model": model,
+                    "type": "enhancement",
+                    "temperature": 0.7,
+                },
+                metadata={"purpose": "prompt_enhancement"},
+            )
 
-        # Process all specs
-        enhanced_count = 0
-        for spec, _ in specs_to_enhance:
-            try:
-                result = orchestrator.run_single_prompt_upsampling(
-                    prompt_spec=spec,
-                    preprocess_videos=preprocess,
-                    max_resolution=max_resolution,
-                    num_frames=2,  # Fixed value
-                    num_gpu=1,
-                    cuda_devices="0",
-                )
+            console.print(f"[dim]Created enhancement run: {enhancement_run['id']}[/dim]")
 
-                if result["success"] and result.get("updated_spec"):
-                    updated_spec = result["updated_spec"]
+            # Update run status to running
+            service.update_run_status(enhancement_run["id"], "running")
 
-                    # The spec was already saved by PromptSpecManager with a smart name
-                    # We just need to report success - no need to save again
-                    enhanced_count += 1
-                    console.print(
-                        f"  [green][OK][/green] Enhanced: {spec.name} -> {updated_spec.name}"
-                    )
-                else:
-                    console.print(f"  [yellow][WARNING][/yellow] Failed: {spec.name}")
+            # Get orchestrator and run enhancement
+            orchestrator = ctx_obj.get_orchestrator()
 
-            except Exception as e:
-                console.print(f"  [red][ERROR][/red] Error enhancing {spec.name}: {e}")
+            # Call the upsampling method (will be simplified in orchestrator refactor)
+            enhanced_text = orchestrator.run_prompt_upsampling(
+                prompt_text=original_prompt["prompt_text"],
+                model=model,
+            )
+
+            # Create new enhanced prompt
+            enhanced_prompt = service.create_prompt(
+                model_type="transfer",  # Enhanced prompts are for transfer
+                prompt_text=enhanced_text,
+                inputs=original_prompt["inputs"],  # Keep same inputs
+                parameters={
+                    **original_prompt.get("parameters", {}),
+                    "enhanced": True,
+                    "parent_prompt_id": prompt_id,
+                    "enhancement_model": model,
+                },
+            )
+
+            console.print(f"[dim]Created enhanced prompt: {enhanced_prompt['id']}[/dim]")
+
+            # Update run with outputs
+            service.update_run(
+                enhancement_run["id"],
+                outputs={
+                    "enhanced_prompt_id": enhanced_prompt["id"],
+                    "enhanced_text": enhanced_text,
+                    "model_used": model,
+                },
+            )
+
+            # Update run status to completed
+            service.update_run_status(enhancement_run["id"], "completed")
+
+        except Exception as e:
+            # Update run status to failed if it exists
+            if "enhancement_run" in locals():
+                try:
+                    service.update_run_status(enhancement_run["id"], "failed")
+                    service.update_run(enhancement_run["id"], outputs={"error": str(e)})
+                except Exception:
+                    pass
+            raise
 
         progress.update(task, completed=True)
 
-    count_msg = f"Enhanced {enhanced_count}/{len(specs_to_enhance)} prompts!"
-    display_success(count_msg)
+    # Display results
+    results_data = {
+        "Original prompt": format_id(prompt_id),
+        "Enhancement run": format_id(enhancement_run["id"]),
+        "Enhanced prompt": format_id(enhanced_prompt["id"]),
+        "Model used": model,
+    }
+
+    display_success("Prompt enhanced successfully!", results_data)
+
+    # Show the enhanced text
+    console.print("\n[bold]Enhanced text:[/bold]")
+    console.print(format_prompt_text(enhanced_text))
+
+    # Suggest next step
+    console.print(f"\n[dim]Next step: cosmos create run {enhanced_prompt['id']}[/dim]")

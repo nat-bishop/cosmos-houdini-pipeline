@@ -3,7 +3,7 @@
 # ===== Remote instance =====
 [remote]
 user = "ubuntu"
-host = "192.222.53.77"  # <-- change this when the IP changes
+host = "192.222.52.157"  # <-- change this when the IP changes
 port = 22
 ssh_key = "~/.ssh/LambdaSSHkey.pem"
 

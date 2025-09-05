@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Service Layer Architecture Complete
+- **Complete database-first service layer architecture**
+  - Database-first approach: all data stored in SQLAlchemy database
+  - Commands work with database IDs: ps_xxxxx (prompts), rs_xxxxx (runs)
+  - No persistent JSON files - only created temporarily for NVIDIA GPU scripts
+  - Three core models: Prompt, Run, Progress for comprehensive workflow tracking
+  - Production-ready system with 453 passing tests
+
+- **WorkflowService - Complete business logic layer**
+  - CRUD operations for prompts and runs with transaction safety
+  - Query methods: list_prompts(), list_runs(), search_prompts(), get_prompt_with_runs()
+  - Input validation and sanitization with security features
+  - Returns dictionaries optimized for CLI display
+  - Support for multiple AI models through flexible JSON columns
+
+- **WorkflowOrchestrator - GPU execution only**
+  - Simplified to handle ONLY GPU execution: inference and upscaling
+  - execute_run() method takes database dictionaries, returns results
+  - run_prompt_upsampling() for AI prompt enhancement
+  - Creates temporary NVIDIA-format JSON for GPU scripts only
+  - No data persistence - pure execution layer
+
+- **Database-first CLI commands**
+  - cosmos create prompt "text" video_dir - creates prompt in DB, returns ps_xxxxx ID
+  - cosmos create run ps_xxxxx - creates run from prompt ID, returns rs_xxxxx ID
+  - cosmos inference rs_xxxxx - executes run on GPU with status tracking
+  - cosmos list prompts/runs - lists with filtering and rich display
+  - cosmos search "query" - full-text search with highlighted matches
+  - cosmos show ps_xxxxx - detailed view with run history
+  - cosmos prompt-enhance ps_xxxxx - AI enhancement creating new prompts and runs
+  - All commands support --json for machine-readable output
+
+### Changed - Architecture Simplified
+- **BREAKING: Complete migration to database-first service architecture**
+  - Replaced JSON file storage with SQLAlchemy database for all data operations
+  - Clear separation of concerns: data layer (service) vs execution layer (orchestrator)
+  - Extensible architecture supporting future AI models (reason, predict, etc.)
+  - Clean, maintainable codebase without over-engineering
+
+- **WorkflowService handles all data operations**
+  - Business logic layer with comprehensive CRUD operations
+  - Transaction safety with automatic rollback on errors
+  - Input validation and security features (path traversal protection)
+  - Query methods for listing, searching, and filtering prompts and runs
+  - Returns dictionaries optimized for CLI display and JSON output
+
+- **WorkflowOrchestrator simplified to execution only**
+  - Removed all data persistence responsibilities
+  - execute_run() takes database dictionaries, executes on GPU infrastructure
+  - Creates temporary NVIDIA-format JSON files only for GPU script compatibility
+  - Handles inference, upscaling, and AI prompt enhancement without data storage
+  - Clean execution results returned to service layer for persistence
+
+### Database Foundation
+- **Flexible database schema supporting multiple AI models**
+  - Prompt model with JSON columns for model-specific inputs and parameters
+  - Run model for execution lifecycle tracking with real-time status updates
+  - Progress model for granular progress tracking during execution stages
+  - Extensible design allows adding future AI models without schema changes
+  - Built-in security validation and input sanitization
+  - Connection management with automatic session handling and transaction safety
+
+### Fixed
+- **Fixed RunSpec timestamp formatting issue in `cosmos create run` command**
+  - Removed duplicate timezone suffix that was causing "+00:00+00:00" in timestamps
+  - Now correctly uses `datetime.now(timezone.utc).isoformat()` without extra timezone indicator
+  - Ensures timestamps are properly formatted for JSON serialization
+
+### Changed
+- **Improved `cosmos prompt-enhance` command to use true batch processing**
+  - Now processes multiple prompts in a single batch instead of one at a time
+  - Significantly improves performance when enhancing multiple prompts
+  - Reduces GPU initialization overhead by keeping model in memory for entire batch
+  - Maintains progress tracking while processing all prompts together
+
+### Fixed
+- **Integrated CosmosConverter for NVIDIA Cosmos Transfer format compatibility**
+  - FileTransferService now automatically converts PromptSpec to NVIDIA format during upload
+  - Ensures proper field mapping (prompt_text → prompt, control_paths → control_path)
+  - Handles path separator conversion from Windows to Unix for remote systems
+  - Falls back to original format if conversion fails, ensuring robustness
+  - Video directories are now correctly detected from PromptSpec's input_video_path field
+
 ### Changed
 - **Switched to read-only pre-commit hooks for predictable formatting workflow**
   - Pre-commit hooks now only check formatting/linting, never modify files

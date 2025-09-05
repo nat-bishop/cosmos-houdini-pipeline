@@ -12,7 +12,6 @@ from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.connection.ssh_manager import SSHManager
-from cosmos_workflow.execution.command_builder import DockerCommandBuilder
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.utils import nvidia_format
@@ -90,7 +89,7 @@ class WorkflowOrchestrator:
 
                     # Upload video files if they exist
                     inputs = prompt_dict.get("inputs", {})
-                    for input_type, input_path in inputs.items():
+                    for _input_type, input_path in inputs.items():
                         if input_path and Path(input_path).exists():
                             remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
                             self.ssh_manager.execute_command_success(
@@ -228,21 +227,23 @@ class WorkflowOrchestrator:
                 with self.ssh_manager:
                     remote_config = self.config_manager.get_remote_config()
 
-                    # Upload batch file
+                    # Create directories using wrapper's remote executor
                     remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_inputs_dir}")
+                    self.docker_executor.remote_executor.create_directory(remote_inputs_dir)
+
+                    # Upload batch file
                     self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
 
                     # Upload video if provided
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                        self.ssh_manager.execute_command_success(f"mkdir -p {remote_videos_dir}")
+                        self.docker_executor.remote_executor.create_directory(remote_videos_dir)
                         logger.info("Uploading video for context: %s", video_path)
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
-                    # Upload upsampler script
+                    # Create scripts directory and upload upsampler script
                     scripts_dir = f"{remote_config.remote_dir}/scripts"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {scripts_dir}")
+                    self.docker_executor.remote_executor.create_directory(scripts_dir)
 
                     local_script = (
                         Path(__file__).parent.parent.parent / "scripts" / "prompt_upsampler.py"
@@ -252,37 +253,17 @@ class WorkflowOrchestrator:
 
                     self.file_transfer.upload_file(local_script, scripts_dir)
 
-                    # Create output directory
-                    remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_outputs_dir}")
-
-                    # Build Docker command
-                    builder = DockerCommandBuilder(remote_config.docker_image)
-                    builder.with_gpu("0")
-                    builder.add_option("--ipc=host")
-                    builder.add_option("--shm-size=8g")
-                    builder.add_volume(remote_config.remote_dir, "/workspace")
-                    builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
-                    builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
-                    builder.add_environment("CUDA_VISIBLE_DEVICES", "0")
-
-                    # Run upsampler
-                    upsample_cmd = (
-                        f"python /workspace/scripts/prompt_upsampler.py "
-                        f"--batch /workspace/inputs/{batch_filename} "
-                        f"--output-dir /workspace/outputs "
-                        f"--checkpoint-dir /workspace/checkpoints"
-                    )
-                    builder.set_command(upsample_cmd)
-
-                    # Execute on GPU
+                    # Execute prompt enhancement via DockerExecutor wrapper
                     logger.info("Executing prompt upsampling on GPU...")
-                    full_cmd = f"sudo {builder.build()}"
-                    self.ssh_manager.execute_command_success(
-                        full_cmd, timeout=600
-                    )  # 10 min timeout
+                    self.docker_executor.run_prompt_enhancement(
+                        batch_filename=batch_filename,
+                        offload=True,  # Memory efficient for single prompts
+                        checkpoint_dir="/workspace/checkpoints",
+                        timeout=600,
+                    )
 
                     # Download results
+                    remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
                     remote_results_file = f"{remote_outputs_dir}/batch_results.json"
                     local_results_path = Path(temp_dir) / "results.json"
 

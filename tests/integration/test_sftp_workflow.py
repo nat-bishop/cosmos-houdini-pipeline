@@ -224,8 +224,6 @@ class TestSFTPWorkflow:
         windows_path.parent.mkdir(parents=True, exist_ok=True)
         windows_path.write_text("test content")
 
-        remote_path = "/remote/test/subdir/file.txt"
-
         # Get the mock sftp client from the fixture
         mock_sftp_client = mock_ssh_manager._sftp_client
 

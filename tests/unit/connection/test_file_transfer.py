@@ -129,82 +129,8 @@ class TestFileTransferService:
                     video_dir, f"{self.remote_dir}/inputs/videos/test_videos"
                 )
 
-    def test_upload_prompt_and_videos_uploads_bash_scripts(self):
-        """Test that upload_prompt_and_videos uploads bash scripts from scripts directory."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        # Create mock scripts directory in temp directory
-        scripts_dir = Path(self.temp_dir) / "scripts"
-        scripts_dir.mkdir()
-        (scripts_dir / "test_script.sh").write_text("#!/bin/bash\necho 'test'")
-
-        with patch.object(self.file_transfer, "_sftp_upload_file"):
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Mock scripts directory existence by patching the Path import in file_transfer module
-                with patch("cosmos_workflow.transfer.file_transfer.Path") as mock_path:
-                    # Make Path("scripts") return our temp scripts directory
-                    def mock_path_side_effect(path_arg):
-                        if path_arg == "scripts":
-                            return scripts_dir
-                        return Path(path_arg)
-
-                    mock_path.side_effect = mock_path_side_effect
-
-                    # Upload files
-                    self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                    # Check that bash script directory was uploaded
-                    mock_sftp_upload_dir.assert_any_call(
-                        scripts_dir, f"{self.remote_dir}/bashscripts"
-                    )
-
-    def test_upload_prompt_and_videos_skips_scripts_if_directory_not_found(self):
-        """Test that upload_prompt_and_videos skips script upload if scripts directory doesn't exist."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        with patch.object(self.file_transfer, "_sftp_upload_file"):
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Mock scripts directory not existing by patching Path import in file_transfer module
-                with patch("cosmos_workflow.transfer.file_transfer.Path") as mock_path:
-                    # Make Path("scripts") return a non-existent path
-                    def mock_path_side_effect(path_arg):
-                        if path_arg == "scripts":
-                            return Path("/nonexistent/scripts")
-                        return Path(path_arg)
-
-                    mock_path.side_effect = mock_path_side_effect
-
-                    # Upload files
-                    self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                    # Check that no script upload was attempted
-                    script_uploads = [
-                        call
-                        for call in mock_sftp_upload_dir.call_args_list
-                        if "bashscripts" in str(call)
-                    ]
-                    assert len(script_uploads) == 0
-
-    def test_upload_prompt_and_videos_makes_scripts_executable(self):
-        """Test that upload_prompt_and_videos makes uploaded scripts executable."""
+    def test_upload_prompt_and_videos_deprecated(self):
+        """Test that deprecated upload_prompt_and_videos method still works."""
         # Mock successful directory creation
         self.mock_ssh_manager.execute_command_success.return_value = None
 
@@ -223,26 +149,21 @@ class TestFileTransferService:
                 video_dir = Path(self.temp_dir) / "test_videos"
                 video_dir.mkdir()
 
-                # Mock scripts directory existence by patching Path import in file_transfer module
-                with patch("cosmos_workflow.transfer.file_transfer.Path") as mock_path:
-                    # Make Path("scripts") return our temp scripts directory
-                    def mock_path_side_effect(path_arg):
-                        if path_arg == "scripts":
-                            return scripts_dir
-                        return Path(path_arg)
+                # Call the deprecated method and verify it logs a warning
+                import logging
 
-                    mock_path.side_effect = mock_path_side_effect
-
-                    # Upload files
+                with patch.object(
+                    logging.getLogger("cosmos_workflow.transfer.file_transfer"), "warning"
+                ) as mock_log:
                     self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
 
-                    # Check that chmod commands were executed
-                    chmod_calls = [
-                        call
-                        for call in self.mock_ssh_manager.execute_command_success.call_args_list
-                        if "chmod" in str(call)
-                    ]
-                    assert len(chmod_calls) == 2  # chmod +x and chmod -R g+w
+                # Check that deprecation warning was logged
+                mock_log.assert_called_once()
+                assert "deprecated" in str(mock_log.call_args)
+
+    # Removed test for bash scripts functionality - deprecated feature
+
+    # Removed test for making scripts executable - deprecated feature
 
     def test_upload_file_uses_sftp_for_single_files(self):
         """Test that upload_file uses SFTP for single file uploads."""

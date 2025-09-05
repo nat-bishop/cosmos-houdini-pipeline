@@ -321,7 +321,7 @@ class TestWorkflowServiceEnhancementSupport:
         service.update_run_status(run["id"], "running")
 
         # Update with enhanced prompt output
-        updated = service.update_run(
+        service.update_run(
             run["id"],
             outputs={
                 "enhanced_prompt_id": "ps_enhanced_new",

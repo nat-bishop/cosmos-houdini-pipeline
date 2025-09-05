@@ -5,7 +5,7 @@ Following principles from the TEST_SUITE_INVESTIGATION_REPORT.md.
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -76,6 +76,16 @@ class FakeSSHManager:
     def disconnect(self) -> None:
         """Simulate disconnection."""
         self.connected = False
+
+    def __enter__(self):
+        """Enter context manager."""
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager."""
+        self.disconnect()
+        return False
 
     def is_connected(self) -> bool:
         """Check connection status."""
@@ -465,10 +475,6 @@ class FakeWorkflowOrchestrator:
         """Main entry point - delegates to run_inference."""
         return self.run_inference(spec_file, **kwargs)
 
-    def run_full_cycle(self, spec_file: str, **kwargs) -> bool:
-        """Run full inference cycle."""
-        return self.run_inference(spec_file, **kwargs)
-
     def run_inference_only(self, spec_file: str, **kwargs) -> bool:
         """Run inference only (no upsampling/upscaling)."""
         return self.run_inference(spec_file, **kwargs)
@@ -515,64 +521,3 @@ class FakeWorkflowOrchestrator:
         """Get video directories for a given name."""
         # Return fake directories for testing
         return [Path(f"outputs/videos/{name}_20250830_120000")]
-
-
-@dataclass
-class FakePromptSpec:
-    """Fake PromptSpec for testing."""
-
-    id: str = "test_ps_001"
-    name: str = "test_prompt"
-    prompt: str = "A beautiful test scene"
-    negative_prompt: str = ""
-    input_video_path: str = "inputs/test.mp4"
-    control_inputs: dict[str, str] = field(
-        default_factory=lambda: {
-            "depth": "inputs/depth.mp4",
-            "segmentation": "inputs/segmentation.mp4",
-        }
-    )
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "prompt": self.prompt,
-            "negative_prompt": self.negative_prompt,
-            "input_video_path": self.input_video_path,
-            "control_inputs": self.control_inputs,
-            "timestamp": self.timestamp,
-        }
-
-    def validate(self) -> bool:
-        """Validate the spec."""
-        return bool(self.prompt and self.input_video_path)
-
-
-@dataclass
-class FakeRunSpec:
-    """Fake RunSpec for testing."""
-
-    id: str = "test_rs_001"
-    prompt_spec_id: str = "test_ps_001"
-    control_weights: dict[str, float] = field(
-        default_factory=lambda: {"depth": 0.3, "segmentation": 0.2}
-    )
-    parameters: dict[str, Any] = field(default_factory=lambda: {"num_steps": 35, "seed": 42})
-    execution_status: str = "pending"
-    output_path: str = "outputs/test_run"
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            "id": self.id,
-            "prompt_spec_id": self.prompt_spec_id,
-            "control_weights": self.control_weights,
-            "parameters": self.parameters,
-            "execution_status": self.execution_status,
-            "output_path": self.output_path,
-            "timestamp": self.timestamp,
-        }

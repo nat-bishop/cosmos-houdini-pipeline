@@ -136,10 +136,10 @@ image = "cosmos-transfer1:latest"
     @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor")
-    def test_run_full_cycle_successful_workflow(
+    def test_execute_run_successful_workflow(
         self, mock_docker_class, mock_file_transfer_class, mock_ssh_class
     ):
-        """Test successful execution of full cycle workflow."""
+        """Test successful execution of run workflow."""
         # Mock all services
         mock_ssh_manager = Mock()
         mock_ssh_manager.__enter__ = Mock(return_value=mock_ssh_manager)
@@ -166,9 +166,25 @@ image = "cosmos-transfer1:latest"
         mock_local_config.notes_dir = Path(self.temp_dir) / "notes"
         self.orchestrator.config_manager.get_local_config.return_value = mock_local_config
 
-        # Run full cycle workflow
-        result = self.orchestrator.run_full_cycle(
-            self.test_prompt_file, num_gpu=2, cuda_devices="0,1", upscale_weight=0.6
+        # Create test run and prompt dictionaries
+        run_dict = {
+            "id": "rs_test001",
+            "prompt_id": "ps_test001",
+            "execution_config": {"num_gpu": 2, "cuda_devices": "0,1"},
+            "status": "pending",
+        }
+
+        prompt_dict = {
+            "id": "ps_test001",
+            "prompt_text": "A test prompt",
+            "model_type": "transfer",
+            "inputs": {"video": "test_video.mp4", "depth": "test_depth.mp4"},
+            "parameters": {"name": "test_prompt"},
+        }
+
+        # Run workflow execution
+        result = self.orchestrator.execute_run(
+            run_dict, prompt_dict, upscale=True, upscale_weight=0.6
         )
 
         # Check result structure
@@ -195,10 +211,10 @@ image = "cosmos-transfer1:latest"
     @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor")
-    def test_run_full_cycle_with_no_upscale(
+    def test_execute_run_with_no_upscale(
         self, mock_docker_class, mock_file_transfer_class, mock_ssh_class
     ):
-        """Test full cycle workflow with upscaling disabled."""
+        """Test run workflow with upscaling disabled."""
         # Mock all services
         mock_ssh_manager = Mock()
         mock_ssh_manager.__enter__ = Mock(return_value=mock_ssh_manager)
@@ -224,10 +240,24 @@ image = "cosmos-transfer1:latest"
         mock_local_config.notes_dir = Path(self.temp_dir) / "notes"
         self.orchestrator.config_manager.get_local_config.return_value = mock_local_config
 
-        # Run full cycle workflow with no upscale
-        result = self.orchestrator.run_full_cycle(
-            self.test_prompt_file, no_upscale=True, num_gpu=1, cuda_devices="0"
-        )
+        # Create test run and prompt dictionaries
+        run_dict = {
+            "id": "rs_test002",
+            "prompt_id": "ps_test002",
+            "execution_config": {"num_gpu": 1, "cuda_devices": "0"},
+            "status": "pending",
+        }
+
+        prompt_dict = {
+            "id": "ps_test002",
+            "prompt_text": "A test prompt",
+            "model_type": "transfer",
+            "inputs": {"video": "test_video.mp4"},
+            "parameters": {"name": "test_prompt"},
+        }
+
+        # Run workflow with no upscale
+        result = self.orchestrator.execute_run(run_dict, prompt_dict, upscale=False)
 
         # Check result structure
         assert result["status"] == "success"
@@ -240,10 +270,10 @@ image = "cosmos-transfer1:latest"
     @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor")
-    def test_run_full_cycle_with_custom_video_subdir(
+    def test_execute_run_with_custom_video_subdir(
         self, mock_docker_class, mock_file_transfer_class, mock_ssh_class
     ):
-        """Test full cycle workflow with custom video subdirectory."""
+        """Test run workflow with custom video subdirectory."""
         # Mock all services
         mock_ssh_manager = Mock()
         mock_ssh_manager.__enter__ = Mock(return_value=mock_ssh_manager)
@@ -269,10 +299,28 @@ image = "cosmos-transfer1:latest"
         mock_local_config.notes_dir = Path(self.temp_dir) / "notes"
         self.orchestrator.config_manager.get_local_config.return_value = mock_local_config
 
-        # Run full cycle workflow with custom video subdir
-        result = self.orchestrator.run_full_cycle(
-            self.test_prompt_file, videos_subdir="custom_videos", num_gpu=1, cuda_devices="0"
-        )
+        # Create test run and prompt dictionaries
+        run_dict = {
+            "id": "rs_test003",
+            "prompt_id": "ps_test003",
+            "execution_config": {
+                "num_gpu": 1,
+                "cuda_devices": "0",
+                "videos_subdir": "custom_videos",
+            },
+            "status": "pending",
+        }
+
+        prompt_dict = {
+            "id": "ps_test003",
+            "prompt_text": "A test prompt",
+            "model_type": "transfer",
+            "inputs": {"video": "test_video.mp4"},
+            "parameters": {"name": "test_prompt"},
+        }
+
+        # Run workflow with custom video subdir
+        result = self.orchestrator.execute_run(run_dict, prompt_dict, upscale=True)
 
         # Check that file transfer was called with custom video directory
         mock_file_transfer.upload_prompt_and_videos.assert_called_once()
@@ -288,10 +336,10 @@ image = "cosmos-transfer1:latest"
     @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor")
-    def test_run_full_cycle_workflow_failure(
+    def test_execute_run_workflow_failure(
         self, mock_docker_class, mock_file_transfer_class, mock_ssh_class
     ):
-        """Test full cycle workflow failure handling."""
+        """Test run workflow failure handling."""
         # Mock all services
         mock_ssh_manager = Mock()
         mock_ssh_manager.__enter__ = Mock(return_value=mock_ssh_manager)
@@ -318,9 +366,25 @@ image = "cosmos-transfer1:latest"
         mock_local_config.notes_dir = Path(self.temp_dir) / "notes"
         self.orchestrator.config_manager.get_local_config.return_value = mock_local_config
 
+        # Create test run and prompt dictionaries
+        run_dict = {
+            "id": "rs_test004",
+            "prompt_id": "ps_test004",
+            "execution_config": {},
+            "status": "pending",
+        }
+
+        prompt_dict = {
+            "id": "ps_test004",
+            "prompt_text": "A test prompt",
+            "model_type": "transfer",
+            "inputs": {"video": "test.mp4"},
+            "parameters": {},
+        }
+
         # Should raise RuntimeError
         with pytest.raises(RuntimeError, match="Workflow failed: Upload failed"):
-            self.orchestrator.run_full_cycle(self.test_prompt_file)
+            self.orchestrator.execute_run(run_dict, prompt_dict)
 
     @patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager")
     @patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService")

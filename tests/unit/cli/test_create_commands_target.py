@@ -366,7 +366,7 @@ class TestCLIServiceIntegration:
             "prompt_text": "test",
             "inputs": {},
         }
-        result = runner.invoke(cli, ["create", "run", "ps_test"])
+        runner.invoke(cli, ["create", "run", "ps_test"])
 
         # Service should be retrieved via context
         assert mock_get_service.called

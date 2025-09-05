@@ -82,6 +82,69 @@ class DockerExecutor:
 
         logger.info("Upscaling completed successfully for %s", prompt_name)
 
+    def run_prompt_enhancement(
+        self,
+        batch_filename: str,
+        offload: bool = True,
+        checkpoint_dir: str = "/workspace/checkpoints",
+        timeout: int = 600,
+    ) -> None:
+        """Run prompt enhancement using Pixtral model on GPU.
+
+        Processes a batch of prompts using the prompt_upsampler.py script.
+        Follows the same pattern as run_inference and run_upscaling.
+
+        Args:
+            batch_filename: Name of batch JSON file in inputs directory
+            offload: Whether to offload model between prompts (True for memory efficiency)
+            checkpoint_dir: Directory containing model checkpoints
+            timeout: Execution timeout in seconds
+        """
+        logger.info("Running prompt enhancement for batch %s", batch_filename)
+
+        # Verify script exists on remote
+        script_path = f"{self.remote_dir}/scripts/prompt_upsampler.py"
+        if not self.remote_executor.file_exists(script_path):
+            raise FileNotFoundError(f"Upsampler script not found at {script_path}")
+
+        # Verify batch file exists
+        batch_path = f"{self.remote_dir}/inputs/{batch_filename}"
+        if not self.remote_executor.file_exists(batch_path):
+            raise FileNotFoundError(f"Batch file not found at {batch_path}")
+
+        # Ensure output directory exists
+        output_dir = f"{self.remote_dir}/outputs"
+        self.remote_executor.create_directory(output_dir)
+
+        # Build Docker command
+        builder = DockerCommandBuilder(self.docker_image)
+        builder.with_gpu("0")
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(self.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+        builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+        builder.add_environment("CUDA_VISIBLE_DEVICES", "0")
+
+        # Build the command - note it's Python script, not bash
+        # Script defaults to offload=True, use --no-offload to disable
+        offload_flag = "" if offload else "--no-offload"
+        cmd = (
+            f"python /workspace/scripts/prompt_upsampler.py "
+            f"--batch /workspace/inputs/{batch_filename} "
+            f"--output-dir /workspace/outputs "
+            f"--checkpoint-dir {checkpoint_dir}"
+        )
+        if offload_flag:
+            cmd += f" {offload_flag}"
+        builder.set_command(cmd)
+
+        # Execute via remote executor
+        logger.info("Starting prompt enhancement (batch mode)...")
+        self.remote_executor.execute_docker(builder, timeout=timeout)
+
+        logger.info("Prompt enhancement completed for batch %s", batch_filename)
+
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
         """Run inference using the bash script."""
         builder = DockerCommandBuilder(self.docker_image)

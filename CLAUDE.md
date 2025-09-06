@@ -23,6 +23,9 @@ All work follows a **gated TDD flow**. If a gate fails, stop and request review.
  - Verify tests introduced or modified in this TDD cycle fail.
  - The pre-existing suite remains unchanged (no legacy tests were modified).
  - **Do Not** run coverage of the full test suite in this gate
+ - Run the following in parallel when verifying:
+   - pytest for newly introduced/modified test files
+   - verify no existing tests were accidentally modified
 
 ### **Gate 3 — Commit Failing Tests**
 Tests are the contract. Commit them unchanged.
@@ -31,6 +34,9 @@ Tests are the contract. Commit them unchanged.
 - Implement minimal code to pass all tests.
 - Do **not** modify tests, they are a contract.
 - **Must** Run the `overfit-verifier` sub-agent to ensure generalization before proceeding.
+- Run the following in parallel to verify success:
+  - pytest (for the tests you just made pass)
+  - overfit-verifier agent (to ensure generalization)
 
 ### **Gate 5 — Document**
 - Update [README.md](README.md)
@@ -39,8 +45,10 @@ Tests are the contract. Commit them unchanged.
 - Use `doc-drafter` for consistency.
 
 ### **Gate 6 — Review**
-- Run `code-reviewer` agent to thoroughly review the new code.
-- Must pass lint, coverage, and security checks.
+- Run the following checks in parallel:
+  - code-reviewer agent
+  - ruff check (lint)
+  - pytest --cov (coverage)
 
 ---
 
@@ -132,8 +140,9 @@ from cosmos_workflow.utils import nvidia_format
 ## **Best Practices**
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
- - “**Zen of Python**” mindset (readability, explicitness, simplicity)
+ - "**Zen of Python**" mindset (readability, explicitness, simplicity)
  - Avoid Over-Engineering
+ - Batch independent read operations and validation checks
 
 ---
 

@@ -6,6 +6,7 @@ match user intentions.
 """
 
 import logging
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -204,25 +205,37 @@ class WorkflowOperations:
             logger.info("Updated prompt %s with enhanced text", prompt_id)
             return updated
 
-    # ========== Run Operations ==========
+    # ========== Internal Helper Methods ==========
 
-    def create_run(
+    def _validate_prompt(self, prompt_id: str) -> dict[str, Any]:
+        """Validate that a prompt exists and return it.
+
+        Args:
+            prompt_id: The prompt ID to validate
+
+        Returns:
+            The prompt dictionary
+
+        Raises:
+            ValueError: If prompt not found
+        """
+        prompt = self.service.get_prompt(prompt_id)
+        if not prompt:
+            error_msg = f"Prompt not found: {prompt_id}"
+            raise ValueError(error_msg)
+        return prompt
+
+    def _build_execution_config(
         self,
-        prompt_id: str,
         weights: dict[str, float] | None = None,
         num_steps: int = 35,
         guidance: float = 7.0,
         seed: int = 1,
         **kwargs,
     ) -> dict[str, Any]:
-        """Create a run for a prompt (low-level method for advanced use).
-
-        Note: Most users should use quick_inference() or batch_inference() instead,
-        which handle run creation internally. This method is for advanced workflows
-        that need explicit control over run creation.
+        """Build a standardized execution configuration.
 
         Args:
-            prompt_id: ID of the prompt to run
             weights: Control weights dict (vis, edge, depth, seg)
             num_steps: Number of inference steps
             guidance: Guidance scale (CFG)
@@ -230,16 +243,11 @@ class WorkflowOperations:
             **kwargs: Additional execution config parameters
 
         Returns:
-            Dictionary containing run data with 'id' key
+            Dictionary containing execution configuration
 
         Raises:
-            ValueError: If prompt not found or invalid parameters
+            ValueError: If weights are invalid
         """
-        # Validate prompt exists
-        prompt = self.service.get_prompt(prompt_id)
-        if not prompt:
-            raise ValueError(f"Prompt not found: {prompt_id}")
-
         # Default weights if not provided
         if weights is None:
             weights = {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
@@ -248,7 +256,8 @@ class WorkflowOperations:
         if not all(0 <= w <= 1 for w in weights.values()):
             raise ValueError("All weights must be between 0 and 1")
         if not (0.99 <= sum(weights.values()) <= 1.01):
-            raise ValueError(f"Weights must sum to 1.0, got {sum(weights.values())}")
+            error_msg = f"Weights must sum to 1.0, got {sum(weights.values())}"
+            raise ValueError(error_msg)
 
         # Build execution config
         execution_config = {
@@ -267,6 +276,59 @@ class WorkflowOperations:
             if key not in execution_config:
                 execution_config[key] = value
 
+        return execution_config
+
+    # ========== Run Operations (DEPRECATED - Use quick_inference instead) ==========
+
+    def create_run(
+        self,
+        prompt_id: str,
+        weights: dict[str, float] | None = None,
+        num_steps: int = 35,
+        guidance: float = 7.0,
+        seed: int = 1,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Create a run for a prompt.
+
+        DEPRECATED: This method is deprecated and will be removed in a future version.
+        Use quick_inference() instead, which handles run creation internally.
+
+        Note: This method is maintained for backward compatibility with existing CLI commands.
+
+        Args:
+            prompt_id: ID of the prompt to run
+            weights: Control weights dict (vis, edge, depth, seg)
+            num_steps: Number of inference steps
+            guidance: Guidance scale (CFG)
+            seed: Random seed
+            **kwargs: Additional execution config parameters
+
+        Returns:
+            Dictionary containing run data with 'id' key
+
+        Raises:
+            ValueError: If prompt not found or invalid parameters
+        """
+        warnings.warn(
+            "create_run() is deprecated and will be removed in a future version. "
+            "Use quick_inference() instead, which handles run creation internally.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        # Validate prompt exists
+        prompt = self._validate_prompt(prompt_id)
+
+        # Build execution config using helper
+        execution_config = self._build_execution_config(
+            weights=weights,
+            num_steps=num_steps,
+            guidance=guidance,
+            seed=seed,
+            **kwargs,
+        )
+
         # Create run
         run = self.service.create_run(
             prompt_id=prompt_id,
@@ -282,11 +344,12 @@ class WorkflowOperations:
         upscale: bool = False,
         upscale_weight: float = 0.5,
     ) -> dict[str, Any]:
-        """Execute a run on GPU (low-level method for advanced use).
+        """Execute a run on GPU.
 
-        Note: Most users should use quick_inference() or batch_inference() instead,
-        which handle both run creation and execution. This method is for advanced
-        workflows that need explicit control over run execution.
+        DEPRECATED: This method is deprecated and will be removed in a future version.
+        Use quick_inference() instead, which handles both run creation and execution.
+
+        Note: This method is maintained for backward compatibility with existing CLI commands.
 
         Args:
             run_id: ID of the run to execute
@@ -300,6 +363,13 @@ class WorkflowOperations:
             ValueError: If run not found
             Exception: If execution fails
         """
+        warnings.warn(
+            "execute_run() is deprecated and will be removed in a future version. "
+            "Use quick_inference() instead, which handles both run creation and execution.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         logger.info("Executing run %s", run_id)
 
         # Get run and prompt
@@ -411,14 +481,14 @@ class WorkflowOperations:
         weights: dict[str, float] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
-        """Primary inference method - creates run internally and executes.
+        """Run inference on a prompt - creates and executes run internally.
 
-        This is the main method users should call for running inference on a prompt.
-        It handles run creation internally, simplifying the workflow.
+        This is the recommended method for running inference. It handles all the
+        details of run creation and execution internally.
 
         Args:
             prompt_id: ID of prompt to run
-            weights: Control weights
+            weights: Control weights (optional, defaults to balanced)
             **kwargs: Additional execution parameters (num_steps, guidance, seed,
                      upscale, upscale_weight, etc.)
 
@@ -431,19 +501,43 @@ class WorkflowOperations:
         logger.info("Quick inference for prompt %s", prompt_id)
 
         # Validate prompt exists
-        prompt = self.service.get_prompt(prompt_id)
-        if not prompt:
-            raise ValueError(f"Prompt not found: {prompt_id}")
+        prompt = self._validate_prompt(prompt_id)
 
         # Extract upscale params if present (not part of execution config)
         upscale = kwargs.pop("upscale", False)
         upscale_weight = kwargs.pop("upscale_weight", 0.5)
 
-        # Create run with remaining kwargs
-        run = self.create_run(prompt_id, weights=weights, **kwargs)
+        # Build execution config
+        execution_config = self._build_execution_config(weights=weights, **kwargs)
 
-        # Execute immediately with upscale params
-        result = self.execute_run(run["id"], upscale=upscale, upscale_weight=upscale_weight)
+        # Create run directly with service
+        run = self.service.create_run(
+            prompt_id=prompt_id,
+            execution_config=execution_config,
+        )
+        logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+
+        # Update status and execute
+        self.service.update_run_status(run["id"], "running")
+
+        try:
+            # Execute on GPU
+            result = self.orchestrator.execute_run(
+                run,
+                prompt,
+                upscale=upscale,
+                upscale_weight=upscale_weight,
+            )
+
+            # Update run with results
+            self.service.update_run(run["id"], outputs=result)
+            self.service.update_run_status(run["id"], "completed")
+            logger.info("Run %s completed successfully", run["id"])
+
+        except Exception:
+            logger.exception("Run %s failed", run["id"])
+            self.service.update_run_status(run["id"], "failed")
+            raise
 
         return {
             "run_id": run["id"],
@@ -458,10 +552,10 @@ class WorkflowOperations:
         shared_weights: dict[str, float] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
-        """Batch inference on multiple prompts - creates runs internally.
+        """Run inference on multiple prompts as a batch.
 
-        This method accepts a list of prompt IDs and creates runs internally
-        for each prompt before executing them as a batch.
+        This method processes multiple prompts efficiently by creating and executing
+        all runs together. Runs are created internally.
 
         Args:
             prompt_ids: List of prompt IDs to run
@@ -481,18 +575,29 @@ class WorkflowOperations:
             logger.warning("Empty prompt list provided for batch inference")
             return self.orchestrator.execute_batch_runs([])
 
+        # Build execution config once for all prompts
+        execution_config = self._build_execution_config(
+            weights=shared_weights, **kwargs
+        )
+
         # Create runs for all prompts
         runs_and_prompts = []
         for prompt_id in prompt_ids:
-            prompt = self.service.get_prompt(prompt_id)
-            if not prompt:
-                logger.warning("Skipping missing prompt: %s", prompt_id)
-                continue
+            try:
+                # Validate prompt
+                prompt = self._validate_prompt(prompt_id)
 
-            # Use shared_weights if provided, otherwise use defaults
-            weights = shared_weights if shared_weights is not None else None
-            run = self.create_run(prompt_id, weights=weights, **kwargs)
-            runs_and_prompts.append((run, prompt))
+                # Create run directly with service
+                run = self.service.create_run(
+                    prompt_id=prompt_id,
+                    execution_config=execution_config,
+                )
+                logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+                runs_and_prompts.append((run, prompt))
+
+            except ValueError as e:
+                logger.warning("Skipping prompt %s: %s", prompt_id, e)
+                continue
 
         # Execute as batch
         batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts)

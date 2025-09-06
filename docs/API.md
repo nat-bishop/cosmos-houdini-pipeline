@@ -658,7 +658,7 @@ prompt = ops.create_prompt(
   - Accepts prompt_id directly, creates run internally
   - Supports all execution parameters (num_steps, guidance, seed, upscale, etc.)
   - Returns execution results with run_id for tracking
-  
+
 - `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
   - Accepts list of prompt_ids, creates runs internally for each
   - Executes all runs as a batch for improved performance
@@ -668,7 +668,7 @@ prompt = ops.create_prompt(
 - `create_run(prompt_id, weights=None, num_steps=35, **kwargs)`: Explicit run creation
   - For workflows that need control over run creation timing
   - Returns run dictionary with generated ID
-  
+
 - `execute_run(run_id, upscale=False, upscale_weight=0.5)`: Explicit run execution
   - For workflows that need control over execution timing
   - Returns execution results

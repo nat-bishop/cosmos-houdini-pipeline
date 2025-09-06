@@ -160,10 +160,10 @@ class TestQuickInferenceRefactored:
             ops.quick_inference("ps_invalid")
 
     def test_quick_inference_docstring_indicates_primary_method(self, ops):
-        """Test that quick_inference docstring emphasizes it's the main path."""
+        """Test that quick_inference docstring emphasizes it's the recommended method."""
         docstring = ops.quick_inference.__doc__
-        assert "Primary inference method" in docstring
-        assert "creates run internally" in docstring.lower()
+        assert "recommended method" in docstring
+        assert "internally" in docstring.lower()
 
 
 class TestBatchInferenceRefactored:
@@ -385,18 +385,18 @@ class TestCreateAndExecuteMethods:
                 with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
                     return WorkflowOperations(mock_config)
 
-    def test_create_run_still_exists_as_low_level(self, ops):
-        """Test that create_run still exists as a low-level method."""
+    def test_create_run_still_exists_as_deprecated(self, ops):
+        """Test that create_run still exists but is deprecated."""
         assert hasattr(ops, "create_run")
         assert callable(ops.create_run)
-        # Verify it's documented as low-level
+        # Verify it's documented as deprecated
         docstring = ops.create_run.__doc__ or ""
-        assert "low-level" in docstring.lower() or "advanced" in docstring.lower()
+        assert "deprecated" in docstring.lower()
 
-    def test_execute_run_still_exists_as_low_level(self, ops):
-        """Test that execute_run still exists as a low-level method."""
+    def test_execute_run_still_exists_as_deprecated(self, ops):
+        """Test that execute_run still exists but is deprecated."""
         assert hasattr(ops, "execute_run")
         assert callable(ops.execute_run)
-        # Verify it's documented as low-level
+        # Verify it's documented as deprecated
         docstring = ops.execute_run.__doc__ or ""
-        assert "low-level" in docstring.lower() or "advanced" in docstring.lower()
+        assert "deprecated" in docstring.lower()

@@ -13,6 +13,12 @@ You analyze code changes and determine their documentation impact, then update a
 
 **Documentation Update Protocol:**
 
+Run the following documentation updates in parallel:
+- CHANGELOG.md (mandatory)
+- README.md (if user-facing changes)
+- API docs (if APIs changed)
+- Docstrings (for modified functions)
+
 1. **CHANGELOG.md** - ALWAYS update for ANY code change under the `[Unreleased]` section. This is mandatory for every change.
 
 2. **README.md** - Update for user-facing changes including:

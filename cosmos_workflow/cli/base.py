@@ -27,7 +27,7 @@ class CLIContext:
 
     def get_operations(self):
         """Get or create workflow operations (lazy-loaded).
-        
+
         This is the ONLY interface for CLI commands to interact with the system.
         All database operations, GPU execution, and business logic go through here.
         """

@@ -56,7 +56,7 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
             name=name,
             negative_prompt=negative,
         )
-        
+
         # Get the name from the created prompt
         prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
 
@@ -137,7 +137,7 @@ def create_run(ctx, prompt_id, weights, steps, guidance, seed, fps, sigma_max, b
             blur_strength=blur_strength,
             canny_threshold=canny_threshold,
         )
-        
+
         # Get prompt for display
         prompt = ops.get_prompt(prompt_id)
         prompt_name = prompt.get("parameters", {}).get("name", prompt_id) if prompt else prompt_id

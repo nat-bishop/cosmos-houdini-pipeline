@@ -28,7 +28,7 @@ cosmos inference ps_abc123 --weights 0.3 0.3 0.2 0.2  # Creates run internally
 ## Implementation Steps
 
 ### Step 1: Update WorkflowOperations Core Methods
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/api/workflow_operations.py`
 
 **Changes needed:**
@@ -54,7 +54,7 @@ cosmos inference ps_abc123 --weights 0.3 0.3 0.2 0.2  # Creates run internally
 ---
 
 ### Step 2: Remove Create Run Command
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/cli/create.py`
 
 **Changes needed:**
@@ -76,7 +76,7 @@ cosmos create prompt "test" videos/test  # Should still work
 ---
 
 ### Step 3: Update Inference Command for Single/Multiple Prompts
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/cli/inference.py`
 
 **Changes needed:**
@@ -84,7 +84,7 @@ cosmos create prompt "test" videos/test  # Should still work
    ```python
    @click.command()
    @click.argument("prompt_ids", nargs=-1, required=True)  # Accept multiple
-   @click.option("--prompts-file", type=click.File('r'), 
+   @click.option("--prompts-file", type=click.File('r'),
                  help="File containing prompt IDs, one per line")
    ```
 
@@ -92,13 +92,13 @@ cosmos create prompt "test" videos/test  # Should still work
    ```python
    def inference(ctx, prompt_ids, prompts_file, weights, ...):
        ops = ctx.obj.get_operations()
-       
+
        # Gather all prompt IDs
        all_prompts = list(prompt_ids)
        if prompts_file:
-           all_prompts.extend([line.strip() for line in prompts_file 
+           all_prompts.extend([line.strip() for line in prompts_file
                               if line.strip()])
-       
+
        if len(all_prompts) == 1:
            # Single inference
            result = ops.quick_inference(all_prompts[0], weights=weights, ...)
@@ -129,7 +129,7 @@ cosmos inference --prompts-file prompts.txt  # From file
 ---
 
 ### Step 4: Simplify Enhance Command
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/cli/enhance.py`
 
 **Changes needed:**
@@ -138,19 +138,19 @@ cosmos inference --prompts-file prompts.txt  # From file
    ```python
    def prompt_enhance(ctx, prompt_id, model, create_new, dry_run):
        ops = ctx.obj.get_operations()
-       
+
        if dry_run:
            # Show what would happen
            ...
            return
-           
+
        # Simple enhancement
        enhanced = ops.enhance_prompt(
            prompt_id=prompt_id,
            create_new=not overwrite,  # Add --overwrite flag
            enhancement_model=model
        )
-       
+
        display_success(...)
    ```
 
@@ -172,7 +172,7 @@ cosmos enhance ps_abc123 --dry-run  # Preview only
 ---
 
 ### Step 5: Update Main CLI Registration
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/cli/__init__.py` or `cosmos_workflow/__main__.py`
 
 **Changes needed:**
@@ -194,7 +194,7 @@ cosmos generate  # Should show "no such command"
 ---
 
 ### Step 6: Update Create Prompt Next Step Hint
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** `cosmos_workflow/cli/create.py`
 
 **Changes needed:**
@@ -202,7 +202,7 @@ cosmos generate  # Should show "no such command"
    ```python
    # Before:
    display_next_step(f"cosmos create run {prompt['id']}")
-   
+
    # After:
    display_next_step(f"cosmos inference {prompt['id']}")
    ```
@@ -222,7 +222,7 @@ cosmos create prompt "test" videos/test
 ---
 
 ### Step 7: Clean Up Imports and Dependencies
-**Status:** Pending  
+**Status:** Pending
 **Files to modify:** Multiple CLI files
 
 **Changes needed:**
@@ -246,7 +246,7 @@ ruff check cosmos_workflow/cli/  # No unused imports
 ---
 
 ### Step 8: Integration Testing
-**Status:** Pending  
+**Status:** Pending
 
 **Test scenarios:**
 

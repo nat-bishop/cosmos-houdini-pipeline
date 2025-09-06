@@ -70,10 +70,10 @@ def generate(
 
     with create_progress_context("[cyan]Generating video...") as progress:
         task = progress.add_task("[cyan]Creating and executing...", total=3)
-        
+
         # Step 1: Create prompt
         progress.update(task, description="[cyan]Creating prompt...", completed=1)
-        
+
         # Build weights dict
         weights_dict = {
             "vis": weights[0],
@@ -81,10 +81,10 @@ def generate(
             "depth": weights[2],
             "seg": weights[3],
         }
-        
+
         # Step 2 & 3: Create and run in one operation
         progress.update(task, description="[cyan]Running inference...", completed=2)
-        
+
         result = ops.create_and_run(
             prompt_text=prompt_text,
             video_dir=video_dir,
@@ -97,7 +97,7 @@ def generate(
             upscale=upscale,
             upscale_weight=upscale_weight,
         )
-        
+
         progress.update(task, description="[cyan]Complete!", completed=3)
 
     # Display results

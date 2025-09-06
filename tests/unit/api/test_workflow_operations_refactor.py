@@ -301,10 +301,9 @@ class TestBatchInferenceRefactored:
 
         # Verify only 1 run was created (for the existing prompt)
         assert mock_service.create_run.call_count == 1
-        mock_service.create_run.assert_called_once_with(
-            prompt_id="ps_test2",
-            execution_config=pytest.Any(dict)
-        )
+        # Verify it was called with ps_test2
+        call_args = mock_service.create_run.call_args
+        assert call_args[1]["prompt_id"] == "ps_test2"
 
     def test_batch_inference_handles_failed_runs(self, ops, mock_service, mock_orchestrator):
         """Test batch_inference properly marks failed runs."""

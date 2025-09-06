@@ -128,7 +128,7 @@ def create_prompt_with_videos(prompt_text, negative_prompt, video_dir, name=None
 
 
 def list_prompts_for_table():
-    """Get list of prompts formatted for the enhanced table with selection."""
+    """Get list of prompts formatted for the table."""
     try:
         prompts = service.list_prompts(limit=200)
 
@@ -150,6 +150,15 @@ def list_prompts_for_table():
             if parent_id:
                 parent_id = parent_id[:8] + "..."
 
+            # Extract video directory name from inputs
+            video_dir = "-"
+            inputs = prompt.get("inputs", {})
+            if inputs and inputs.get("video"):
+                video_path = Path(inputs["video"])
+                # Get the parent directory name (e.g., "funvideo" from "inputs/videos/funvideo/color.mp4")
+                if len(video_path.parts) > 1:
+                    video_dir = video_path.parent.name
+
             # Format the prompt text to avoid cutoff
             prompt_text = prompt["prompt_text"]
             if len(prompt_text) > 100:
@@ -160,8 +169,8 @@ def list_prompts_for_table():
 
             data.append(
                 {
-                    "Select": False,
                     "Name": name,
+                    "Video Dir": video_dir,
                     "Prompt Text": prompt_text,
                     "Enhanced": "Yes" if is_enhanced else "No",
                     "Parent": parent_id if parent_id else "-",
@@ -307,7 +316,9 @@ def get_prompt_details_with_videos(selected_prompt_id):
                 ("Segmentation", inputs.get("seg")),
             ]:
                 if path and Path(path).exists():
-                    video_previews.append((str(path), video_type))
+                    # Include full path in the caption
+                    caption = f"{video_type}\n{path}"
+                    video_previews.append((str(path), caption))
 
         return (
             gr.update(visible=True, open=True),
@@ -350,6 +361,10 @@ def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tu
 
             # Create enhancement run
             try:
+                results.append(
+                    f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Starting enhancement for {prompt_id[:12]}..."
+                )
+
                 enhancement_run = service.create_run(
                     prompt_id=prompt_id,
                     execution_config={
@@ -362,11 +377,18 @@ def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tu
 
                 # Update status
                 service.update_run_status(enhancement_run["id"], "running")
+                results.append(
+                    f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Calling Pixtral model for {prompt_id[:12]}..."
+                )
 
                 # Run enhancement with pixtral model
                 enhanced_text = orchestrator.run_prompt_upsampling(
                     prompt_text=original_prompt["prompt_text"],
                     model="pixtral",
+                )
+
+                results.append(
+                    f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Enhancement completed for {prompt_id[:12]}"
                 )
 
                 if overwrite_mode:
@@ -381,7 +403,9 @@ def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tu
                             "enhanced_at": datetime.now(timezone.utc).isoformat(),
                         },
                     )
-                    results.append(f"Updated {prompt_id[:12]}...")
+                    results.append(
+                        f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Updated prompt {prompt_id[:12]}"
+                    )
                 else:
                     # Create new enhanced prompt
                     name = original_prompt.get("parameters", {}).get("name", "unnamed")
@@ -398,7 +422,7 @@ def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tu
                         },
                     )
                     results.append(
-                        f"Created {enhanced_prompt['id'][:12]}... from {prompt_id[:12]}..."
+                        f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Created new prompt {enhanced_prompt['id'][:12]} from {prompt_id[:12]}"
                     )
 
                 # Update run status
@@ -415,11 +439,11 @@ def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tu
             except Exception as e:
                 errors.append(f"Failed to enhance {prompt_id[:12]}...: {e}")
 
-        # Format results
+        # Format results with logs
         status = ""
         if results:
-            status += f"Successfully enhanced {len(results)} prompt(s):\n"
-            status += "\n".join(f"  - {r}" for r in results)
+            # Show all log entries
+            status = "\n".join(results)
 
         if errors:
             if status:
@@ -757,8 +781,63 @@ def handle_run_selection(df: pd.DataFrame, evt: gr.SelectData):
     )
 
 
+def handle_prompt_multi_selection(df: pd.DataFrame, selected_ids: list, evt: gr.SelectData):
+    """Handle multi-selection of prompts with Ctrl/Shift support."""
+    if evt.index[0] is None:
+        return selected_ids, df, gr.update(), gr.update()
+
+    # Get the clicked prompt ID
+    prompt_id = df.iloc[evt.index[0]]["ID"]
+    # Remove the "..." suffix if present
+    if prompt_id.endswith("..."):
+        short_id = prompt_id[:-3]
+        # Need to get the full ID from service
+        prompts = service.list_prompts(limit=200)
+        for p in prompts:
+            if p["id"].startswith(short_id):
+                prompt_id = p["id"]
+                break
+
+    # Toggle selection
+    if prompt_id in selected_ids:
+        selected_ids.remove(prompt_id)
+    else:
+        selected_ids.append(prompt_id)
+
+    # Update selection display
+    count = len(selected_ids)
+    selection_text = f"**{count} prompt{'s' if count != 1 else ''} selected**"
+
+    # Apply row highlighting by adding a style column
+    df_with_style = df.copy()
+    # Mark selected rows
+    for idx, row in df_with_style.iterrows():
+        row_id = row["ID"]
+        if row_id.endswith("..."):
+            # Check if this short ID matches any selected full ID
+            short_id = row_id[:-3]
+            is_selected = any(sid.startswith(short_id) for sid in selected_ids)
+        else:
+            is_selected = row_id in selected_ids
+
+        if is_selected:
+            # Apply highlighting style to this row
+            for col in df_with_style.columns:
+                # Add background color style
+                df_with_style.at[idx, col] = (
+                    f'<div style="background-color: rgba(56, 142, 60, 0.2);">{df_with_style.at[idx, col]}</div>'
+                )
+
+    return (
+        selected_ids,
+        df_with_style,
+        gr.update(value=selection_text),
+        gr.update(visible=count > 0),  # Show clear button when items selected
+    )
+
+
 def handle_prompt_selection(df: pd.DataFrame, evt: gr.SelectData):
-    """Handle clicking on a row in the prompts table."""
+    """Handle clicking on a row in the prompts table for details view."""
     if evt.index[0] is not None:
         # Get the full prompt ID from the hidden column
         prompt_id = df.iloc[evt.index[0]]["ID"]
@@ -800,13 +879,56 @@ def handle_prompt_selection(df: pd.DataFrame, evt: gr.SelectData):
     )
 
 
+def clear_prompt_selection(df: pd.DataFrame):
+    """Clear all selected prompts."""
+    return [], df, gr.update(value="**0 prompts selected**"), gr.update(visible=False)
+
+
+def select_all_prompts(df: pd.DataFrame, prompt_ids: list):
+    """Select all visible prompts."""
+    # Get all prompt IDs from the dataframe
+    selected_ids = []
+    for _, row in df.iterrows():
+        prompt_id = row["ID"]
+        if prompt_id.endswith("..."):
+            # Get full ID from the prompt_ids list
+            short_id = prompt_id[:-3]
+            for full_id in prompt_ids:
+                if full_id.startswith(short_id):
+                    selected_ids.append(full_id)
+                    break
+        else:
+            selected_ids.append(prompt_id)
+
+    count = len(selected_ids)
+    selection_text = f"**{count} prompt{'s' if count != 1 else ''} selected**"
+
+    # Apply highlighting to all rows
+    df_with_style = df.copy()
+    for idx in range(len(df_with_style)):
+        for col in df_with_style.columns:
+            df_with_style.at[idx, col] = (
+                f'<div style="background-color: rgba(56, 142, 60, 0.2);">{df_with_style.at[idx, col]}</div>'
+            )
+
+    return selected_ids, df_with_style, gr.update(value=selection_text), gr.update(visible=True)
+
+
 def create_interface():
     """Create the enhanced Gradio interface."""
-    with gr.Blocks(title="Cosmos Workflow") as interface:
+    # Custom CSS for row highlighting
+    custom_css = """
+    .selected-row {
+        background-color: rgba(56, 142, 60, 0.2) !important;
+    }
+    """
+
+    with gr.Blocks(title="Cosmos Workflow", css=custom_css) as interface:
         gr.Markdown("# Cosmos Transfer Workflow - Enhanced UI")
 
-        # Hidden state for selected prompt
+        # Hidden state for selected prompt and multi-selection
         selected_prompt_state = gr.State("")
+        selected_prompt_ids = gr.State([])  # List of selected prompt IDs for bulk operations
 
         with gr.Tabs():
             # INFERENCE TAB - Enhanced with selection and details
@@ -829,14 +951,22 @@ def create_interface():
                                 value="All",
                             )
 
-                        # Prompts table with checkbox selection
+                        # Selection info row
+                        with gr.Row():
+                            selection_info = gr.Markdown("**0 prompts selected**")
+                            clear_selection_btn = gr.Button(
+                                "Clear Selection", variant="secondary", size="sm", visible=False
+                            )
+                            select_all_btn = gr.Button("Select All", variant="secondary", size="sm")
+
+                        # Prompts table without checkbox
                         prompts_df, prompt_ids_state, prompts_message = list_prompts_for_table()
 
                         prompts_table = gr.Dataframe(
                             value=prompts_df,
                             headers=[
-                                "Select",
                                 "Name",
+                                "Video Dir",
                                 "Prompt Text",
                                 "Enhanced",
                                 "Parent",
@@ -844,10 +974,11 @@ def create_interface():
                                 "Created",
                                 "ID",
                             ],
-                            datatype=["bool", "str", "str", "str", "str", "str", "str", "str"],
+                            datatype=["str", "str", "str", "str", "str", "str", "str", "str"],
                             col_count=(8, "fixed"),
-                            interactive=True,
+                            interactive=False,  # Non-interactive to enable sorting
                             wrap=True,
+                            column_widths=[150, 100, 300, 80, 100, 80, 150, 150],
                         )
 
                         prompt_ids_hidden = gr.State(prompt_ids_state)
@@ -858,6 +989,9 @@ def create_interface():
                             )
                             delete_selected_btn = gr.Button(
                                 "Delete Selected", variant="stop", size="sm"
+                            )
+                            enhance_selected_btn = gr.Button(
+                                "Enhance Selected", variant="primary", size="sm"
                             )
                             prompts_status = gr.Textbox(
                                 label="Status",
@@ -1158,6 +1292,7 @@ def create_interface():
                             datatype=["str", "str", "str", "str", "str"],
                             col_count=5,
                             interactive=False,
+                            column_widths=[100, 200, 100, 150, 150],
                         )
 
                         with gr.Row():
@@ -1221,7 +1356,19 @@ def create_interface():
 
         # Event handlers
 
-        # Prompts tab - table selection
+        # Prompts tab - multi-selection for bulk operations
+        prompts_table.select(
+            fn=handle_prompt_multi_selection,
+            inputs=[prompts_table, selected_prompt_ids],
+            outputs=[
+                selected_prompt_ids,
+                prompts_table,
+                selection_info,
+                clear_selection_btn,
+            ],
+        )
+
+        # Double-click for details (using same select event with modifier check)
         prompts_table.select(
             fn=handle_prompt_selection,
             inputs=[prompts_table],
@@ -1235,6 +1382,21 @@ def create_interface():
                 additional_info_display,
                 input_videos_gallery,
             ],
+            queue=False,
+        )
+
+        # Clear selection button
+        clear_selection_btn.click(
+            fn=clear_prompt_selection,
+            inputs=[prompts_table],
+            outputs=[selected_prompt_ids, prompts_table, selection_info, clear_selection_btn],
+        )
+
+        # Select all button
+        select_all_btn.click(
+            fn=select_all_prompts,
+            inputs=[prompts_table, prompt_ids_hidden],
+            outputs=[selected_prompt_ids, prompts_table, selection_info, clear_selection_btn],
         )
 
         # Refresh prompts with filtering
@@ -1268,6 +1430,14 @@ def create_interface():
                 if parent_id:
                     parent_id = parent_id[:8] + "..."
 
+                # Extract video directory name from inputs
+                video_dir = "-"
+                inputs = prompt.get("inputs", {})
+                if inputs and inputs.get("video"):
+                    video_path = Path(inputs["video"])
+                    if len(video_path.parts) > 1:
+                        video_dir = video_path.parent.name
+
                 # Format the prompt text to avoid cutoff
                 prompt_text = prompt["prompt_text"]
                 if len(prompt_text) > 100:
@@ -1278,8 +1448,8 @@ def create_interface():
 
                 data.append(
                     {
-                        "Select": False,
                         "Name": name,
+                        "Video Dir": video_dir,
                         "Prompt Text": prompt_text,
                         "Enhanced": "Yes" if is_enhanced else "No",
                         "Parent": parent_id if parent_id else "-",
@@ -1375,23 +1545,9 @@ def create_interface():
         )
 
         # Show/hide overwrite warning with dynamic content based on selected prompts
-        def update_overwrite_warning(mode, df):
+        def update_overwrite_warning(mode, selected):
             if mode != "Overwrite":
                 return gr.update(visible=False, value="")
-
-            # Get selected prompts
-            selected = []
-            for _i, row in df.iterrows():
-                if row["Select"]:
-                    prompt_id = row["ID"]
-                    if prompt_id.endswith("..."):
-                        prompts = service.list_prompts(limit=200)
-                        for p in prompts:
-                            if p["id"].startswith(prompt_id[:-3]):
-                                selected.append(p["id"])
-                                break
-                    else:
-                        selected.append(prompt_id)
 
             if not selected:
                 return gr.update(
@@ -1434,35 +1590,19 @@ def create_interface():
 
         overwrite_mode.change(
             fn=update_overwrite_warning,
-            inputs=[overwrite_mode, prompts_table],
+            inputs=[overwrite_mode, selected_prompt_ids],
             outputs=[overwrite_warning],
         )
 
         # Also update warning when selection changes
-        prompts_table.change(
+        selected_prompt_ids.change(
             fn=update_overwrite_warning,
-            inputs=[overwrite_mode, prompts_table],
+            inputs=[overwrite_mode, selected_prompt_ids],
             outputs=[overwrite_warning],
         )
 
         # Prompt enhancement with confirmation
-        def prepare_enhancement_confirmation(df, overwrite):
-            # Get selected prompts
-            selected = []
-            for _i, row in df.iterrows():
-                if row["Select"]:
-                    # Get full ID from hidden state
-                    prompt_id = row["ID"]
-                    if prompt_id.endswith("..."):
-                        # Need to match with full IDs
-                        prompts = service.list_prompts(limit=200)
-                        for p in prompts:
-                            if p["id"].startswith(prompt_id[:-3]):
-                                selected.append(p["id"])
-                                break
-                    else:
-                        selected.append(prompt_id)
-
+        def prepare_enhancement_confirmation(selected, overwrite):
             if not selected:
                 return gr.update(visible=False), [], "", "Please select prompts to enhance"
 
@@ -1506,9 +1646,18 @@ def create_interface():
         def cancel_enhancement():
             return "", "Enhancement cancelled", gr.update(visible=False)
 
+        # Add handler for the quick enhance button in the main table area
+        enhance_selected_btn.click(
+            fn=lambda selected: (gr.update(visible=True), selected)
+            if selected
+            else (gr.update(visible=False), []),
+            inputs=[selected_prompt_ids],
+            outputs=[enhancement_confirm_dialog, selected_prompts_for_enhancement],
+        )
+
         enhance_btn.click(
             fn=prepare_enhancement_confirmation,
-            inputs=[prompts_table, overwrite_mode],
+            inputs=[selected_prompt_ids, overwrite_mode],
             outputs=[
                 enhancement_confirm_dialog,
                 selected_prompts_for_enhancement,
@@ -1529,20 +1678,7 @@ def create_interface():
         )
 
         # Delete selected prompts with confirmation
-        def prepare_deletion_confirmation(df):
-            selected = []
-            for _i, row in df.iterrows():
-                if row["Select"]:
-                    prompt_id = row["ID"]
-                    if prompt_id.endswith("..."):
-                        prompts = service.list_prompts(limit=200)
-                        for p in prompts:
-                            if p["id"].startswith(prompt_id[:-3]):
-                                selected.append(p["id"])
-                                break
-                    else:
-                        selected.append(prompt_id)
-
+        def prepare_deletion_confirmation(selected):
             if not selected:
                 return (
                     gr.update(visible=False),
@@ -1608,7 +1744,7 @@ def create_interface():
 
         delete_selected_btn.click(
             fn=prepare_deletion_confirmation,
-            inputs=[prompts_table],
+            inputs=[selected_prompt_ids],
             outputs=[
                 deletion_confirmation_dialog,
                 deletion_preview_text,

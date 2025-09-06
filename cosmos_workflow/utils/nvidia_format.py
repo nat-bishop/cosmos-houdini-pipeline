@@ -30,10 +30,28 @@ def to_cosmos_inference_json(
 
     # Convert Windows paths to Unix paths for GPU server
     def to_unix_path(path: str) -> str:
-        """Convert Windows path to Unix path."""
-        if path:
-            return path.replace("\\", "/")
-        return path
+        """Convert Windows path to Unix path.
+
+        Handles Windows paths that may have escape sequences like \v (vertical tab).
+        """
+        if not path:
+            return path
+
+        # Fix escape sequences that may have been introduced
+        # These occur when Python interprets backslash sequences in file paths
+        # For example: \videos becomes \x0bideos (vertical tab + ideos)
+        path = path.replace("\x0b", "/v")  # \v (vertical tab) in \videos
+        path = path.replace("\x0c", "/f")  # \f (form feed) in \files
+        path = path.replace("\x07", "/a")  # \a (bell) in \apps
+        path = path.replace("\x08", "/b")  # \b (backspace) in \bin
+        path = path.replace("\x0d", "/r")  # \r (carriage return) in \resources
+        path = path.replace("\x09", "/t")  # \t (tab) in \temp
+        path = path.replace("\x0a", "/n")  # \n (newline) in \new
+
+        # Now convert remaining backslashes to forward slashes
+        unix_path = path.replace("\\", "/")
+
+        return unix_path
 
     # Extract negative prompt from parameters if not at top level
     negative_prompt = prompt_dict.get("negative_prompt", "")

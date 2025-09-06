@@ -596,6 +596,10 @@ class WorkflowService:
             logger.error("Error searching prompts: %s", e)
             return []
 
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitize input text by stripping whitespace."""
+        return text.strip() if text else ""
+
     def update_prompt(self, prompt_id: str, **kwargs) -> dict[str, Any] | None:
         """Update an existing prompt's fields.
 

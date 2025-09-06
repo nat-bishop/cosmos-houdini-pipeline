@@ -91,6 +91,7 @@ cosmos status
 
 ### GPU Execution
 - `cosmos inference rs_xxxxx [--upscale/--no-upscale]` - Execute run on GPU with status tracking
+- `cosmos batch-inference rs_xxx1 rs_xxx2 rs_xxx3` - Execute multiple runs as batch for efficiency
 - `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt + run)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
@@ -151,6 +152,35 @@ cosmos create run ps_abc123
 # 3. Execution Layer: Execute on GPU
 cosmos inference rs_xyz789
 # → WorkflowOrchestrator.execute_run() → GPU → Results → WorkflowService.update_run()
+```
+
+### Batch Inference Processing
+
+The system supports efficient batch processing of multiple inference jobs using NVIDIA Cosmos Transfer's batch mode:
+
+```bash
+# Create multiple prompts and runs
+cosmos create prompt "futuristic city" inputs/videos/scene1  # → ps_abc123
+cosmos create run ps_abc123                                  # → rs_xyz789
+cosmos create prompt "cyberpunk street" inputs/videos/scene2 # → ps_def456
+cosmos create run ps_def456                                  # → rs_uvw012
+
+# Execute all runs as a batch for maximum efficiency
+cosmos batch-inference rs_xyz789 rs_uvw012 rs_mno345
+# → Converts to JSONL format → Single GPU execution → Split outputs to individual folders
+```
+
+**Batch Processing Benefits:**
+- **Reduced GPU Initialization** - Models stay loaded in memory between jobs
+- **JSONL Format Support** - Native compatibility with NVIDIA Cosmos Transfer batch processing
+- **Automatic Output Splitting** - Each run gets its own organized output folder
+- **Control Weight Flexibility** - Per-run control weights with auto-generation for missing videos
+- **Progress Tracking** - Individual run status updates within batch execution
+
+**JSONL Format Structure:**
+```json
+{"visual_input": "/path/to/video.mp4", "prompt": "A futuristic city", "control_overrides": {"vis": {"control_weight": 0.3}, "depth": {"input_control": null, "control_weight": 0.2}}}
+{"visual_input": "/path/to/video2.mp4", "prompt": "Cyberpunk street", "control_overrides": {"vis": {"control_weight": 0.4}, "seg": {"input_control": "/path/seg.mp4", "control_weight": 0.3}}}
 ```
 
 ## 🗄️ Database-First Architecture
@@ -215,6 +245,7 @@ cosmos verify --fix
 - **[Development Guide](docs/DEVELOPMENT.md)** - Setup, testing, TDD workflow
 - **[Formatting Guide](docs/FORMATTING.md)** - Code formatting philosophy and workflow
 - **[API Reference](docs/API.md)** - Complete API documentation
+- **[Batch Inference Guide](docs/BATCH_INFERENCE.md)** - Comprehensive guide to batch processing
 - **[Changelog](CHANGELOG.md)** - Version history
 - **[Roadmap](ROADMAP.md)** - Planned features and improvements
 
@@ -240,6 +271,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 - **Service Layer Design** - Clean separation between data operations and GPU execution
 - **Multi-AI Model Support** - Extensible schema supports transfer, enhancement, reason, predict models
 - **Remote GPU Execution** - SSH-based orchestration with Docker containers
+- **Batch Inference Processing** - Run multiple inference jobs together for improved efficiency
 - **Real-Time Progress** - Granular tracking through all execution stages
 - **Rich CLI Interface** - Database IDs, colored tables, JSON output support
 - **Gradio Web UI** - Interactive web interface for prompt creation and inference

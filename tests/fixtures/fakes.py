@@ -169,9 +169,8 @@ class FakeFileTransferService:
             )
             raise ConnectionError("Simulated upload failure")
 
-        if not local_path.exists():
-            raise FileNotFoundError(f"Local file not found: {local_path}")
-
+        # For testing, don't check if file exists - just track the upload
+        # This allows tests to work with mocked paths
         upload_info = {
             "local_path": local_path,
             "remote_path": remote_dir,

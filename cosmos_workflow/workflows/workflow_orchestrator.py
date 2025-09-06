@@ -338,6 +338,7 @@ class WorkflowOrchestrator:
         """
         output_mapping = {}
         output_files = batch_result.get("output_files", [])
+        used_files = set()  # Track which files have been matched
 
         # Match output files to runs
         # NVIDIA batch inference typically names outputs with indices or prompt IDs
@@ -348,10 +349,14 @@ class WorkflowOrchestrator:
             # Look for files with index or run_id in name
             matched_file = None
             for output_file in output_files:
+                if output_file in used_files:
+                    continue  # Skip already matched files
+
                 file_name = Path(output_file).name
                 # Check if file contains run_id or index
                 if run_id in file_name or f"_{i:03d}_" in file_name or f"_{i}_" in file_name:
                     matched_file = output_file
+                    used_files.add(output_file)
                     break
 
             if matched_file:
@@ -361,10 +366,13 @@ class WorkflowOrchestrator:
                     "status": "found",
                 }
             else:
-                # If no match found, try sequential matching
-                if i < len(output_files):
+                # If no match found, try sequential matching with unused files
+                available_files = [f for f in output_files if f not in used_files]
+                if available_files:
+                    matched_file = available_files[0]
+                    used_files.add(matched_file)
                     output_mapping[run_id] = {
-                        "remote_path": output_files[i],
+                        "remote_path": matched_file,
                         "batch_index": i,
                         "status": "assumed",
                     }

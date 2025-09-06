@@ -180,6 +180,61 @@ def list_prompts_for_table():
         return pd.DataFrame(), [], f"Error: {e}"
 
 
+def get_run_details(selected_run_id):
+    """Get detailed view of a run including execution config and outputs."""
+    if not selected_run_id:
+        return gr.update(visible=False), "", "", "", []
+
+    try:
+        run = service.get_run(selected_run_id)
+        if not run:
+            return gr.update(visible=False), "Run not found", "", "", []
+
+        # Get associated prompt
+        prompt = service.get_prompt(run["prompt_id"])
+        prompt_text = prompt["prompt_text"] if prompt else "N/A"
+
+        # Build run info string
+        run_info = f"**Run ID:** {run['id']}\n"
+        run_info += f"**Status:** {run['status']}\n"
+        run_info += f"**Created:** {run['created_at'][:19].replace('T', ' ')}\n"
+        if run.get("updated_at"):
+            run_info += f"**Updated:** {run['updated_at'][:19].replace('T', ' ')}\n"
+
+        # Execution config details
+        exec_config = run.get("execution_config", {})
+        weights = exec_config.get("weights", {})
+        config_text = "**Execution Configuration:**\n"
+        config_text += f"- Visual Weight: {weights.get('vis', 0.25)}\n"
+        config_text += f"- Edge Weight: {weights.get('edge', 0.25)}\n"
+        config_text += f"- Depth Weight: {weights.get('depth', 0.25)}\n"
+        config_text += f"- Segmentation Weight: {weights.get('seg', 0.25)}\n"
+        config_text += f"- Guidance: {exec_config.get('guidance', 7.0)}\n"
+        config_text += f"- Steps: {exec_config.get('num_steps', 35)}\n"
+        config_text += f"- Seed: {exec_config.get('seed', 1)}\n"
+        config_text += f"- Sigma Max: {exec_config.get('sigma_max', 70.0)}\n"
+        config_text += f"- Blur Strength: {exec_config.get('blur_strength', 'medium')}\n"
+        config_text += f"- Canny Threshold: {exec_config.get('canny_threshold', 'medium')}\n"
+
+        # Output video if available
+        video_outputs = []
+        outputs = run.get("outputs", {})
+        output_path = outputs.get("output_path")
+        if output_path and Path(output_path).exists():
+            video_outputs.append((str(output_path), "Output Video"))
+
+        return (
+            gr.update(visible=True, open=True),
+            prompt_text,
+            run_info,
+            config_text,
+            video_outputs,
+        )
+
+    except Exception as e:
+        return gr.update(visible=False), f"Error: {e}", "", "", []
+
+
 def get_prompt_details_with_videos(selected_prompt_id):
     """Get detailed view of a prompt including input videos."""
     if not selected_prompt_id:
@@ -426,6 +481,12 @@ def run_inference_with_live_logs(
     seg_weight: float = 0.25,
     enable_upscaling: bool = False,
     upscale_weight: float = 0.5,
+    guidance: float = 7.0,
+    num_steps: int = 35,
+    seed: int = 1,
+    sigma_max: float = 70.0,
+    blur_strength: str = "medium",
+    canny_threshold: str = "medium",
 ) -> tuple[str, str, str]:
     """Run inference on selected prompt with live log streaming."""
     if not prompt_id:
@@ -444,7 +505,13 @@ def run_inference_with_live_logs(
                 "edge": edge_weight,
                 "depth": depth_weight,
                 "seg": seg_weight,
-            }
+            },
+            "guidance": guidance,
+            "num_steps": num_steps,
+            "seed": seed,
+            "sigma_max": sigma_max,
+            "blur_strength": blur_strength,
+            "canny_threshold": canny_threshold,
         }
 
         run = service.create_run(prompt_id=prompt_id, execution_config=execution_config)
@@ -494,7 +561,8 @@ def run_inference_with_live_logs(
         thread.start()
 
         config_summary = (
-            f"Weights: vis={vis_weight}, edge={edge_weight}, depth={depth_weight}, seg={seg_weight}"
+            f"Weights: vis={vis_weight}, edge={edge_weight}, depth={depth_weight}, seg={seg_weight}\n"
+            f"Guidance: {guidance}, Steps: {num_steps}, Seed: {seed}"
         )
         if enable_upscaling:
             config_summary += f", Upscaling: {upscale_weight}"
@@ -659,6 +727,36 @@ def get_gpu_status():
         return f"### Status Check Failed\n\nError: {e}\n\nMake sure the GPU instance is running.\n\n*Auto-refreshing every 5 seconds*"
 
 
+def handle_run_selection(df: pd.DataFrame, evt: gr.SelectData):
+    """Handle clicking on a row in the runs table."""
+    if evt.index[0] is not None:
+        # Get the full run ID from the hidden column
+        run_id = df.iloc[evt.index[0]]["Full ID"]
+
+        # Get run details
+        details_visible, prompt_text, run_info, config_text, video_outputs = get_run_details(run_id)
+
+        return (
+            run_id,
+            df,
+            details_visible,
+            gr.update(value=prompt_text),
+            gr.update(value=run_info),
+            gr.update(value=config_text),
+            gr.update(value=video_outputs if video_outputs else []),
+        )
+
+    return (
+        "",
+        df,
+        gr.update(visible=False),
+        gr.update(value=""),
+        gr.update(value=""),
+        gr.update(value=""),
+        gr.update(value=[]),
+    )
+
+
 def handle_prompt_selection(df: pd.DataFrame, evt: gr.SelectData):
     """Handle clicking on a row in the prompts table."""
     if evt.index[0] is not None:
@@ -704,7 +802,7 @@ def handle_prompt_selection(df: pd.DataFrame, evt: gr.SelectData):
 
 def create_interface():
     """Create the enhanced Gradio interface."""
-    with gr.Blocks(title="Cosmos Workflow", theme=gr.themes.Soft()) as interface:
+    with gr.Blocks(title="Cosmos Workflow") as interface:
         gr.Markdown("# Cosmos Transfer Workflow - Enhanced UI")
 
         # Hidden state for selected prompt
@@ -717,6 +815,19 @@ def create_interface():
                     # Left side - Prompts table
                     with gr.Column(scale=2):
                         gr.Markdown("### Prompt Management")
+
+                        # Filters
+                        with gr.Row():
+                            prompts_enhanced_filter = gr.Dropdown(
+                                label="Filter by Enhancement",
+                                choices=["All", "Enhanced", "Not Enhanced"],
+                                value="All",
+                            )
+                            prompts_model_filter = gr.Dropdown(
+                                label="Filter by Model",
+                                choices=["All", "transfer"],
+                                value="All",
+                            )
 
                         # Prompts table with checkbox selection
                         prompts_df, prompt_ids_state, prompts_message = list_prompts_for_table()
@@ -837,6 +948,62 @@ def create_interface():
                                             step=0.05,
                                         )
 
+                                    # Advanced Settings
+                                    with gr.Accordion("Advanced Settings", open=False):
+                                        with gr.Row():
+                                            guidance = gr.Slider(
+                                                label="Guidance Scale",
+                                                minimum=1,
+                                                maximum=15,
+                                                value=7.0,
+                                                step=0.5,
+                                            )
+                                            num_steps = gr.Slider(
+                                                label="Number of Steps",
+                                                minimum=10,
+                                                maximum=50,
+                                                value=35,
+                                                step=1,
+                                            )
+
+                                        with gr.Row():
+                                            seed = gr.Number(
+                                                label="Random Seed",
+                                                value=1,
+                                                precision=0,
+                                            )
+                                            sigma_max = gr.Slider(
+                                                label="Maximum Noise Level",
+                                                minimum=0,
+                                                maximum=80,
+                                                value=70.0,
+                                                step=1.0,
+                                            )
+
+                                        with gr.Row():
+                                            blur_strength = gr.Dropdown(
+                                                label="Blur Strength",
+                                                choices=[
+                                                    "very_low",
+                                                    "low",
+                                                    "medium",
+                                                    "high",
+                                                    "very_high",
+                                                ],
+                                                value="medium",
+                                            )
+                                            canny_threshold = gr.Dropdown(
+                                                label="Canny Threshold",
+                                                choices=[
+                                                    "very_low",
+                                                    "low",
+                                                    "medium",
+                                                    "high",
+                                                    "very_high",
+                                                ],
+                                                value="medium",
+                                            )
+
                                     enable_upscaling = gr.Checkbox(
                                         label="Enable 4K Upscaling", value=False
                                     )
@@ -924,7 +1091,6 @@ def create_interface():
                                 file_types=["video"],
                             )
 
-                            upload_btn = gr.Button("Upload Videos", variant="secondary")
                             upload_status = gr.Textbox(label="Upload Status", interactive=False)
                             video_dir = gr.Textbox(visible=False)
 
@@ -937,7 +1103,7 @@ def create_interface():
                             gen_negative_prompt = gr.Textbox(
                                 label="Negative Prompt",
                                 lines=2,
-                                value="blurry, low quality, distorted",
+                                value="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
                             )
                             gen_prompt_name = gr.Textbox(
                                 label="Prompt Name (Optional)", placeholder="my_awesome_prompt"
@@ -953,36 +1119,75 @@ def create_interface():
             with gr.TabItem("Runs"):
                 gr.Markdown("### Run Management")
 
-                runs_data = []
-                runs = service.list_runs(limit=50)
-                for run in runs:
-                    try:
-                        prompt = service.get_prompt(run["prompt_id"])
-                        prompt_text = prompt["prompt_text"][:50] + "..."
-                    except Exception:
-                        prompt_text = "N/A"
-
-                    runs_data.append(
-                        [
-                            run["id"][:12] + "...",
-                            prompt_text,
-                            run["status"],
-                            run["created_at"],
-                            run["id"],
-                        ]
-                    )
-
-                runs_df = gr.Dataframe(
-                    value=runs_data,
-                    headers=["ID", "Prompt", "Status", "Created", "Full ID"],
-                    datatype=["str", "str", "str", "str", "str"],
-                    col_count=5,
-                    interactive=False,
-                )
+                # Hidden state for selected run
+                selected_run_state = gr.State("")
 
                 with gr.Row():
-                    refresh_runs_btn = gr.Button("Refresh", variant="secondary")
-                    runs_message = gr.Textbox(label="Message", interactive=False)
+                    # Left side - Runs table with filters
+                    with gr.Column(scale=2):
+                        # Filters
+                        with gr.Row():
+                            runs_status_filter = gr.Dropdown(
+                                label="Filter by Status",
+                                choices=["All", "pending", "running", "completed", "failed"],
+                                value="All",
+                            )
+
+                        runs_data = []
+                        runs = service.list_runs(limit=50)
+                        for run in runs:
+                            try:
+                                prompt = service.get_prompt(run["prompt_id"])
+                                prompt_text = prompt["prompt_text"][:50] + "..."
+                            except Exception:
+                                prompt_text = "N/A"
+
+                            runs_data.append(
+                                [
+                                    run["id"][:12] + "...",
+                                    prompt_text,
+                                    run["status"],
+                                    run["created_at"][:16].replace("T", " "),
+                                    run["id"],
+                                ]
+                            )
+
+                        runs_df = gr.Dataframe(
+                            value=runs_data,
+                            headers=["ID", "Prompt", "Status", "Created", "Full ID"],
+                            datatype=["str", "str", "str", "str", "str"],
+                            col_count=5,
+                            interactive=False,
+                        )
+
+                        with gr.Row():
+                            refresh_runs_btn = gr.Button("Refresh", variant="secondary")
+                            runs_message = gr.Textbox(label="Message", interactive=False)
+
+                    # Right side - Run details
+                    with gr.Column(scale=1):
+                        with gr.Accordion(
+                            "Run Details", open=False, visible=False
+                        ) as run_details_accordion:
+                            run_prompt_display = gr.Textbox(
+                                label="Prompt Text", lines=3, max_lines=5, interactive=False
+                            )
+
+                            run_info_display = gr.Markdown("")
+
+                            run_config_display = gr.Markdown("")
+
+                            # Output video display
+                            gr.Markdown("**Output Video:**")
+                            run_output_gallery = gr.Gallery(
+                                label="",
+                                show_label=False,
+                                columns=1,
+                                rows=1,
+                                object_fit="contain",
+                                height=400,
+                                preview=True,
+                            )
 
             # GALLERY TAB
             with gr.TabItem("Gallery"):
@@ -1032,21 +1237,115 @@ def create_interface():
             ],
         )
 
-        # Refresh prompts
+        # Refresh prompts with filtering
+        def refresh_prompts_with_filter(enhanced_filter="All", model_filter="All"):
+            prompts = service.list_prompts(limit=200)
+
+            if not prompts:
+                return pd.DataFrame(), [], "No prompts yet"
+
+            data = []
+            prompt_ids = []
+
+            for prompt in prompts:
+                # Apply enhanced filter
+                is_enhanced = prompt.get("parameters", {}).get("enhanced", False)
+                if enhanced_filter == "Enhanced" and not is_enhanced:
+                    continue
+                elif enhanced_filter == "Not Enhanced" and is_enhanced:
+                    continue
+
+                # Apply model filter
+                model_type = prompt.get("model_type", "transfer")
+                if model_filter != "All" and model_type != model_filter:
+                    continue
+
+                # Get name from parameters or use default
+                name = prompt.get("parameters", {}).get("name", "unnamed")
+
+                # Get parent prompt ID if this is enhanced
+                parent_id = prompt.get("parameters", {}).get("parent_prompt_id", "")
+                if parent_id:
+                    parent_id = parent_id[:8] + "..."
+
+                # Format the prompt text to avoid cutoff
+                prompt_text = prompt["prompt_text"]
+                if len(prompt_text) > 100:
+                    prompt_text = prompt_text[:97] + "..."
+
+                # Format date without T and seconds
+                created_date = prompt["created_at"][:16].replace("T", " ")  # YYYY-MM-DD HH:MM
+
+                data.append(
+                    {
+                        "Select": False,
+                        "Name": name,
+                        "Prompt Text": prompt_text,
+                        "Enhanced": "Yes" if is_enhanced else "No",
+                        "Parent": parent_id if parent_id else "-",
+                        "Model": model_type,
+                        "Created": created_date,
+                        "ID": prompt["id"][:12] + "...",
+                    }
+                )
+                prompt_ids.append(prompt["id"])
+
+            df = pd.DataFrame(data)
+            return df, prompt_ids, f"Showing {len(data)} prompts"
+
         def refresh_prompts():
-            df, ids, msg = list_prompts_for_table()
-            return df, ids, msg
+            return refresh_prompts_with_filter("All", "All")
 
         refresh_prompts_btn.click(
-            fn=refresh_prompts, outputs=[prompts_table, prompt_ids_hidden, prompts_status]
+            fn=lambda e, m: refresh_prompts_with_filter(e, m),
+            inputs=[prompts_enhanced_filter, prompts_model_filter],
+            outputs=[prompts_table, prompt_ids_hidden, prompts_status],
+        )
+
+        prompts_enhanced_filter.change(
+            fn=lambda e, m: refresh_prompts_with_filter(e, m),
+            inputs=[prompts_enhanced_filter, prompts_model_filter],
+            outputs=[prompts_table, prompt_ids_hidden, prompts_status],
+        )
+
+        prompts_model_filter.change(
+            fn=lambda e, m: refresh_prompts_with_filter(e, m),
+            inputs=[prompts_enhanced_filter, prompts_model_filter],
+            outputs=[prompts_table, prompt_ids_hidden, prompts_status],
         )
 
         # Run inference from prompts tab
-        def run_inference_from_prompt(prompt_id, vis, edge, depth, seg, upscale, up_weight):
+        def run_inference_from_prompt(
+            prompt_id,
+            vis,
+            edge,
+            depth,
+            seg,
+            upscale,
+            up_weight,
+            guidance,
+            num_steps,
+            seed,
+            sigma_max,
+            blur_strength,
+            canny_threshold,
+        ):
             if not prompt_id:
                 return "", "Please select a prompt first", ""
             run_id, status, config = run_inference_with_live_logs(
-                prompt_id, vis, edge, depth, seg, upscale, up_weight
+                prompt_id,
+                vis,
+                edge,
+                depth,
+                seg,
+                upscale,
+                up_weight,
+                guidance,
+                num_steps,
+                seed,
+                sigma_max,
+                blur_strength,
+                canny_threshold,
             )
             return run_id, status, config
 
@@ -1060,6 +1359,12 @@ def create_interface():
                 seg_weight,
                 enable_upscaling,
                 upscale_weight,
+                guidance,
+                num_steps,
+                seed,
+                sigma_max,
+                blur_strength,
+                canny_threshold,
             ],
             outputs=[run_id_state, inference_status, live_logs],
         )
@@ -1326,7 +1631,18 @@ def create_interface():
         log_timer.tick(fn=get_live_logs, inputs=[run_id_state], outputs=[live_logs])
 
         # Generate tab handlers
-        upload_btn.click(
+        # Auto-upload when files are selected
+        color_upload.change(
+            fn=handle_video_uploads,
+            inputs=[color_upload, depth_upload, seg_upload],
+            outputs=[video_dir, upload_status],
+        )
+        depth_upload.change(
+            fn=handle_video_uploads,
+            inputs=[color_upload, depth_upload, seg_upload],
+            outputs=[video_dir, upload_status],
+        )
+        seg_upload.change(
             fn=handle_video_uploads,
             inputs=[color_upload, depth_upload, seg_upload],
             outputs=[video_dir, upload_status],
@@ -1338,11 +1654,15 @@ def create_interface():
             outputs=[gen_prompt_id_output, gen_prompt_status],
         ).then(fn=refresh_prompts, outputs=[prompts_table, prompt_ids_hidden, prompts_status])
 
-        # Runs tab refresh
-        def refresh_runs():
+        # Runs tab refresh with filtering
+        def refresh_runs(status_filter="All"):
             runs_data = []
-            runs = service.list_runs(limit=50)
+            runs = service.list_runs(limit=100)
             for run in runs:
+                # Apply status filter
+                if status_filter != "All" and run["status"] != status_filter:
+                    continue
+
                 try:
                     prompt = service.get_prompt(run["prompt_id"])
                     prompt_text = prompt["prompt_text"][:50] + "..."
@@ -1354,13 +1674,38 @@ def create_interface():
                         run["id"][:12] + "...",
                         prompt_text,
                         run["status"],
-                        run["created_at"],
+                        run["created_at"][:16].replace("T", " "),
                         run["id"],
                     ]
                 )
             return runs_data, f"Showing {len(runs_data)} runs"
 
-        refresh_runs_btn.click(fn=refresh_runs, outputs=[runs_df, runs_message])
+        refresh_runs_btn.click(
+            fn=lambda f: refresh_runs(f),
+            inputs=[runs_status_filter],
+            outputs=[runs_df, runs_message],
+        )
+
+        runs_status_filter.change(
+            fn=lambda f: refresh_runs(f),
+            inputs=[runs_status_filter],
+            outputs=[runs_df, runs_message],
+        )
+
+        # Runs table selection
+        runs_df.select(
+            fn=handle_run_selection,
+            inputs=[runs_df],
+            outputs=[
+                selected_run_state,
+                runs_df,
+                run_details_accordion,
+                run_prompt_display,
+                run_info_display,
+                run_config_display,
+                run_output_gallery,
+            ],
+        )
 
         # Gallery refresh
         refresh_gallery_btn.click(fn=get_completed_videos, outputs=[gallery])
@@ -1369,7 +1714,7 @@ def create_interface():
         interface.load(
             fn=refresh_prompts, outputs=[prompts_table, prompt_ids_hidden, prompts_status]
         )
-        interface.load(fn=refresh_runs, outputs=[runs_df, runs_message])
+        interface.load(fn=lambda: refresh_runs("All"), outputs=[runs_df, runs_message])
 
     return interface
 

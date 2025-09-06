@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Batch Inference Support (2025-09-06)
+- **Comprehensive Batch Inference System**
+  - Added capability to run multiple inference jobs together using NVIDIA Cosmos Transfer's batch mode
+  - New `to_cosmos_batch_inference_jsonl()` function converts run/prompt pairs to JSONL format
+  - JSONL format supports per-video control overrides and auto-generation of missing controls
+  - Batch processing reduces GPU initialization overhead by keeping models in memory
+  - Automatic splitting of batch output folder into individual run folders with proper naming
+
+- **New Batch Processing Functions**
+  - `cosmos_workflow.utils.nvidia_format.to_cosmos_batch_inference_jsonl()`: Converts multiple runs to JSONL
+  - `cosmos_workflow.utils.nvidia_format.write_batch_jsonl()`: Writes batch data to JSONL file
+  - `cosmos_workflow.execution.docker_executor.run_batch_inference()`: Executes batch on GPU
+  - `cosmos_workflow.workflows.workflow_orchestrator.execute_batch_runs()`: Orchestrates complete batch workflow
+
+- **Production Script**
+  - New `scripts/batch_inference.sh` for GPU batch execution with logging and environment setup
+  - Batch spec generation for reproducibility and debugging
+  - Complete error handling and execution logs per batch
+
+- **Comprehensive Test Coverage**
+  - 39 new tests across 3 test files covering all batch inference functionality
+  - Unit tests for JSONL conversion, batch orchestration, and Docker execution
+  - Tests validate JSONL format compliance with NVIDIA Cosmos Transfer requirements
+  - Edge case testing for missing videos, empty batches, and error conditions
+
 ### Removed - Database Cleanup (2025-09-06)
 - **Removed unused Progress model**
   - Deleted Progress model from database schema (was never implemented in production)

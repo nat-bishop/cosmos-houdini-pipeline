@@ -516,6 +516,46 @@ class WorkflowOperations:
         """
         return self.service.get_run(run_id)
 
+    def get_prompt_with_runs(self, prompt_id: str) -> dict[str, Any] | None:
+        """Get a prompt with all its associated runs.
+
+        Args:
+            prompt_id: The prompt ID
+
+        Returns:
+            Dictionary containing prompt data and its runs, or None if not found
+        """
+        prompt = self.service.get_prompt(prompt_id)
+        if not prompt:
+            return None
+
+        # Get all runs for this prompt
+        runs = self.service.list_runs(prompt_id=prompt_id, limit=100)
+        prompt["runs"] = runs
+        return prompt
+
+    def preview_prompt_deletion(self, prompt_id: str) -> dict[str, Any]:
+        """Preview what will be deleted if a prompt is removed.
+
+        Args:
+            prompt_id: The prompt ID to preview deletion for
+
+        Returns:
+            Dictionary with prompt info, associated runs, and warnings
+        """
+        prompt = self.service.get_prompt(prompt_id)
+        if not prompt:
+            return {"error": f"Prompt not found: {prompt_id}"}
+
+        runs = self.service.list_runs(prompt_id=prompt_id, limit=100)
+
+        return {
+            "prompt": prompt,
+            "runs": runs,
+            "run_count": len(runs),
+            "warnings": [],
+        }
+
     def delete_prompt(self, prompt_id: str) -> dict[str, Any]:
         """Delete a prompt and its associated runs.
 

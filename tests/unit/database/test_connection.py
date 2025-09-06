@@ -59,7 +59,8 @@ class TestDatabaseConnection:
 
             assert "prompts" in table_names
             assert "runs" in table_names
-            assert "progress" in table_names
+            # Only two tables should exist
+            assert len(table_names) == 2
 
     def test_get_session_context_manager(self):
         """Test that get_session returns a working context manager."""
@@ -274,7 +275,8 @@ class TestDatabaseHelpers:
 
                 assert "prompts" in table_names
                 assert "runs" in table_names
-                assert "progress" in table_names
+                # Only two tables should exist
+                assert len(table_names) == 2
 
             # Clean up
             conn.close()

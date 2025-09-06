@@ -19,12 +19,12 @@ class TestSearchCommand:
         return CliRunner()
 
     @pytest.fixture
-    def mock_service(self):
-        """Create a mock WorkflowService."""
+    def mock_operations(self):
+        """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.search.get_service")
-    def test_search_with_results(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.search.get_operations")
+    def test_search_with_results(self, mock_get_operations, runner, mock_operations):
         """Test searching prompts with matching results."""
         # Arrange
         mock_prompts = [
@@ -43,8 +43,8 @@ class TestSearchCommand:
                 "inputs": {"video": "test2.mp4"},
             },
         ]
-        mock_service.search_prompts.return_value = mock_prompts
-        mock_get_service.return_value = mock_service
+        mock_operations.search_prompts.return_value = mock_prompts
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(search_command, ["cyberpunk"])
@@ -54,14 +54,14 @@ class TestSearchCommand:
         assert "ps_001" in result.output
         assert "ps_002" in result.output
         assert "cyberpunk" in result.output.lower()
-        mock_service.search_prompts.assert_called_once_with("cyberpunk", limit=50)
+        mock_operations.search_prompts.assert_called_once_with("cyberpunk", limit=50)
 
-    @patch("cosmos_workflow.cli.search.get_service")
-    def test_search_no_results(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.search.get_operations")
+    def test_search_no_results(self, mock_get_operations, runner, mock_operations):
         """Test searching prompts with no matches."""
         # Arrange
-        mock_service.search_prompts.return_value = []
-        mock_get_service.return_value = mock_service
+        mock_operations.search_prompts.return_value = []
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(search_command, ["nonexistent"])
@@ -69,24 +69,24 @@ class TestSearchCommand:
         # Assert
         assert result.exit_code == 0
         assert "No prompts found" in result.output
-        mock_service.search_prompts.assert_called_once_with("nonexistent", limit=50)
+        mock_operations.search_prompts.assert_called_once_with("nonexistent", limit=50)
 
-    @patch("cosmos_workflow.cli.search.get_service")
-    def test_search_with_limit(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.search.get_operations")
+    def test_search_with_limit(self, mock_get_operations, runner, mock_operations):
         """Test searching prompts with custom limit."""
         # Arrange
-        mock_service.search_prompts.return_value = []
-        mock_get_service.return_value = mock_service
+        mock_operations.search_prompts.return_value = []
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(search_command, ["test", "--limit", "10"])
 
         # Assert
         assert result.exit_code == 0
-        mock_service.search_prompts.assert_called_once_with("test", limit=10)
+        mock_operations.search_prompts.assert_called_once_with("test", limit=10)
 
-    @patch("cosmos_workflow.cli.search.get_service")
-    def test_search_empty_query(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.search.get_operations")
+    def test_search_empty_query(self, mock_get_operations, runner, mock_operations):
         """Test search with empty query."""
         # Act
         result = runner.invoke(search_command, [""])
@@ -95,8 +95,8 @@ class TestSearchCommand:
         assert result.exit_code != 0
         assert "Search query cannot be empty" in result.output
 
-    @patch("cosmos_workflow.cli.search.get_service")
-    def test_search_json_output(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.search.get_operations")
+    def test_search_json_output(self, mock_get_operations, runner, mock_operations):
         """Test search with JSON output format."""
         # Arrange
         mock_prompts = [
@@ -108,8 +108,8 @@ class TestSearchCommand:
                 "inputs": {"video": "test.mp4"},
             }
         ]
-        mock_service.search_prompts.return_value = mock_prompts
-        mock_get_service.return_value = mock_service
+        mock_operations.search_prompts.return_value = mock_prompts
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(search_command, ["test", "--json"])
@@ -130,12 +130,12 @@ class TestShowCommand:
         return CliRunner()
 
     @pytest.fixture
-    def mock_service(self):
-        """Create a mock WorkflowService."""
+    def mock_operations(self):
+        """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.show.get_service")
-    def test_show_prompt_with_runs(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.show.get_operations")
+    def test_show_prompt_with_runs(self, mock_get_operations, runner, mock_operations):
         """Test showing prompt with associated runs."""
         # Arrange
         mock_prompt_data = {
@@ -160,8 +160,8 @@ class TestShowCommand:
                 },
             ],
         }
-        mock_service.get_prompt_with_runs.return_value = mock_prompt_data
-        mock_get_service.return_value = mock_service
+        mock_operations.get_prompt_with_runs.return_value = mock_prompt_data
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(show_command, ["ps_001"])
@@ -174,10 +174,10 @@ class TestShowCommand:
         assert "rs_002" in result.output
         assert "completed" in result.output
         assert "failed" in result.output
-        mock_service.get_prompt_with_runs.assert_called_once_with("ps_001")
+        mock_operations.get_prompt_with_runs.assert_called_once_with("ps_001")
 
-    @patch("cosmos_workflow.cli.show.get_service")
-    def test_show_prompt_no_runs(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.show.get_operations")
+    def test_show_prompt_no_runs(self, mock_get_operations, runner, mock_operations):
         """Test showing prompt with no runs."""
         # Arrange
         mock_prompt_data = {
@@ -189,8 +189,8 @@ class TestShowCommand:
             "parameters": {"num_steps": 35},
             "runs": [],
         }
-        mock_service.get_prompt_with_runs.return_value = mock_prompt_data
-        mock_get_service.return_value = mock_service
+        mock_operations.get_prompt_with_runs.return_value = mock_prompt_data
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(show_command, ["ps_001"])
@@ -201,12 +201,12 @@ class TestShowCommand:
         assert "Test prompt" in result.output
         assert "No runs" in result.output or "0 runs" in result.output
 
-    @patch("cosmos_workflow.cli.show.get_service")
-    def test_show_prompt_not_found(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.show.get_operations")
+    def test_show_prompt_not_found(self, mock_get_operations, runner, mock_operations):
         """Test showing non-existent prompt."""
         # Arrange
-        mock_service.get_prompt_with_runs.return_value = None
-        mock_get_service.return_value = mock_service
+        mock_operations.get_prompt_with_runs.return_value = None
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(show_command, ["ps_nonexistent"])
@@ -214,10 +214,10 @@ class TestShowCommand:
         # Assert
         assert result.exit_code == 0
         assert "Prompt not found" in result.output
-        mock_service.get_prompt_with_runs.assert_called_once_with("ps_nonexistent")
+        mock_operations.get_prompt_with_runs.assert_called_once_with("ps_nonexistent")
 
-    @patch("cosmos_workflow.cli.show.get_service")
-    def test_show_json_output(self, mock_get_service, runner, mock_service):
+    @patch("cosmos_workflow.cli.show.get_operations")
+    def test_show_json_output(self, mock_get_operations, runner, mock_operations):
         """Test show with JSON output format."""
         # Arrange
         mock_prompt_data = {
@@ -236,8 +236,8 @@ class TestShowCommand:
                 }
             ],
         }
-        mock_service.get_prompt_with_runs.return_value = mock_prompt_data
-        mock_get_service.return_value = mock_service
+        mock_operations.get_prompt_with_runs.return_value = mock_prompt_data
+        mock_get_operations.return_value = mock_operations
 
         # Act
         result = runner.invoke(show_command, ["ps_001", "--json"])

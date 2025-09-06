@@ -137,7 +137,7 @@ class TestQuickInferenceRefactored:
             "duration_seconds": 90,
         }
 
-        result = ops.quick_inference(
+        ops.quick_inference(
             "ps_test123", num_steps=50, guidance=8.5, seed=42, upscale=True, upscale_weight=0.7
         )
 
@@ -285,7 +285,7 @@ class TestBatchInferenceRefactored:
 
         shared_weights = {"vis": 0.5, "edge": 0.2, "depth": 0.2, "seg": 0.1}
 
-        result = ops.batch_inference(["ps_test1", "ps_test2"], shared_weights=shared_weights)
+        ops.batch_inference(["ps_test1", "ps_test2"], shared_weights=shared_weights)
 
         # Verify shared weights are used for all runs
         for call_args in mock_service.create_run.call_args_list:
@@ -306,7 +306,7 @@ class TestBatchInferenceRefactored:
         }
 
         # Try to process 3 prompts, but only 1 exists
-        result = ops.batch_inference(["ps_missing1", "ps_test2", "ps_missing3"])
+        ops.batch_inference(["ps_missing1", "ps_test2", "ps_missing3"])
 
         # Verify only 1 run was created (for the existing prompt)
         assert mock_service.create_run.call_count == 1
@@ -336,7 +336,7 @@ class TestBatchInferenceRefactored:
             "failed": 1,
         }
 
-        result = ops.batch_inference(["ps_test1", "ps_test2"])
+        ops.batch_inference(["ps_test1", "ps_test2"])
 
         # Verify status updates
         mock_service.update_run_status.assert_any_call("rs_auto1", "completed")
@@ -351,7 +351,7 @@ class TestBatchInferenceRefactored:
             "output_mapping": {"rs_auto1": "out.mp4"}
         }
 
-        result = ops.batch_inference(["ps_test1"], num_steps=50, guidance=8.5, seed=42)
+        ops.batch_inference(["ps_test1"], num_steps=50, guidance=8.5, seed=42)
 
         # Verify additional params are passed to run creation
         call_args = mock_service.create_run.call_args
@@ -361,7 +361,7 @@ class TestBatchInferenceRefactored:
 
     def test_batch_inference_empty_list(self, ops, mock_orchestrator):
         """Test batch_inference with empty prompt list."""
-        result = ops.batch_inference([])
+        ops.batch_inference([])
 
         # Should handle gracefully
         mock_orchestrator.execute_batch_runs.assert_called_once_with([])
@@ -385,18 +385,18 @@ class TestCreateAndExecuteMethods:
                 with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
                     return WorkflowOperations(mock_config)
 
-    def test_create_run_still_exists_as_deprecated(self, ops):
-        """Test that create_run still exists but is deprecated."""
-        assert hasattr(ops, "create_run")
-        assert callable(ops.create_run)
-        # Verify it's documented as deprecated
-        docstring = ops.create_run.__doc__ or ""
-        assert "deprecated" in docstring.lower()
+    def test_quick_inference_replaces_create_and_execute(self, ops):
+        """Test that quick_inference is the new primary method."""
+        assert hasattr(ops, "quick_inference")
+        assert callable(ops.quick_inference)
+        # Verify it's documented as the primary method
+        docstring = ops.quick_inference.__doc__ or ""
+        assert "execute inference" in docstring.lower() or "run inference" in docstring.lower()
 
-    def test_execute_run_still_exists_as_deprecated(self, ops):
-        """Test that execute_run still exists but is deprecated."""
-        assert hasattr(ops, "execute_run")
-        assert callable(ops.execute_run)
-        # Verify it's documented as deprecated
-        docstring = ops.execute_run.__doc__ or ""
-        assert "deprecated" in docstring.lower()
+    def test_batch_inference_available(self, ops):
+        """Test that batch_inference method exists."""
+        assert hasattr(ops, "batch_inference")
+        assert callable(ops.batch_inference)
+        # Verify it handles multiple prompts
+        docstring = ops.batch_inference.__doc__ or ""
+        assert "batch" in docstring.lower() or "multiple" in docstring.lower()

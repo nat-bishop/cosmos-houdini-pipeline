@@ -97,18 +97,31 @@ class TestCreatePromptCommand:
         assert "error" in result.output.lower() or "not found" in result.output.lower()
 
     def test_create_prompt_missing_video_files(self, runner):
-        """Test that missing required video files causes error."""
+        """Test that missing required color.mp4 file causes error."""
         with tempfile.TemporaryDirectory() as tmpdir:
             video_dir = Path(tmpdir) / "incomplete_videos"
             video_dir.mkdir()
-            # Only create one file, missing depth and segmentation
+            # Don't create color.mp4 - this should cause an error
+
+            result = runner.invoke(cli, ["create", "prompt", "test prompt", str(video_dir)])
+
+            # Should fail when color.mp4 is missing
+            assert result.exit_code != 0
+            assert "color.mp4" in result.output.lower() or "not found" in result.output.lower()
+
+    def test_create_prompt_with_color_only(self, runner):
+        """Test that prompt creation works with only color.mp4 (depth and segmentation optional)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_dir = Path(tmpdir) / "color_only_videos"
+            video_dir.mkdir()
+            # Only create color.mp4 - depth and segmentation are optional
             (video_dir / "color.mp4").write_text("mock content")
 
             result = runner.invoke(cli, ["create", "prompt", "test prompt", str(video_dir)])
 
-            # Current implementation validates that required files exist
-            assert result.exit_code != 0
-            assert "missing" in result.output.lower() or "not found" in result.output.lower()
+            # Should succeed with only color.mp4
+            assert result.exit_code == 0
+            assert "successfully" in result.output.lower()
 
     def test_create_prompt_auto_generates_name(self, runner, test_video_dir):
         """Test that name is auto-generated when not provided."""

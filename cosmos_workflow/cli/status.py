@@ -93,7 +93,8 @@ def status(ctx, stream):
         status_data["Running Containers"] = "[yellow]None[/yellow]"
 
     # Display the table
-    table = create_info_table(status_data, title="Remote GPU Status")
+    console.print("\n[bold cyan]Remote GPU Status[/bold cyan]")
+    table = create_info_table(status_data)
     console.print(table)
 
     # Show tips based on status

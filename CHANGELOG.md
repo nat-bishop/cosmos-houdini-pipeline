@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - WorkflowOperations API Simplified (Step 1) (2025-09-06)
+- **Simplified WorkflowOperations API for easier usage**
+  - `quick_inference()` is now the primary inference method accepting `prompt_id` directly
+  - `batch_inference()` now accepts list of `prompt_ids` instead of run_ids
+  - Both methods create runs internally, eliminating the need for manual run creation in most workflows
+  - `create_run()` and `execute_run()` remain available as low-level methods for advanced use cases
+  - Updated docstrings emphasize that most users should use the simplified methods
+  - Maintains backward compatibility while providing a more intuitive API
+
 ### Added - CLI Batch Inference Command (2025-09-06)
 - **New `cosmos batch-inference` CLI command**
   - Command syntax: `cosmos batch-inference <run_ids...>` with options `--batch-name` and `--dry-run`

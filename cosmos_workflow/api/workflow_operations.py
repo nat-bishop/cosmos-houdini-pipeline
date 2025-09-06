@@ -419,7 +419,7 @@ class WorkflowOperations:
         Args:
             prompt_id: ID of prompt to run
             weights: Control weights
-            **kwargs: Additional execution parameters (num_steps, guidance, seed, 
+            **kwargs: Additional execution parameters (num_steps, guidance, seed,
                      upscale, upscale_weight, etc.)
 
         Returns:

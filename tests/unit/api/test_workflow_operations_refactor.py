@@ -20,9 +20,7 @@ class TestQuickInferenceRefactored:
     def mock_config(self):
         """Create mock config manager."""
         config = MagicMock(spec=ConfigManager)
-        config.get_local_config.return_value = MagicMock(
-            outputs_dir=Path("/tmp/outputs")
-        )
+        config.get_local_config.return_value = MagicMock(outputs_dir=Path("/tmp/outputs"))
         return config
 
     @pytest.fixture
@@ -41,8 +39,13 @@ class TestQuickInferenceRefactored:
     def ops(self, mock_config, mock_service, mock_orchestrator):
         """Create WorkflowOperations instance with mocked dependencies."""
         with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch("cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service):
-                with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator", return_value=mock_orchestrator):
+            with patch(
+                "cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service
+            ):
+                with patch(
+                    "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
+                    return_value=mock_orchestrator,
+                ):
                     ops = WorkflowOperations(mock_config)
                     ops.service = mock_service
                     ops.orchestrator = mock_orchestrator
@@ -56,7 +59,7 @@ class TestQuickInferenceRefactored:
             "prompt_text": "A beautiful sunset",
             "model_type": "transfer",
             "inputs": {"video": "test.mp4"},
-            "parameters": {}
+            "parameters": {},
         }
         mock_service.get_prompt.return_value = mock_prompt
 
@@ -65,15 +68,14 @@ class TestQuickInferenceRefactored:
             "id": "rs_auto123",
             "prompt_id": "ps_test123",
             "status": "pending",
-            "execution_config": {"weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}}
+            "execution_config": {
+                "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+            },
         }
         mock_service.create_run.return_value = mock_run
 
         # Setup mock execution result
-        mock_result = {
-            "output_path": "/outputs/result.mp4",
-            "duration_seconds": 120
-        }
+        mock_result = {"output_path": "/outputs/result.mp4", "duration_seconds": 120}
         mock_orchestrator.execute_run.return_value = mock_result
 
         # Call quick_inference with prompt_id directly (no run_id needed)
@@ -90,8 +92,8 @@ class TestQuickInferenceRefactored:
                 "sigma_max": 70.0,
                 "blur_strength": "medium",
                 "canny_threshold": "medium",
-                "fps": 24
-            }
+                "fps": 24,
+            },
         )
 
         # Verify it executes the run
@@ -109,7 +111,10 @@ class TestQuickInferenceRefactored:
         mock_service.get_prompt.return_value = mock_prompt
         mock_run = {"id": "rs_auto456", "prompt_id": "ps_test123"}
         mock_service.create_run.return_value = mock_run
-        mock_orchestrator.execute_run.return_value = {"output_path": "test.mp4", "duration_seconds": 60}
+        mock_orchestrator.execute_run.return_value = {
+            "output_path": "test.mp4",
+            "duration_seconds": 60,
+        }
 
         # Custom weights
         weights = {"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1}
@@ -127,15 +132,13 @@ class TestQuickInferenceRefactored:
         mock_service.get_prompt.return_value = mock_prompt
         mock_run = {"id": "rs_auto789", "prompt_id": "ps_test123"}
         mock_service.create_run.return_value = mock_run
-        mock_orchestrator.execute_run.return_value = {"output_path": "test.mp4", "duration_seconds": 90}
+        mock_orchestrator.execute_run.return_value = {
+            "output_path": "test.mp4",
+            "duration_seconds": 90,
+        }
 
         result = ops.quick_inference(
-            "ps_test123",
-            num_steps=50,
-            guidance=8.5,
-            seed=42,
-            upscale=True,
-            upscale_weight=0.7
+            "ps_test123", num_steps=50, guidance=8.5, seed=42, upscale=True, upscale_weight=0.7
         )
 
         # Verify additional params are passed
@@ -146,7 +149,7 @@ class TestQuickInferenceRefactored:
 
         # Verify upscale params are passed to executor
         exec_call_args = mock_orchestrator.execute_run.call_args
-        assert exec_call_args[1]["upscale"] == True
+        assert exec_call_args[1]["upscale"] is True
         assert exec_call_args[1]["upscale_weight"] == 0.7
 
     def test_quick_inference_invalid_prompt_id(self, ops, mock_service):
@@ -170,9 +173,7 @@ class TestBatchInferenceRefactored:
     def mock_config(self):
         """Create mock config manager."""
         config = MagicMock(spec=ConfigManager)
-        config.get_local_config.return_value = MagicMock(
-            outputs_dir=Path("/tmp/outputs")
-        )
+        config.get_local_config.return_value = MagicMock(outputs_dir=Path("/tmp/outputs"))
         return config
 
     @pytest.fixture
@@ -191,8 +192,13 @@ class TestBatchInferenceRefactored:
     def ops(self, mock_config, mock_service, mock_orchestrator):
         """Create WorkflowOperations instance with mocked dependencies."""
         with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch("cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service):
-                with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator", return_value=mock_orchestrator):
+            with patch(
+                "cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service
+            ):
+                with patch(
+                    "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
+                    return_value=mock_orchestrator,
+                ):
                     ops = WorkflowOperations(mock_config)
                     ops.service = mock_service
                     ops.orchestrator = mock_orchestrator
@@ -204,7 +210,7 @@ class TestBatchInferenceRefactored:
         mock_prompts = [
             {"id": "ps_test1", "prompt_text": "Sunset", "inputs": {}, "parameters": {}},
             {"id": "ps_test2", "prompt_text": "Sunrise", "inputs": {}, "parameters": {}},
-            {"id": "ps_test3", "prompt_text": "Night", "inputs": {}, "parameters": {}}
+            {"id": "ps_test3", "prompt_text": "Night", "inputs": {}, "parameters": {}},
         ]
 
         def get_prompt_side_effect(prompt_id):
@@ -219,7 +225,7 @@ class TestBatchInferenceRefactored:
         mock_runs = [
             {"id": "rs_auto1", "prompt_id": "ps_test1", "status": "pending"},
             {"id": "rs_auto2", "prompt_id": "ps_test2", "status": "pending"},
-            {"id": "rs_auto3", "prompt_id": "ps_test3", "status": "pending"}
+            {"id": "rs_auto3", "prompt_id": "ps_test3", "status": "pending"},
         ]
         mock_service.create_run.side_effect = mock_runs
 
@@ -228,11 +234,11 @@ class TestBatchInferenceRefactored:
             "output_mapping": {
                 "rs_auto1": "/outputs/result1.mp4",
                 "rs_auto2": "/outputs/result2.mp4",
-                "rs_auto3": "/outputs/result3.mp4"
+                "rs_auto3": "/outputs/result3.mp4",
             },
             "total_duration": 360,
             "successful": 3,
-            "failed": 0
+            "failed": 0,
         }
         mock_orchestrator.execute_batch_runs.return_value = mock_batch_result
 
@@ -263,13 +269,15 @@ class TestBatchInferenceRefactored:
         """Test batch_inference with shared weights for all prompts."""
         mock_prompts = [
             {"id": "ps_test1", "prompt_text": "Test1", "inputs": {}, "parameters": {}},
-            {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}}
+            {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}},
         ]
 
-        mock_service.get_prompt.side_effect = lambda pid: next((p for p in mock_prompts if p["id"] == pid), None)
+        mock_service.get_prompt.side_effect = lambda pid: next(
+            (p for p in mock_prompts if p["id"] == pid), None
+        )
         mock_service.create_run.side_effect = [
             {"id": "rs_auto1", "prompt_id": "ps_test1"},
-            {"id": "rs_auto2", "prompt_id": "ps_test2"}
+            {"id": "rs_auto2", "prompt_id": "ps_test2"},
         ]
         mock_orchestrator.execute_batch_runs.return_value = {
             "output_mapping": {"rs_auto1": "out1.mp4", "rs_auto2": "out2.mp4"}
@@ -288,7 +296,8 @@ class TestBatchInferenceRefactored:
         # Only ps_test2 exists
         mock_service.get_prompt.side_effect = lambda pid: (
             {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}}
-            if pid == "ps_test2" else None
+            if pid == "ps_test2"
+            else None
         )
 
         mock_service.create_run.return_value = {"id": "rs_auto2", "prompt_id": "ps_test2"}
@@ -309,20 +318,22 @@ class TestBatchInferenceRefactored:
         """Test batch_inference properly marks failed runs."""
         mock_prompts = [
             {"id": "ps_test1", "prompt_text": "Test1", "inputs": {}, "parameters": {}},
-            {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}}
+            {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}},
         ]
 
-        mock_service.get_prompt.side_effect = lambda pid: next((p for p in mock_prompts if p["id"] == pid), None)
+        mock_service.get_prompt.side_effect = lambda pid: next(
+            (p for p in mock_prompts if p["id"] == pid), None
+        )
         mock_service.create_run.side_effect = [
             {"id": "rs_auto1", "prompt_id": "ps_test1"},
-            {"id": "rs_auto2", "prompt_id": "ps_test2"}
+            {"id": "rs_auto2", "prompt_id": "ps_test2"},
         ]
 
         # Only rs_auto1 succeeded
         mock_orchestrator.execute_batch_runs.return_value = {
             "output_mapping": {"rs_auto1": "out1.mp4"},
             "successful": 1,
-            "failed": 1
+            "failed": 1,
         }
 
         result = ops.batch_inference(["ps_test1", "ps_test2"])
@@ -336,14 +347,11 @@ class TestBatchInferenceRefactored:
         mock_prompt = {"id": "ps_test1", "prompt_text": "Test", "inputs": {}, "parameters": {}}
         mock_service.get_prompt.return_value = mock_prompt
         mock_service.create_run.return_value = {"id": "rs_auto1", "prompt_id": "ps_test1"}
-        mock_orchestrator.execute_batch_runs.return_value = {"output_mapping": {"rs_auto1": "out.mp4"}}
+        mock_orchestrator.execute_batch_runs.return_value = {
+            "output_mapping": {"rs_auto1": "out.mp4"}
+        }
 
-        result = ops.batch_inference(
-            ["ps_test1"],
-            num_steps=50,
-            guidance=8.5,
-            seed=42
-        )
+        result = ops.batch_inference(["ps_test1"], num_steps=50, guidance=8.5, seed=42)
 
         # Verify additional params are passed to run creation
         call_args = mock_service.create_run.call_args
@@ -366,9 +374,7 @@ class TestCreateAndExecuteMethods:
     def mock_config(self):
         """Create mock config manager."""
         config = MagicMock(spec=ConfigManager)
-        config.get_local_config.return_value = MagicMock(
-            outputs_dir=Path("/tmp/outputs")
-        )
+        config.get_local_config.return_value = MagicMock(outputs_dir=Path("/tmp/outputs"))
         return config
 
     @pytest.fixture

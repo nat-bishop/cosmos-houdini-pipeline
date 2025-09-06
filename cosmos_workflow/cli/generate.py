@@ -4,7 +4,7 @@ import click
 
 from .base import CLIContext, handle_errors
 from .completions import complete_video_dirs
-from .helpers import console, display_success, format_id, create_progress_context
+from .helpers import create_progress_context, display_success, format_id
 
 
 @click.command()

@@ -615,6 +615,78 @@ run = service.get_run("rs_wxyz5678")
 - Input length validation (max 10,000 chars for prompt_text)
 - Null byte and control character sanitization
 
+### WorkflowOperations
+Unified interface for all workflow operations, combining service and orchestrator functionality into high-level operations.
+
+```python
+from cosmos_workflow.api.workflow_operations import WorkflowOperations
+
+# Initialize operations (auto-creates service and orchestrator)
+ops = WorkflowOperations()
+
+# Primary inference method - accepts prompt_id directly
+result = ops.quick_inference(
+    prompt_id="ps_abc123",
+    weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
+    num_steps=35,
+    guidance=7.0,
+    upscale=True,
+    upscale_weight=0.5
+)
+# Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
+
+# Batch inference method - accepts list of prompt_ids
+batch_result = ops.batch_inference(
+    prompt_ids=["ps_abc123", "ps_def456", "ps_ghi789"],
+    shared_weights={"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+    num_steps=50,
+    guidance=8.0
+)
+# Returns: {"output_mapping": {...}, "successful": 3, "failed": 0}
+
+# Create prompt (same as WorkflowService)
+prompt = ops.create_prompt(
+    prompt_text="A futuristic city",
+    video_dir="inputs/videos/scene1",
+    name="futuristic_city"
+)
+# Returns: {"id": "ps_abc123", ...}
+```
+
+**Primary Methods (What Most Users Should Use):**
+- `quick_inference(prompt_id, weights=None, **kwargs)`: Main inference method
+  - Accepts prompt_id directly, creates run internally
+  - Supports all execution parameters (num_steps, guidance, seed, upscale, etc.)
+  - Returns execution results with run_id for tracking
+  
+- `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
+  - Accepts list of prompt_ids, creates runs internally for each
+  - Executes all runs as a batch for improved performance
+  - Returns batch results with output mapping
+
+**Low-Level Methods (For Advanced Use):**
+- `create_run(prompt_id, weights=None, num_steps=35, **kwargs)`: Explicit run creation
+  - For workflows that need control over run creation timing
+  - Returns run dictionary with generated ID
+  
+- `execute_run(run_id, upscale=False, upscale_weight=0.5)`: Explicit run execution
+  - For workflows that need control over execution timing
+  - Returns execution results
+
+**Convenience Methods:**
+- `create_and_run(prompt_text, video_dir, **kwargs)`: Complete workflow in one call
+- `enhance_prompt(prompt_id, create_new=True)`: AI-powered prompt enhancement
+- `list_prompts(**kwargs)`, `list_runs(**kwargs)`: Query methods
+- `get_prompt(prompt_id)`, `get_run(run_id)`: Retrieve methods
+- `search_prompts(query, limit=50)`: Full-text search
+
+**Design Principles:**
+- **User-Focused**: Primary methods match common workflows (create prompt → run inference)
+- **Intelligent Defaults**: Sensible defaults for weights, steps, guidance, etc.
+- **Internal Run Management**: Users work with prompt_ids, runs created automatically
+- **Backward Compatible**: Low-level methods remain available for advanced workflows
+- **Single Interface**: Combines WorkflowService and WorkflowOrchestrator capabilities
+
 ### WorkflowOrchestrator
 Simplified orchestrator handling ONLY GPU execution (no data persistence).
 

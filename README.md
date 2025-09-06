@@ -142,7 +142,15 @@ cosmos_workflow/
 - JSON output support for scripting (--json flag)
 - Error handling with clear, actionable messages
 
+**4. Unified API Layer (WorkflowOperations)**
+- High-level API combining service and orchestrator functionality
+- Simplified methods: `quick_inference(prompt_id)` and `batch_inference(prompt_ids)` create runs internally
+- Low-level methods: `create_run()` and `execute_run()` for advanced workflows
+- Single interface for all workflow operations with intelligent defaults
+
 ### Workflow Example
+
+**CLI Workflow:**
 ```bash
 # 1. Data Layer: Create prompt in database
 cosmos create prompt "cyberpunk city" inputs/videos/scene1
@@ -155,6 +163,25 @@ cosmos create run ps_abc123
 # 3. Execution Layer: Execute on GPU
 cosmos inference rs_xyz789
 # → WorkflowOrchestrator.execute_run() → GPU → Results → WorkflowService.update_run()
+```
+
+**Simplified API Workflow:**
+```python
+from cosmos_workflow.api.workflow_operations import WorkflowOperations
+
+ops = WorkflowOperations()
+
+# Create prompt (same as CLI)
+prompt = ops.create_prompt("cyberpunk city", "inputs/videos/scene1")
+# → Returns: {"id": "ps_abc123", ...}
+
+# Run inference directly with prompt_id (creates run internally)
+result = ops.quick_inference("ps_abc123", weights={"vis": 0.3, "depth": 0.2})
+# → Creates run, executes, returns: {"run_id": "rs_xyz789", "output_path": "...", "status": "success"}
+
+# Or batch multiple prompts (creates runs internally)
+results = ops.batch_inference(["ps_abc123", "ps_def456", "ps_ghi789"])
+# → Creates runs for all prompts, executes as batch, returns batch results
 ```
 
 ### Batch Inference Processing

@@ -1,6 +1,5 @@
 """Create command group for prompts and run specifications."""
 
-from pathlib import Path
 
 import click
 
@@ -101,7 +100,9 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
 )
 @click.pass_context
 @handle_errors
-def create_run(ctx, prompt_id, weights, steps, guidance, seed, fps, sigma_max, blur_strength, canny_threshold):
+def create_run(
+    ctx, prompt_id, weights, steps, guidance, seed, fps, sigma_max, blur_strength, canny_threshold
+):
     r"""Create a run specification for a prompt.
 
     Creates a run in the database for the specified prompt ID.

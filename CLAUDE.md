@@ -173,8 +173,7 @@ Lint & Format:
 
 Cosmos CLI:
 `cosmos create prompt "desc" video_dir`  # Returns ps_xxxxx ID
-`cosmos create run ps_xxxxx`            # Returns rs_xxxxx ID
-`cosmos inference rs_xxxxx`             # Execute run on GPU
+`cosmos inference ps_xxxxx`             # Execute inference on GPU (creates run internally)
 `cosmos list prompts`                   # List all prompts
 `cosmos status`                         # Check GPU status
 

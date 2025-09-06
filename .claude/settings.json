@@ -1,6 +1,5 @@
 {
   "includeCoAuthoredBy": false,
-  "disabledMcpjsonServers": ["playwright"],
   "permissions": {
     "allow": [
       "WebFetch",

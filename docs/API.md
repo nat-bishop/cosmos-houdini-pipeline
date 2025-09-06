@@ -3,11 +3,193 @@
 Complete API documentation for the Cosmos Workflow System.
 
 ## Table of Contents
+- [System Architecture](#system-architecture)
 - [CLI Commands](#cli-commands)
 - [Core Modules](#core-modules)
 - [Schemas](#schemas)
 - [Configuration](#configuration)
 - [Utilities](#utilities)
+
+## System Architecture
+
+### Overview
+
+The Cosmos Workflow System follows a clean, layered architecture with clear separation of concerns. Each layer has a specific responsibility and only communicates with adjacent layers.
+
+### Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   CLI Layer                             │
+│              (cosmos_workflow/cli/)                     │
+│          User-facing commands and display               │
+└─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│             WorkflowOperations API                      │
+│          (cosmos_workflow/api/workflow_operations.py)   │
+│       Single unified interface for all operations       │
+└─────────────────────────────────────────────────────────┘
+                            │
+                ┌───────────┴───────────┐
+                ▼                       ▼
+┌──────────────────────┐    ┌──────────────────────────┐
+│   WorkflowService    │    │   WorkflowOrchestrator   │
+│ (services/workflow_  │    │ (workflows/workflow_     │
+│    service.py)       │    │    orchestrator.py)      │
+│                      │    │                          │
+│ • CRUD operations    │    │ • GPU execution          │
+│ • Data validation    │    │ • Remote operations      │
+│ • Database queries   │    │ • File transfers         │
+└──────────────────────┘    └──────────────────────────┘
+            │                            │
+            ▼                            ▼
+┌──────────────────────┐    ┌──────────────────────────┐
+│      Database        │    │    Remote Systems        │
+│   (SQLAlchemy)       │    │  (SSH, Docker, GPU)      │
+└──────────────────────┘    └──────────────────────────┘
+```
+
+### Layer Responsibilities
+
+#### 1. CLI Layer (`cosmos_workflow/cli/`)
+- **Purpose**: User interaction and display
+- **Responsibilities**:
+  - Parse command-line arguments
+  - Display results to users
+  - Handle user input validation
+  - Format output (tables, progress bars, etc.)
+- **Rules**:
+  - ✅ ONLY uses `WorkflowOperations` API
+  - ❌ NEVER directly imports service, database, or orchestrator modules
+  - ❌ NEVER contains business logic
+
+#### 2. WorkflowOperations API (`cosmos_workflow/api/workflow_operations.py`)
+- **Purpose**: Unified interface for all operations
+- **Responsibilities**:
+  - Combine service and orchestrator functionality
+  - Provide high-level operations that match user intentions
+  - Handle complex workflows (e.g., create prompt + run inference)
+  - Maintain consistent API for both CLI and future UIs
+- **Rules**:
+  - ✅ The ONLY layer that imports both Service and Orchestrator
+  - ✅ All business logic lives here
+  - ✅ Returns simple dictionaries (no ORM objects)
+
+#### 3. WorkflowService (`cosmos_workflow/services/workflow_service.py`)
+- **Purpose**: Data management and persistence
+- **Responsibilities**:
+  - CRUD operations for prompts and runs
+  - Data validation and integrity
+  - Database queries and updates
+  - Transaction management
+- **Rules**:
+  - ✅ ONLY handles database operations
+  - ❌ NO remote execution logic
+  - ❌ NO file system operations (except validation)
+
+#### 4. WorkflowOrchestrator (`cosmos_workflow/workflows/workflow_orchestrator.py`)
+- **Purpose**: Remote execution and GPU operations
+- **Responsibilities**:
+  - Execute inference on remote GPU
+  - Manage SSH connections
+  - Handle Docker containers
+  - Transfer files to/from remote systems
+  - Stream logs and monitor execution
+- **Rules**:
+  - ✅ ONLY handles execution logic
+  - ❌ NO database operations
+  - ❌ Receives data from Service layer via Operations
+
+### Usage Examples
+
+#### Correct Usage - Through WorkflowOperations
+
+```python
+from cosmos_workflow.api import WorkflowOperations
+
+# Initialize the API (this is the ONLY import you need)
+ops = WorkflowOperations()
+
+# Create a prompt
+prompt = ops.create_prompt(
+    prompt_text="A cyberpunk city at night",
+    video_dir="/path/to/videos",
+    name="cyberpunk_test"
+)
+print(f"Created prompt: {prompt['id']}")
+
+# Run inference (no manual run creation needed!)
+result = ops.quick_inference(
+    prompt_id=prompt["id"],
+    weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
+    num_steps=50,
+    upscale=True
+)
+print(f"Output: {result['output_path']}")
+
+# Batch inference for multiple prompts
+results = ops.batch_inference(
+    prompt_ids=["ps_001", "ps_002", "ps_003"],
+    shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+)
+
+# List and search operations
+all_prompts = ops.list_prompts(limit=10)
+matching = ops.search_prompts("cyberpunk")
+prompt_details = ops.get_prompt("ps_001")
+
+# System operations
+status = ops.check_status()  # Check GPU status
+integrity = ops.verify_integrity()  # Verify data integrity
+ops.stream_logs()  # Stream container logs
+
+# Cleanup
+ops.delete_prompt(prompt["id"])
+```
+
+#### Incorrect Usage - Bypassing Layers
+
+```python
+# ❌ WRONG - CLI directly using Service
+from cosmos_workflow.services import WorkflowService
+service = WorkflowService()
+prompt = service.create_prompt(...)  # Don't do this in CLI!
+
+# ❌ WRONG - CLI directly using Orchestrator
+from cosmos_workflow.workflows import WorkflowOrchestrator
+orchestrator = WorkflowOrchestrator()
+orchestrator.execute_run(...)  # Don't do this in CLI!
+
+# ❌ WRONG - Direct database access
+from cosmos_workflow.database import DatabaseConnection
+db = DatabaseConnection()
+db.session.query(...)  # Never do this outside Service layer!
+```
+
+### WorkflowOperations API Methods
+
+#### Core Operations
+- `create_prompt()` - Create a new prompt
+- `enhance_prompt()` - Enhance prompt with AI
+- `quick_inference()` - Run inference on a prompt (creates run internally)
+- `batch_inference()` - Run inference on multiple prompts
+- `create_and_run()` - Create prompt and run inference in one call
+
+#### Data Operations
+- `list_prompts()` - List all prompts
+- `list_runs()` - List all runs
+- `get_prompt()` - Get prompt details
+- `get_run()` - Get run details
+- `search_prompts()` - Search prompts by text
+- `delete_prompt()` - Delete a prompt
+- `delete_run()` - Delete a run
+
+#### System Operations
+- `check_status()` - Check remote GPU status
+- `stream_logs()` - Stream container logs
+- `verify_integrity()` - Verify database-filesystem integrity
 
 ## CLI Commands
 
@@ -56,84 +238,46 @@ cosmos create prompt "Transform to anime style" /path/to/video_dir --name "anime
 # Returns: Created prompt ps_d4e5f6 with name "anime_transform"
 ```
 
-### create run
-Create a run in the database from a prompt ID.
+### inference
+Run Cosmos Transfer inference with optional upscaling using prompt IDs.
 
 ```bash
-cosmos create run PROMPT_ID [OPTIONS]
+cosmos inference PROMPT_ID [PROMPT_ID2 ...] [OPTIONS]
 ```
 
 **Arguments:**
-- `PROMPT_ID`: Database ID of existing prompt (ps_xxxxx format)
+- `PROMPT_ID`: One or more database IDs of prompts (ps_xxxxx format)
 
 **Options:**
 - `--weights`: Control weights (4 values: vis edge depth segmentation)
 - `--num-steps`: Number of inference steps (default: 35)
 - `--guidance-scale`: CFG guidance scale (default: 8.0)
-- `--output-path`: Custom output path
-
-**Database-First Architecture:**
-- Works with prompt IDs from database, not JSON files
-- Creates run directly in database with UUID-based ID (rs_xxxxx)
-- Links run to existing prompt via foreign key relationship
-- Stores execution configuration in database for analytics and tracking
-- Run lifecycle tracked: pending → running → completed/failed
-
-**Example:**
-```bash
-cosmos create run ps_a1b2c3 --weights 0.3 0.4 0.2 0.1
-# Returns: Created run rs_x9y8z7 for prompt ps_a1b2c3
-
-cosmos create run ps_d4e5f6 --num-steps 50 --guidance-scale 10.0
-# Returns: Created run rs_m5n4o3 for prompt ps_d4e5f6
-```
-
-### inference
-Run Cosmos Transfer inference with optional upscaling using database IDs.
-
-```bash
-cosmos inference RUN_ID [OPTIONS]
-```
-
-**Arguments:**
-- `RUN_ID`: Database ID of run to execute (rs_xxxxx format)
-
-**Options:**
 - `--upscale/--no-upscale`: Enable/disable 4K upscaling (default: enabled)
 - `--upscale-weight`: Control weight for upscaling (0.0-1.0, default: 0.5)
+- `--batch-name`: Name for batch when running multiple prompts
+- `--prompts-file`: File containing prompt IDs (one per line)
 - `--dry-run`: Preview without executing
 
-**Database-First Execution:**
-- Works with run IDs from database, not JSON files
-- Retrieves run and linked prompt data automatically via WorkflowService
+**2-Step Workflow:**
+- Works directly with prompt IDs - creates runs internally
+- Single prompt: Uses `quick_inference()` for immediate execution
+- Multiple prompts: Uses `batch_inference()` for efficient GPU utilization
 - Updates run status in real-time: pending → running → completed/failed
-- Creates temporary NVIDIA-format JSON only for GPU script compatibility
 - All execution results stored back in database for persistence and analytics
 
 **Example:**
 ```bash
-cosmos inference rs_x9y8z7                    # Inference + upscaling for run
-cosmos inference rs_x9y8z7 --no-upscale       # Inference only
-cosmos inference rs_x9y8z7 --upscale-weight 0.7 --dry-run  # Preview execution plan
+# Single prompt inference
+cosmos inference ps_a1b2c3                    # Inference + upscaling
+cosmos inference ps_a1b2c3 --no-upscale       # Inference only
+cosmos inference ps_a1b2c3 --weights 0.3 0.3 0.2 0.2
+
+# Batch inference for multiple prompts
+cosmos inference ps_001 ps_002 ps_003 --batch-name "my_batch"
+cosmos inference --prompts-file prompt_list.txt
 ```
 
-### batch-inference
-Run multiple Cosmos Transfer inference jobs as a batch for improved efficiency.
-
-```bash
-cosmos batch-inference RUN_ID1 RUN_ID2 RUN_ID3... [OPTIONS]
-```
-
-**Arguments:**
-- `RUN_ID1 RUN_ID2 ...`: Multiple database IDs of runs to execute (rs_xxxxx format)
-
-**Options:**
-- `--batch-name`: Custom name for the batch (auto-generated if not provided)
-- `--dry-run`: Preview batch execution without running on GPU
-
-**Performance Benefits:**
-- **40-60% Time Savings**: Models stay loaded in memory across all jobs
-- **Better GPU Utilization**: Continuous processing without gaps between jobs
+**Note:** Batch inference is now integrated into the main `inference` command. Simply provide multiple prompt IDs to run them as a batch.
 - **Reduced Overhead**: Single model load/unload cycle for entire batch
 
 **JSONL Format:**
@@ -166,20 +310,19 @@ outputs/
 
 **Example Workflow:**
 ```bash
-# Create multiple prompts and runs
+# Create multiple prompts
 cosmos create prompt "futuristic city" inputs/videos/scene1  # → ps_abc123
-cosmos create run ps_abc123 --weights 0.3 0.4 0.2 0.1        # → rs_xyz789
 cosmos create prompt "cyberpunk street" inputs/videos/scene2 # → ps_def456
-cosmos create run ps_def456 --weights 0.4 0.3 0.3 0.0        # → rs_uvw012
+cosmos create prompt "neon alley" inputs/videos/scene3       # → ps_ghi789
 
 # Execute as batch (40% faster than individual runs)
-cosmos batch-inference rs_xyz789 rs_uvw012 rs_mno345
+cosmos inference ps_abc123 ps_def456 ps_ghi789 --batch-name "urban_scenes"
 
-# Custom batch name for organized output
-cosmos batch-inference rs_xyz789 rs_uvw012 --batch-name "urban_scenes_v1"
+# Custom control weights for all prompts
+cosmos inference ps_abc123 ps_def456 --weights 0.3 0.3 0.2 0.2
 
 # Preview without execution
-cosmos batch-inference rs_xyz789 rs_uvw012 --dry-run
+cosmos inference ps_abc123 ps_def456 ps_ghi789 --dry-run
 ```
 
 **Performance Scaling:**

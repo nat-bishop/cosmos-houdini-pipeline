@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - Complete 2-Step Workflow Refactoring (2025-09-06)
+- **Major Architecture Refactoring to 2-Step Workflow**
+  - Eliminated manual run creation - `cosmos create run` command removed
+  - `cosmos inference` now accepts prompt IDs directly instead of run IDs
+  - Batch inference merged into main inference command (provide multiple prompt IDs)
+  - All CLI commands now exclusively use WorkflowOperations API layer
+  - Complete abstraction achieved - no direct service/orchestrator access from CLI
+  - Removed ~1,400+ lines of deprecated code and obsolete files
+  - Added comprehensive architecture documentation with usage examples
+
+- **CLI Command Updates**
+  - `cosmos inference ps_xxx` replaces `cosmos create run ps_xxx` + `cosmos inference rs_xxx`
+  - `cosmos inference ps_001 ps_002 ps_003` replaces `cosmos batch-inference rs_001 rs_002 rs_003`
+  - `cosmos enhance ps_xxx` replaces `cosmos prompt-enhance ps_xxx`
+  - All commands now return immediately actionable results
+
+- **WorkflowOperations API Enhancements**
+  - Added `check_status()`, `stream_logs()`, `verify_integrity()` operations
+  - Removed deprecated `create_run()` and `execute_run()` methods
+  - All operations return simple dictionaries for consistent interface
+  - Complete separation between data operations (Service) and execution (Orchestrator)
+
 ### Changed - WorkflowOperations API Simplified (Step 1) (2025-09-06)
 - **Simplified WorkflowOperations API for easier usage**
   - `quick_inference()` is now the primary inference method accepting `prompt_id` directly

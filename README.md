@@ -59,26 +59,23 @@ ssh_key = "~/.ssh/your-key.pem"
 remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
 ```
 
-### Basic Usage
+### Basic Usage (2-Step Workflow)
 ```bash
-# Create a prompt (returns database ID)
+# Step 1: Create a prompt (returns database ID)
 cosmos create prompt "A futuristic city at sunset" inputs/videos/scene1
 # Returns: Created prompt ps_a1b2c3d4 with name "futuristic_city_sunset"
 
-# Create a run from the prompt
-cosmos create run ps_a1b2c3d4
-# Returns: Created run rs_x9y8z7w6 for prompt ps_a1b2c3d4
+# Step 2: Run inference (creates run internally and executes on GPU)
+cosmos inference ps_a1b2c3d4
+# Output saved to: outputs/run_rs_x9y8z7w6/result.mp4
 
-# Execute the run on GPU
-cosmos inference rs_x9y8z7w6
+# Or process multiple prompts together for better performance
+cosmos inference ps_001 ps_002 ps_003 --batch-name "my_batch"
 
-# Or process multiple runs together for better performance
-cosmos batch-inference rs_x9y8z7w6 rs_a1b2c3d4 rs_e5f6g7h8
-
-# Or use the Gradio UI
+# Or use the Gradio UI for interactive workflow
 cosmos ui
 
-# Check status
+# Check GPU status
 cosmos status
 ```
 
@@ -86,16 +83,14 @@ cosmos status
 
 ### Database Operations
 - `cosmos create prompt "text" video_dir` - Create prompt in database, returns ps_xxxxx ID
-- `cosmos create run ps_xxxxx` - Create run from prompt ID, returns rs_xxxxx ID
 - `cosmos list prompts [--model transfer] [--limit 50] [--json]` - List prompts with filtering
 - `cosmos list runs [--status completed] [--prompt ps_xxxxx] [--json]` - List runs with filtering
 - `cosmos search "query" [--limit 50] [--json]` - Full-text search prompts with highlighting
 - `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
 
 ### GPU Execution
-- `cosmos inference rs_xxxxx [--upscale/--no-upscale]` - Execute run on GPU with status tracking
-- `cosmos batch-inference rs_xxx1 rs_xxx2 rs_xxx3 [--batch-name NAME] [--dry-run]` - Execute multiple runs as batch (40-60% faster)
-- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt + run)
+- `cosmos inference ps_xxxxx [ps_xxx2 ...] [--upscale/--no-upscale]` - Execute inference on prompts (creates runs internally)
+- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
 - `cosmos verify [--fix]` - Verify database-filesystem integrity
@@ -156,13 +151,9 @@ cosmos_workflow/
 cosmos create prompt "cyberpunk city" inputs/videos/scene1
 # → WorkflowService.create_prompt() → Database → Returns ps_abc123
 
-# 2. Data Layer: Create run from prompt
-cosmos create run ps_abc123
-# → WorkflowService.create_run() → Database → Returns rs_xyz789
-
-# 3. Execution Layer: Execute on GPU
-cosmos inference rs_xyz789
-# → WorkflowOrchestrator.execute_run() → GPU → Results → WorkflowService.update_run()
+# 2. Execution Layer: Run inference (creates run internally)
+cosmos inference ps_abc123
+# → WorkflowOperations.quick_inference() → Creates run → GPU → Results
 ```
 
 **Simplified API Workflow:**
@@ -189,15 +180,14 @@ results = ops.batch_inference(["ps_abc123", "ps_def456", "ps_ghi789"])
 The system supports efficient batch processing of multiple inference jobs using NVIDIA Cosmos Transfer's batch mode:
 
 ```bash
-# Create multiple prompts and runs
+# Create multiple prompts
 cosmos create prompt "futuristic city" inputs/videos/scene1  # → ps_abc123
-cosmos create run ps_abc123                                  # → rs_xyz789
 cosmos create prompt "cyberpunk street" inputs/videos/scene2 # → ps_def456
-cosmos create run ps_def456                                  # → rs_uvw012
+cosmos create prompt "neon alley" inputs/videos/scene3       # → ps_ghi789
 
-# Execute all runs as a batch for maximum efficiency
-cosmos batch-inference rs_xyz789 rs_uvw012 rs_mno345
-# → Converts to JSONL format → Single GPU execution → Split outputs to individual folders
+# Execute all prompts as a batch for maximum efficiency
+cosmos inference ps_abc123 ps_def456 ps_ghi789 --batch-name "city_scenes"
+# → Creates runs internally → JSONL batch → Single GPU execution → Individual outputs
 ```
 
 **Batch Processing Benefits:**

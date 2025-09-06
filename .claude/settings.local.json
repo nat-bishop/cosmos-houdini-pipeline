@@ -4,17 +4,10 @@
       "Bash(ssh:*)",
       "WebSearch",
       "Read(//f/Art/cosmos-transfer1/server/**)",
-      "Read(//f/Art/cosmos-transfer1/**)",
-      "mcp__playwright__browser_navigate",
-      "mcp__playwright__browser_click",
-      "mcp__playwright__browser_wait_for",
-      "mcp__playwright__browser_press_key",
-      "mcp__playwright__browser_close"
+      "Read(//f/Art/cosmos-transfer1/**)"
     ],
     "deny": [],
     "ask": []
   },
-  "enabledMcpjsonServers": [
-    "playwright"
-  ]
+  "enableAllProjectMcpServers": false
 }

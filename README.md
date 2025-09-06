@@ -94,6 +94,7 @@ cosmos status
 - `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt + run)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
+- `cosmos verify [--fix]` - Verify database-filesystem integrity
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 
@@ -180,6 +181,34 @@ All data is stored in a SQLAlchemy database with no persistent JSON files:
 - **Security Built-in**: Input validation, path traversal protection, sanitization
 
 See [docs/DATABASE.md](docs/DATABASE.md) for complete schema documentation.
+
+## 📁 Output Structure
+
+Each run creates a self-contained directory with all artifacts:
+
+```
+outputs/
+└── run_rs_xxxxx/           # One directory per run
+    ├── output.mp4           # Primary generated video
+    ├── edge_input_control.mp4  # Generated control video
+    ├── spec_used.json       # Actual spec sent to model
+    ├── run.log             # Docker execution logs
+    ├── execution.log       # UI execution logs (if run via UI)
+    ├── output.txt          # Text output from process
+    └── manifest.txt        # File manifest with sizes/timestamps
+```
+
+### Data Integrity
+
+Use the `cosmos verify` command to check database-filesystem consistency:
+
+```bash
+# Check for missing files, orphaned directories, data mismatches
+cosmos verify
+
+# Future: auto-fix common issues
+cosmos verify --fix
+```
 
 ## 📚 Documentation
 

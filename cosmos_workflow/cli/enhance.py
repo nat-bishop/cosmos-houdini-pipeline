@@ -56,8 +56,8 @@ def prompt_enhance(ctx, prompt_id, model, dry_run):
             raise ValueError(f"Prompt not found: {prompt_id}")
     except Exception as e:
         if "not found" in str(e).lower():
-            raise ValueError(str(e))
-        raise Exception(f"Database error: {e!s}")
+            raise ValueError(str(e)) from e
+        raise Exception(f"Database error: {e!s}") from e
 
     # Handle dry-run mode
     if dry_run:
@@ -131,12 +131,25 @@ def prompt_enhance(ctx, prompt_id, model, dry_run):
             console.print(f"[dim]Created enhanced prompt: {enhanced_prompt['id']}[/dim]")
 
             # Update run with outputs
+            import time
+
+            duration = (
+                time.time() - enhancement_run["created_at"].timestamp()
+                if hasattr(enhancement_run.get("created_at"), "timestamp")
+                else 0
+            )
+
             service.update_run(
                 enhancement_run["id"],
                 outputs={
+                    "type": "text_enhancement",  # Mark as text enhancement
                     "enhanced_prompt_id": enhanced_prompt["id"],
-                    "enhanced_text": enhanced_text,
+                    "enhanced_text": enhanced_text[:500]
+                    if len(enhanced_text) > 500
+                    else enhanced_text,  # Store preview
+                    "enhanced_text_full_length": len(enhanced_text),
                     "model_used": model,
+                    "duration_seconds": duration,
                 },
             )
 
@@ -149,8 +162,8 @@ def prompt_enhance(ctx, prompt_id, model, dry_run):
                 try:
                     service.update_run_status(enhancement_run["id"], "failed")
                     service.update_run(enhancement_run["id"], outputs={"error": str(e)})
-                except Exception:
-                    pass
+                except Exception:  # noqa: S110
+                    pass  # Status update is best-effort, don't fail the command
             raise
 
         progress.update(task, completed=True)

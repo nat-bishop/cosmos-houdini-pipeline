@@ -72,9 +72,10 @@ class WorkflowOrchestrator:
         # Create log directory and file if UI is being used
         log_path = None
         if kwargs.get("enable_logging", False):
-            log_dir = Path("logs/runs")
+            # Store logs in the run output directory
+            log_dir = Path(f"outputs/run_{run_id}")
             log_dir.mkdir(parents=True, exist_ok=True)
-            log_path = log_dir / f"{run_id}.log"
+            log_path = log_dir / "execution.log"
 
             # Write initial info to log
             with open(log_path, "w") as f:
@@ -154,13 +155,18 @@ class WorkflowOrchestrator:
                 duration = end_time - start_time
 
                 # Return execution results
-                output_path = f"outputs/{prompt_name}/result.mp4"
+                output_path = f"outputs/{prompt_name}/output.mp4"
                 if upscale:
-                    output_path = f"outputs/{prompt_name}/result_upscaled.mp4"
+                    output_path = f"outputs/{prompt_name}/output_upscaled.mp4"
 
                 return {
                     "status": "success",
-                    "output_path": output_path,
+                    "type": "video_generation",  # Operation type for filtering
+                    "output_dir": f"outputs/{prompt_name}/",  # Directory containing all outputs
+                    "primary_output": "output.mp4"
+                    if not upscale
+                    else "output_upscaled.mp4",  # Just filename
+                    "output_path": output_path,  # Full path for compatibility
                     "upscaled": upscale,
                     "upscale_weight": upscale_weight if upscale else None,
                     "duration_seconds": duration.total_seconds(),

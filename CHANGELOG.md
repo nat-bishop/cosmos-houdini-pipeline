@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Data Architecture Improvements (2025-09-06)
+- **Critical Path Fixes**
+  - Fixed output filename mismatch: changed from `result.mp4` to `output.mp4` to match actual GPU outputs
+  - Enhanced run outputs JSON with metadata fields: `type`, `output_dir`, `primary_output`
+  - Improved text enhancement tracking with proper run type identification
+  - Simplified Gallery video retrieval logic, removed multiple fallback paths
+
+- **Logging Consolidation**
+  - Moved logs from `/logs/runs/` to run output directories (`outputs/run_xxx/execution.log`)
+  - Removed unused `/logs` and `/notes` directories
+  - All run artifacts now centralized in single directory per run
+
+- **Data Integrity Tools**
+  - Added `cosmos verify` command to check database-filesystem consistency
+  - Detects missing files, orphaned directories, and data mismatches
+  - Reports statistics and warnings for proactive maintenance
+  - Manifest generation for downloaded files to track transfer completeness
+
+- **UI Improvements**
+  - Gallery now filters out text enhancement runs properly
+  - Cleaner path handling with consistent expectations
+  - Better error handling for missing video files
+
 ### Added - Gradio UI Improvements (2025-09-05)
 - **Enhanced Gradio Web Interface**
   - All 4 control weights now available: visual, edge, depth, segmentation (0.0-1.0 range)

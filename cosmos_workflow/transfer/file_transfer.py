@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import stat
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -139,6 +140,8 @@ class FileTransferService:
         local_out.mkdir(parents=True, exist_ok=True)
         if self.file_exists_remote(remote_out):
             self._sftp_download_dir(remote_out, local_out)
+            # Create manifest of downloaded files
+            self._create_manifest(local_out)
         else:
             logger.info("No remote outputs found at %s", remote_out)
 
@@ -148,8 +151,32 @@ class FileTransferService:
         if self.file_exists_remote(remote_up):
             local_up.mkdir(parents=True, exist_ok=True)
             self._sftp_download_dir(remote_up, local_up)
+            # Create manifest for upscaled outputs
+            self._create_manifest(local_up)
         else:
             logger.info("No upscaled results found.")
+
+    def _create_manifest(self, directory: Path) -> None:
+        """Create a manifest file listing all files in the directory.
+
+        Args:
+            directory: Directory to create manifest for
+        """
+        manifest_path = directory / "manifest.txt"
+        try:
+            with open(manifest_path, "w") as f:
+                f.write(f"# Manifest for {directory.name}\n")
+                f.write(f"# Generated at {datetime.now(timezone.utc).isoformat()}\n")
+                f.write("# Format: filename\tsize_bytes\tmodified_timestamp\n\n")
+
+                for file_path in sorted(directory.iterdir()):
+                    if file_path.name != "manifest.txt" and file_path.is_file():
+                        stat = file_path.stat()
+                        f.write(f"{file_path.name}\t{stat.st_size}\t{stat.st_mtime}\n")
+
+                logger.debug("Created manifest at %s", manifest_path)
+        except Exception as e:
+            logger.warning("Failed to create manifest: %s", e)
 
     def create_remote_directory(self, remote_path: str) -> None:
         """Create a directory on the remote system."""

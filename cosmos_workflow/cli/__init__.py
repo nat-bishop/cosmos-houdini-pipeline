@@ -12,6 +12,7 @@ from .search import search_command
 from .show import show_command
 from .status import status
 from .ui import ui
+from .verify import verify
 
 
 @click.group(
@@ -51,6 +52,7 @@ cli.add_command(search_command)
 cli.add_command(show_command)
 cli.add_command(status)
 cli.add_command(ui)
+cli.add_command(verify)
 
 
 def main():

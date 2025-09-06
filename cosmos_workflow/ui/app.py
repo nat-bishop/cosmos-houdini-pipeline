@@ -312,36 +312,33 @@ def tail_log_file(run_id, num_lines=100):
 
 
 def get_completed_videos():
-    """Get paths to completed videos for gallery - FIXED VERSION."""
+    """Get paths to completed videos for gallery."""
     runs = service.list_runs(status="completed", limit=20)
     videos = []
 
     for run in runs:
-        # The run name format used in download
-        run_name = f"run_{run['id']}"
+        outputs = run.get("outputs", {})
 
-        # Check multiple possible locations and filenames
-        possible_paths = [
-            Path(f"outputs/{run_name}/output.mp4"),
-            Path(f"outputs/{run_name}/result.mp4"),
-            Path(f"outputs/{run_name}_upscaled/output.mp4"),
-            Path(f"outputs/{run_name}_upscaled/result.mp4"),
-        ]
+        # Skip non-video runs (e.g., text enhancement)
+        if outputs.get("type") == "text_enhancement":
+            continue
 
-        # Also check if output_path is stored in the run
-        if run.get("outputs", {}).get("output_path"):
-            possible_paths.insert(0, Path(run["outputs"]["output_path"]))
+        # Use the output_path from the run outputs
+        output_path = outputs.get("output_path")
+        if not output_path:
+            # Fallback for older runs without output_path
+            run_name = f"run_{run['id']}"
+            output_path = f"outputs/{run_name}/output.mp4"
 
-        for path in possible_paths:
-            if path.exists():
-                try:
-                    prompt = service.get_prompt(run["prompt_id"])
-                    label = f"{prompt['prompt_text'][:30]}... (Run: {run['id'][:8]})"
-                except Exception:
-                    label = f"Run {run['id'][:8]}"
+        # Check if the file actually exists
+        if Path(output_path).exists():
+            try:
+                prompt = service.get_prompt(run["prompt_id"])
+                label = f"{prompt['prompt_text'][:30]}... (Run: {run['id'][:8]})"
+            except Exception:
+                label = f"Run {run['id'][:8]}"
 
-                videos.append((str(path), label))
-                break
+            videos.append((str(output_path), label))
 
     return videos
 

@@ -188,7 +188,11 @@ class TestRunDeletion:
         # Check preview contains correct information
         assert preview["run"]["id"] == run_id
         assert preview["run"]["prompt_id"] == prompt["id"]
-        assert preview["directory_to_delete"] == f"outputs/run_{run_id}"
+        # Use Path to handle OS-specific separators
+        from pathlib import Path
+
+        expected_dir = str(Path("outputs") / f"run_{run_id}")
+        assert preview["directory_to_delete"] == expected_dir
 
     def test_preview_run_deletion_nonexistent(self, workflow_service):
         """Test preview with non-existent run ID."""
@@ -328,14 +332,21 @@ class TestDeletionEdgeCases:
         # Create prompt and run
         prompt = workflow_service.create_prompt(**sample_prompt_data)
         run = workflow_service.create_run(prompt["id"], **sample_run_data)
+        run_id = run["id"]
+
+        # Create the directory so it exists for deletion
+        outputs_dir = workflow_service.config.get_local_config().outputs_dir
+        run_dir = outputs_dir / f"run_{run_id}"
+        run_dir.mkdir(parents=True, exist_ok=True)
 
         # Mock permission error
         mock_rmtree.side_effect = PermissionError("Access denied")
 
         # Delete run
-        result = workflow_service.delete_run(run["id"])
+        result = workflow_service.delete_run(run_id)
 
         # Database deletion should succeed, but note directory error
         assert result["success"] is True
+        assert "warnings" in result
         assert "permission" in result["warnings"][0].lower()
-        assert workflow_service.get_run(run["id"]) is None
+        assert workflow_service.get_run(run_id) is None

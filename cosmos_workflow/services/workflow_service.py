@@ -596,6 +596,51 @@ class WorkflowService:
             logger.error("Error searching prompts: %s", e)
             return []
 
+    def update_prompt(self, prompt_id: str, **kwargs) -> dict[str, Any] | None:
+        """Update an existing prompt's fields.
+
+        Args:
+            prompt_id: The prompt ID to update
+            **kwargs: Fields to update (prompt_text, parameters)
+
+        Returns:
+            Updated prompt dictionary or None if not found
+        """
+        if not prompt_id or not prompt_id.strip():
+            logger.debug("Empty prompt_id provided")
+            return None
+
+        logger.debug("Updating prompt %s with fields: %s", prompt_id, kwargs.keys())
+
+        try:
+            with self.db.get_session() as session:
+                prompt = session.query(Prompt).filter_by(id=prompt_id).first()
+
+                if not prompt:
+                    logger.warning("Prompt not found: %s", prompt_id)
+                    return None
+
+                # Update allowed fields
+                if "prompt_text" in kwargs:
+                    prompt.prompt_text = self._sanitize_input(kwargs["prompt_text"])
+
+                if "parameters" in kwargs:
+                    # Merge parameters instead of replacing
+                    existing_params = prompt.parameters or {}
+                    updated_params = {**existing_params, **kwargs["parameters"]}
+                    prompt.parameters = updated_params
+
+                # Note: We don't allow updating inputs or model_type for data integrity
+
+                session.commit()
+                logger.info("Updated prompt %s", prompt_id)
+
+                return self._prompt_to_dict(prompt)
+
+        except SQLAlchemyError as e:
+            logger.error("Error updating prompt %s: %s", prompt_id, e)
+            return None
+
     def get_prompt_with_runs(self, prompt_id: str) -> dict[str, Any] | None:
         """Get a prompt with all its associated runs.
 
@@ -655,3 +700,238 @@ class WorkflowService:
         except SQLAlchemyError as e:
             logger.error("Error getting prompt with runs: %s", e)
             return None
+
+    def preview_prompt_deletion(self, prompt_id: str) -> dict[str, Any]:
+        """Preview what would be deleted if a prompt is removed.
+
+        Args:
+            prompt_id: The prompt ID to preview deletion for
+
+        Returns:
+            Dictionary containing:
+            - prompt: Prompt details or None if not found
+            - runs: List of runs that would be deleted
+            - directories_to_delete: List of output directories that would be removed
+            - error: Error message if prompt not found
+        """
+        logger.debug("Previewing deletion for prompt_id=%s", prompt_id)
+
+        result = {
+            "prompt": None,
+            "runs": [],
+            "directories_to_delete": [],
+        }
+
+        # Get prompt with runs
+        prompt_data = self.get_prompt_with_runs(prompt_id)
+        if not prompt_data:
+            result["error"] = "Prompt not found"
+            return result
+
+        # Extract prompt info
+        result["prompt"] = {
+            "id": prompt_data["id"],
+            "prompt_text": prompt_data["prompt_text"],
+            "model_type": prompt_data["model_type"],
+        }
+
+        # Extract runs info
+        result["runs"] = prompt_data.get("runs", [])
+
+        # Determine directories that would be deleted
+        outputs_dir = self.config.get_local_config().outputs_dir
+        for run in result["runs"]:
+            run_dir = outputs_dir / f"run_{run['id']}"
+            result["directories_to_delete"].append(str(run_dir))
+
+        return result
+
+    def preview_run_deletion(self, run_id: str) -> dict[str, Any]:
+        """Preview what would be deleted if a run is removed.
+
+        Args:
+            run_id: The run ID to preview deletion for
+
+        Returns:
+            Dictionary containing:
+            - run: Run details or None if not found
+            - directory_to_delete: Output directory that would be removed
+            - error: Error message if run not found
+        """
+        logger.debug("Previewing deletion for run_id=%s", run_id)
+
+        result = {
+            "run": None,
+            "directory_to_delete": None,
+        }
+
+        # Get run details
+        run_data = self.get_run(run_id)
+        if not run_data:
+            result["error"] = "Run not found"
+            return result
+
+        # Extract run info
+        result["run"] = run_data
+
+        # Determine directory that would be deleted
+        outputs_dir = self.config.get_local_config().outputs_dir
+        result["directory_to_delete"] = str(outputs_dir / f"run_{run_id}")
+
+        return result
+
+    def delete_prompt(self, prompt_id: str) -> dict[str, Any]:
+        """Delete a prompt and all associated runs.
+
+        Args:
+            prompt_id: The prompt ID to delete
+
+        Returns:
+            Dictionary containing:
+            - success: Whether deletion succeeded
+            - deleted: Information about what was deleted
+            - error: Error message if failed
+        """
+        logger.info("Deleting prompt_id=%s", prompt_id)
+
+        # Check if prompt exists
+        prompt_data = self.get_prompt_with_runs(prompt_id)
+        if not prompt_data:
+            return {
+                "success": False,
+                "error": "Prompt not found",
+            }
+
+        # Check for running or uploading runs
+        active_runs = [
+            run for run in prompt_data.get("runs", []) if run["status"] in ("running", "uploading")
+        ]
+        if active_runs:
+            return {
+                "success": False,
+                "error": f"Cannot delete prompt with active runs (running/uploading). Found {len(active_runs)} active runs.",
+            }
+
+        # Collect information about what will be deleted
+        deleted_info = {
+            "prompt_id": prompt_id,
+            "run_ids": [run["id"] for run in prompt_data.get("runs", [])],
+            "directories": [],
+        }
+
+        # Delete output directories
+        import shutil
+
+        outputs_dir = self.config.get_local_config().outputs_dir
+        for run in prompt_data.get("runs", []):
+            run_dir = outputs_dir / f"run_{run['id']}"
+            deleted_info["directories"].append(str(run_dir))
+            if run_dir.exists():
+                try:
+                    shutil.rmtree(run_dir)
+                    logger.info("Deleted directory: %s", run_dir)
+                except Exception as e:
+                    logger.warning("Failed to delete directory %s: %s", run_dir, e)
+
+        # Delete from database (cascade will delete runs)
+        try:
+            with self.db.get_session() as session:
+                prompt = session.query(Prompt).filter_by(id=prompt_id).first()
+                if prompt:
+                    session.delete(prompt)
+                    session.commit()
+                    logger.info(
+                        "Deleted prompt %s and %d runs from database",
+                        prompt_id,
+                        len(deleted_info["run_ids"]),
+                    )
+        except SQLAlchemyError as e:
+            logger.error("Database error deleting prompt %s: %s", prompt_id, e)
+            return {
+                "success": False,
+                "error": f"Database error: {e!s}",
+            }
+
+        return {
+            "success": True,
+            "deleted": deleted_info,
+        }
+
+    def delete_run(self, run_id: str) -> dict[str, Any]:
+        """Delete a run and its output directory.
+
+        Args:
+            run_id: The run ID to delete
+
+        Returns:
+            Dictionary containing:
+            - success: Whether deletion succeeded
+            - deleted: Information about what was deleted
+            - warnings: Any warnings during deletion
+            - error: Error message if failed
+        """
+        logger.info("Deleting run_id=%s", run_id)
+
+        # Check if run exists
+        run_data = self.get_run(run_id)
+        if not run_data:
+            return {
+                "success": False,
+                "error": "Run not found",
+            }
+
+        # Check for running or uploading status
+        if run_data["status"] in ("running", "uploading"):
+            return {
+                "success": False,
+                "error": f"Cannot delete run with status '{run_data['status']}'. Wait for completion or cancel first.",
+            }
+
+        # Collect information about what will be deleted
+        deleted_info = {
+            "run_id": run_id,
+            "directory": None,
+        }
+        warnings = []
+
+        # Delete output directory
+        import shutil
+
+        outputs_dir = self.config.get_local_config().outputs_dir
+        run_dir = outputs_dir / f"run_{run_id}"
+        deleted_info["directory"] = str(run_dir)
+
+        if run_dir.exists():
+            try:
+                shutil.rmtree(run_dir)
+                logger.info("Deleted directory: %s", run_dir)
+            except PermissionError as e:
+                warnings.append(f"Could not delete directory due to permission error: {e!s}")
+                logger.warning("Permission error deleting directory %s: %s", run_dir, e)
+            except Exception as e:
+                warnings.append(f"Failed to delete directory: {e!s}")
+                logger.warning("Failed to delete directory %s: %s", run_dir, e)
+
+        # Delete from database
+        try:
+            with self.db.get_session() as session:
+                run = session.query(Run).filter_by(id=run_id).first()
+                if run:
+                    session.delete(run)
+                    session.commit()
+                    logger.info("Deleted run %s from database", run_id)
+        except SQLAlchemyError as e:
+            logger.error("Database error deleting run %s: %s", run_id, e)
+            return {
+                "success": False,
+                "error": f"Database error: {e!s}",
+            }
+
+        result = {
+            "success": True,
+            "deleted": deleted_info,
+        }
+        if warnings:
+            result["warnings"] = warnings
+
+        return result

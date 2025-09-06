@@ -2,7 +2,6 @@
 
 import click
 
-# These imports are for mocking in tests
 from .base import CLIContext, handle_errors
 from .helpers import (
     console,

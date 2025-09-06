@@ -4,7 +4,6 @@ import json
 
 import click
 
-# These imports are for mocking in tests
 from .base import CLIContext, handle_errors
 from .helpers import (
     console,
@@ -51,24 +50,16 @@ def inference(ctx, run_id, upscale, upscale_weight, dry_run):
       cosmos inference rs_abc123 --upscale-weight 0.7
     """
     ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
-    # Get service and load run/prompt data
-    try:
-        # Use the get_workflow_service from context
-        service = ctx_obj.get_workflow_service()
+    # Get run and prompt data
+    run = ops.get_run(run_id)
+    if not run:
+        raise ValueError(f"Run not found: {run_id}")
 
-        # Get run and prompt
-        run = service.get_run(run_id)
-        if not run:
-            raise ValueError(f"Run not found: {run_id}")
-
-        prompt = service.get_prompt(run["prompt_id"])
-        if not prompt:
-            raise ValueError(f"Prompt not found: {run['prompt_id']}")
-    except Exception as e:
-        if "not found" in str(e).lower():
-            raise ValueError(str(e)) from e
-        raise Exception(f"Database error: {e!s}") from e
+    prompt = ops.get_prompt(run["prompt_id"])
+    if not prompt:
+        raise ValueError(f"Prompt not found: {run['prompt_id']}")
 
     # Handle dry-run mode
     if dry_run:
@@ -114,40 +105,12 @@ def inference(ctx, run_id, upscale, upscale_weight, dry_run):
         workflow_desc = "inference + upscaling" if upscale else "inference"
         task = progress.add_task(f"[cyan]Running {workflow_desc}...", total=None)
 
-        try:
-            # Update run status to running
-            service.update_run_status(run_id, "running")
-
-            # Get orchestrator
-            orchestrator = ctx_obj.get_orchestrator()
-
-            # Execute the run using the simplified orchestrator
-            # The orchestrator.execute_run method will be simplified to just handle GPU execution
-            result = orchestrator.execute_run(
-                run, prompt, upscale=upscale, upscale_weight=upscale_weight
-            )
-
-            # Update run with outputs
-            outputs = {
-                "video_path": result.get("output_path", ""),
-                "upscaled": upscale,
-            }
-            if upscale:
-                outputs["upscale_weight"] = upscale_weight
-
-            service.update_run(run_id, outputs=outputs)
-
-            # Update run status to completed
-            service.update_run_status(run_id, "completed")
-
-        except Exception as e:
-            # Update run status to failed
-            try:
-                service.update_run_status(run_id, "failed")
-                service.update_run(run_id, outputs={"error": str(e)})
-            except Exception:  # noqa: S110
-                pass  # Don't fail on status update error
-            raise
+        # Execute the run using operations
+        result = ops.execute_run(
+            run_id=run_id,
+            upscale=upscale,
+            upscale_weight=upscale_weight,
+        )
 
         progress.update(task, completed=True)
 
@@ -155,7 +118,7 @@ def inference(ctx, run_id, upscale, upscale_weight, dry_run):
     results_data = {
         "Run ID": format_id(run_id),
         "Status": "Completed",
-        "Output": outputs.get("video_path", "N/A"),
+        "Output": result.get("output_path", "N/A"),
     }
 
     display_success(f"{workflow_desc.capitalize()} completed!", results_data)

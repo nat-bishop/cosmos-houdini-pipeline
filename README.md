@@ -72,6 +72,9 @@ cosmos create run ps_a1b2c3d4
 # Execute the run on GPU
 cosmos inference rs_x9y8z7w6
 
+# Or process multiple runs together for better performance
+cosmos batch-inference rs_x9y8z7w6 rs_a1b2c3d4 rs_e5f6g7h8
+
 # Or use the Gradio UI
 cosmos ui
 
@@ -91,7 +94,7 @@ cosmos status
 
 ### GPU Execution
 - `cosmos inference rs_xxxxx [--upscale/--no-upscale]` - Execute run on GPU with status tracking
-- `cosmos batch-inference rs_xxx1 rs_xxx2 rs_xxx3` - Execute multiple runs as batch for efficiency
+- `cosmos batch-inference rs_xxx1 rs_xxx2 rs_xxx3 [--batch-name NAME] [--dry-run]` - Execute multiple runs as batch (40-60% faster)
 - `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt + run)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs

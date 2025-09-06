@@ -36,10 +36,6 @@ from .helpers import (
 @click.pass_context
 @handle_errors
 def inference(ctx, run_id, upscale, upscale_weight, dry_run):
-    # TODO: Add batch inference support
-    # Future enhancement: Add --batch flag to run multiple run IDs at once
-    # This would use the batch_inference.sh script and to_cosmos_batch_inference_jsonl()
-    # Example: cosmos inference --batch rs_abc123 rs_def456 rs_ghi789
     r"""Run Cosmos Transfer inference with optional upscaling.
 
     Uses a run ID from the database to execute inference on a remote GPU.

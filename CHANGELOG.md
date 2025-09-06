@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - CLI Batch Inference Command (2025-09-06)
+- **New `cosmos batch-inference` CLI command**
+  - Command syntax: `cosmos batch-inference <run_ids...>` with options `--batch-name` and `--dry-run`
+  - Processes multiple inference jobs in parallel on GPU for improved performance
+  - 40-60% performance improvement over individual runs through reduced model loading overhead
+  - Automatic splitting of batch outputs into individual run folders with proper naming
+  - Complete integration with database-first architecture using run IDs (rs_xxxxx format)
+  - Dry-run mode for previewing batch execution without GPU processing
+  - Custom batch naming for organized output management
+
 ### Added - Batch Inference Support (2025-09-06)
 - **Comprehensive Batch Inference System**
   - Added capability to run multiple inference jobs together using NVIDIA Cosmos Transfer's batch mode

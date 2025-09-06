@@ -3,6 +3,7 @@
 import click
 
 from .base import CLIContext, ensure_utf8_encoding
+from .batch_inference import batch_inference
 from .create import create
 from .delete import delete_group
 from .enhance import prompt_enhance
@@ -44,6 +45,7 @@ def cli(ctx, verbose):
 
 
 # Register all commands
+cli.add_command(batch_inference)
 cli.add_command(create)
 cli.add_command(delete_group)
 cli.add_command(inference)

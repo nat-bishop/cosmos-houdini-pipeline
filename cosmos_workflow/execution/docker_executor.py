@@ -311,6 +311,81 @@ class DockerExecutor:
             logger.error("Failed to get container logs: %s", e)
             return f"Error retrieving logs: {e}"
 
+    def run_batch_inference(
+        self,
+        batch_name: str,
+        batch_jsonl_file: str,
+        num_gpu: int = 1,
+        cuda_devices: str = "0",
+    ) -> dict[str, Any]:
+        """Run batch inference for multiple prompts/videos.
+
+        Args:
+            batch_name: Name for the batch output directory
+            batch_jsonl_file: Name of JSONL file with batch data (in inputs/batches/)
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs to use
+
+        Returns:
+            Dictionary with batch results including output paths
+        """
+        logger.info("Running batch inference %s with %d GPU(s)", batch_name, num_gpu)
+
+        # Check if batch file exists
+        batch_path = f"{self.remote_dir}/inputs/batches/{batch_jsonl_file}"
+        if not self.remote_executor.file_exists(batch_path):
+            raise FileNotFoundError(f"Batch file not found: {batch_path}")
+
+        # Create output directory
+        remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
+        self.remote_executor.create_directory(remote_output_dir)
+
+        # Execute batch inference using bash script
+        logger.info("Starting batch inference...")
+        self._run_batch_inference_script(batch_name, batch_jsonl_file, num_gpu, cuda_devices)
+
+        # Get list of output files
+        output_files = self._get_batch_output_files(batch_name)
+
+        logger.info("Batch inference completed successfully for %s", batch_name)
+        return {
+            "batch_name": batch_name,
+            "output_dir": remote_output_dir,
+            "output_files": output_files,
+        }
+
+    def _run_batch_inference_script(
+        self, batch_name: str, batch_jsonl_file: str, num_gpu: int, cuda_devices: str
+    ) -> None:
+        """Run batch inference using the bash script."""
+        builder = DockerCommandBuilder(self.docker_image)
+        builder.with_gpu()
+        builder.add_option("--ipc=host")
+        builder.add_option("--shm-size=8g")
+        builder.add_volume(self.remote_dir, "/workspace")
+        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+        builder.set_command(
+            f'bash -lc "/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"'
+        )
+
+        self.remote_executor.execute_docker(builder, timeout=7200)  # 2 hour timeout for batch
+
+    def _get_batch_output_files(self, batch_name: str) -> list[str]:
+        """Get list of output files from batch inference."""
+        output_dir = f"{self.remote_dir}/outputs/{batch_name}"
+        try:
+            # List all mp4 files in the output directory
+            result = self.ssh_manager.execute_command_success(
+                f"ls -1 {output_dir}/*.mp4 2>/dev/null || true", stream_output=False
+            )
+            if result:
+                files = result.strip().split("\n")
+                return [f for f in files if f]
+            return []
+        except Exception as e:
+            logger.warning("Failed to list output files: %s", e)
+            return []
+
     def stream_container_logs(self, container_id: str | None = None) -> None:
         """Stream container logs in real-time.
 

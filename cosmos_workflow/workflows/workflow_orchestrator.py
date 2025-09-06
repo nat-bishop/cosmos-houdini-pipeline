@@ -212,6 +212,171 @@ class WorkflowOrchestrator:
         except Exception as e:
             return {"ssh_status": "failed", "error": str(e)}
 
+    def execute_batch_runs(
+        self,
+        runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+        batch_name: str | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Execute multiple runs as a batch on GPU infrastructure.
+
+        Args:
+            runs_and_prompts: List of (run_dict, prompt_dict) tuples
+            batch_name: Optional batch name, generated if not provided
+            **kwargs: Additional options
+
+        Returns:
+            Dictionary with batch execution results
+        """
+        self._initialize_services()
+
+        if not batch_name:
+            batch_name = f"batch_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+
+        start_time = datetime.now(timezone.utc)
+        logger.info("Starting batch execution %s with %d runs", batch_name, len(runs_and_prompts))
+
+        try:
+            with self.ssh_manager:
+                # Convert runs to JSONL format
+                batch_data = nvidia_format.to_cosmos_batch_inference_jsonl(runs_and_prompts)
+
+                # Write to temporary JSONL file
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    jsonl_filename = f"{batch_name}.jsonl"
+                    temp_jsonl_path = Path(temp_dir) / jsonl_filename
+
+                    # Write JSONL file
+                    nvidia_format.write_batch_jsonl(batch_data, temp_jsonl_path)
+
+                    # Upload JSONL to remote
+                    remote_config = self.config_manager.get_remote_config()
+                    remote_batch_dir = f"{remote_config.remote_dir}/inputs/batches"
+                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_batch_dir}")
+                    self.file_transfer.upload_file(temp_jsonl_path, remote_batch_dir)
+
+                    # Upload all referenced video files
+                    for _run_dict, prompt_dict in runs_and_prompts:
+                        inputs = prompt_dict.get("inputs", {})
+                        for _input_type, input_path in inputs.items():
+                            if input_path and Path(input_path).exists():
+                                remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
+                                self.ssh_manager.execute_command_success(
+                                    f"mkdir -p {remote_videos_dir}"
+                                )
+                                self.file_transfer.upload_file(Path(input_path), remote_videos_dir)
+
+                # Upload batch_inference.sh script if it exists
+                batch_script = Path("scripts/batch_inference.sh")
+                if batch_script.exists():
+                    remote_scripts_dir = f"{remote_config.remote_dir}/scripts"
+                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_scripts_dir}")
+                    self.file_transfer.upload_file(batch_script, remote_scripts_dir)
+                    # Make script executable
+                    self.ssh_manager.execute_command_success(
+                        f"chmod +x {remote_scripts_dir}/batch_inference.sh"
+                    )
+
+                # Run batch inference
+                logger.info("Running batch inference on GPU")
+                batch_result = self.docker_executor.run_batch_inference(
+                    batch_name, jsonl_filename, num_gpu=1, cuda_devices="0"
+                )
+
+                # Split outputs to individual run folders
+                output_mapping = self._split_batch_outputs(
+                    batch_name, runs_and_prompts, batch_result
+                )
+
+                # Download all outputs
+                for run_id, output_info in output_mapping.items():
+                    remote_file = output_info["remote_path"]
+                    local_dir = Path(f"outputs/run_{run_id}")
+                    local_dir.mkdir(parents=True, exist_ok=True)
+                    local_file = local_dir / "output.mp4"
+
+                    self.file_transfer.download_file(remote_file, str(local_file))
+                    output_info["local_path"] = str(local_file)
+
+                end_time = datetime.now(timezone.utc)
+                duration = end_time - start_time
+
+                return {
+                    "status": "success",
+                    "batch_name": batch_name,
+                    "num_runs": len(runs_and_prompts),
+                    "output_mapping": output_mapping,
+                    "duration_seconds": duration.total_seconds(),
+                    "started_at": start_time.isoformat(),
+                    "completed_at": end_time.isoformat(),
+                }
+
+        except Exception as e:
+            logger.error("Batch execution failed: %s", e)
+            return {
+                "status": "failed",
+                "batch_name": batch_name,
+                "error": str(e),
+                "started_at": start_time.isoformat(),
+            }
+
+    def _split_batch_outputs(
+        self,
+        batch_name: str,
+        runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+        batch_result: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        """Split batch output files to individual run folders.
+
+        Args:
+            batch_name: Name of the batch
+            runs_and_prompts: Original run/prompt pairs
+            batch_result: Result from batch inference
+
+        Returns:
+            Mapping of run_id to output file info
+        """
+        output_mapping = {}
+        output_files = batch_result.get("output_files", [])
+
+        # Match output files to runs
+        # NVIDIA batch inference typically names outputs with indices or prompt IDs
+        for i, (run_dict, _) in enumerate(runs_and_prompts):
+            run_id = run_dict["id"]
+
+            # Try to find matching output file
+            # Look for files with index or run_id in name
+            matched_file = None
+            for output_file in output_files:
+                file_name = Path(output_file).name
+                # Check if file contains run_id or index
+                if run_id in file_name or f"_{i:03d}_" in file_name or f"_{i}_" in file_name:
+                    matched_file = output_file
+                    break
+
+            if matched_file:
+                output_mapping[run_id] = {
+                    "remote_path": matched_file,
+                    "batch_index": i,
+                    "status": "found",
+                }
+            else:
+                # If no match found, try sequential matching
+                if i < len(output_files):
+                    output_mapping[run_id] = {
+                        "remote_path": output_files[i],
+                        "batch_index": i,
+                        "status": "assumed",
+                    }
+                else:
+                    output_mapping[run_id] = {
+                        "remote_path": None,
+                        "batch_index": i,
+                        "status": "missing",
+                    }
+
+        return output_mapping
+
     # ========== Upsampling Methods ==========
 
     def run_prompt_upsampling(

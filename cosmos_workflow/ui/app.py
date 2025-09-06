@@ -711,8 +711,8 @@ def create_interface():
         selected_prompt_state = gr.State("")
 
         with gr.Tabs():
-            # PROMPTS TAB - Enhanced with selection and details
-            with gr.TabItem("Prompts"):
+            # INFERENCE TAB - Enhanced with selection and details
+            with gr.TabItem("Inference"):
                 with gr.Row():
                     # Left side - Prompts table
                     with gr.Column(scale=2):
@@ -867,9 +867,9 @@ def create_interface():
                                         value="Create New",
                                     )
 
-                                    # Warning message for overwrite mode
+                                    # Dynamic warning message for overwrite mode
                                     overwrite_warning = gr.Markdown(
-                                        "⚠️ **Warning:** Overwriting prompts with associated runs is not allowed.",
+                                        "",
                                         visible=False,
                                     )
 
@@ -904,8 +904,8 @@ def create_interface():
                             )
                             run_id_state = gr.State("")
 
-            # GENERATE TAB - Original functionality
-            with gr.TabItem("Generate"):
+            # CREATE PROMPTS TAB - Original functionality
+            with gr.TabItem("Create Prompts"):
                 with gr.Row():
                     # LEFT COLUMN - Create Prompt
                     with gr.Column():
@@ -1069,10 +1069,74 @@ def create_interface():
             fn=lambda x: gr.update(visible=x), inputs=[enable_upscaling], outputs=[upscale_weight]
         )
 
-        # Show/hide overwrite warning
+        # Show/hide overwrite warning with dynamic content based on selected prompts
+        def update_overwrite_warning(mode, df):
+            if mode != "Overwrite":
+                return gr.update(visible=False, value="")
+
+            # Get selected prompts
+            selected = []
+            for _i, row in df.iterrows():
+                if row["Select"]:
+                    prompt_id = row["ID"]
+                    if prompt_id.endswith("..."):
+                        prompts = service.list_prompts(limit=200)
+                        for p in prompts:
+                            if p["id"].startswith(prompt_id[:-3]):
+                                selected.append(p["id"])
+                                break
+                    else:
+                        selected.append(prompt_id)
+
+            if not selected:
+                return gr.update(
+                    visible=True,
+                    value="⚠️ **Warning:** Overwriting will replace the original prompt text.",
+                )
+
+            # Check for prompts with runs
+            prompts_with_runs = []
+            for pid in selected:
+                preview = service.preview_prompt_deletion(pid)
+                runs = preview.get("runs", [])
+                if runs:
+                    # Get output files
+                    output_files = []
+                    for run in runs:
+                        outputs = run.get("outputs", {})
+                        output_path = outputs.get("output_path")
+                        if output_path and Path(output_path).exists():
+                            output_files.append(Path(output_path).name)
+
+                    prompts_with_runs.append(
+                        {"id": pid[:12] + "...", "runs": len(runs), "files": output_files}
+                    )
+
+            if prompts_with_runs:
+                warning_text = "⚠️ **Warning:** Cannot overwrite the following prompts with associated runs:\n\n"
+                for p in prompts_with_runs:
+                    warning_text += f"- **{p['id']}**: {p['runs']} run(s)"
+                    if p["files"]:
+                        warning_text += f" with output files: {', '.join(p['files'])}"
+                    warning_text += "\n"
+                warning_text += "\n**Please delete the runs first or use 'Create New' mode.**"
+                return gr.update(visible=True, value=warning_text)
+            else:
+                return gr.update(
+                    visible=True,
+                    value="⚠️ **Warning:** Overwriting will replace the original prompt text.",
+                )
+
         overwrite_mode.change(
-            fn=lambda mode: gr.update(visible=(mode == "Overwrite")),
-            inputs=[overwrite_mode],
+            fn=update_overwrite_warning,
+            inputs=[overwrite_mode, prompts_table],
+            outputs=[overwrite_warning],
+        )
+
+        # Also update warning when selection changes
+        prompts_table.change(
+            fn=update_overwrite_warning,
+            inputs=[overwrite_mode, prompts_table],
             outputs=[overwrite_warning],
         )
 

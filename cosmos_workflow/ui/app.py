@@ -267,9 +267,7 @@ def get_prompt_details_with_videos(selected_prompt_id):
         return gr.update(visible=False), f"Error: {e}", "", "", "", []
 
 
-def run_prompt_enhancer(
-    selected_prompts: list[str], overwrite_mode: bool, model: str = "pixtral"
-) -> tuple[str, str]:
+def run_prompt_enhancer(selected_prompts: list[str], overwrite_mode: bool) -> tuple[str, str]:
     """Run prompt enhancement on selected prompts."""
     if not selected_prompts:
         return "", "Please select at least one prompt"
@@ -300,7 +298,7 @@ def run_prompt_enhancer(
                 enhancement_run = service.create_run(
                     prompt_id=prompt_id,
                     execution_config={
-                        "model": model,
+                        "model": "pixtral",
                         "type": "enhancement",
                         "temperature": 0.7,
                     },
@@ -310,10 +308,10 @@ def run_prompt_enhancer(
                 # Update status
                 service.update_run_status(enhancement_run["id"], "running")
 
-                # Run enhancement
+                # Run enhancement with pixtral model
                 enhanced_text = orchestrator.run_prompt_upsampling(
                     prompt_text=original_prompt["prompt_text"],
-                    model=model,
+                    model="pixtral",
                 )
 
                 if overwrite_mode:
@@ -324,7 +322,7 @@ def run_prompt_enhancer(
                         parameters={
                             **original_prompt.get("parameters", {}),
                             "enhanced": True,
-                            "enhancement_model": model,
+                            "enhancement_model": "pixtral",
                             "enhanced_at": datetime.now(timezone.utc).isoformat(),
                         },
                     )
@@ -341,7 +339,7 @@ def run_prompt_enhancer(
                             "name": f"{name}_enhanced",
                             "enhanced": True,
                             "parent_prompt_id": prompt_id,
-                            "enhancement_model": model,
+                            "enhancement_model": "pixtral",
                         },
                     )
                     results.append(
@@ -355,7 +353,7 @@ def run_prompt_enhancer(
                     outputs={
                         "type": "text_enhancement",
                         "enhanced_text": enhanced_text[:500],
-                        "model_used": model,
+                        "model_used": "pixtral",
                     },
                 )
 
@@ -774,9 +772,9 @@ def create_interface():
                     ) as prompt_details_accordion:
                         prompt_name_display = gr.Textbox(label="Name", interactive=False)
 
-                        # Full Text and Negative Prompt
+                        # Prompt and Negative Prompt
                         full_prompt_text = gr.Textbox(
-                            label="Full Text", lines=3, max_lines=5, interactive=False
+                            label="Prompt", lines=3, max_lines=5, interactive=False
                         )
 
                         negative_prompt_display = gr.Textbox(
@@ -794,7 +792,7 @@ def create_interface():
                             columns=3,
                             rows=1,
                             object_fit="contain",
-                            height=200,
+                            height=400,
                             preview=True,
                         )
 
@@ -861,12 +859,7 @@ def create_interface():
                                 # Run Prompt Upsampler Tab
                                 with gr.TabItem("Run Prompt Upsampler"):
                                     gr.Markdown("**Enhancement Settings**")
-
-                                    enhancement_model = gr.Dropdown(
-                                        label="Model",
-                                        choices=["pixtral", "gpt-4", "claude-3"],
-                                        value="pixtral",
-                                    )
+                                    gr.Markdown("*Using Pixtral model for enhancement*")
 
                                     overwrite_mode = gr.Radio(
                                         label="Mode",
@@ -887,9 +880,17 @@ def create_interface():
                                         label="Status", interactive=False, max_lines=3
                                     )
 
-                                    # Deletion preview
-                                    with gr.Accordion("Deletion Preview", open=False):
-                                        deletion_preview = gr.Markdown("No prompts selected")
+                                    # Enhancement confirmation dialog
+                                    with gr.Group(visible=False) as enhancement_confirm_dialog:
+                                        enhancement_confirm_text = gr.Markdown("")
+                                        selected_prompts_for_enhancement = gr.State([])
+                                        with gr.Row():
+                                            confirm_enhance_btn = gr.Button(
+                                                "Confirm Enhancement", variant="primary"
+                                            )
+                                            cancel_enhance_btn = gr.Button(
+                                                "Cancel", variant="secondary"
+                                            )
 
                         # Right side - Live Logs (larger)
                         with gr.Column(scale=2):
@@ -1075,8 +1076,8 @@ def create_interface():
             outputs=[overwrite_warning],
         )
 
-        # Prompt enhancement
-        def enhance_selected_prompts(df, overwrite, model):
+        # Prompt enhancement with confirmation
+        def prepare_enhancement_confirmation(df, overwrite):
             # Get selected prompts
             selected = []
             for _i, row in df.iterrows():
@@ -1094,10 +1095,16 @@ def create_interface():
                         selected.append(prompt_id)
 
             if not selected:
-                return "", "Please select prompts to enhance"
+                return gr.update(visible=False), [], "", "Please select prompts to enhance"
 
-            # Check for overwrites with runs
+            # Build confirmation text
+            confirm_text = "### Enhancement Confirmation\n\n"
+
             if overwrite == "Overwrite":
+                confirm_text += "**Mode:** Overwrite existing prompts\n\n"
+                confirm_text += "⚠️ **Warning:** This will replace the original prompt text!\n\n"
+
+                # Check for overwrites with runs
                 warnings = []
                 for pid in selected:
                     preview = service.preview_prompt_deletion(pid)
@@ -1105,38 +1112,51 @@ def create_interface():
                         warnings.append(f"{pid[:12]}... has {len(preview['runs'])} run(s)")
 
                 if warnings:
-                    return "", "Cannot overwrite prompts with runs:\n" + "\n".join(warnings)
+                    confirm_text += "**Cannot overwrite these prompts (they have runs):**\n"
+                    confirm_text += "\n".join(f"- {w}" for w in warnings)
+                    return gr.update(visible=False), [], "", "Cannot overwrite prompts with runs"
+            else:
+                confirm_text += "**Mode:** Create new enhanced versions\n\n"
 
-            status, msg = run_prompt_enhancer(selected, overwrite == "Overwrite", model)
-            return status, msg
+            confirm_text += f"**Selected prompts:** {len(selected)}\n\n"
+            confirm_text += "**Model:** Pixtral (default)\n\n"
+            confirm_text += (
+                "This will enhance the selected prompts using AI to improve their quality.\n\n"
+            )
+            confirm_text += "**Continue with enhancement?**"
+
+            return gr.update(visible=True), selected, confirm_text, ""
+
+        def execute_enhancement(selected_ids, overwrite):
+            if not selected_ids:
+                return "", "No prompts selected", gr.update(visible=False)
+
+            status, msg = run_prompt_enhancer(selected_ids, overwrite == "Overwrite")
+            return status, msg, gr.update(visible=False)
+
+        def cancel_enhancement():
+            return "", "Enhancement cancelled", gr.update(visible=False)
 
         enhance_btn.click(
-            fn=enhance_selected_prompts,
-            inputs=[prompts_table, overwrite_mode, enhancement_model],
-            outputs=[enhance_status, prompts_status],
+            fn=prepare_enhancement_confirmation,
+            inputs=[prompts_table, overwrite_mode],
+            outputs=[
+                enhancement_confirm_dialog,
+                selected_prompts_for_enhancement,
+                enhancement_confirm_text,
+                prompts_status,
+            ],
+        )
+
+        confirm_enhance_btn.click(
+            fn=execute_enhancement,
+            inputs=[selected_prompts_for_enhancement, overwrite_mode],
+            outputs=[enhance_status, prompts_status, enhancement_confirm_dialog],
         ).then(fn=refresh_prompts, outputs=[prompts_table, prompt_ids_hidden, prompts_status])
 
-        # Deletion preview
-        def update_deletion_preview(df):
-            selected = []
-            for _i, row in df.iterrows():
-                if row["Select"]:
-                    prompt_id = row["ID"]
-                    if prompt_id.endswith("..."):
-                        prompts = service.list_prompts(limit=200)
-                        for p in prompts:
-                            if p["id"].startswith(prompt_id[:-3]):
-                                selected.append(p["id"])
-                                break
-                    else:
-                        selected.append(prompt_id)
-
-            if selected:
-                return preview_prompt_deletion_ui(selected)
-            return "No prompts selected"
-
-        prompts_table.change(
-            fn=update_deletion_preview, inputs=[prompts_table], outputs=[deletion_preview]
+        cancel_enhance_btn.click(
+            fn=cancel_enhancement,
+            outputs=[enhance_status, prompts_status, enhancement_confirm_dialog],
         )
 
         # Delete selected prompts with confirmation

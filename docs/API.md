@@ -373,7 +373,7 @@ The database system provides flexible data persistence supporting multiple AI mo
 ```python
 from cosmos_workflow.database import init_database, get_database_url
 from cosmos_workflow.database.connection import DatabaseConnection
-from cosmos_workflow.database.models import Prompt, Run, Progress
+from cosmos_workflow.database.models import Prompt, Run
 
 # Initialize database with all tables
 conn = init_database()
@@ -409,15 +409,7 @@ with conn.get_session() as session:
         run_metadata={"user": "NAT", "session": "workflow"}
     )
 
-    # Track progress
-    progress = Progress(
-        run_id=run.id,
-        stage="uploading",
-        percentage=25.0,
-        message="Uploading video files..."
-    )
-
-    session.add_all([prompt, run, progress])
+    session.add_all([prompt, run])
     session.commit()
 ```
 
@@ -446,10 +438,6 @@ Manages secure database connections with automatic session handling.
 - JSON storage for execution configuration and outputs
 - Automatic timestamp management for audit trail
 
-**Progress Model:**
-- Real-time progress tracking through execution stages
-- Percentage-based progress (0.0-100.0) with validation
-- Human-readable status messages for dashboard display
 
 #### Helper Functions
 
@@ -784,35 +772,6 @@ service.update_run("rs_xyz789", outputs={"video_path": "/outputs/result.mp4"})
 - `run_metadata`: JSON column for additional metadata
 - `created_at`, `updated_at`, `started_at`, `completed_at`: Lifecycle timestamps
 
-### Progress Model
-Database model for real-time progress tracking during execution.
-
-```python
-from cosmos_workflow.database.models import Progress
-
-# Progress is automatically created by WorkflowOrchestrator during execution
-# Example progress entries for a run:
-
-# Upload stage
-Progress(run_id="rs_xyz789", stage="uploading", percentage=25.0,
-         message="Uploading video files to GPU instance...")
-
-# Inference stage
-Progress(run_id="rs_xyz789", stage="inference", percentage=60.0,
-         message="Running Cosmos Transfer inference...")
-
-# Download stage
-Progress(run_id="rs_xyz789", stage="downloading", percentage=90.0,
-         message="Downloading generated video results...")
-```
-
-**Database Fields:**
-- `id`: Auto-incrementing primary key
-- `run_id`: Foreign key reference to Run model
-- `stage`: Execution stage ("uploading", "inference", "downloading")
-- `percentage`: Progress percentage (0.0-100.0)
-- `message`: Human-readable status message
-- `timestamp`: When this progress update was recorded
 
 ## Database ID Format
 

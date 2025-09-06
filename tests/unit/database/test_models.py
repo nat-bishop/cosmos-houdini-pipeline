@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from cosmos_workflow.database.models import Base, Progress, Prompt, Run
+from cosmos_workflow.database.models import Base, Prompt, Run
 
 
 class TestPromptModel:
@@ -367,176 +367,6 @@ class TestRunModel:
         assert run.prompt.prompt_text == "test"
 
 
-class TestProgressModel:
-    """Test Progress model for real-time tracking."""
-
-    @pytest.fixture
-    def session(self):
-        """Create in-memory database session."""
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
-        with Session(engine) as session:
-            yield session
-
-    @pytest.fixture
-    def sample_run(self, session: Session) -> Run:
-        """Create a sample run for progress tests."""
-        prompt = Prompt(
-            id="ps_prog",
-            model_type="transfer",
-            prompt_text="test",
-            inputs={},
-            parameters={},
-        )
-        session.add(prompt)
-
-        run = Run(
-            id="rs_prog",
-            prompt_id=prompt.id,
-            model_type="transfer",
-            status="running",
-            execution_config={},
-            outputs={},
-            run_metadata={},
-        )
-        session.add(run)
-        session.commit()
-        return run
-
-    def test_create_progress_entry(self, session: Session, sample_run: Run):
-        """Test creating progress tracking entries."""
-        progress = Progress(
-            run_id=sample_run.id,
-            stage="uploading",
-            percentage=45.5,
-            message="Uploading depth video to GPU node...",
-        )
-        session.add(progress)
-        session.commit()
-
-        assert progress.id is not None
-        assert progress.run_id == sample_run.id
-        assert progress.stage == "uploading"
-        assert progress.percentage == 45.5
-        assert "depth video" in progress.message
-        assert isinstance(progress.timestamp, datetime)
-
-    def test_progress_stages(self, session: Session, sample_run: Run):
-        """Test tracking different execution stages."""
-        stages = [
-            ("uploading", 0.0, "Starting upload"),
-            ("uploading", 50.0, "Uploading video"),
-            ("uploading", 100.0, "Upload complete"),
-            ("inference", 0.0, "Starting inference"),
-            ("inference", 25.0, "Processing frame 30/120"),
-            ("inference", 50.0, "Processing frame 60/120"),
-            ("inference", 75.0, "Processing frame 90/120"),
-            ("inference", 100.0, "Inference complete"),
-            ("downloading", 0.0, "Starting download"),
-            ("downloading", 100.0, "Download complete"),
-        ]
-
-        for stage, percentage, message in stages:
-            progress = Progress(
-                run_id=sample_run.id,
-                stage=stage,
-                percentage=percentage,
-                message=message,
-            )
-            session.add(progress)
-        session.commit()
-
-        # Query progress by stage
-        upload_progress = session.scalars(
-            select(Progress).where(
-                (Progress.run_id == sample_run.id) & (Progress.stage == "uploading")
-            )
-        ).all()
-        assert len(upload_progress) == 3
-
-        # Query all progress and get the last one
-        all_progress = session.scalars(
-            select(Progress)
-            .where(Progress.run_id == sample_run.id)
-            .order_by(Progress.id)  # Order by ID to get insertion order
-        ).all()
-
-        # The last one should be downloading 100%
-        latest = all_progress[-1]
-        assert latest.stage == "downloading"
-        assert latest.percentage == 100.0
-
-    def test_progress_run_relationship(self, session: Session, sample_run: Run):
-        """Test relationship between Progress and Run."""
-        progress_entries = [
-            Progress(
-                run_id=sample_run.id,
-                stage="uploading",
-                percentage=float(i * 20),
-                message=f"Progress {i}",
-            )
-            for i in range(5)
-        ]
-        session.add_all(progress_entries)
-        session.commit()
-
-        # Access progress through run
-        run_progress = sample_run.progress
-        assert len(run_progress) == 5
-        assert all(p.run_id == sample_run.id for p in run_progress)
-
-        # Access run through progress
-        progress = progress_entries[0]
-        assert progress.run.id == sample_run.id
-
-    def test_progress_chronological_order(self, session: Session, sample_run: Run):
-        """Test that progress entries maintain chronological order."""
-        import time
-
-        progress1 = Progress(
-            run_id=sample_run.id,
-            stage="uploading",
-            percentage=0.0,
-            message="Start",
-        )
-        session.add(progress1)
-        session.commit()
-
-        time.sleep(0.01)  # Small delay to ensure different timestamps
-
-        progress2 = Progress(
-            run_id=sample_run.id,
-            stage="uploading",
-            percentage=50.0,
-            message="Middle",
-        )
-        session.add(progress2)
-        session.commit()
-
-        time.sleep(0.01)
-
-        progress3 = Progress(
-            run_id=sample_run.id,
-            stage="uploading",
-            percentage=100.0,
-            message="End",
-        )
-        session.add(progress3)
-        session.commit()
-
-        # Query in chronological order
-        ordered_progress = session.scalars(
-            select(Progress).where(Progress.run_id == sample_run.id).order_by(Progress.timestamp)
-        ).all()
-
-        assert len(ordered_progress) == 3
-        assert ordered_progress[0].percentage == 0.0
-        assert ordered_progress[1].percentage == 50.0
-        assert ordered_progress[2].percentage == 100.0
-        assert ordered_progress[0].timestamp < ordered_progress[1].timestamp
-        assert ordered_progress[1].timestamp < ordered_progress[2].timestamp
-
-
 class TestModelValidation:
     """Test model validation rules."""
 
@@ -569,21 +399,6 @@ class TestModelValidation:
             Prompt(
                 id="ps_invalid", model_type="transfer", prompt_text="   ", inputs={}, parameters={}
             )
-
-    def test_progress_validates_percentage_range(self):
-        """Test that Progress validates percentage is between 0 and 100."""
-        with pytest.raises(ValueError, match="must be between 0 and 100"):
-            Progress(run_id="rs_test", stage="uploading", percentage=-10.0, message="test")
-
-        with pytest.raises(ValueError, match="must be between 0 and 100"):
-            Progress(run_id="rs_test", stage="uploading", percentage=150.0, message="test")
-
-        # Valid percentages should work
-        progress = Progress(run_id="rs_test", stage="uploading", percentage=0.0, message="test")
-        assert progress.percentage == 0.0
-
-        progress = Progress(run_id="rs_test", stage="uploading", percentage=100.0, message="test")
-        assert progress.percentage == 100.0
 
     def test_run_validates_required_fields(self):
         """Test that Run validates required fields."""
@@ -622,7 +437,7 @@ class TestDatabaseIntegration:
             yield session
 
     def test_full_workflow_lifecycle(self, session: Session):
-        """Test complete workflow from prompt to completion with progress."""
+        """Test complete workflow from prompt to completion."""
         # Create prompt
         prompt = Prompt(
             id="ps_workflow",
@@ -653,36 +468,6 @@ class TestDatabaseIntegration:
         session.add(run)
         session.commit()
 
-        # Add progress entries
-        progress_entries = [
-            Progress(run_id=run.id, stage="uploading", percentage=0.0, message="Starting"),
-            Progress(
-                run_id=run.id,
-                stage="uploading",
-                percentage=100.0,
-                message="Upload complete",
-            ),
-            Progress(
-                run_id=run.id,
-                stage="inference",
-                percentage=50.0,
-                message="Processing",
-            ),
-            Progress(
-                run_id=run.id,
-                stage="inference",
-                percentage=100.0,
-                message="Inference done",
-            ),
-            Progress(
-                run_id=run.id,
-                stage="downloading",
-                percentage=100.0,
-                message="Complete",
-            ),
-        ]
-        session.add_all(progress_entries)
-
         # Update run to completed
         run.status = "completed"
         run.outputs = {
@@ -698,11 +483,6 @@ class TestDatabaseIntegration:
         retrieved_run = retrieved_prompt.runs[0]
         assert retrieved_run.status == "completed"
         assert retrieved_run.outputs["result"] == "/outputs/landscape_futuristic.mp4"
-        assert len(retrieved_run.progress) == 5
-
-        last_progress = retrieved_run.progress[-1]
-        assert last_progress.stage == "downloading"
-        assert last_progress.percentage == 100.0
 
     def test_multiple_runs_per_prompt(self, session: Session):
         """Test handling multiple runs for the same prompt."""
@@ -758,27 +538,18 @@ class TestDatabaseIntegration:
             outputs={},
             run_metadata={},
         )
-        progress = Progress(
-            run_id=run.id,
-            stage="uploading",
-            percentage=50.0,
-            message="In progress",
-        )
 
         session.add(prompt)
         session.add(run)
-        session.add(progress)
         session.commit()
 
         # Verify all objects exist
         assert session.get(Prompt, prompt.id) is not None
         assert session.get(Run, run.id) is not None
-        assert session.get(Progress, progress.id) is not None
 
-        # Test that deleting prompt cascades to runs and progress
+        # Test that deleting prompt cascades to runs
         session.delete(prompt)
         session.commit()
 
         assert session.get(Prompt, prompt.id) is None
         assert session.get(Run, run.id) is None
-        assert session.get(Progress, progress.id) is None

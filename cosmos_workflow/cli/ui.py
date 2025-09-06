@@ -14,4 +14,9 @@ def ui(port, share):
     click.echo(f"Open browser to: http://localhost:{port}")
 
     interface = create_interface()
-    interface.launch(server_port=port, share=share, inbrowser=True)
+    interface.launch(
+        server_port=port,
+        share=share,
+        inbrowser=True,
+        allowed_paths=["inputs/", "outputs/"],  # Allow serving video files
+    )

@@ -8,12 +8,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
-    CheckConstraint,
     Column,
     DateTime,
-    Float,
     ForeignKey,
-    Integer,
     String,
     Text,
 )
@@ -118,7 +115,6 @@ class Run(Base):
 
     # Relationships
     prompt = relationship("Prompt", back_populates="runs")
-    progress = relationship("Progress", back_populates="run", cascade="all, delete-orphan")
 
     @validates("execution_config", "outputs", "run_metadata")
     def validate_json_fields(self, key, value):
@@ -158,70 +154,3 @@ class Run(Base):
 
     def __repr__(self):
         return f"<Run(id={self.id}, prompt={self.prompt_id}, status={self.status})>"
-
-
-class Progress(Base):
-    """Progress model for real-time tracking of run execution.
-
-    Records progress updates during different stages of execution
-    (uploading, inference, downloading) for dashboard visualization.
-    """
-
-    __tablename__ = "progress"
-    __table_args__ = (
-        CheckConstraint("percentage >= 0.0 AND percentage <= 100.0", name="check_percentage_range"),
-    )
-
-    # Core fields
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String, ForeignKey("runs.id"), nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
-    # Progress information
-    stage = Column(String, nullable=False)  # uploading, inference, downloading
-    percentage = Column(Float, nullable=False)  # 0.0 to 100.0
-    message = Column(Text, nullable=False)  # Human-readable status message
-
-    # Relationships
-    run = relationship("Run", back_populates="progress")
-
-    @validates("percentage")
-    def validate_percentage(self, key, value):
-        """Validate that percentage is between 0 and 100.
-
-        Args:
-            key: Name of the field being validated.
-            value: Value being assigned to the field.
-
-        Returns:
-            The validated value if it passes validation.
-
-        Raises:
-            ValueError: If the value is None or outside the 0.0-100.0 range.
-        """
-        if value is None:
-            raise ValueError("Percentage cannot be None")
-        if not 0.0 <= value <= 100.0:
-            raise ValueError(f"Percentage must be between 0 and 100, got {value}")
-        return value
-
-    @validates("stage", "message")
-    def validate_required_strings(self, key, value):
-        """Validate that required string fields are not empty.
-
-        Args:
-            key: Name of the field being validated.
-            value: Value being assigned to the field.
-
-        Returns:
-            The validated value if it passes validation.
-
-        Raises:
-            ValueError: If the value is None or empty string.
-        """
-        if value is None or (isinstance(value, str) and not value.strip()):
-            raise ValueError(f"{key} cannot be None or empty")
-        return value
-
-    def __repr__(self):
-        return f"<Progress(run={self.run_id}, stage={self.stage}, {self.percentage}%)>"

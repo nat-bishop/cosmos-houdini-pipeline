@@ -75,32 +75,11 @@ class Run(Base):
     run_metadata = Column("metadata", JSON, nullable=False)
 ```
 
-#### 3. Progress Model
-Provides real-time progress tracking for dashboard visualization.
-
-**Key Features:**
-- Granular progress tracking through different execution stages
-- Percentage-based progress (0.0-100.0) with built-in validation
-- Human-readable status messages for user feedback
-- Chronological ordering for progress timeline visualization
-
-**Schema:**
-```python
-class Progress(Base):
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(String, ForeignKey("runs.id"), nullable=False)
-    timestamp = Column(DateTime(timezone=True))
-    stage = Column(String, nullable=False)      # uploading, inference, downloading
-    percentage = Column(Float, nullable=False)   # 0.0 to 100.0
-    message = Column(Text, nullable=False)      # Human-readable status
-```
-
 ### Relationships
 
 The models are connected through foreign key relationships with cascading operations:
 
 - `Prompt` → `Run` (one-to-many): One prompt can have multiple execution attempts
-- `Run` → `Progress` (one-to-many): One run can have multiple progress updates
 - Cascade deletes ensure data integrity when removing parent records
 
 ## AI Model Support
@@ -293,7 +272,6 @@ All models include comprehensive validation:
 
 - **Required Fields**: Model type, prompt text, and JSON fields cannot be None or empty
 - **JSON Validation**: All JSON fields are validated to ensure they are not None
-- **Percentage Validation**: Progress percentages must be between 0.0 and 100.0
 - **Foreign Key Integrity**: Relationships are enforced with proper constraints
 
 ### Transaction Safety
@@ -398,7 +376,7 @@ run = service.get_run(run_data["id"])
 
 ```python
 from cosmos_workflow.database import init_database
-from cosmos_workflow.database.models import Prompt, Run, Progress
+from cosmos_workflow.database.models import Prompt, Run
 
 # Initialize database
 conn = init_database()
@@ -426,15 +404,6 @@ with conn.get_session() as session:
     )
     session.add(run)
 
-    # Add progress tracking
-    progress = Progress(
-        run_id=run.id,
-        stage="uploading",
-        percentage=0.0,
-        message="Starting upload"
-    )
-    session.add(progress)
-
     session.commit()
 ```
 
@@ -449,14 +418,6 @@ with conn.get_session() as session:
     run.status = "running"
     run.started_at = datetime.now(timezone.utc)
 
-    # Add progress update
-    progress = Progress(
-        run_id=run.id,
-        stage="inference",
-        percentage=50.0,
-        message="Processing frame 60/120"
-    )
-    session.add(progress)
     session.commit()
 ```
 
@@ -476,13 +437,6 @@ with conn.get_session() as session:
         select(Run).where(Run.status == "completed")
     ).all()
 
-    # Get recent progress for a run
-    recent_progress = session.scalars(
-        select(Progress)
-        .where(Progress.run_id == "run_example")
-        .order_by(Progress.timestamp.desc())
-        .limit(10)
-    ).all()
 ```
 
 ## Testing
@@ -640,7 +594,7 @@ logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 ```python
 from cosmos_workflow.database import init_database, get_database_url
 from cosmos_workflow.database.connection import DatabaseConnection
-from cosmos_workflow.database.models import Prompt, Run, Progress
+from cosmos_workflow.database.models import Prompt, Run
 
 # Initialize database with tables
 conn = init_database(database_url=None)

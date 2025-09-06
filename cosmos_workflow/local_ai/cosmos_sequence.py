@@ -297,9 +297,20 @@ class CosmosVideoConverter:
 
         height, width = first_frame.shape[:2]
 
-        # Set up video writer
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
+        # Set up video writer - use H.264 for browser compatibility
+        # Try H.264 first (browser compatible), fallback to mp4v if needed
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*"avc1")  # H.264 codec
+            out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
+            if not out.isOpened():
+                # Fallback to mp4v if H.264 fails
+                logger.warning("H.264 codec failed for %s, using mp4v fallback", modality)
+                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
+        except Exception:
+            # If avc1 fails completely, use mp4v
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
 
         if not out.isOpened():
             logger.error("Failed to open video writer for %s", modality)
@@ -323,6 +334,10 @@ class CosmosVideoConverter:
                     logger.warning("Cannot read frame: %s", frame_path)
 
             logger.info("Created %s video with %d frames", modality, frames_written)
+
+            # Validate codec for browser compatibility
+            self._validate_video_codec(output_path, modality)
+
             return True, output_path
 
         except Exception as e:
@@ -331,6 +346,35 @@ class CosmosVideoConverter:
 
         finally:
             out.release()
+
+    def _validate_video_codec(self, video_path: Path, modality: str) -> None:
+        """Validate that the video codec is browser-compatible.
+
+        Args:
+            video_path: Path to the video file
+            modality: Name of the modality for logging
+        """
+        try:
+            cap = cv2.VideoCapture(str(video_path))
+            if cap.isOpened():
+                fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+                codec = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
+                cap.release()
+
+                # Check if codec is browser-compatible
+                browser_compatible = codec.lower() in ["h264", "avc1"]
+
+                if not browser_compatible:
+                    logger.warning(
+                        "Video %s.mp4 uses codec '%s' which may not play in browsers. "
+                        "Consider converting to H.264 for browser compatibility.",
+                        modality,
+                        codec,
+                    )
+                else:
+                    logger.info("Video %s.mp4 uses browser-compatible codec: %s", modality, codec)
+        except Exception as e:
+            logger.warning("Could not validate video codec for %s: %s", modality, e)
 
     def generate_metadata(
         self,

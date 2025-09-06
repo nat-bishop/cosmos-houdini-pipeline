@@ -13,7 +13,6 @@
   - [ ] Implement unified `cosmos run` command (single-step workflow)
   - [ ] Add `cosmos list` command to view recent runs
   - [ ] Add `cosmos search` command for full-text prompt search
-  - [ ] Implement progress tracking in database
   - [ ] Add smart defaults and auto-discovery
 
 - [ ] **Phase 2: API & UI (Week 3, Optional)**

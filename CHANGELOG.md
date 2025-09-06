@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - Database Cleanup (2025-09-06)
+- **Removed unused Progress model**
+  - Deleted Progress model from database schema (was never implemented in production)
+  - Removed all Progress-related tests (6 test methods)
+  - Updated documentation to remove Progress references
+  - Simplified database to 2 core models: Prompt and Run
+  - No migration needed as Progress was never used in production code
+
 ### Fixed - Data Architecture Improvements (2025-09-06)
 - **Critical Path Fixes**
   - Fixed output filename mismatch: changed from `result.mp4` to `output.mp4` to match actual GPU outputs

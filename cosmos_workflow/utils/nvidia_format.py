@@ -152,3 +152,116 @@ def to_cosmos_batch_json(prompts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
 
     return batch_data
+
+
+def to_cosmos_batch_inference_jsonl(
+    runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Convert multiple run/prompt pairs to NVIDIA Cosmos batch inference JSONL format.
+
+    Args:
+        runs_and_prompts: List of (run_dict, prompt_dict) tuples
+
+    Returns:
+        List of dictionaries, each representing one line in the JSONL file.
+        Each dict contains:
+        - visual_input: path to input video
+        - prompt: text prompt
+        - control_overrides: optional per-video control settings
+    """
+    batch_lines = []
+
+    for run_dict, prompt_dict in runs_and_prompts:
+        # Get basic fields
+        inputs = prompt_dict.get("inputs", {})
+        visual_input = inputs.get("video", "")
+
+        # Convert Windows paths to Unix for GPU server
+        if visual_input:
+            visual_input = visual_input.replace("\\", "/")
+
+        # Build the JSONL line
+        line = {
+            "visual_input": visual_input,
+            "prompt": prompt_dict.get("prompt_text", ""),
+        }
+
+        # Add control overrides based on execution config
+        execution_config = run_dict.get("execution_config", {})
+        weights = execution_config.get("weights", {})
+
+        control_overrides = {}
+
+        # Handle segmentation control
+        seg_weight = weights.get("seg", 0.25)
+        if seg_weight > 0:
+            seg_input = inputs.get("seg", "")
+            if seg_input:
+                # Use provided segmentation video
+                control_overrides["seg"] = {
+                    "input_control": seg_input.replace("\\", "/"),
+                    "control_weight": seg_weight,
+                }
+            else:
+                # Auto-generate segmentation (null means auto-generate)
+                control_overrides["seg"] = {"input_control": None, "control_weight": seg_weight}
+
+        # Handle depth control
+        depth_weight = weights.get("depth", 0.25)
+        if depth_weight > 0:
+            depth_input = inputs.get("depth", "")
+            if depth_input:
+                # Use provided depth video
+                control_overrides["depth"] = {
+                    "input_control": depth_input.replace("\\", "/"),
+                    "control_weight": depth_weight,
+                }
+            else:
+                # Auto-generate depth (null means auto-generate)
+                control_overrides["depth"] = {"input_control": None, "control_weight": depth_weight}
+
+        # Handle visual (vis) control - always auto-generated
+        vis_weight = weights.get("vis", 0.25)
+        if vis_weight > 0:
+            control_overrides["vis"] = {"control_weight": vis_weight}
+
+        # Handle edge control - always auto-generated
+        edge_weight = weights.get("edge", 0.25)
+        if edge_weight > 0:
+            control_overrides["edge"] = {"control_weight": edge_weight}
+
+        # Only add control_overrides if there are any
+        if control_overrides:
+            line["control_overrides"] = control_overrides
+
+        # Add metadata for tracking (will be ignored by inference script)
+        line["_run_id"] = run_dict.get("id", "")
+        line["_prompt_id"] = prompt_dict.get("id", "")
+
+        batch_lines.append(line)
+
+    return batch_lines
+
+
+def write_batch_jsonl(batch_data: list[dict[str, Any]], output_path: str | Path) -> Path:
+    """Write batch data to a JSONL file.
+
+    Args:
+        batch_data: List of dictionaries to write as JSONL
+        output_path: Path where to write the JSONL file
+
+    Returns:
+        Path to the written file
+    """
+    import json
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w") as f:
+        for line_data in batch_data:
+            # Remove internal metadata fields before writing
+            clean_data = {k: v for k, v in line_data.items() if not k.startswith("_")}
+            f.write(json.dumps(clean_data) + "\n")
+
+    return output_path

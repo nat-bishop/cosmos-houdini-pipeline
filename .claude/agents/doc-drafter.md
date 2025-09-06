@@ -66,27 +66,26 @@ Run the following documentation updates in parallel:
    """
    ```
 
-**Documentation Mapping Guide (What Triggers Updates):**
+**Documentation Mapping Guide:**
 
-| Change Type | CHANGELOG | README | API.md | DEVELOPMENT | ROADMAP | Docstrings |
-|-------------|-----------|---------|---------|-------------|----------|------------|
-| Bug fixes | ✓ | - | - | - | - | - |
-| New CLI command | ✓ | ✓ | ✓ | - | Check | - |
-| API changes | ✓ | - | ✓ | - | - | ✓ |
-| Database changes | ✓ | - | ✓ | - | - | - |
-| New features | ✓ | ✓ | ✓ | - | Check | ✓ |
-| Config changes | ✓ | ✓ | - | - | - | - |
-| Breaking changes | ✓ BREAKING | ✓ | ✓ | - | - | - |
-| Performance | ✓ | - | ✓ | - | - | - |
-| Test changes | ✓ | - | - | ✓ | - | - |
-| Dev workflow | ✓ | - | - | ✓ | - | - |
+- **Bug fixes** → CHANGELOG.md only
+- **New CLI commands** → README.md (commands section) + docs/API.md (full details) + CHANGELOG.md
+- **API changes** → docs/API.md + CHANGELOG.md + docstrings
+- **Database changes** → docs/API.md (database schema section) + CHANGELOG.md
+- **New features** → README.md (if user-facing) + docs/API.md (technical details) + CHANGELOG.md + check ROADMAP.md
+- **Config changes** → README.md (configuration section) + CHANGELOG.md
+- **Breaking changes** → CHANGELOG.md with BREAKING CHANGE note + README.md + docs/API.md
+- **Performance improvements** → docs/API.md (if significant) + CHANGELOG.md
+- **Test changes** → tests/README.md (if new test categories/commands) + docs/DEVELOPMENT.md (if framework changes) + CHANGELOG.md
+- **Development workflow changes** → docs/DEVELOPMENT.md + CHANGELOG.md
+- **Completed roadmap items** → ROADMAP.md (check off with [x]) + CHANGELOG.md
 
-**Decision Rules:**
-- If change affects what users see/do → Update README
-- If change affects how developers use the code → Update API.md
-- If change affects how developers work on the project → Update DEVELOPMENT.md
-- If change completes a roadmap item → Check off in ROADMAP.md
-- Always update CHANGELOG.md regardless of change type
+**Key Principles:**
+- CHANGELOG.md is ALWAYS updated for ANY change (no exceptions)
+- README.md only for user-visible changes (commands, config, features)
+- docs/API.md for all technical/implementation details
+- docs/DEVELOPMENT.md only for changes to development process
+- ROADMAP.md only to check off completed items (never add or modify)
 
 **Operating Principles:**
 

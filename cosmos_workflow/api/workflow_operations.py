@@ -6,7 +6,6 @@ match user intentions.
 """
 
 import logging
-import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -278,133 +277,6 @@ class WorkflowOperations:
 
         return execution_config
 
-    # ========== Run Operations (DEPRECATED - Use quick_inference instead) ==========
-
-    def create_run(
-        self,
-        prompt_id: str,
-        weights: dict[str, float] | None = None,
-        num_steps: int = 35,
-        guidance: float = 7.0,
-        seed: int = 1,
-        **kwargs,
-    ) -> dict[str, Any]:
-        """Create a run for a prompt.
-
-        DEPRECATED: This method is deprecated and will be removed in a future version.
-        Use quick_inference() instead, which handles run creation internally.
-
-        Note: This method is maintained for backward compatibility with existing CLI commands.
-
-        Args:
-            prompt_id: ID of the prompt to run
-            weights: Control weights dict (vis, edge, depth, seg)
-            num_steps: Number of inference steps
-            guidance: Guidance scale (CFG)
-            seed: Random seed
-            **kwargs: Additional execution config parameters
-
-        Returns:
-            Dictionary containing run data with 'id' key
-
-        Raises:
-            ValueError: If prompt not found or invalid parameters
-        """
-        warnings.warn(
-            "create_run() is deprecated and will be removed in a future version. "
-            "Use quick_inference() instead, which handles run creation internally.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        # Validate prompt exists
-        prompt = self._validate_prompt(prompt_id)
-
-        # Build execution config using helper
-        execution_config = self._build_execution_config(
-            weights=weights,
-            num_steps=num_steps,
-            guidance=guidance,
-            seed=seed,
-            **kwargs,
-        )
-
-        # Create run
-        run = self.service.create_run(
-            prompt_id=prompt_id,
-            execution_config=execution_config,
-        )
-
-        logger.info("Created run %s for prompt %s", run["id"], prompt_id)
-        return run
-
-    def execute_run(
-        self,
-        run_id: str,
-        upscale: bool = False,
-        upscale_weight: float = 0.5,
-    ) -> dict[str, Any]:
-        """Execute a run on GPU.
-
-        DEPRECATED: This method is deprecated and will be removed in a future version.
-        Use quick_inference() instead, which handles both run creation and execution.
-
-        Note: This method is maintained for backward compatibility with existing CLI commands.
-
-        Args:
-            run_id: ID of the run to execute
-            upscale: Whether to run 4K upscaling
-            upscale_weight: Weight for upscaling (0.0-1.0)
-
-        Returns:
-            Dictionary containing execution results
-
-        Raises:
-            ValueError: If run not found
-            Exception: If execution fails
-        """
-        warnings.warn(
-            "execute_run() is deprecated and will be removed in a future version. "
-            "Use quick_inference() instead, which handles both run creation and execution.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        logger.info("Executing run %s", run_id)
-
-        # Get run and prompt
-        run = self.service.get_run(run_id)
-        if not run:
-            raise ValueError(f"Run not found: {run_id}")
-
-        prompt = self.service.get_prompt(run["prompt_id"])
-        if not prompt:
-            raise ValueError(f"Prompt not found for run: {run['prompt_id']}")
-
-        # Update status to running
-        self.service.update_run_status(run_id, "running")
-
-        try:
-            # Execute on GPU
-            result = self.orchestrator.execute_run(
-                run,
-                prompt,
-                upscale=upscale,
-                upscale_weight=upscale_weight,
-            )
-
-            # Update run with results
-            self.service.update_run(run_id, outputs=result)
-            self.service.update_run_status(run_id, "completed")
-
-            logger.info("Run %s completed successfully", run_id)
-            return result
-
-        except Exception as e:
-            logger.error("Run %s failed: %s", run_id, e)
-            self.service.update_run_status(run_id, "failed")
-            raise
-
     # ========== Composite Operations (What users actually want) ==========
 
     def create_and_run(
@@ -451,29 +323,18 @@ class WorkflowOperations:
             negative_prompt=negative_prompt,
         )
 
-        # Create run
-        run = self.create_run(
+        # Use quick_inference to handle run creation and execution
+        result = self.quick_inference(
             prompt_id=prompt["id"],
             weights=weights,
             num_steps=num_steps,
             guidance=guidance,
+            upscale=upscale,
+            upscale_weight=upscale_weight,
             **kwargs,
         )
 
-        # Execute immediately
-        result = self.execute_run(
-            run_id=run["id"],
-            upscale=upscale,
-            upscale_weight=upscale_weight,
-        )
-
-        return {
-            "prompt_id": prompt["id"],
-            "run_id": run["id"],
-            "output_path": result.get("output_path"),
-            "duration_seconds": result.get("duration_seconds"),
-            "status": "success",
-        }
+        return result
 
     def quick_inference(
         self,
@@ -576,9 +437,7 @@ class WorkflowOperations:
             return self.orchestrator.execute_batch_runs([])
 
         # Build execution config once for all prompts
-        execution_config = self._build_execution_config(
-            weights=shared_weights, **kwargs
-        )
+        execution_config = self._build_execution_config(weights=shared_weights, **kwargs)
 
         # Create runs for all prompts
         runs_and_prompts = []

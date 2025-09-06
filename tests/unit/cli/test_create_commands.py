@@ -8,7 +8,6 @@ These tests will initially FAIL until we implement the service integration.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -123,127 +122,6 @@ class TestCreatePromptCommand:
         # Name generation might truncate or simplify the prompt
 
 
-class TestCreateRunCommand:
-    """Test the 'cosmos create run' command behavior."""
-
-    @pytest.fixture
-    def runner(self):
-        """Create a CLI test runner."""
-        return CliRunner()
-
-    @pytest.fixture
-    def setup_test_service(self, test_service, created_prompt):
-        """Setup the test service with a created prompt."""
-        with patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service") as mock_get_service:
-            mock_get_service.return_value = test_service
-            yield test_service, created_prompt
-
-    def test_create_run_basic(self, runner, setup_test_service):
-        """Test creating a basic run specification."""
-        test_service, prompt = setup_test_service
-
-        result = runner.invoke(cli, ["create", "run", prompt["id"]])
-
-        assert result.exit_code == 0
-        assert "created" in result.output.lower()
-        # Should show the run ID
-        assert "rs_" in result.output
-
-        # Verify run was created in database
-        runs = test_service.list_runs(prompt_id=prompt["id"])
-        assert len(runs) == 1
-        assert runs[0]["prompt_id"] == prompt["id"]
-
-    def test_create_run_with_weights(self, runner, setup_test_service):
-        """Test creating a run with custom control weights."""
-        test_service, prompt = setup_test_service
-
-        result = runner.invoke(
-            cli, ["create", "run", prompt["id"], "--weights", "0.3", "0.3", "0.2", "0.2"]
-        )
-
-        assert result.exit_code == 0
-        assert "created" in result.output.lower()
-
-        # Verify weights were set correctly
-        runs = test_service.list_runs(prompt_id=prompt["id"])
-        assert len(runs) == 1
-        assert runs[0]["execution_config"]["weights"]["vis"] == 0.3
-        assert runs[0]["execution_config"]["weights"]["edge"] == 0.3
-        assert runs[0]["execution_config"]["weights"]["depth"] == 0.2
-        assert runs[0]["execution_config"]["weights"]["seg"] == 0.2
-
-    def test_create_run_with_parameters(self, runner, setup_test_service):
-        """Test creating a run with custom inference parameters."""
-        test_service, prompt = setup_test_service
-
-        result = runner.invoke(
-            cli,
-            [
-                "create",
-                "run",
-                prompt["id"],
-                "--steps",
-                "50",
-                "--guidance",
-                "8.5",
-                "--seed",
-                "42",
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert "created" in result.output.lower()
-
-        # Verify parameters were set correctly
-        runs = test_service.list_runs(prompt_id=prompt["id"])
-        assert len(runs) == 1
-        assert runs[0]["execution_config"]["num_steps"] == 50
-        assert runs[0]["execution_config"]["guidance"] == 8.5
-        assert runs[0]["execution_config"]["seed"] == 42
-
-    def test_create_run_missing_prompt(self, runner, setup_test_service):
-        """Test that missing prompt ID causes error."""
-        test_service, _ = setup_test_service
-
-        result = runner.invoke(cli, ["create", "run", "ps_nonexistent"])
-
-        assert result.exit_code != 0
-        assert "not found" in result.output.lower() or "error" in result.output.lower()
-
-    def test_create_run_invalid_weights_sum(self, runner, setup_test_service):
-        """Test that weights not summing to 1.0 causes error."""
-        test_service, prompt = setup_test_service
-
-        result = runner.invoke(
-            cli, ["create", "run", prompt["id"], "--weights", "0.5", "0.3", "0.1", "0.05"]
-        )
-
-        assert result.exit_code != 0
-        assert (
-            "weights must sum to 1.0" in result.output.lower() or "error" in result.output.lower()
-        )
-
-    def test_create_run_invalid_weights(self, runner, setup_test_service):
-        """Test that invalid weight count causes error."""
-        test_service, prompt = setup_test_service
-
-        result = runner.invoke(
-            cli,
-            [
-                "create",
-                "run",
-                prompt["id"],
-                "--weights",
-                "0.5",
-                "0.5",  # Only 2 weights instead of 4
-            ],
-        )
-
-        assert result.exit_code != 0
-        # Should error about wrong number of weights
-
-
 class TestCLIIntegration:
     """Test integration between CLI commands."""
 
@@ -264,7 +142,6 @@ class TestCLIIntegration:
         assert result.exit_code == 0
         assert "create" in result.output.lower()
         assert "prompt" in result.output.lower()
-        assert "run" in result.output.lower()
 
     def test_create_prompt_help_works(self, runner):
         """Test that create prompt help works."""

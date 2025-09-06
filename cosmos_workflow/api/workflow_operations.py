@@ -549,3 +549,97 @@ class WorkflowOperations:
             List of matching prompt dictionaries
         """
         return self.service.search_prompts(query, limit)
+
+    # ========== System Operations ==========
+
+    def check_status(self) -> dict[str, Any]:
+        """Check remote GPU instance status.
+
+        Returns:
+            Dictionary containing:
+                - ssh_status: SSH connectivity status
+                - docker_status: Docker daemon status
+                - gpu_info: GPU information if available
+                - containers: Running containers info
+        """
+        logger.info("Checking remote GPU status")
+        return self.orchestrator.check_remote_status()
+
+    def stream_logs(self) -> None:
+        """Stream logs from the most recent container.
+
+        Connects to remote instance and streams container logs in real-time.
+        Raises RuntimeError if no container is running.
+        """
+        logger.info("Streaming container logs")
+        self.orchestrator._initialize_services()
+        with self.orchestrator.ssh_manager:
+            self.orchestrator.docker_executor.stream_container_logs()
+
+    def verify_integrity(self) -> dict[str, Any]:
+        """Verify database-filesystem integrity.
+
+        Checks for:
+        - Database paths that point to non-existent files
+        - Orphaned directories without database entries
+        - Missing output files for completed runs
+
+        Returns:
+            Dictionary containing:
+                - issues: List of found issues
+                - warnings: List of warnings
+                - stats: Statistics about the verification
+        """
+        logger.info("Verifying data integrity")
+
+        issues = []
+        warnings = []
+        stats = {
+            "total_runs": 0,
+            "checked_runs": 0,
+            "missing_files": 0,
+            "orphaned_dirs": 0,
+        }
+
+        # Check all runs in database
+        runs = self.service.list_runs()
+        stats["total_runs"] = len(runs)
+
+        for run in runs:
+            stats["checked_runs"] += 1
+
+            # Check if output files exist for completed runs
+            if run.get("status") == "completed":
+                outputs = run.get("outputs", {})
+                if "output_path" in outputs:
+                    output_path = Path(outputs["output_path"])
+                    if not output_path.exists():
+                        stats["missing_files"] += 1
+                        issues.append(
+                            {
+                                "type": "missing_output",
+                                "run_id": run["id"],
+                                "path": str(output_path),
+                            }
+                        )
+
+        # Check prompts for missing video directories
+        prompts = self.service.list_prompts()
+        for prompt in prompts:
+            inputs = prompt.get("inputs", {})
+            if "video" in inputs:
+                video_path = Path(inputs["video"])
+                if not video_path.exists():
+                    issues.append(
+                        {
+                            "type": "missing_input",
+                            "prompt_id": prompt["id"],
+                            "path": str(video_path),
+                        }
+                    )
+
+        return {
+            "issues": issues,
+            "warnings": warnings,
+            "stats": stats,
+        }

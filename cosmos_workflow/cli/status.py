@@ -23,23 +23,19 @@ def status(ctx, stream):
     Use --stream to stream logs from the most recent container in real-time.
     """
     ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     # Handle streaming mode
     if stream:
         with create_progress_context("[cyan]Connecting to remote instance...") as progress:
             task = progress.add_task("[cyan]Connecting to remote instance...", total=None)
-
-            orchestrator = ctx_obj.get_orchestrator()
-            orchestrator._initialize_services()
-
             progress.update(task, completed=True)
 
         console.print("\n[bold][STREAMING] Docker Container Logs[/bold]\n")
 
         try:
-            # Stream logs from most recent container
-            with orchestrator.ssh_manager:
-                orchestrator.docker_executor.stream_container_logs()
+            # Stream logs using operations
+            ops.stream_logs()
         except RuntimeError as e:
             console.print(f"\n[red]Error:[/red] {e}")
             console.print(
@@ -55,38 +51,59 @@ def status(ctx, stream):
     with create_progress_context("[cyan]Checking remote status...") as progress:
         task = progress.add_task("[cyan]Checking remote status...", total=None)
 
-        orchestrator = ctx_obj.get_orchestrator()
-        status_info = orchestrator.check_remote_status()
+        # Use operations to check status
+        status_info = ops.check_status()
 
         progress.update(task, completed=True)
 
-    # Display status
-    console.print("\n[bold]Remote Instance Status[/bold]")
-
-    # Build status data for table
+    # Build status information table
     status_data = {}
 
-    if status_info["ssh_status"] == "connected":
-        status_data["SSH Status"] = "[green]Connected[/green]"
-        status_data["Remote Directory"] = status_info.get("remote_directory", "N/A")
-        status_data["Directory Exists"] = (
-            "[green]Yes[/green]" if status_info.get("remote_directory_exists") else "[red]No[/red]"
-        )
-
-        docker_status = status_info.get("docker_status", {})
-        status_data["Docker Running"] = (
-            "[green]Yes[/green]" if docker_status.get("docker_running") else "[red]No[/red]"
-        )
-
-        if ctx_obj.verbose and docker_status.get("docker_running"):
-            status_data["Docker Images"] = (
-                f"{len(docker_status.get('available_images', []))} available"
-            )
-            status_data["Running Containers"] = str(docker_status.get("running_containers", "0"))
+    # SSH status
+    if status_info.get("ssh_status") == "connected":
+        status_data["SSH Connection"] = "[green]✓ Connected[/green]"
     else:
-        status_data["SSH Status"] = "[red]Disconnected[/red]"
-        status_data["Error"] = status_info.get("error", "Unknown error")
+        status_data["SSH Connection"] = "[red]✗ Failed[/red]"
+
+    # Docker status
+    if status_info.get("docker_status") == "running":
+        status_data["Docker Daemon"] = "[green]✓ Running[/green]"
+    else:
+        status_data["Docker Daemon"] = "[red]✗ Not running[/red]"
+
+    # GPU information
+    gpu_info = status_info.get("gpu_info", {})
+    if gpu_info:
+        gpu_name = gpu_info.get("name", "Unknown")
+        gpu_memory = gpu_info.get("memory_total", "Unknown")
+        status_data["GPU"] = f"{gpu_name} ({gpu_memory})"
+        status_data["CUDA Version"] = gpu_info.get("cuda_version", "Unknown")
+    else:
+        status_data["GPU"] = "[yellow]Not detected[/yellow]"
+
+    # Container information
+    containers = status_info.get("containers", [])
+    if containers:
+        status_data["Running Containers"] = f"[cyan]{len(containers)}[/cyan]"
+        for i, container in enumerate(containers[:3]):  # Show first 3
+            name = container.get("name", "unknown")
+            state = container.get("state", "unknown")
+            status_data[f"  Container {i + 1}"] = f"{name} ({state})"
+    else:
+        status_data["Running Containers"] = "[yellow]None[/yellow]"
 
     # Display the table
-    table = create_info_table(status_data)
+    table = create_info_table(status_data, title="Remote GPU Status")
     console.print(table)
+
+    # Show tips based on status
+    if status_info.get("ssh_status") != "connected":
+        console.print(
+            "\n[yellow]Tip:[/yellow] Check your SSH configuration and network connection."
+        )
+    elif status_info.get("docker_status") != "running":
+        console.print("\n[yellow]Tip:[/yellow] Docker may not be running on the remote instance.")
+    elif not gpu_info:
+        console.print("\n[yellow]Tip:[/yellow] GPU drivers may not be properly installed.")
+    elif not containers:
+        console.print("\n[yellow]Tip:[/yellow] Use 'cosmos inference' to start a container.")

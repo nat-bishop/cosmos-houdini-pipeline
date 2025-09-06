@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def get_service() -> Any:
-    """Get the workflow service from context.
+def get_operations() -> Any:
+    """Get the workflow operations from context.
 
     Returns:
-        WorkflowService: The workflow service instance.
+        WorkflowOperations: The workflow operations instance.
     """
     ctx = click.get_current_context()
-    return ctx.obj.get_workflow_service()
+    return ctx.obj.get_operations()
 
 
 @click.command(name="show")
@@ -43,10 +43,10 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
         cosmos show ps_abc123
         cosmos show ps_abc123 --json
     """
-    service = get_service()
+    ops = get_operations()
 
     try:
-        prompt_data = service.get_prompt_with_runs(prompt_id)
+        prompt_data = ops.get_prompt_with_runs(prompt_id)
 
         if not prompt_data:
             console.print(f"[yellow]Prompt not found: {prompt_id}[/yellow]")

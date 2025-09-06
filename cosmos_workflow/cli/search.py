@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def get_service() -> Any:
-    """Get the workflow service from context.
+def get_operations() -> Any:
+    """Get the workflow operations from context.
 
     Returns:
-        WorkflowService: The workflow service instance.
+        WorkflowOperations: The workflow operations instance.
     """
     ctx = click.get_current_context()
-    return ctx.obj.get_workflow_service()
+    return ctx.obj.get_operations()
 
 
 @click.command(name="search")
@@ -55,10 +55,10 @@ def search_command(ctx: click.Context, query: str, limit: int, output_json: bool
         console.print("[red]Error: Search query cannot be empty[/red]")
         ctx.exit(1)
 
-    service = get_service()
+    ops = get_operations()
 
     try:
-        prompts = service.search_prompts(query, limit=limit)
+        prompts = ops.search_prompts(query, limit=limit)
 
         if output_json:
             # Output as JSON

@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def get_service() -> Any:
-    """Get the workflow service from context.
+def get_operations() -> Any:
+    """Get the workflow operations from context.
 
     Returns:
-        WorkflowService: The workflow service instance.
+        WorkflowOperations: The workflow operations instance.
     """
     ctx = click.get_current_context()
-    return ctx.obj.get_workflow_service()
+    return ctx.obj.get_operations()
 
 
 @click.group(name="list")
@@ -57,10 +57,10 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
         cosmos list prompts --limit 10
         cosmos list prompts --json
     """
-    service = get_service()
+    ops = get_operations()
 
     try:
-        prompts = service.list_prompts(model_type=model, limit=limit)
+        prompts = ops.list_prompts(model_type=model, limit=limit)
 
         if output_json:
             # Output as JSON
@@ -142,10 +142,10 @@ def list_runs(
         cosmos list runs --status failed --prompt ps_abc123
         cosmos list runs --json
     """
-    service = get_service()
+    ops = get_operations()
 
     try:
-        runs = service.list_runs(status=status, prompt_id=prompt, limit=limit)
+        runs = ops.list_runs(status=status, prompt_id=prompt, limit=limit)
 
         if output_json:
             # Output as JSON

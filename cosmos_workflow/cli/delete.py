@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def get_service() -> Any:
-    """Get the workflow service from context.
+def get_operations() -> Any:
+    """Get the workflow operations from context.
 
     Returns:
-        WorkflowService: The workflow service instance.
+        WorkflowOperations: The workflow operations instance.
     """
     ctx = click.get_current_context()
-    return ctx.obj.get_workflow_service()
+    return ctx.obj.get_operations()
 
 
 @click.group(name="delete")
@@ -47,10 +47,10 @@ def delete_prompt(ctx: click.Context, prompt_id: str, force: bool) -> None:
         cosmos delete prompt ps_abc123
         cosmos delete prompt ps_abc123 --force
     """
-    service = get_service()
+    ops = get_operations()
 
     # Preview what will be deleted
-    preview = service.preview_prompt_deletion(prompt_id)
+    preview = ops.preview_prompt_deletion(prompt_id)
 
     # Check if prompt exists
     if preview.get("error"):
@@ -99,7 +99,7 @@ def delete_prompt(ctx: click.Context, prompt_id: str, force: bool) -> None:
             return
 
     # Perform deletion
-    result = service.delete_prompt(prompt_id)
+    result = ops.delete_prompt(prompt_id)
 
     if not result["success"]:
         console.print(f"[red]Error: {result.get('error', 'Unknown error')}[/red]")
@@ -134,10 +134,10 @@ def delete_run(ctx: click.Context, run_id: str, force: bool) -> None:
         cosmos delete run rs_xyz789
         cosmos delete run rs_xyz789 --force
     """
-    service = get_service()
+    ops = get_operations()
 
     # Preview what will be deleted
-    preview = service.preview_run_deletion(run_id)
+    preview = ops.preview_run_deletion(run_id)
 
     # Check if run exists
     if preview.get("error"):
@@ -177,7 +177,7 @@ def delete_run(ctx: click.Context, run_id: str, force: bool) -> None:
             return
 
     # Perform deletion
-    result = service.delete_run(run_id)
+    result = ops.delete_run(run_id)
 
     if not result["success"]:
         console.print(f"[red]Error: {result.get('error', 'Unknown error')}[/red]")

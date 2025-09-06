@@ -1,5 +1,4 @@
-"""Create command group for prompts and run specifications."""
-
+"""Create command group for prompts."""
 
 import click
 
@@ -11,9 +10,9 @@ from .helpers import console, display_next_step, display_success, format_id
 @click.group()
 @click.pass_context
 def create(ctx):
-    """Create prompts and run specifications.
+    """Create prompts for Cosmos Transfer workflows.
 
-    Use these commands to create prompts and runs in the database for
+    Use these commands to create prompts in the database for
     Cosmos Transfer inference and upscaling workflows.
     """
 
@@ -68,90 +67,4 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
     }
 
     display_success("Prompt created successfully!", results_data)
-    display_next_step(f"cosmos create run {prompt['id']}")
-
-
-@create.command("run")
-@click.argument("prompt_id")
-@click.option(
-    "--weights",
-    "-w",
-    nargs=4,
-    type=float,
-    default=[0.25, 0.25, 0.25, 0.25],
-    help="Control weights: VIS EDGE DEPTH SEG (default: 0.25 0.25 0.25 0.25)",
-)
-@click.option("--steps", default=35, help="Number of inference steps (default: 35)")
-@click.option("--guidance", default=7.0, help="Guidance scale (CFG) (default: 7.0)")
-@click.option("--seed", default=1, help="Random seed for reproducibility (default: 1)")
-@click.option("--fps", default=24, help="Output video FPS (default: 24)")
-@click.option("--sigma-max", default=70.0, help="Maximum noise level (default: 70.0)")
-@click.option(
-    "--blur-strength",
-    default="medium",
-    type=click.Choice(["very_low", "low", "medium", "high", "very_high"]),
-    help="Blur strength (default: medium)",
-)
-@click.option(
-    "--canny-threshold",
-    default="medium",
-    type=click.Choice(["very_low", "low", "medium", "high", "very_high"]),
-    help="Canny edge threshold (default: medium)",
-)
-@click.pass_context
-@handle_errors
-def create_run(
-    ctx, prompt_id, weights, steps, guidance, seed, fps, sigma_max, blur_strength, canny_threshold
-):
-    r"""Create a run specification for a prompt.
-
-    Creates a run in the database for the specified prompt ID.
-    The run can then be executed using 'cosmos inference'.
-
-    \b
-    Examples:
-      cosmos create run ps_abc123
-      cosmos create run ps_abc123 --weights 0.3 0.3 0.2 0.2
-      cosmos create run ps_abc123 --steps 50 --guidance 8.0
-    """
-    ctx_obj: CLIContext = ctx.obj
-    ops = ctx_obj.get_operations()
-
-    with console.status("[bold green]Creating run specification..."):
-        # Build control weights dict
-        weights_dict = {
-            "vis": weights[0],
-            "edge": weights[1],
-            "depth": weights[2],
-            "seg": weights[3],
-        }
-
-        # Create run using operations
-        run = ops.create_run(
-            prompt_id=prompt_id,
-            weights=weights_dict,
-            num_steps=steps,
-            guidance=guidance,
-            seed=seed,
-            fps=fps,
-            sigma_max=sigma_max,
-            blur_strength=blur_strength,
-            canny_threshold=canny_threshold,
-        )
-
-        # Get prompt for display
-        prompt = ops.get_prompt(prompt_id)
-        prompt_name = prompt.get("parameters", {}).get("name", prompt_id) if prompt else prompt_id
-
-    # Display success
-    from .helpers import format_weights
-
-    results_data = {
-        "Run ID": format_id(run["id"]),
-        "Prompt": prompt_name,
-        "Weights": format_weights(weights_dict),
-        "Steps": steps,
-    }
-
-    display_success("Run created successfully!", results_data)
-    display_next_step(f"cosmos inference {run['id']}")
+    display_next_step(f"cosmos inference {prompt['id']}")

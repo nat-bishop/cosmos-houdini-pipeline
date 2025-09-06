@@ -52,30 +52,27 @@ When we update the CLI commands (Step 2), we'll remove the deprecated methods en
 ## Implementation Steps
 
 ### Step 1: Update WorkflowOperations Core Methods
-**Status:** ✅ COMPLETED (with refinements in progress)
+**Status:** ✅ COMPLETED
 **Files modified:** `cosmos_workflow/api/workflow_operations.py`, `tests/unit/api/test_workflow_operations_refactor.py`
 
-**Changes completed:**
+**All changes completed:**
 1. ✅ `quick_inference()` accepts prompt_id directly and creates run internally
 2. ✅ `batch_inference()` accepts list of prompt_ids and creates runs internally
-3. ✅ Updated docstrings to indicate primary vs low-level methods
-4. ✅ Full TDD workflow completed (Gates 1-6)
-5. ✅ All 13 tests passing
-6. ✅ Documentation updated (README, CHANGELOG, API docs)
-
-**Refinements in progress (Phase 1A - Simplification):**
-1. Add deprecation warnings to `create_run()` and `execute_run()`
-2. Create cleaner internal helper methods:
-   - `_validate_prompt()` - Just validation logic
-   - `_build_execution_config()` - Config building
-3. Simplify API documentation to remove "primary" vs "low-level" distinction
-4. Keep methods public for now (backward compatibility with CLI)
+3. ✅ Full TDD workflow completed (Gates 1-6)
+4. ✅ Documentation updated (README, CHANGELOG, API docs)
+5. ✅ Phase 1A refinements completed:
+   - Added deprecation warnings to `create_run()` and `execute_run()`
+   - Created semantic helper methods (`_validate_prompt()`, `_build_execution_config()`)
+   - Refactored methods to use service/orchestrator directly
+   - Simplified docstring language
+6. ✅ All 13 tests passing
 
 **Success criteria achieved:**
 - ✅ Can run inference without manually creating runs
 - ✅ Batch inference works with multiple prompt IDs
 - ✅ Returns run_id in results for tracking
 - ✅ Maintains backward compatibility for CLI
+- ✅ Clean internal architecture with semantic helpers
 
 ---
 

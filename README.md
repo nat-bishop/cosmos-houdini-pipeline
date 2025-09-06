@@ -240,7 +240,7 @@ All data is stored in a SQLAlchemy database with no persistent JSON files:
 - **Transaction Safety**: Automatic rollback on errors, consistent data state
 - **Security Built-in**: Input validation, path traversal protection, sanitization
 
-See [docs/DATABASE.md](docs/DATABASE.md) for complete schema documentation.
+See [docs/API.md](docs/API.md#database-schema) for complete database schema documentation.
 
 ## 📁 Output Structure
 
@@ -273,9 +273,7 @@ cosmos verify --fix
 ## 📚 Documentation
 
 - **[Development Guide](docs/DEVELOPMENT.md)** - Setup, testing, TDD workflow
-- **[Formatting Guide](docs/FORMATTING.md)** - Code formatting philosophy and workflow
-- **[API Reference](docs/API.md)** - Complete API documentation
-- **[Batch Inference Guide](docs/BATCH_INFERENCE.md)** - Comprehensive guide to batch processing
+- **[API Reference](docs/API.md)** - Complete API documentation including batch processing and database schema
 - **[Changelog](CHANGELOG.md)** - Version history
 - **[Roadmap](ROADMAP.md)** - Planned features and improvements
 
@@ -387,6 +385,16 @@ Real-time system information:
 - Supports 4K video generation
 - Multi-GPU scaling for faster inference
 - Optimized SFTP transfers
+
+## 📚 Documentation
+
+- **[API Reference](docs/API.md)** - Complete API documentation, CLI commands, database schema
+- **[Development Guide](docs/DEVELOPMENT.md)** - TDD workflow, testing guide, code conventions
+- **[Shell Completion](docs/SHELL_COMPLETION.md)** - Setup shell completion for CLI commands
+- **[Bash Shortcuts](docs/BASH_SHORTCUTS.md)** - Development productivity shortcuts
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+- **[Roadmap](ROADMAP.md)** - Future features and development plans
+- **[CLAUDE.md](CLAUDE.md)** - Instructions for Claude AI assistant (TDD workflow)
 
 ## 📄 License
 

@@ -3,7 +3,6 @@
 import click
 
 from .base import CLIContext, ensure_utf8_encoding
-from .batch_inference import batch_inference
 from .create import create
 from .delete import delete_group
 from .enhance import prompt_enhance
@@ -34,8 +33,8 @@ def cli(ctx, verbose):
 
     \b
     Quick Start:
-      1. Create a prompt:  cosmos create prompt "A cyberpunk city"
-      2. Run inference:    cosmos inference <prompt_file>
+      1. Create a prompt:  cosmos create prompt "A cyberpunk city" videos/scene1
+      2. Run inference:    cosmos inference ps_abc123
       3. Check status:     cosmos status
 
     Use 'cosmos <command> --help' for detailed command information.
@@ -45,7 +44,6 @@ def cli(ctx, verbose):
 
 
 # Register all commands
-cli.add_command(batch_inference)
 cli.add_command(create)
 cli.add_command(delete_group)
 cli.add_command(inference)

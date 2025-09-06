@@ -14,30 +14,38 @@ You analyze code changes and determine their documentation impact, then update a
 **Documentation Update Protocol:**
 
 Run the following documentation updates in parallel:
-- CHANGELOG.md (mandatory)
+- CHANGELOG.md (mandatory for EVERY change)
 - README.md (if user-facing changes)
-- API docs (if APIs changed)
+- docs/API.md (if API/CLI/database changes)
+- ROADMAP.md (if completing features)
 - Docstrings (for modified functions)
 
 1. **CHANGELOG.md** - ALWAYS update for ANY code change under the `[Unreleased]` section. This is mandatory for every change.
 
-2. **README.md** - Update for user-facing changes including:
-   - New features (features section)
-   - CLI commands (usage section)
-   - Configuration changes (configuration section)
-   - Installation or setup changes
+2. **README.md** - Update ONLY for user-facing changes:
+   - New CLI commands or changed command syntax
+   - Installation or setup requirement changes
+   - New features visible to users
+   - Configuration file changes
 
-3. **docs/API.md** - Update for API changes (only if file exists):
-   - New endpoints or methods
-   - Changed parameters or return values
-   - Deprecated functionality
+3. **docs/API.md** - Update for technical changes:
+   - New or modified CLI commands
+   - API method signature changes
+   - Database schema changes
+   - New modules or utilities
+   - Batch processing or performance improvements
 
-4. **docs/DEVELOPMENT.md** - Update for development workflow changes (only if file exists):
-   - Build process changes
-   - Testing procedure updates
-   - Development environment setup
+4. **docs/DEVELOPMENT.md** - Update ONLY for development process changes:
+   - Testing framework changes
+   - Build process modifications
+   - Development environment requirements
+   - Code style or convention changes
 
-5. **Docstrings** - Update for all modified functions and classes using this exact format:
+5. **ROADMAP.md** - Update ONLY when completing planned features:
+   - Check off completed items with [x]
+   - DO NOT add new items or modify descriptions
+
+6. **Docstrings** - Update for all modified functions and classes using this exact format:
    ```python
    """One-line summary ending with period.
 
@@ -58,16 +66,27 @@ Run the following documentation updates in parallel:
    """
    ```
 
-**Documentation Mapping Guide:**
+**Documentation Mapping Guide (What Triggers Updates):**
 
-- **New CLI commands** → README.md (usage section) + CHANGELOG.md
-- **API changes** → docs/API.md (if exists) + CHANGELOG.md + docstrings
-- **Bug fixes** → CHANGELOG.md only
-- **New features** → README.md (features section) + CHANGELOG.md
-- **Config changes** → README.md (configuration section) + CHANGELOG.md
-- **Breaking changes** → CHANGELOG.md with BREAKING CHANGE note prominently displayed
-- **Performance improvements** → CHANGELOG.md
-- **Development workflow changes** → docs/DEVELOPMENT.md (if exists)
+| Change Type | CHANGELOG | README | API.md | DEVELOPMENT | ROADMAP | Docstrings |
+|-------------|-----------|---------|---------|-------------|----------|------------|
+| Bug fixes | ✓ | - | - | - | - | - |
+| New CLI command | ✓ | ✓ | ✓ | - | Check | - |
+| API changes | ✓ | - | ✓ | - | - | ✓ |
+| Database changes | ✓ | - | ✓ | - | - | - |
+| New features | ✓ | ✓ | ✓ | - | Check | ✓ |
+| Config changes | ✓ | ✓ | - | - | - | - |
+| Breaking changes | ✓ BREAKING | ✓ | ✓ | - | - | - |
+| Performance | ✓ | - | ✓ | - | - | - |
+| Test changes | ✓ | - | - | ✓ | - | - |
+| Dev workflow | ✓ | - | - | ✓ | - | - |
+
+**Decision Rules:**
+- If change affects what users see/do → Update README
+- If change affects how developers use the code → Update API.md
+- If change affects how developers work on the project → Update DEVELOPMENT.md
+- If change completes a roadmap item → Check off in ROADMAP.md
+- Always update CHANGELOG.md regardless of change type
 
 **Operating Principles:**
 
@@ -89,12 +108,14 @@ Run the following documentation updates in parallel:
 
 Before completing your task, verify:
 - CHANGELOG.md has been updated (this is mandatory)
-- All user-facing changes are reflected in README.md
-- API changes are documented if docs/API.md exists
-- Docstrings follow the exact format specified
-- No code logic has been modified
-- Documentation is technically accurate and matches the implementation
-- All cross-references between documents are consistent
+- User-facing changes are in README.md (commands, config, features)
+- Technical changes are in docs/API.md (APIs, database, modules)
+- Completed roadmap items are checked off
+- Docstrings follow the exact Google-style format
+- NO code logic has been modified (documentation only)
+- Documentation accurately reflects the implementation
+- Cross-references between documents are consistent
+- Test-related changes are noted if tests were added/modified
 
 **Error Handling:**
 

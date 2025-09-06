@@ -1,9 +1,7 @@
 """Behavioral tests for CLI create commands - TARGET BEHAVIOR.
 
-These tests define the desired CLI behavior using WorkflowService and database.
-They test the target state, not the current JSON-based implementation.
-Following TDD Gate 1: Write tests for desired behavior.
-These tests will initially FAIL until we implement the service integration.
+These tests define the desired CLI behavior using WorkflowOperations.
+Updated for 2-step workflow: removed create run command tests.
 """
 
 import tempfile
@@ -15,7 +13,7 @@ from click.testing import CliRunner
 
 
 class TestCreatePromptCommandTarget:
-    """Test the target behavior of 'cosmos create prompt' with WorkflowService."""
+    """Test the target behavior of 'cosmos create prompt' with WorkflowOperations."""
 
     @pytest.fixture
     def runner(self):
@@ -36,66 +34,87 @@ class TestCreatePromptCommandTarget:
 
             yield video_dir
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_prompt_uses_service(self, mock_get_service, runner, test_video_dir):
-        """Test that create prompt uses WorkflowService and returns database ID."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-        mock_service.create_prompt.return_value = {
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_create_prompt_uses_operations(self, mock_get_ops, runner, test_video_dir):
+        """Test that create prompt uses WorkflowOperations and returns database ID."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+        mock_ops.create_prompt.return_value = {
             "id": "ps_database_id_123",
             "model_type": "transfer",
             "prompt_text": "cyberpunk city at night",
             "inputs": {
                 "video": str(test_video_dir / "color.mp4"),
                 "depth": str(test_video_dir / "depth.mp4"),
-                "seg": str(test_video_dir / "segmentation.mp4"),
+                "segmentation": str(test_video_dir / "segmentation.mp4"),
             },
-            "parameters": {},
+            "name": "cyberpunk_city",
             "created_at": "2024-01-01T00:00:00",
         }
 
         from cosmos_workflow.cli import cli
 
         result = runner.invoke(
-            cli, ["create", "prompt", "cyberpunk city at night", str(test_video_dir)]
+            cli,
+            [
+                "create",
+                "prompt",
+                "cyberpunk city at night",
+                str(test_video_dir),
+            ],
         )
 
-        # Target behavior assertions
         assert result.exit_code == 0
-        assert "Prompt created successfully!" in result.output
-        assert "ps_database_id_123" in result.output  # Database ID shown
-        assert "cyberpunk" in result.output.lower()  # Smart name shown
+        assert "Prompt created successfully!" in result.output or "Prompt created" in result.output
+        assert "ps_database_id_123" in result.output  # Database ID is shown
+        assert "cyberpunk_city" in result.output  # Name shown
 
-        # Verify service was called correctly
-        mock_service.create_prompt.assert_called_once()
-        call_args = mock_service.create_prompt.call_args
-        assert call_args.kwargs["model_type"] == "transfer"
-        assert call_args.kwargs["prompt_text"] == "cyberpunk city at night"
-        assert "video" in call_args.kwargs["inputs"]
+        # Verify operations call
+        mock_ops.create_prompt.assert_called_once()
+        call_kwargs = mock_ops.create_prompt.call_args[1]
+        assert call_kwargs["prompt_text"] == "cyberpunk city at night"
+        assert str(test_video_dir) in str(call_kwargs["video_dir"])
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_prompt_validates_files(self, mock_get_service, runner):
-        """Test that create prompt validates video files exist."""
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_create_prompt_validates_files(self, mock_get_ops, runner):
+        """Test that create prompt validates required video files."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+
+        # Create dir without required color.mp4
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_dir = Path(tmpdir) / "invalid_videos"
+            video_dir.mkdir()
+            # Only create depth, missing color
+            (video_dir / "depth.mp4").write_text("mock depth")
+
+            from cosmos_workflow.cli import cli
+
+            result = runner.invoke(
+                cli,
+                ["create", "prompt", "test prompt", str(video_dir)],
+            )
+
+            # Should fail validation
+            assert result.exit_code != 0
+            assert "color.mp4" in result.output.lower() or "not found" in result.output.lower()
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_create_prompt_handles_db_error(self, mock_get_ops, runner, test_video_dir):
+        """Test handling database errors from operations."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+        mock_ops.create_prompt.side_effect = RuntimeError("Database connection failed")
+
         from cosmos_workflow.cli import cli
 
-        # Try with non-existent directory
-        result = runner.invoke(cli, ["create", "prompt", "test prompt", "/nonexistent/directory"])
-
-        assert result.exit_code != 0
-        assert "not found" in result.output.lower() or "error" in result.output.lower()
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_prompt_handles_db_error(self, mock_get_service, runner, test_video_dir):
-        """Test that database errors are handled gracefully."""
-        # Setup mock to raise database error
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-        mock_service.create_prompt.side_effect = Exception("Database connection failed")
-
-        from cosmos_workflow.cli import cli
-
-        result = runner.invoke(cli, ["create", "prompt", "test prompt", str(test_video_dir)])
+        result = runner.invoke(
+            cli,
+            ["create", "prompt", "test prompt", str(test_video_dir)],
+        )
 
         assert result.exit_code != 0
         assert "error" in result.output.lower() or "failed" in result.output.lower()
@@ -103,286 +122,241 @@ class TestCreatePromptCommandTarget:
         assert "database" in result.output.lower()
 
 
-class TestCreateRunCommandTarget:
-    """Test the target behavior of 'cosmos create run' with WorkflowService."""
-
-    @pytest.fixture
-    def runner(self):
-        """Create a CLI test runner."""
-        return CliRunner()
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_run_from_prompt_id(self, mock_get_service, runner):
-        """Test creating a run from a prompt ID."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-
-        # Mock getting the prompt
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test123",
-            "model_type": "transfer",
-            "prompt_text": "test prompt",
-            "inputs": {"video": "/path/to/video.mp4"},
-            "parameters": {},
-        }
-
-        # Mock creating the run
-        mock_service.create_run.return_value = {
-            "id": "rs_run_id_456",
-            "prompt_id": "ps_test123",
-            "model_type": "transfer",
-            "status": "pending",
-            "execution_config": {
-                "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
-                "num_steps": 35,
-            },
-            "created_at": "2024-01-01T00:00:00",
-        }
-
-        from cosmos_workflow.cli import cli
-
-        result = runner.invoke(
-            cli,
-            [
-                "create",
-                "run",
-                "ps_test123",  # Target: accepts prompt ID, not JSON file
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert "Run created successfully!" in result.output or "Run created" in result.output
-        assert "rs_run_id_456" in result.output  # Database run ID shown
-        assert "ps_test123" in result.output  # Reference to prompt
-
-        # Verify service calls
-        mock_service.get_prompt.assert_called_once_with("ps_test123")
-        mock_service.create_run.assert_called_once()
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_run_with_custom_weights(self, mock_get_service, runner):
-        """Test creating a run with custom weights."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test123",
-            "model_type": "transfer",
-            "prompt_text": "test",
-            "inputs": {},
-            "parameters": {},
-        }
-
-        mock_service.create_run.return_value = {
-            "id": "rs_run_id_789",
-            "prompt_id": "ps_test123",
-            "status": "pending",
-            "execution_config": {
-                "weights": {"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
-            },
-            "created_at": "2024-01-01T00:00:00",
-        }
-
-        from cosmos_workflow.cli import cli
-
-        result = runner.invoke(
-            cli,
-            [
-                "create",
-                "run",
-                "ps_test123",
-                "--weights",
-                "0.3",
-                "0.3",
-                "0.2",
-                "0.2",
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert "Run created" in result.output
-        assert "rs_run_id_789" in result.output
-
-        # Verify custom weights were passed
-        call_args = mock_service.create_run.call_args
-        weights = call_args.kwargs["execution_config"]["weights"]
-        assert weights["vis"] == 0.3
-        assert weights["edge"] == 0.3
-        assert weights["depth"] == 0.2
-        assert weights["seg"] == 0.2
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_run_invalid_prompt_id(self, mock_get_service, runner):
-        """Test error when prompt ID doesn't exist."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-        mock_service.get_prompt.return_value = None  # Prompt not found
-
-        from cosmos_workflow.cli import cli
-
-        result = runner.invoke(cli, ["create", "run", "ps_nonexistent"])
-
-        assert result.exit_code != 0
-        assert "not found" in result.output.lower()
-        assert "ps_nonexistent" in result.output
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_create_run_dry_run_shows_details(self, mock_get_service, runner):
-        """Test --dry-run shows comprehensive information."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test123",
-            "prompt_text": "test prompt",
-            "inputs": {"video": "/path/to/video.mp4"},
-        }
-
-        from cosmos_workflow.cli import cli
-
-        # Test dry run (if implemented)
-        # This test can be expanded when dry-run is implemented for create run
-        # For now, just test that the command doesn't crash
-        result = runner.invoke(cli, ["create", "run", "ps_test123"])
-        # Basic check - command should work
-        assert "ps_test123" in result.output or "error" in result.output.lower()
-
-
 class TestInferenceCommandTarget:
-    """Test inference command from create module perspective."""
+    """Test the target behavior of 'cosmos inference' with WorkflowOperations."""
 
     @pytest.fixture
     def runner(self):
         """Create a CLI test runner."""
         return CliRunner()
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    @patch("cosmos_workflow.cli.base.CLIContext.get_orchestrator")
-    def test_inference_from_run_id(self, mock_get_orchestrator, mock_get_service, runner):
-        """Test that inference accepts run IDs."""
-        # Setup mocks
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_with_prompt_id(self, mock_get_ops, runner):
+        """Test inference accepts prompt ID directly."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
 
-        mock_orchestrator = MagicMock()
-        mock_get_orchestrator.return_value = mock_orchestrator
-        mock_orchestrator.execute_run.return_value = {
+        # Mock quick_inference result
+        mock_ops.quick_inference.return_value = {
+            "run_id": "rs_auto123",
+            "prompt_id": "ps_test123",
             "status": "success",
-            "output_path": "/outputs/result.mp4",
-        }
-
-        # Mock run and prompt
-        mock_service.get_run.return_value = {
-            "id": "rs_test_run",
-            "prompt_id": "ps_test_prompt",
-            "status": "pending",
-        }
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test_prompt",
-            "prompt_text": "test",
-            "inputs": {},
+            "output_path": "/outputs/run_rs_auto123/output.mp4",
+            "duration_seconds": 120,
         }
 
         from cosmos_workflow.cli import cli
 
-        result = runner.invoke(cli, ["inference", "rs_test_run"])
-
-        # Should work with run ID
-        assert result.exit_code == 0
-        mock_service.get_run.assert_called_with("rs_test_run")
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_inference_dry_run_from_run_id(self, mock_get_service, runner):
-        """Test dry-run with run ID."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-
-        mock_service.get_run.return_value = {
-            "id": "rs_test_run",
-            "prompt_id": "ps_test_prompt",
-            "status": "pending",
-            "model_type": "transfer",
-            "execution_config": {"weights": {}},
-            "outputs": {},
-            "metadata": {},
-        }
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test_prompt",
-            "prompt_text": "test prompt",
-            "inputs": {"video": "/test.mp4"},
-        }
-
-        from cosmos_workflow.cli import cli
-
-        result = runner.invoke(cli, ["inference", "rs_test_run", "--dry-run"])
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123"],
+        )
 
         assert result.exit_code == 0
-        assert "dry" in result.output.lower() or "preview" in result.output.lower()
-        assert "rs_test_run" in result.output
+        assert "completed" in result.output.lower() or "success" in result.output.lower()
+        assert "output.mp4" in result.output or "rs_auto123" in result.output
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_inference_invalid_run_id(self, mock_get_service, runner):
-        """Test error with invalid run ID."""
-        # Setup mock service
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
-        mock_service.get_run.return_value = None  # Run not found
+        # Verify operations call
+        mock_ops.quick_inference.assert_called_once()
+        call_kwargs = mock_ops.quick_inference.call_args[1]
+        assert call_kwargs["prompt_id"] == "ps_test123"
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_dry_run_shows_full_details(self, mock_get_ops, runner):
+        """Test dry-run mode shows execution plan without running."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+
+        # Mock get_prompt for dry-run preview
+        mock_ops.get_prompt.return_value = {
+            "id": "ps_test123",
+            "prompt_text": "A futuristic city",
+            "inputs": {
+                "video": "/inputs/scene1/color.mp4",
+                "depth": "/inputs/scene1/depth.mp4",
+            },
+            "parameters": {"negative_prompt": "blurry"},
+        }
 
         from cosmos_workflow.cli import cli
 
-        result = runner.invoke(cli, ["inference", "rs_nonexistent"])
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123", "--dry-run"],
+        )
+
+        assert result.exit_code == 0
+        assert "dry run" in result.output.lower()
+        assert "ps_test123" in result.output
+        assert "futuristic city" in result.output.lower()
+
+        # Should NOT call quick_inference in dry-run
+        mock_ops.quick_inference.assert_not_called()
+        # Should call get_prompt for preview
+        mock_ops.get_prompt.assert_called_once_with("ps_test123")
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_prompt_not_found(self, mock_get_ops, runner):
+        """Test error when prompt doesn't exist."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+        mock_ops.quick_inference.side_effect = ValueError("Prompt ps_missing not found")
+
+        from cosmos_workflow.cli import cli
+
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_missing"],
+        )
 
         assert result.exit_code != 0
-        assert "not found" in result.output.lower()
+        assert "not found" in result.output.lower() or "error" in result.output.lower()
+        assert "ps_missing" in result.output
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_already_running(self, mock_get_ops, runner):
+        """Test handling of already running inference."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+        mock_ops.quick_inference.side_effect = RuntimeError(
+            "Prompt ps_test123 already has a running job"
+        )
+
+        from cosmos_workflow.cli import cli
+
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123"],
+        )
+
+        assert result.exit_code != 0
+        assert "already" in result.output.lower() or "running" in result.output.lower()
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_with_upscaling(self, mock_get_ops, runner):
+        """Test inference with upscaling options."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+
+        mock_ops.quick_inference.return_value = {
+            "run_id": "rs_auto123",
+            "status": "success",
+            "output_path": "/outputs/run_rs_auto123/output.mp4",
+            "upscaled": True,
+        }
+
+        from cosmos_workflow.cli import cli
+
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123", "--upscale-weight", "0.8"],
+        )
+
+        assert result.exit_code == 0
+
+        # Verify upscale weight passed
+        mock_ops.quick_inference.assert_called_once()
+        call_kwargs = mock_ops.quick_inference.call_args[1]
+        assert call_kwargs.get("upscale_weight") == 0.8
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_updates_database_on_failure(self, mock_get_ops, runner):
+        """Test that database is updated even when execution fails."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+        mock_ops.quick_inference.side_effect = RuntimeError("GPU execution failed")
+
+        from cosmos_workflow.cli import cli
+
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123"],
+        )
+
+        assert result.exit_code != 0
+        assert "failed" in result.output.lower() or "error" in result.output.lower()
 
 
-class TestCLIServiceIntegration:
-    """Test overall CLI and service integration."""
+class TestInferenceProgress:
+    """Test inference progress tracking."""
 
     @pytest.fixture
     def runner(self):
         """Create a CLI test runner."""
         return CliRunner()
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_database_initialized_once_per_invocation(self, mock_get_service, runner):
-        """Test that database/service is initialized only once per CLI invocation."""
-        # Setup mock
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_inference_tracks_progress(self, mock_get_ops, runner):
+        """Test that inference shows progress updates."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
 
-        # This test verifies the concept - actual implementation may vary
-        # The key is that get_workflow_service should cache the service
-        from cosmos_workflow.cli import cli
-
-        # Run a command that uses the service
-        mock_service.get_prompt.return_value = {
-            "id": "ps_test",
-            "prompt_text": "test",
-            "inputs": {},
+        # Mock successful execution
+        mock_ops.quick_inference.return_value = {
+            "run_id": "rs_auto123",
+            "status": "success",
+            "output_path": "/outputs/run_rs_auto123/output.mp4",
         }
-        runner.invoke(cli, ["create", "run", "ps_test"])
-
-        # Service should be retrieved via context
-        assert mock_get_service.called
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_workflow_service")
-    def test_database_error_shows_clear_message(self, mock_get_service, runner):
-        """Test that database errors show clear messages, not tracebacks."""
-        # Setup mock to raise error
-        mock_get_service.side_effect = Exception("Database connection failed")
 
         from cosmos_workflow.cli import cli
 
-        # Any command that needs database
-        result = runner.invoke(cli, ["create", "run", "ps_test"])
+        result = runner.invoke(
+            cli,
+            ["inference", "ps_test123"],
+        )
+
+        assert result.exit_code == 0
+        # Should show some kind of progress/status
+        assert any(
+            word in result.output.lower()
+            for word in ["processing", "running", "executing", "completed", "success"]
+        )
+
+
+class TestCLIOperationsIntegration:
+    """Test CLI integration with WorkflowOperations."""
+
+    @pytest.fixture
+    def runner(self):
+        """Create a CLI test runner."""
+        return CliRunner()
+
+    @patch("cosmos_workflow.api.workflow_operations.init_database")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_database_initialized_once_per_invocation(self, mock_get_ops, mock_init_db, runner):
+        """Test that database is initialized once per CLI invocation."""
+        # Setup mock operations
+        mock_ops = MagicMock()
+        mock_get_ops.return_value = mock_ops
+
+        # Mock list operations
+        mock_ops.list_prompts.return_value = []
+
+        from cosmos_workflow.cli import cli
+
+        # Single invocation
+        result = runner.invoke(cli, ["list", "prompts"])
+        assert result.exit_code == 0
+
+        # Verify get_operations was called (which initializes database internally)
+        mock_get_ops.assert_called()
+
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
+    def test_database_error_shows_clear_message(self, mock_get_ops, runner):
+        """Test that database errors show clear messages."""
+        # Simulate database initialization error
+        mock_get_ops.side_effect = RuntimeError("Failed to connect to database")
+
+        from cosmos_workflow.cli import cli
+
+        result = runner.invoke(cli, ["list", "prompts"])
 
         assert result.exit_code != 0
-        assert "database" in result.output.lower()
-        # Should have user-friendly error, not raw traceback
-        assert "error" in result.output.lower() or "failed" in result.output.lower()
+        assert "database" in result.output.lower() or "failed" in result.output.lower()

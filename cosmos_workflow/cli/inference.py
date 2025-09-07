@@ -52,8 +52,8 @@ from .helpers import (
 )
 @click.option(
     "--upscale/--no-upscale",
-    default=True,
-    help="Enable/disable 4K upscaling after inference (default: --upscale)",
+    default=False,
+    help="Enable/disable 4K upscaling after inference (default: --no-upscale)",
 )
 @click.option(
     "--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0) (default: 0.5)"
@@ -216,11 +216,14 @@ def inference(
         results_data = {
             "Prompt ID": format_id(all_prompts[0]),
             "Run ID": format_id(result["run_id"]),
-            "Status": result["status"],
-            "Output": result.get("output_path", "N/A"),
+            "Status": "Started in background",
         }
 
-        display_success(f"{workflow_desc.capitalize()} completed!", results_data)
+        display_success(f"{workflow_desc.capitalize()} started successfully!", results_data)
+
+        # Show monitoring instructions
+        console.print("\n[cyan]Monitor progress with:[/cyan]")
+        console.print("  cosmos status --stream")
 
     else:
         # Batch inference for multiple prompts
@@ -276,7 +279,11 @@ def inference(
             if len(result["run_ids"]) > 3:
                 results_data["..."] = f"and {len(result['run_ids']) - 3} more runs"
 
-        display_success(f"Batch inference completed for {batch_name}!", results_data)
+        display_success(f"Batch inference started for {batch_name}!", results_data)
+
+        # Show monitoring instructions
+        console.print("\n[cyan]Monitor progress with:[/cyan]")
+        console.print("  cosmos status --stream")
 
     if ctx_obj.verbose:
         console.print("\n[cyan]Full results:[/cyan]")

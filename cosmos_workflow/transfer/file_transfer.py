@@ -206,7 +206,7 @@ class FileTransferService:
         """Upload a single file via SFTP to a specific remote absolute path."""
         remote_abs_file = remote_abs_file.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Uploading file: %s -> %s", local_file, remote_abs_file)
+            logger.info(f"Uploading file: {local_file} -> {remote_abs_file}")
             sftp.put(str(local_file), remote_abs_file)
             logger.debug("Successfully uploaded %s", local_file.name)
 

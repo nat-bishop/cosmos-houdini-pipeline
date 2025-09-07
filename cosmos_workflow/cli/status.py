@@ -7,13 +7,21 @@ from .helpers import console, create_info_table, create_progress_context
 
 
 @click.command()
+@click.option(
+    "--stream",
+    "-s",
+    is_flag=True,
+    help="Stream logs from active container after showing status",
+)
 @click.pass_context
 @handle_errors
-def status(ctx):
+def status(ctx, stream):
     """Check remote GPU instance status.
 
     Shows SSH connectivity, Docker status, and available resources
     on the configured remote GPU instance.
+
+    With --stream, will also stream logs from any active container.
     """
     ctx_obj: CLIContext = ctx.obj
     ops = ctx_obj.get_operations()
@@ -80,3 +88,20 @@ def status(ctx):
         console.print("\n[yellow]Tip:[/yellow] GPU drivers may not be properly installed.")
     elif not containers:
         console.print("\n[yellow]Tip:[/yellow] Use 'cosmos inference' to start a container.")
+
+    # Stream logs if requested and containers are running
+    if stream and containers:
+        console.print("\n[cyan]Starting log stream...[/cyan]")
+        console.print("[dim]Press Ctrl+C to stop streaming[/dim]\n")
+
+        # We already have the container info from status check
+        container_id = containers[0]["container_id"]
+
+        try:
+            ops.stream_container_logs(container_id)
+        except RuntimeError as e:
+            console.print(f"[red]Error streaming logs:[/red] {e}")
+        except KeyboardInterrupt:
+            console.print("\n[cyan]Stopped streaming logs[/cyan]")
+    elif stream and not containers:
+        console.print("\n[yellow]No containers running to stream logs from.[/yellow]")

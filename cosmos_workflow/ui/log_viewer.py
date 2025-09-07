@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple log viewer for monitoring GPU inference runs."""
+"""Simple log viewer for GPU inference runs."""
 
 import html
 from collections import deque
@@ -7,14 +7,14 @@ from datetime import datetime, timezone
 
 
 class LogViewer:
-    """Simple log viewer for GPU inference monitoring."""
+    """Simple log viewer for GPU inference."""
 
     def __init__(self, max_lines=2000):
         """Initialize with a ring buffer for automatic old log cleanup."""
         self.entries = deque(maxlen=max_lines)
 
     def add_from_stream(self, content: str):
-        """Add lines from RemoteLogStreamer callback."""
+        """Add lines from container log streaming callback."""
         for line in content.strip().split("\n"):
             if line:
                 self.entries.append(

@@ -108,6 +108,7 @@ class SSHManager:
                     line = line.strip()
                     if line:
                         logger.debug(f"STDOUT: {line}")
+                        print(line, flush=True)  # Print to console for real-time streaming
                         stdout_lines.append(line)
 
                 # Collect stderr
@@ -117,6 +118,7 @@ class SSHManager:
                     for line in stderr_lines:
                         if line.strip():
                             logger.warning(f"STDERR: {line.strip()}")
+                            print(f"[ERROR] {line.strip()}", flush=True)  # Print errors to console
             else:
                 # Collect all output at once
                 stdout_output = stdout.read().decode().strip()

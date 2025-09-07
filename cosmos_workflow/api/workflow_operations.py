@@ -17,7 +17,6 @@ Example:
     result = ops.quick_inference(prompt["id"])
 """
 
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,10 +24,9 @@ from typing import Any
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import init_database
 from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 from cosmos_workflow.workflows import WorkflowOrchestrator
-
-logger = logging.getLogger(__name__)
 
 # Default negative prompt for video generation
 DEFAULT_NEGATIVE_PROMPT = (
@@ -383,7 +381,7 @@ class WorkflowOperations:
         Raises:
             ValueError: If prompt not found
         """
-        logger.info("Quick inference for prompt %s", prompt_id)
+        logger.info(f"Quick inference for prompt {prompt_id}")
 
         # Validate prompt exists
         prompt = self._validate_prompt(prompt_id)
@@ -401,7 +399,7 @@ class WorkflowOperations:
             prompt_id=prompt_id,
             execution_config=execution_config,
         )
-        logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+        logger.info(f"Created run {run['id']} for prompt {prompt_id}")
 
         # Update status and execute
         self.service.update_run_status(run["id"], "running")
@@ -484,7 +482,7 @@ class WorkflowOperations:
                     prompt_id=prompt_id,
                     execution_config=execution_config,
                 )
-                logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+                logger.info(f"Created run {run['id']} for prompt {prompt_id}")
                 runs_and_prompts.append((run, prompt))
 
             except ValueError as e:
@@ -676,197 +674,61 @@ class WorkflowOperations:
             logger.error("Failed to get containers: %s", e)
             return []
 
-    def stream_logs(self, container_id: str | None = None, callback=None) -> None:
-        """Stream logs from a container.
+    def stream_container_logs(self, container_id: str, callback=None) -> None:
+        """Stream logs from a specific Docker container.
+
+        Handles both CLI (stdout) and Gradio (callback) streaming modes.
 
         Args:
-            container_id: Optional container ID. If None, uses most recent.
-            callback: Optional callback function to process log lines.
-                     Called with each line of output.
+            container_id: Docker container ID to stream from
+            callback: Optional callback function for each log line (for Gradio).
+                     If None, streams directly to stdout (for CLI).
 
         Raises:
-            RuntimeError: If no container is running.
+            RuntimeError: If streaming fails
         """
-        logger.info("Streaming container logs")
-        self.orchestrator._initialize_services()
+        logger.info("Streaming logs from container %s", container_id)
 
-        with self.orchestrator.ssh_manager:
-            if callback:
-                # Stream with callback for Gradio
-                self._stream_logs_with_callback(container_id, callback)
-            else:
-                # Stream to stdout for CLI
-                self.orchestrator.docker_executor.stream_container_logs(container_id)
+        if callback:
+            # Gradio mode - use callback with threading to not block UI
+            import threading
 
-    def _stream_logs_with_callback(self, container_id: str | None, callback) -> None:
-        """Stream logs with a callback function.
+            cmd = f"sudo docker logs -f {container_id}"
 
-        Internal method to stream Docker logs and process with callback.
-        """
-        if not container_id:
-            # Auto-detect the most recent container
-            containers = self.get_active_containers()
-            if not containers:
-                raise RuntimeError("No running containers found")
-            container_id = containers[0]["container_id"]
-
-        logger.info("Streaming logs from container %s with callback", container_id)
-
-        # Use docker logs with follow
-        import threading
-
-        cmd = f"sudo docker logs -f {container_id}"
-
-        def stream_output():
-            try:
-                # Execute command and stream output
-                exit_code, stdout, stderr = self.orchestrator.ssh_manager.execute_command(
-                    cmd,
-                    timeout=3600,  # 1 hour timeout
-                    stream_output=False,  # We'll handle streaming ourselves
-                )
-
-                # Process output line by line
-                for line in stdout.split("\n"):
-                    if line:
-                        callback(line)
-
-                if stderr:
-                    for line in stderr.split("\n"):
-                        if line:
-                            callback(f"[ERROR] {line}")
-
-            except Exception as e:
-                callback(f"[ERROR] Stream failed: {e}")
-
-        # Run in thread to not block
-        thread = threading.Thread(target=stream_output, daemon=True)
-        thread.start()
-
-    def stream_run_logs(
-        self,
-        run_id: str | None = None,
-        callback=None,
-        tail_lines: int = 0,
-        follow: bool = True,
-    ) -> dict[str, Any]:
-        """Stream logs from a run using RemoteLogStreamer.
-
-        This is a thin facade that delegates to RemoteLogStreamer for actual work.
-
-        Args:
-            run_id: Run ID to stream logs from. If None, uses most recent run.
-            callback: Optional callback function for each log line.
-            tail_lines: Number of previous lines to show before streaming (0 for none).
-            follow: If True, continues streaming until completion.
-
-        Returns:
-            Dictionary with run info and status.
-
-        Raises:
-            ValueError: If run not found or has no log path.
-        """
-        from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-
-        logger.info("Streaming logs for run %s", run_id)
-
-        # Get run
-        if not run_id:
-            runs = self.service.list_runs(limit=1)
-            if not runs:
-                raise ValueError("No runs found")
-            run = runs[0]
-            run_id = run["id"]
-        else:
-            run = self.service.get_run(run_id)
-            if not run:
-                raise ValueError(f"Run not found: {run_id}")
-
-        # Get paths
-        prompt = self.service.get_prompt(run["prompt_id"])
-        prompt_name = prompt.get("prompt_name", run["prompt_id"]) if prompt else run_id
-        local_path = Path(run.get("log_path", f"outputs/{prompt_name}/logs/run_{run_id}.log"))
-        remote_config = self.config.get_remote_config()
-        remote_path = f"{remote_config.remote_dir}/outputs/{prompt_name}/run.log"
-
-        # Initialize and use RemoteLogStreamer
-        self.orchestrator._initialize_services()
-
-        with self.orchestrator.ssh_manager:
-            streamer = RemoteLogStreamer(self.orchestrator.ssh_manager)
-
-            # Show tail if requested
-            if tail_lines > 0:
-                tail_output = streamer.tail_log(remote_path, tail_lines)
-                if tail_output and not callback:
-                    # For CLI - output directly using logger which goes to console
-                    from cosmos_workflow.utils.logging import logger
-
-                    for line in tail_output.splitlines():
-                        logger.info(line)
-
-            # Stream if following
-            if follow:
-                if callback:
-                    # Async streaming with callback (for Gradio)
-                    import threading
-
-                    def stream_thread():
-                        streamer.stream_remote_log(
-                            remote_path,
-                            local_path,
-                            poll_interval=2.0,
-                            timeout=3600,
-                            wait_for_file=True,
-                            completion_marker="[COSMOS_COMPLETE]",
-                            callback=callback,
-                        )
-
-                    thread = threading.Thread(target=stream_thread, daemon=True)
-                    thread.start()
-                else:
-                    # For CLI - stream directly using logger callback
-                    from cosmos_workflow.utils.logging import logger
-
-                    def log_callback(content):
-                        # Output each line through logger (no newline needed, content has them)
-                        for line in content.rstrip("\n").split("\n"):
-                            if line:  # Skip empty lines
-                                logger.info(line)
-
-                    streamer.stream_remote_log(
-                        remote_path,
-                        local_path,
-                        poll_interval=2.0,
-                        timeout=3600,
-                        wait_for_file=True,
-                        completion_marker="[COSMOS_COMPLETE]",
-                        callback=log_callback,
+            def stream_output():
+                try:
+                    # Execute command without streaming (we'll process output)
+                    exit_code, stdout, stderr = self.orchestrator.ssh_manager.execute_command(
+                        cmd,
+                        timeout=3600,  # 1 hour timeout
+                        stream_output=False,  # We handle output ourselves
                     )
 
-        return {
-            "run_id": run_id,
-            "log_path": str(local_path),
-            "remote_path": remote_path,
-            "status": "streaming" if follow else "tailed",
-        }
+                    # Send stdout lines to callback
+                    for line in stdout.split("\n"):
+                        if line:
+                            callback(line)
 
-    def get_latest_run_logs(self, tail_lines: int = 100) -> dict[str, Any]:
-        """Get the latest run's logs without streaming.
+                    # Send stderr lines to callback with error prefix
+                    if stderr:
+                        for line in stderr.split("\n"):
+                            if line:
+                                callback(f"[ERROR] {line}")
 
-        Simple wrapper around stream_run_logs with follow=False.
+                except Exception as e:
+                    callback(f"[ERROR] Stream failed: {e}")
 
-        Args:
-            tail_lines: Number of lines to return from the end of the log.
-
-        Returns:
-            Dictionary with run info and log lines.
-        """
-        try:
-            # Use stream_run_logs with follow=False to just get tail
-            return self.stream_run_logs(run_id=None, tail_lines=tail_lines, follow=False)
-        except ValueError as e:
-            return {"error": str(e), "lines": []}
+            # Run in background thread to not block
+            thread = threading.Thread(target=stream_output, daemon=True)
+            thread.start()
+        else:
+            # CLI mode - stream directly to stdout
+            cmd = f"sudo docker logs -f {container_id}"
+            self.orchestrator.ssh_manager.execute_command(
+                cmd,
+                timeout=86400,  # 24 hour timeout for long streams
+                stream_output=True,
+            )
 
     def verify_integrity(self) -> dict[str, Any]:
         """Verify database-filesystem integrity.

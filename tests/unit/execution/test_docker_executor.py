@@ -75,7 +75,7 @@ class TestDockerExecutor:
 
             # Check that result is a dict with expected keys
             assert isinstance(result, dict)
-            assert result["status"] == "success"
+            assert result["status"] == "started"
             assert "log_path" in result
             assert result["prompt_name"] == "test_prompt"
 
@@ -95,7 +95,7 @@ class TestDockerExecutor:
 
             # Check that result is a dict with expected keys
             assert isinstance(result, dict)
-            assert result["status"] == "success"
+            assert result["status"] == "started"
 
     def test_run_inference_with_run_id(self):
         """Test that run_inference handles run_id parameter correctly."""
@@ -113,7 +113,7 @@ class TestDockerExecutor:
 
             # Check that result contains log path with run_id
             assert "test_run_123" in result["log_path"]
-            assert result["status"] == "success"
+            assert result["status"] == "started"
 
     def test_run_inference_handles_failure(self):
         """Test that run_inference handles failures gracefully."""
@@ -181,19 +181,23 @@ class TestDockerExecutor:
                     mock_run_script.assert_called_once_with("test_prompt", 0.8, 3, "0,1,2")
 
     def test_run_inference_script_executes_docker_command(self):
-        """Test that _run_inference_script executes the correct Docker command."""
+        """Test that _run_inference_script executes the correct Docker command in background."""
         # Mock successful command execution
-        self.mock_ssh_manager.execute_command_success.return_value = None
+        self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
         # Run inference script
         self.docker_executor._run_inference_script("test_prompt", 2, "0,1")
 
-        # Check that Docker command was executed
-        self.mock_ssh_manager.execute_command_success.assert_called_once()
+        # Check that Docker command was executed in background
+        self.mock_ssh_manager.execute_command.assert_called_once()
 
         # Get the command that was executed
-        call_args = self.mock_ssh_manager.execute_command_success.call_args
+        call_args = self.mock_ssh_manager.execute_command.call_args
         cmd = call_args[0][0]
+
+        # Check that it's run in background with nohup
+        assert "nohup" in cmd
+        assert "&" in cmd
 
         # Check command components
         assert "sudo docker run" in cmd
@@ -204,22 +208,26 @@ class TestDockerExecutor:
         assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/inference.sh test_prompt 2 0,1" in cmd
-        assert call_args[1]["timeout"] == 3600  # 1 hour timeout
+        assert call_args[1]["timeout"] == 5  # Quick timeout for background
 
     def test_run_upscaling_script_executes_docker_command(self):
-        """Test that _run_upscaling_script executes the correct Docker command."""
+        """Test that _run_upscaling_script executes the correct Docker command in background."""
         # Mock successful command execution
-        self.mock_ssh_manager.execute_command_success.return_value = None
+        self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
         # Run upscaling script
         self.docker_executor._run_upscaling_script("test_prompt", 0.6, 2, "0,1")
 
-        # Check that Docker command was executed
-        self.mock_ssh_manager.execute_command_success.assert_called_once()
+        # Check that Docker command was executed in background
+        self.mock_ssh_manager.execute_command.assert_called_once()
 
         # Get the command that was executed
-        call_args = self.mock_ssh_manager.execute_command_success.call_args
+        call_args = self.mock_ssh_manager.execute_command.call_args
         cmd = call_args[0][0]
+
+        # Check that it's run in background with nohup
+        assert "nohup" in cmd
+        assert "&" in cmd
 
         # Check command components
         assert "sudo docker run" in cmd
@@ -230,7 +238,7 @@ class TestDockerExecutor:
         assert "-w /workspace" in cmd
         assert self.docker_image in cmd
         assert "/workspace/bashscripts/upscale.sh test_prompt 0.6 2 0,1" in cmd
-        assert call_args[1]["timeout"] == 1800  # 30 minute timeout
+        assert call_args[1]["timeout"] == 5  # Quick timeout for background
 
     def test_create_upscaler_spec_creates_correct_spec_file(self):
         """Test that _create_upscaler_spec creates the correct specification file."""
@@ -480,41 +488,33 @@ class TestDockerExecutorBatchInference:
 
         # Mock batch script execution
         with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            # Mock output files retrieval
-            with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
-                mock_get_files.return_value = [
-                    f"{self.remote_dir}/outputs/batch_test/video_000.mp4",
-                    f"{self.remote_dir}/outputs/batch_test/video_001.mp4",
-                ]
+            # Run batch inference
+            result = self.docker_executor.run_batch_inference(
+                batch_name="batch_test",
+                batch_jsonl_file="batch_test.jsonl",
+                num_gpu=2,
+                cuda_devices="0,1",
+            )
 
-                # Run batch inference
-                result = self.docker_executor.run_batch_inference(
-                    batch_name="batch_test",
-                    batch_jsonl_file="batch_test.jsonl",
-                    num_gpu=2,
-                    cuda_devices="0,1",
-                )
+            # Verify batch file was checked
+            self.mock_remote_executor.file_exists.assert_called_once_with(
+                f"{self.remote_dir}/inputs/batches/batch_test.jsonl"
+            )
 
-                # Verify batch file was checked
-                self.mock_remote_executor.file_exists.assert_called_once_with(
-                    f"{self.remote_dir}/inputs/batches/batch_test.jsonl"
-                )
+            # Verify output directory was created
+            self.mock_remote_executor.create_directory.assert_called_once_with(
+                f"{self.remote_dir}/outputs/batch_test"
+            )
 
-                # Verify output directory was created
-                self.mock_remote_executor.create_directory.assert_called_once_with(
-                    f"{self.remote_dir}/outputs/batch_test"
-                )
+            # Verify batch script was called
+            mock_run_script.assert_called_once_with(
+                "batch_test", "batch_test.jsonl", 2, "0,1", None
+            )
 
-                # Verify batch script was called
-                mock_run_script.assert_called_once_with("batch_test", "batch_test.jsonl", 2, "0,1")
-
-                # Verify output files were retrieved
-                mock_get_files.assert_called_once_with("batch_test")
-
-                # Check result structure
-                assert result["batch_name"] == "batch_test"
-                assert result["output_dir"] == f"{self.remote_dir}/outputs/batch_test"
-                assert len(result["output_files"]) == 2
+            # Check result structure - batch now returns immediately with "started" status
+            assert result["batch_name"] == "batch_test"
+            assert result["output_dir"] == f"{self.remote_dir}/outputs/batch_test"
+            assert result["status"] == "started"
 
     def test_run_batch_inference_file_not_found(self):
         """Test batch inference when JSONL file doesn't exist."""
@@ -537,35 +537,39 @@ class TestDockerExecutorBatchInference:
         self.mock_remote_executor.file_exists.return_value = True
 
         with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            with patch.object(self.docker_executor, "_get_batch_output_files"):
-                # Run with defaults
-                self.docker_executor.run_batch_inference(
-                    batch_name="batch_default",
-                    batch_jsonl_file="batch.jsonl",
-                )
+            # Run with defaults
+            result = self.docker_executor.run_batch_inference(
+                batch_name="batch_default",
+                batch_jsonl_file="batch.jsonl",
+            )
 
-                # Should use default num_gpu=1 and cuda_devices="0"
-                mock_run_script.assert_called_once_with("batch_default", "batch.jsonl", 1, "0")
+            # Check result
+            assert result["batch_name"] == "batch_default"
+            assert result["status"] == "started"
+
+            # Should use default num_gpu=1 and cuda_devices="0"
+            mock_run_script.assert_called_once_with("batch_default", "batch.jsonl", 1, "0", None)
 
     def test_run_batch_inference_script_builds_correct_command(self):
-        """Test that batch inference script builds correct Docker command."""
-        # Mock execute_docker
-        self.mock_remote_executor.execute_docker.return_value = None
+        """Test that batch inference script builds correct Docker command in background."""
+        # Mock execute_command
+        self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
         # Run batch inference script
         self.docker_executor._run_batch_inference_script(
             "batch_test", "batch_test.jsonl", 4, "0,1,2,3"
         )
 
-        # Get the builder that was passed
-        call_args = self.mock_remote_executor.execute_docker.call_args
-        builder = call_args[0][0]
+        # Get the command that was executed
+        call_args = self.mock_ssh_manager.execute_command.call_args
+        cmd = call_args[0][0]
 
-        # Check timeout
-        assert call_args[1]["timeout"] == 7200  # 2 hours for batch
+        # Check timeout is quick for background
+        assert call_args[1]["timeout"] == 5
 
-        # Build command to check it
-        cmd = builder.build()
+        # Check that it's run in background with nohup
+        assert "nohup" in cmd
+        assert "&" in cmd
 
         # Check command components
         assert "docker run" in cmd
@@ -623,24 +627,19 @@ class TestDockerExecutorBatchInference:
         assert files == []
 
     def test_run_batch_inference_with_large_batch(self):
-        """Test batch inference with many output files."""
+        """Test batch inference with large batch."""
         self.mock_remote_executor.file_exists.return_value = True
 
         with patch.object(self.docker_executor, "_run_batch_inference_script"):
-            with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
-                # Mock 100 output files
-                mock_get_files.return_value = [
-                    f"{self.remote_dir}/outputs/large_batch/video_{i:03d}.mp4" for i in range(100)
-                ]
+            # Run batch inference
+            result = self.docker_executor.run_batch_inference(
+                batch_name="large_batch",
+                batch_jsonl_file="large_batch.jsonl",
+            )
 
-                # Run batch inference
-                result = self.docker_executor.run_batch_inference(
-                    batch_name="large_batch",
-                    batch_jsonl_file="large_batch.jsonl",
-                )
-
-                # Should handle all 100 files
-                assert len(result["output_files"]) == 100
+            # Should return immediately with started status
+            assert result["batch_name"] == "large_batch"
+            assert result["status"] == "started"
 
     def test_run_batch_inference_preserves_batch_name_with_special_chars(self):
         """Test that batch names with timestamps are preserved."""
@@ -648,16 +647,16 @@ class TestDockerExecutorBatchInference:
         self.mock_remote_executor.file_exists.return_value = True
 
         with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            with patch.object(self.docker_executor, "_get_batch_output_files"):
-                # Run with timestamp in name
-                result = self.docker_executor.run_batch_inference(
-                    batch_name=batch_name,
-                    batch_jsonl_file=f"{batch_name}.jsonl",
-                )
+            # Run with timestamp in name
+            result = self.docker_executor.run_batch_inference(
+                batch_name=batch_name,
+                batch_jsonl_file=f"{batch_name}.jsonl",
+            )
 
-                # Name should be preserved exactly
-                assert result["batch_name"] == batch_name
-                mock_run_script.assert_called_once_with(batch_name, f"{batch_name}.jsonl", 1, "0")
+            # Name should be preserved exactly
+            assert result["batch_name"] == batch_name
+            assert result["status"] == "started"
+            mock_run_script.assert_called_once_with(batch_name, f"{batch_name}.jsonl", 1, "0", None)
 
 
 if __name__ == "__main__":

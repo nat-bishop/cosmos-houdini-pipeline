@@ -12,7 +12,6 @@ from .prepare import prepare
 from .search import search_command
 from .show import show_command
 from .status import status
-from .stream import stream
 from .ui import ui
 from .verify import verify
 
@@ -54,7 +53,6 @@ cli.add_command(prepare)
 cli.add_command(search_command)
 cli.add_command(show_command)
 cli.add_command(status)
-cli.add_command(stream)
 cli.add_command(ui)
 cli.add_command(verify)
 

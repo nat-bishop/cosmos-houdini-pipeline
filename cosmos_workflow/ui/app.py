@@ -18,58 +18,36 @@ ops = WorkflowOperations(config=config)
 log_viewer = LogViewer(max_lines=2000)
 
 
-def get_running_jobs():
-    """Get currently running jobs from database."""
-    try:
-        # Get running runs from database
-        running_runs = ops.list_runs(status="running", limit=10)
-
-        if not running_runs:
-            return None, "No active jobs found"
-
-        jobs = []
-        for run in running_runs:
-            prompt = ops.get_prompt(run.get("prompt_id"))
-            prompt_text = prompt.get("prompt_text", "Unknown")[:50] if prompt else "Unknown"
-
-            jobs.append(
-                {
-                    "run_id": run.get("id"),  # Fixed: database field is 'id' not 'run_id'
-                    "prompt_name": run.get("prompt_name", "Unknown"),
-                    "prompt_text": prompt_text,
-                    "started_at": run.get("started_at", "Unknown"),
-                }
-            )
-
-        return jobs, f"Found {len(jobs)} active job(s)"
-    except Exception as e:
-        logger.error("Failed to get running jobs: %s", e)
-        return None, f"Error: {e}"
-
-
 def stream_callback(content):
     """Callback for log streaming."""
     log_viewer.add_from_stream(content)
 
 
-def start_log_streaming(run_id):
-    """Start streaming logs for a run using the new RemoteLogStreamer API."""
-    if not run_id:
-        return "Please enter a Run ID", log_viewer.get_html()
-
-    # Get run details
-    run = ops.get_run(run_id)
-    if not run:
-        return f"Run {run_id} not found", log_viewer.get_html()
-
+def start_log_streaming():
+    """Start streaming logs from active container."""
     # Clear previous logs
     log_viewer.clear()
 
     try:
-        # Use the new stream_run_logs API with callback
-        ops.stream_run_logs(run_id=run_id, callback=stream_callback, follow=True)
-        prompt_name = run.get("prompt_name", run_id)
-        return f"Streaming logs for {prompt_name}", log_viewer.get_html()
+        # Get active containers
+        containers = ops.get_active_containers()
+
+        if not containers:
+            return "No active containers found", log_viewer.get_html()
+
+        if len(containers) > 1:
+            # Multiple containers - use the first one
+            container_id = containers[0]["container_id"]
+            message = f"Multiple containers found, streaming from {container_id}"
+        else:
+            container_id = containers[0]["container_id"]
+            message = f"Streaming logs from container {container_id}"
+
+        # Stream with callback for UI updates
+        ops.stream_container_logs(container_id, callback=stream_callback)
+        return message, log_viewer.get_html()
+    except RuntimeError as e:
+        return f"Error: {e}", log_viewer.get_html()
     except Exception as e:
         return f"Failed to start streaming: {e}", log_viewer.get_html()
 
@@ -97,50 +75,65 @@ def clear_logs():
 
 
 def check_running_jobs():
-    """Check for running jobs and format for display."""
-    jobs, message = get_running_jobs()
+    """Check for active containers on remote instance."""
+    try:
+        containers = ops.get_active_containers()
 
-    if jobs:
-        display_text = f"{message}\n\n"
-        for job in jobs:
-            display_text += f"Run ID: {job['run_id']}\n"
-            display_text += f"Prompt: {job['prompt_text']}...\n"
-            display_text += f"Started: {job['started_at']}\n"
-            display_text += "-" * 40 + "\n"
-        return display_text.strip(), jobs[0]["run_id"] if jobs else ""
-    else:
-        return message, ""
+        if containers:
+            display_text = f"Found {len(containers)} active container(s)\n\n"
+            for container in containers:
+                display_text += f"Container: {container['container_id']}\n"
+                display_text += f"Image: {container.get('image', 'Unknown')}\n"
+                display_text += f"Status: {container.get('status', 'Unknown')}\n"
+                display_text += "-" * 40 + "\n"
+
+            if len(containers) == 1:
+                status = "Ready to stream from active container"
+            else:
+                status = "Multiple containers active - streaming will fail"
+
+            return display_text.strip(), status
+        else:
+            return "No active containers found", "No containers to stream from"
+    except Exception as e:
+        return f"Error: {e}", "Error checking containers"
 
 
 def check_and_auto_stream():
-    """Check for running jobs and auto-start streaming if job exists."""
-    jobs, message = get_running_jobs()
+    """Check for active containers and auto-start streaming if available."""
+    try:
+        containers = ops.get_active_containers()
 
-    if jobs:
-        # Auto-start streaming for the first (and typically only) job
-        first_job = jobs[0]
-        run_id = first_job["run_id"]
-        prompt_name = first_job["prompt_name"]
+        if containers:
+            # Format container display
+            display_text = f"Found {len(containers)} active container(s)\n\n"
+            for container in containers:
+                display_text += f"Container: {container['container_id']}\n"
+                display_text += f"Image: {container.get('image', 'Unknown')}\n"
+                display_text += f"Status: {container.get('status', 'Unknown')}\n"
+                display_text += "-" * 40 + "\n"
 
-        # Format job display
-        display_text = f"{message}\n\n"
-        for job in jobs:
-            display_text += f"Run ID: {job['run_id']}\n"
-            display_text += f"Prompt: {job['prompt_text']}...\n"
-            display_text += f"Started: {job['started_at']}\n"
-            display_text += "-" * 40 + "\n"
+            # Auto-start streaming if single container
+            if len(containers) == 1:
+                streaming_status, log_html = start_log_streaming()
+                job_status = f"Auto-streaming from container {containers[0]['container_id']}"
+            else:
+                job_status = "Multiple containers found. Click 'Start Streaming' to begin."
+                streaming_status = "Multiple containers active"
+                log_html = log_viewer.get_html()
 
-        # Auto-start streaming
-        streaming_status, log_html = start_log_streaming(run_id)
-
-        # Show which job is being streamed
-        job_status = f"Auto-streaming: {prompt_name} ({run_id})"
-
-        return display_text.strip(), job_status, streaming_status, log_html
-    else:
-        # No jobs - show waiting message
-        job_status = "No active jobs. Waiting..."
-        return message, job_status, "Waiting for active jobs", log_viewer.get_html()
+            return display_text.strip(), job_status, streaming_status, log_html
+        else:
+            # No containers - show waiting message
+            job_status = "No active containers. Waiting..."
+            return (
+                "No active containers found",
+                job_status,
+                "Waiting for containers",
+                log_viewer.get_html(),
+            )
+    except Exception as e:
+        return f"Error: {e}", "Error checking containers", "Error", log_viewer.get_html()
 
 
 def create_ui():
@@ -153,22 +146,23 @@ def create_ui():
                 gr.Markdown("### Controls")
 
                 # Running jobs section
-                gr.Markdown("#### Active Jobs")
+                gr.Markdown("#### Active Containers")
                 running_jobs_display = gr.Textbox(
-                    label="Active Runs",
-                    value="Checking for active jobs...",
+                    label="Active Containers",
+                    value="Checking for active containers...",
                     interactive=False,
                     lines=3,
                 )
-                check_jobs_btn = gr.Button("Check Active Jobs", size="sm")
+                check_jobs_btn = gr.Button("Check Active Containers", size="sm")
 
-                # Job status display (replaces manual run ID input)
+                # Job status display
                 job_status = gr.Textbox(
-                    label="Current Job",
-                    value="Checking for active jobs...",
+                    label="Stream Status",
+                    value="Click 'Start Streaming' to stream from active container",
                     interactive=False,
                 )
 
+                stream_btn = gr.Button("Start Streaming", variant="primary", size="sm")
                 refresh_btn = gr.Button("Refresh", size="sm")
 
                 # Filters
@@ -215,6 +209,12 @@ def create_ui():
             fn=check_running_jobs,
             inputs=[],
             outputs=[running_jobs_display, job_status],
+        )
+
+        stream_btn.click(
+            fn=start_log_streaming,
+            inputs=[],
+            outputs=[job_status, log_display],
         )
 
         refresh_btn.click(

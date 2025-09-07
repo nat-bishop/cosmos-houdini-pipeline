@@ -74,7 +74,7 @@ class WorkflowService:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        logger.info("Creating prompt with model_type=%s", model_type)
+        logger.info(f"Creating prompt with model_type={model_type}")
 
         # Validate inputs
         if model_type is None:
@@ -121,7 +121,7 @@ class WorkflowService:
             }
 
             session.commit()
-            logger.info("Created prompt with id=%s", prompt.id)
+            logger.info(f"Created prompt with id={prompt.id}")
             return result
 
     def create_run(
@@ -145,7 +145,7 @@ class WorkflowService:
         Raises:
             ValueError: If prompt not found or invalid parameters
         """
-        logger.info("Creating run for prompt_id=%s", prompt_id)
+        logger.info(f"Creating run for prompt_id={prompt_id}")
 
         # Validate inputs
         if prompt_id is None:
@@ -191,7 +191,7 @@ class WorkflowService:
             }
 
             session.commit()
-            logger.info("Created run with id=%s for prompt=%s", run.id, prompt_id)
+            logger.info(f"Created run with id={run.id} for prompt={prompt_id}")
             return result
 
     def get_prompt(self, prompt_id: str) -> dict[str, Any] | None:
@@ -313,7 +313,7 @@ class WorkflowService:
                 f"Invalid status: {status}. Must be one of pending, running, completed, failed"
             )
 
-        logger.info("Updating run status for id=%s to %s", run_id, status)
+        logger.info(f"Updating run status for id={run_id} to {status}")
 
         with self.db.get_session() as session:
             run = session.query(Run).filter_by(id=run_id).first()
@@ -351,7 +351,7 @@ class WorkflowService:
                 result["completed_at"] = run.completed_at.isoformat()
 
             session.commit()
-            logger.info("Updated run %s status to %s", run_id, status)
+            logger.info(f"Updated run {run_id} status to {status}")
             return result
 
     def update_run(self, run_id: str, **kwargs) -> dict[str, Any] | None:

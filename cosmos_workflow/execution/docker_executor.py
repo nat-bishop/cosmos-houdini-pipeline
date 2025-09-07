@@ -70,41 +70,18 @@ class DockerExecutor:
             remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}/run.log"
             run_logger.info("Remote log path: %s", remote_log_path)
 
-            # Conditionally stream logs
-            if stream_logs:
-                import threading
-
-                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-
-                streamer = RemoteLogStreamer(self.ssh_manager)
-                stream_thread = threading.Thread(
-                    target=streamer.stream_remote_log,
-                    args=(remote_log_path, local_log_path),
-                    kwargs={
-                        "poll_interval": 2.0,
-                        "timeout": 3600,
-                        "wait_for_file": True,
-                        "completion_marker": "[COSMOS_COMPLETE]",
-                    },
-                    daemon=True,
-                )
-                stream_thread.start()
-                run_logger.info("Started log streaming from remote...")
-            else:
-                run_logger.info("Use 'cosmos stream' to view logs in real-time")
-
             # Execute inference using bash script
-            run_logger.info("Executing inference script on remote...")
+            run_logger.info("Starting inference on GPU. This may take several minutes...")
+            run_logger.info("Use 'cosmos status --stream' to monitor progress")
+            run_logger.info("Launching inference in background...")
+
             self._run_inference_script(prompt_name, num_gpu, cuda_devices)
 
-            # Wait for streaming thread if enabled
-            if stream_logs:
-                stream_thread.join(timeout=5)
-
-            run_logger.info("Inference completed successfully for %s", prompt_name)
+            run_logger.info("Inference started successfully for %s", prompt_name)
+            run_logger.info("The process is now running in the background on the GPU")
 
             return {
-                "status": "success",
+                "status": "started",  # Changed from "success" to "started"
                 "log_path": str(local_log_path),
                 "prompt_name": prompt_name,
             }
@@ -146,7 +123,7 @@ class DockerExecutor:
 
         # Setup run-specific logger
         run_logger = get_run_logger(run_id, f"{prompt_name}_upscaled")
-        run_logger.info("Running upscaling for %s with weight %f", prompt_name, control_weight)
+        run_logger.info("Running upscaling for %s with weight %s", prompt_name, control_weight)
 
         # Setup local log path
         log_dir = Path(f"outputs/{prompt_name}_upscaled/logs")
@@ -170,41 +147,18 @@ class DockerExecutor:
             remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}_upscaled/run.log"
             run_logger.info("Remote log path: %s", remote_log_path)
 
-            # Conditionally stream logs
-            if stream_logs:
-                import threading
-
-                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-
-                streamer = RemoteLogStreamer(self.ssh_manager)
-                stream_thread = threading.Thread(
-                    target=streamer.stream_remote_log,
-                    args=(remote_log_path, local_log_path),
-                    kwargs={
-                        "poll_interval": 2.0,
-                        "timeout": 1800,  # 30 minutes for upscaling
-                        "wait_for_file": True,
-                        "completion_marker": "[COSMOS_COMPLETE]",
-                    },
-                    daemon=True,
-                )
-                stream_thread.start()
-                run_logger.info("Started log streaming for upscaling...")
-            else:
-                run_logger.info("Use 'cosmos stream' to view logs in real-time")
-
             # Execute upscaling using bash script
-            run_logger.info("Starting upscaling...")
+            run_logger.info("Starting upscaling on GPU. This may take several minutes...")
+            run_logger.info("Use 'cosmos status --stream' to monitor progress")
+            run_logger.info("Launching upscaling in background...")
+
             self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
 
-            # Wait for streaming thread if enabled
-            if stream_logs:
-                stream_thread.join(timeout=5)
-
-            run_logger.info("Upscaling completed successfully for %s", prompt_name)
+            run_logger.info("Upscaling started successfully for %s", prompt_name)
+            run_logger.info("The process is now running in the background on the GPU")
 
             return {
-                "status": "success",
+                "status": "started",  # Changed from "success" to "started"
                 "log_path": str(local_log_path),
                 "prompt_name": prompt_name,
             }
@@ -301,29 +255,11 @@ class DockerExecutor:
 
             builder.set_command(cmd)
 
-            # Start streaming thread if requested
-            if stream_logs and remote_log_path and local_log_path:
-                import threading
+            # Execute via remote executor (blocking - we need the result)
+            if stream_logs:
+                op_logger.info("Starting prompt enhancement on GPU...")
+                op_logger.info("This is typically fast (under 30 seconds)")
 
-                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-
-                streamer = RemoteLogStreamer(self.ssh_manager)
-                stream_thread = threading.Thread(
-                    target=streamer.stream_remote_log,
-                    args=(remote_log_path, local_log_path),
-                    kwargs={
-                        "poll_interval": 2.0,
-                        "timeout": timeout + 60,  # Give extra time for cleanup
-                        "wait_for_file": True,
-                        "completion_marker": "[COSMOS_COMPLETE]",
-                    },
-                    daemon=True,
-                )
-                stream_thread.start()
-                op_logger.info("Started log streaming for prompt enhancement")
-
-            # Execute via remote executor
-            op_logger.info("Starting prompt enhancement (batch mode)...")
             self.remote_executor.execute_docker(builder, timeout=timeout)
 
             op_logger.info("Prompt enhancement completed for batch %s", batch_filename)
@@ -341,7 +277,7 @@ class DockerExecutor:
             return result
 
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
-        """Run inference using the bash script."""
+        """Run inference using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -352,12 +288,18 @@ class DockerExecutor:
             f'bash -lc "/workspace/bashscripts/inference.sh {prompt_name} {num_gpu} {cuda_devices}"'
         )
 
-        self.remote_executor.execute_docker(builder, timeout=3600)  # 1 hour timeout
+        # Run the command in background by appending & and using nohup
+        command = builder.build()
+        background_command = f"nohup {command} > /dev/null 2>&1 &"
+
+        # This returns immediately since we're running in background
+        self.ssh_manager.execute_command(background_command, timeout=5)
+        logger.info("Inference started in background")
 
     def _run_upscaling_script(
         self, prompt_name: str, control_weight: float, num_gpu: int, cuda_devices: str
     ) -> None:
-        """Run upscaling using the bash script."""
+        """Run upscaling using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -368,7 +310,13 @@ class DockerExecutor:
             f'bash -lc "/workspace/bashscripts/upscale.sh {prompt_name} {control_weight} {num_gpu} {cuda_devices}"'
         )
 
-        self.remote_executor.execute_docker(builder, timeout=1800)  # 30 minute timeout
+        # Run the command in background
+        command = builder.build()
+        background_command = f"nohup {command} > /dev/null 2>&1 &"
+
+        # This returns immediately since we're running in background
+        self.ssh_manager.execute_command(background_command, timeout=5)
+        logger.info("Upscaling started in background")
 
     def _create_upscaler_spec(self, prompt_name: str, control_weight: float) -> None:
         """Create upscaler specification file on remote."""
@@ -382,7 +330,7 @@ class DockerExecutor:
         spec_path = f"{self.remote_dir}/outputs/{prompt_name}/upscaler_spec.json"
 
         self.remote_executor.write_file(spec_path, spec_content)
-        logger.info("Created upscaler spec: %s", spec_path)
+        logger.info(f"Created upscaler spec: {spec_path}")
 
     def _check_remote_file_exists(self, remote_path: str) -> bool:
         """Check if a file exists on the remote system."""
@@ -455,7 +403,7 @@ class DockerExecutor:
         Returns:
             Dictionary with batch results including output paths
         """
-        logger.info("Running batch inference %s with %d GPU(s)", batch_name, num_gpu)
+        logger.info(f"Running batch inference {batch_name} with {num_gpu} GPU(s)")
 
         # Setup logging paths if streaming
         remote_log_path = None
@@ -476,41 +424,23 @@ class DockerExecutor:
         remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         self.remote_executor.create_directory(remote_output_dir)
 
-        # Start streaming thread if requested
-        if stream_logs and remote_log_path and local_log_path:
-            import threading
-
-            from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-
-            streamer = RemoteLogStreamer(self.ssh_manager)
-            stream_thread = threading.Thread(
-                target=streamer.stream_remote_log,
-                args=(remote_log_path, local_log_path),
-                kwargs={
-                    "poll_interval": 2.0,
-                    "timeout": 7200 + 60,  # 2 hour timeout + extra time
-                    "wait_for_file": True,
-                    "completion_marker": "[COSMOS_COMPLETE]",
-                },
-                daemon=True,
-            )
-            stream_thread.start()
-            logger.info("Started log streaming for batch inference")
-
         # Execute batch inference using bash script
-        logger.info("Starting batch inference...")
+        if stream_logs:
+            logger.info("Starting batch inference on GPU. This may take a while...")
+            logger.info("Use 'cosmos status --stream' to monitor progress")
+
+        logger.info("Launching batch inference in background...")
         self._run_batch_inference_script(
             batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
         )
 
-        # Get list of output files
-        output_files = self._get_batch_output_files(batch_name)
+        logger.info(f"Batch inference started successfully for {batch_name}")
+        logger.info("The process is now running in the background on the GPU")
 
-        logger.info("Batch inference completed successfully for %s", batch_name)
         return {
             "batch_name": batch_name,
             "output_dir": remote_output_dir,
-            "output_files": output_files,
+            "status": "started",
         }
 
     def _run_batch_inference_script(
@@ -521,7 +451,7 @@ class DockerExecutor:
         cuda_devices: str,
         remote_log_path: str | None = None,
     ) -> None:
-        """Run batch inference using the bash script."""
+        """Run batch inference using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -536,7 +466,13 @@ class DockerExecutor:
 
         builder.set_command(f'bash -lc "{cmd}"')
 
-        self.remote_executor.execute_docker(builder, timeout=7200)  # 2 hour timeout for batch
+        # Run the command in background
+        command = builder.build()
+        background_command = f"nohup {command} > /dev/null 2>&1 &"
+
+        # This returns immediately since we're running in background
+        self.ssh_manager.execute_command(background_command, timeout=5)
+        logger.info("Batch inference started in background")
 
     def _get_batch_output_files(self, batch_name: str) -> list[str]:
         """Get list of output files from batch inference."""

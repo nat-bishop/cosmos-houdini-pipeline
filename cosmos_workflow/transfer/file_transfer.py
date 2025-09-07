@@ -233,7 +233,7 @@ class FileTransferService:
         """Download a remote directory to a local directory via SFTP."""
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Downloading directory: %s -> {local_dir}", remote_abs_dir)
+            logger.info("Downloading directory: %s -> %s", remote_abs_dir, local_dir)
 
             # List remote directory contents
             try:

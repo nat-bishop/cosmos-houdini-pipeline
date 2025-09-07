@@ -416,17 +416,23 @@ class WorkflowOperations:
             self.service.update_run_status(run["id"], "completed")
             logger.info("Run %s completed successfully", run["id"])
 
-        except Exception:
+            return {
+                "run_id": run["id"],
+                "output_path": result.get("output_path"),
+                "duration_seconds": result.get("duration_seconds"),
+                "status": "success",
+            }
+
+        except Exception as e:
             logger.exception("Run %s failed", run["id"])
             self.service.update_run_status(run["id"], "failed")
-            raise
-
-        return {
-            "run_id": run["id"],
-            "output_path": result.get("output_path"),
-            "duration_seconds": result.get("duration_seconds"),
-            "status": "success",
-        }
+            return {
+                "run_id": run["id"],
+                "output_path": None,
+                "duration_seconds": None,
+                "status": "failed",
+                "error": str(e),
+            }
 
     def batch_inference(
         self,

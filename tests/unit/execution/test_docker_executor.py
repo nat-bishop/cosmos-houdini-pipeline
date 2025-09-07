@@ -61,7 +61,9 @@ class TestDockerExecutor:
         # Mock successful inference script execution
         with patch.object(self.docker_executor, "_run_inference_script") as mock_run_script:
             # Run inference
-            self.docker_executor.run_inference(self.test_prompt_file, num_gpu=2, cuda_devices="0,1")
+            result = self.docker_executor.run_inference(
+                self.test_prompt_file, run_id="test_run_001", num_gpu=2, cuda_devices="0,1"
+            )
 
             # Check that output directory was created
             self.mock_ssh_manager.execute_command_success.assert_any_call(
@@ -71,6 +73,12 @@ class TestDockerExecutor:
             # Check that inference script was called
             mock_run_script.assert_called_once_with("test_prompt", 2, "0,1")
 
+            # Check that result is a dict with expected keys
+            assert isinstance(result, dict)
+            assert result["status"] == "success"
+            assert "log_path" in result
+            assert result["prompt_name"] == "test_prompt"
+
     def test_run_inference_calls_inference_script_with_correct_parameters(self):
         """Test that run_inference calls the inference script with correct parameters."""
         # Mock successful directory creation
@@ -78,16 +86,53 @@ class TestDockerExecutor:
 
         with patch.object(self.docker_executor, "_run_inference_script") as mock_run_script:
             # Run inference with custom parameters
-            self.docker_executor.run_inference(
-                self.test_prompt_file, num_gpu=4, cuda_devices="0,1,2,3"
+            result = self.docker_executor.run_inference(
+                self.test_prompt_file, run_id="test_run_002", num_gpu=4, cuda_devices="0,1,2,3"
             )
 
             # Check that script was called with correct parameters
             mock_run_script.assert_called_once_with("test_prompt", 4, "0,1,2,3")
 
-    # Tests removed - implementation has changed significantly
-    # The run_upscaling method no longer checks input video existence in the same way
-    # and doesn't raise FileNotFoundError anymore
+            # Check that result is a dict with expected keys
+            assert isinstance(result, dict)
+            assert result["status"] == "success"
+
+    def test_run_inference_with_run_id(self):
+        """Test that run_inference handles run_id parameter correctly."""
+        # Mock successful directory creation
+        self.mock_ssh_manager.execute_command_success.return_value = None
+
+        with patch.object(self.docker_executor, "_run_inference_script") as mock_run_script:
+            # Run inference with run_id
+            result = self.docker_executor.run_inference(
+                self.test_prompt_file, run_id="test_run_123", num_gpu=1, cuda_devices="0"
+            )
+
+            # Check that inference script was called
+            mock_run_script.assert_called_once_with("test_prompt", 1, "0")
+
+            # Check that result contains log path with run_id
+            assert "test_run_123" in result["log_path"]
+            assert result["status"] == "success"
+
+    def test_run_inference_handles_failure(self):
+        """Test that run_inference handles failures gracefully."""
+        # Mock successful directory creation
+        self.mock_ssh_manager.execute_command_success.return_value = None
+
+        with patch.object(self.docker_executor, "_run_inference_script") as mock_run_script:
+            # Mock script failure
+            mock_run_script.side_effect = Exception("Inference failed")
+
+            # Run inference
+            result = self.docker_executor.run_inference(
+                self.test_prompt_file, run_id="test_run_003", num_gpu=1, cuda_devices="0"
+            )
+
+            # Check that result indicates failure
+            assert result["status"] == "failed"
+            assert "Inference failed" in result["error"]
+            assert "log_path" in result
 
     def test_run_upscaling_creates_output_directory(self):
         """Test that run_upscaling creates the upscaled output directory."""
@@ -100,7 +145,11 @@ class TestDockerExecutor:
             with patch.object(self.docker_executor, "_create_upscaler_spec"):
                 with patch.object(self.docker_executor, "_run_upscaling_script"):
                     # Run upscaling
-                    self.docker_executor.run_upscaling(self.test_prompt_file)
+                    result = self.docker_executor.run_upscaling(
+                        self.test_prompt_file, run_id="test_run_004"
+                    )
+                    # Check result is dict
+                    assert isinstance(result, dict)
 
                     # Check that upscaled output directory was created
                     self.mock_ssh_manager.execute_command_success.assert_any_call(
@@ -118,9 +167,15 @@ class TestDockerExecutor:
             with patch.object(self.docker_executor, "_create_upscaler_spec"):
                 with patch.object(self.docker_executor, "_run_upscaling_script") as mock_run_script:
                     # Run upscaling with custom parameters
-                    self.docker_executor.run_upscaling(
-                        self.test_prompt_file, control_weight=0.8, num_gpu=3, cuda_devices="0,1,2"
+                    result = self.docker_executor.run_upscaling(
+                        self.test_prompt_file,
+                        run_id="test_run_005",
+                        control_weight=0.8,
+                        num_gpu=3,
+                        cuda_devices="0,1,2",
                     )
+                    # Check result is dict
+                    assert isinstance(result, dict)
 
                     # Check that script was called with correct parameters
                     mock_run_script.assert_called_once_with("test_prompt", 0.8, 3, "0,1,2")

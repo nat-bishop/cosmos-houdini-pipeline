@@ -4,7 +4,6 @@ Handles GPU execution for inference and upscaling workflows.
 """
 
 import json
-import logging
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,8 +14,7 @@ from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.utils import nvidia_format
-
-logger = logging.getLogger(__name__)
+from cosmos_workflow.utils.logging import logger
 
 
 class WorkflowOrchestrator:
@@ -69,20 +67,7 @@ class WorkflowOrchestrator:
         prompt_name = f"run_{run_dict['id']}"
         run_id = run_dict["id"]
 
-        # Create log directory and file if UI is being used
-        log_path = None
-        if kwargs.get("enable_logging", False):
-            # Store logs in the run output directory
-            log_dir = Path(f"outputs/run_{run_id}")
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_path = log_dir / "execution.log"
-
-            # Write initial info to log
-            with open(log_path, "w") as f:
-                f.write(f"[{datetime.now(timezone.utc)}] Starting run {run_id}\n")
-                f.write(f"Prompt: {prompt_dict['prompt_text']}\n")
-                f.write(f"Model: {run_dict.get('model_type', 'transfer')}\n")
-                f.write("=" * 50 + "\n")
+        logger.info(f"Executing run {run_id} for prompt {prompt_name}")
 
         try:
             with self.ssh_manager:
@@ -130,23 +115,32 @@ class WorkflowOrchestrator:
                 # Build prompt file path for scripts
                 prompt_file = Path(f"inputs/prompts/{prompt_name}.json")
 
-                # Run inference
-                logger.info("Running inference on GPU for run %s", run_dict["id"])
-                if log_path:
-                    # Use logging version if log path is provided
-                    self.docker_executor.run_inference_with_logging(
-                        prompt_file, num_gpu=1, cuda_devices="0", log_path=str(log_path)
-                    )
-                else:
-                    # Use standard version without logging
-                    self.docker_executor.run_inference(prompt_file, num_gpu=1, cuda_devices="0")
+                # Run inference - always pass run_id for logging
+                logger.info(f"Running inference on GPU for run {run_dict['id']}")
+                result = self.docker_executor.run_inference(
+                    prompt_file, run_id=run_id, num_gpu=1, cuda_devices="0"
+                )
+
+                # Store log path if available
+                if result.get("log_path"):
+                    # This will be implemented in Phase 2
+                    # self.service.update_run_with_log(run_id, result["log_path"])
+                    logger.debug(f"Log path for run {run_id}: {result['log_path']}")
 
                 # Run upscaling if requested
                 if upscale:
-                    logger.info("Running upscaling with weight %s", upscale_weight)
-                    self.docker_executor.run_upscaling(
-                        prompt_file, upscale_weight, num_gpu=1, cuda_devices="0"
+                    logger.info(f"Running upscaling with weight {upscale_weight}")
+                    upscale_result = self.docker_executor.run_upscaling(
+                        prompt_file,
+                        run_id=run_id,
+                        control_weight=upscale_weight,
+                        num_gpu=1,
+                        cuda_devices="0",
                     )
+                    if upscale_result.get("log_path"):
+                        logger.debug(
+                            f"Upscaling log path for run {run_id}: {upscale_result['log_path']}"
+                        )
 
                 # Download results
                 self.file_transfer.download_results(prompt_file)
@@ -175,11 +169,7 @@ class WorkflowOrchestrator:
                 }
 
         except Exception as e:
-            logger.error("Execution failed for run %s: %s", run_dict["id"], e)
-            # Log errors if logging is enabled
-            if log_path and log_path.exists():
-                with open(log_path, "a") as f:
-                    f.write(f"\n[ERROR] {e}\n")
+            logger.error(f"Execution failed for run {run_dict['id']}: {e}")
             return {
                 "status": "failed",
                 "error": str(e),
@@ -234,7 +224,7 @@ class WorkflowOrchestrator:
             batch_name = f"batch_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         start_time = datetime.now(timezone.utc)
-        logger.info("Starting batch execution %s with %d runs", batch_name, len(runs_and_prompts))
+        logger.info(f"Starting batch execution {batch_name} with {len(runs_and_prompts)} runs")
 
         try:
             with self.ssh_manager:
@@ -278,7 +268,7 @@ class WorkflowOrchestrator:
                     )
 
                 # Run batch inference
-                logger.info("Running batch inference on GPU")
+                logger.info(f"Running batch inference on GPU for {batch_name}")
                 batch_result = self.docker_executor.run_batch_inference(
                     batch_name, jsonl_filename, num_gpu=1, cuda_devices="0"
                 )
@@ -312,7 +302,7 @@ class WorkflowOrchestrator:
                 }
 
         except Exception as e:
-            logger.error("Batch execution failed: %s", e)
+            logger.error(f"Batch execution failed: {e}")
             return {
                 "status": "failed",
                 "batch_name": batch_name,
@@ -410,7 +400,7 @@ class WorkflowOrchestrator:
         # Initialize services if not already done
         self._initialize_services()
 
-        logger.info("Starting prompt upsampling using %s model", model)
+        logger.info(f"Starting prompt upsampling using {model} model")
 
         # Prepare batch data for the upsampler script
         batch_data = [
@@ -445,7 +435,7 @@ class WorkflowOrchestrator:
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
                         self.docker_executor.remote_executor.create_directory(remote_videos_dir)
-                        logger.info("Uploading video for context: %s", video_path)
+                        logger.info(f"Uploading video for context: {video_path}")
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
                     # Create scripts directory and upload upsampler script
@@ -462,12 +452,25 @@ class WorkflowOrchestrator:
 
                     # Execute prompt enhancement via DockerExecutor wrapper
                     logger.info("Executing prompt upsampling on GPU...")
-                    self.docker_executor.run_prompt_enhancement(
+                    from datetime import datetime
+
+                    operation_id = f"enhance_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+
+                    enhancement_result = self.docker_executor.run_prompt_enhancement(
                         batch_filename=batch_filename,
+                        operation_id=operation_id,
                         offload=True,  # Memory efficient for single prompts
                         checkpoint_dir="/workspace/checkpoints",
                         timeout=600,
                     )
+
+                    if enhancement_result.get("log_path"):
+                        logger.debug(f"Enhancement log path: {enhancement_result['log_path']}")
+
+                    if enhancement_result["status"] != "success":
+                        raise RuntimeError(
+                            f"Prompt enhancement failed: {enhancement_result.get('error', 'Unknown error')}"
+                        )
 
                     # Download results
                     remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
@@ -489,6 +492,6 @@ class WorkflowOrchestrator:
                         return prompt_text
 
             except Exception as e:
-                logger.error("Prompt upsampling failed: %s", e)
+                logger.error(f"Prompt upsampling failed: {e}")
                 # Return original prompt on failure rather than raising
                 return prompt_text

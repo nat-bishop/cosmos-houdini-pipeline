@@ -6,7 +6,6 @@ flexible database schema.
 """
 
 import hashlib
-import logging
 import uuid
 from typing import Any
 
@@ -16,8 +15,7 @@ from sqlalchemy.orm import joinedload
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.database.models import Prompt, Run
-
-logger = logging.getLogger(__name__)
+from cosmos_workflow.utils.logging import logger
 
 # Supported AI model types
 SUPPORTED_MODEL_TYPES = {"transfer", "reason", "predict", "enhancement"}

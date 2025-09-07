@@ -4,14 +4,12 @@ Handles running Docker commands on remote instances with proper logging and erro
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
-
-logger = logging.getLogger(__name__)
+from cosmos_workflow.utils.logging import get_run_logger, logger
 
 
 class DockerExecutor:
@@ -23,197 +21,212 @@ class DockerExecutor:
         self.docker_image = docker_image
         self.remote_executor = RemoteCommandExecutor(ssh_manager)
 
-    def run_inference(self, prompt_file: Path, num_gpu: int = 1, cuda_devices: str = "0") -> None:
+    def run_inference(
+        self, prompt_file: Path, run_id: str, num_gpu: int = 1, cuda_devices: str = "0"
+    ) -> dict:
         """Run Cosmos-Transfer1 inference on remote instance.
 
-        Args:
-            prompt_file: Name of prompt file (without path)
-            num_gpu: Number of GPUs to use
-            cuda_devices: CUDA device IDs to use
-        """
-        prompt_name = prompt_file.stem
-
-        logger.info("Running inference for %s with {num_gpu} GPU(s)", prompt_name)
-
-        # Create output directory
-        remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
-        self.remote_executor.create_directory(remote_output_dir)
-
-        # Execute inference using bash script
-        logger.info("Starting inference...")
-        self._run_inference_script(prompt_name, num_gpu, cuda_devices)
-
-        logger.info("Inference completed successfully for %s", prompt_name)
-
-    def run_inference_with_logging(
-        self,
-        prompt_file: Path,
-        num_gpu: int = 1,
-        cuda_devices: str = "0",
-        log_path: str | None = None,
-    ) -> None:
-        """Run inference with optional log file capture.
+        Note: Logging is always enabled. The run.log file on remote
+        is created by tee in the bash script and will be streamed locally.
 
         Args:
             prompt_file: Name of prompt file (without path)
+            run_id: Run ID for tracking (REQUIRED)
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
-            log_path: Optional path to write logs to
+
+        Returns:
+            Dict with log_path, status, and prompt_name
         """
-
         prompt_name = prompt_file.stem
-        logger.info("Running inference for %s", prompt_name)
 
-        # Create output directory
+        # Setup run-specific logger
+        run_logger = get_run_logger(run_id, prompt_name)
+
+        run_logger.info(f"Starting inference for prompt: {prompt_name}")
+        run_logger.debug(f"GPU config: num_gpu={num_gpu}, devices={cuda_devices}")
+
+        # Create output directory on remote
         remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
         self.remote_executor.create_directory(remote_output_dir)
 
-        # Execute inference
-        logger.info("Starting inference...")
-        self._run_inference_script(prompt_name, num_gpu, cuda_devices)
+        # Setup local log path
+        log_dir = Path(f"outputs/{prompt_name}/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        local_log_path = log_dir / f"run_{run_id}.log"
 
-        # If log_path provided, capture Docker logs
-        if log_path:
-            # Get container ID (most recent for our image)
-            cmd = f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"'
-            container_id = self.ssh_manager.execute_command_success(
-                cmd, stream_output=False
-            ).strip()
+        try:
+            # Execute inference using bash script
+            run_logger.info("Executing inference script on remote...")
+            self._run_inference_script(prompt_name, num_gpu, cuda_devices)
 
-            if container_id:
-                logger.info("Capturing logs from container %s to %s", container_id, log_path)
+            # Note: In Phase 3, we'll add log streaming here
+            # For now, just log that inference completed
 
-                # Stream logs to file
-                with open(log_path, "w") as log_file:
-                    # Get logs (not following, just current state)
-                    logs_cmd = f"sudo docker logs {container_id}"
-                    exit_code, stdout, stderr = self.ssh_manager.execute_command(
-                        logs_cmd, timeout=60, stream_output=False
-                    )
+            run_logger.info(f"Inference completed successfully for {prompt_name}")
 
-                    # Write to file
-                    log_file.write(stdout)
-                    if stderr:
-                        log_file.write(f"\n=== STDERR ===\n{stderr}")
-                    log_file.flush()
+            return {
+                "status": "success",
+                "log_path": str(local_log_path),
+                "prompt_name": prompt_name,
+            }
 
-                    # Now follow new logs
-                    follow_cmd = f"sudo docker logs -f {container_id}"
-
-                    # Custom streaming to file
-                    stdin, stdout_stream, stderr_stream = self.ssh_manager.ssh_client.exec_command(
-                        follow_cmd
-                    )
-
-                    # Stream to file in real-time
-                    for line in stdout_stream:
-                        line = line.strip()
-                        if line:
-                            print(f"  {line}")  # Console
-                            log_file.write(f"{line}\n")
-                            log_file.flush()  # Real-time
-
-        logger.info("Inference completed for %s", prompt_name)
+        except Exception as e:
+            run_logger.error(f"Inference failed for {prompt_name}: {e}")
+            return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_upscaling(
         self,
         prompt_file: Path,
+        run_id: str,
         control_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> None:
+    ) -> dict:
         """Run 4K upscaling on remote instance.
 
         Args:
             prompt_file: Name of prompt file (without path)
+            run_id: Run ID for tracking (REQUIRED)
             control_weight: Control weight for upscaling
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
+
+        Returns:
+            Dict with log_path and status
         """
         prompt_name = prompt_file.stem
 
-        logger.info("Running upscaling for %s with weight {control_weight}", prompt_name)
+        # Setup run-specific logger
+        run_logger = get_run_logger(run_id, f"{prompt_name}_upscaled")
+        run_logger.info(f"Running upscaling for {prompt_name} with weight {control_weight}")
 
-        # Check if input video exists
-        input_video_path = f"{self.remote_dir}/outputs/{prompt_name}/output.mp4"
-        if not self.remote_executor.file_exists(input_video_path):
-            raise FileNotFoundError(f"Input video not found: {input_video_path}")
+        # Setup local log path
+        log_dir = Path(f"outputs/{prompt_name}_upscaled/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        local_log_path = log_dir / f"run_{run_id}.log"
 
-        # Create upscaled output directory
-        remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
-        self.remote_executor.create_directory(remote_output_dir)
+        try:
+            # Check if input video exists
+            input_video_path = f"{self.remote_dir}/outputs/{prompt_name}/output.mp4"
+            if not self.remote_executor.file_exists(input_video_path):
+                raise FileNotFoundError(f"Input video not found: {input_video_path}")
 
-        # Create upscaler spec
-        self._create_upscaler_spec(prompt_name, control_weight)
+            # Create upscaled output directory
+            remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
+            self.remote_executor.create_directory(remote_output_dir)
 
-        # Execute upscaling using bash script
-        logger.info("Starting upscaling...")
-        self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
+            # Create upscaler spec
+            self._create_upscaler_spec(prompt_name, control_weight)
 
-        logger.info("Upscaling completed successfully for %s", prompt_name)
+            # Execute upscaling using bash script
+            run_logger.info("Starting upscaling...")
+            self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
+
+            run_logger.info(f"Upscaling completed successfully for {prompt_name}")
+
+            return {
+                "status": "success",
+                "log_path": str(local_log_path),
+                "prompt_name": prompt_name,
+            }
+
+        except Exception as e:
+            run_logger.error(f"Upscaling failed for {prompt_name}: {e}")
+            return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
         self,
         batch_filename: str,
+        operation_id: str | None = None,
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
         timeout: int = 600,
-    ) -> None:
+    ) -> dict:
         """Run prompt enhancement using Pixtral model on GPU.
 
         Processes a batch of prompts using the prompt_upsampler.py script.
-        Follows the same pattern as run_inference and run_upscaling.
+        Note: This doesn't create a Run in the database, but we still
+        track operations for debugging.
 
         Args:
             batch_filename: Name of batch JSON file in inputs directory
+            operation_id: Optional operation ID for tracking
             offload: Whether to offload model between prompts (True for memory efficiency)
             checkpoint_dir: Directory containing model checkpoints
             timeout: Execution timeout in seconds
+
+        Returns:
+            Dict with status and optional log_path if operation_id provided
         """
-        logger.info("Running prompt enhancement for batch %s", batch_filename)
+        # Setup logger
+        if operation_id:
+            log_dir = Path("outputs/prompt_enhancement/logs")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            local_log_path = log_dir / f"op_{operation_id}.log"
+            # Use bound logger for this operation
+            op_logger = logger.bind(operation_id=operation_id)
+        else:
+            local_log_path = None
+            op_logger = logger
 
-        # Verify script exists on remote
-        script_path = f"{self.remote_dir}/scripts/prompt_upsampler.py"
-        if not self.remote_executor.file_exists(script_path):
-            raise FileNotFoundError(f"Upsampler script not found at {script_path}")
+        op_logger.info(f"Running prompt enhancement for batch {batch_filename}")
 
-        # Verify batch file exists
-        batch_path = f"{self.remote_dir}/inputs/{batch_filename}"
-        if not self.remote_executor.file_exists(batch_path):
-            raise FileNotFoundError(f"Batch file not found at {batch_path}")
+        try:
+            # Verify script exists on remote
+            script_path = f"{self.remote_dir}/scripts/prompt_upsampler.py"
+            if not self.remote_executor.file_exists(script_path):
+                raise FileNotFoundError(f"Upsampler script not found at {script_path}")
 
-        # Ensure output directory exists
-        output_dir = f"{self.remote_dir}/outputs"
-        self.remote_executor.create_directory(output_dir)
+            # Verify batch file exists
+            batch_path = f"{self.remote_dir}/inputs/{batch_filename}"
+            if not self.remote_executor.file_exists(batch_path):
+                raise FileNotFoundError(f"Batch file not found at {batch_path}")
 
-        # Build Docker command
-        builder = DockerCommandBuilder(self.docker_image)
-        builder.with_gpu("0")
-        builder.add_option("--ipc=host")
-        builder.add_option("--shm-size=8g")
-        builder.add_volume(self.remote_dir, "/workspace")
-        builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
-        builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
-        builder.add_environment("CUDA_VISIBLE_DEVICES", "0")
+            # Ensure output directory exists
+            output_dir = f"{self.remote_dir}/outputs"
+            self.remote_executor.create_directory(output_dir)
 
-        # Build the command - note it's Python script, not bash
-        # Script defaults to offload=True, use --no-offload to disable
-        offload_flag = "" if offload else "--no-offload"
-        cmd = (
-            f"python /workspace/scripts/prompt_upsampler.py "
-            f"--batch /workspace/inputs/{batch_filename} "
-            f"--output-dir /workspace/outputs "
-            f"--checkpoint-dir {checkpoint_dir}"
-        )
-        if offload_flag:
-            cmd += f" {offload_flag}"
-        builder.set_command(cmd)
+            # Build Docker command
+            builder = DockerCommandBuilder(self.docker_image)
+            builder.with_gpu("0")
+            builder.add_option("--ipc=host")
+            builder.add_option("--shm-size=8g")
+            builder.add_volume(self.remote_dir, "/workspace")
+            builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+            builder.add_environment("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+            builder.add_environment("CUDA_VISIBLE_DEVICES", "0")
 
-        # Execute via remote executor
-        logger.info("Starting prompt enhancement (batch mode)...")
-        self.remote_executor.execute_docker(builder, timeout=timeout)
+            # Build the command - note it's Python script, not bash
+            # Script defaults to offload=True, use --no-offload to disable
+            offload_flag = "" if offload else "--no-offload"
+            cmd = (
+                f"python /workspace/scripts/prompt_upsampler.py "
+                f"--batch /workspace/inputs/{batch_filename} "
+                f"--output-dir /workspace/outputs "
+                f"--checkpoint-dir {checkpoint_dir}"
+            )
+            if offload_flag:
+                cmd += f" {offload_flag}"
+            builder.set_command(cmd)
 
-        logger.info("Prompt enhancement completed for batch %s", batch_filename)
+            # Execute via remote executor
+            op_logger.info("Starting prompt enhancement (batch mode)...")
+            self.remote_executor.execute_docker(builder, timeout=timeout)
+
+            op_logger.info(f"Prompt enhancement completed for batch {batch_filename}")
+
+            result = {"status": "success"}
+            if local_log_path:
+                result["log_path"] = str(local_log_path)
+            return result
+
+        except Exception as e:
+            op_logger.error(f"Prompt enhancement failed: {e}")
+            result = {"status": "failed", "error": str(e)}
+            if local_log_path:
+                result["log_path"] = str(local_log_path)
+            return result
 
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
         """Run inference using the bash script."""
@@ -398,7 +411,7 @@ class DockerExecutor:
         """
         if not container_id:
             # Auto-detect the most recent container matching our image
-            logger.info("Auto-detecting most recent container for image %s", self.docker_image)
+            logger.info(f"Auto-detecting most recent container for image {self.docker_image}")
             cmd = f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"'
             container_id = self.ssh_manager.execute_command_success(
                 cmd, stream_output=False
@@ -407,7 +420,7 @@ class DockerExecutor:
             if not container_id:
                 raise RuntimeError("No running containers found")
 
-        logger.info("Streaming logs from container %s", container_id)
+        logger.info(f"Streaming logs from container {container_id}")
         print(f"[INFO] Streaming logs from container {container_id[:12]}...")
         print("[INFO] Press Ctrl+C to stop streaming\n")
 

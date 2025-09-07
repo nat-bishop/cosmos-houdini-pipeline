@@ -304,7 +304,9 @@ class FakeDockerExecutor:
         # Fake remote executor
         self.remote_executor = FakeRemoteExecutor(ssh_manager)
 
-    def run_inference(self, prompt_file: Path, num_gpu: int = 1, cuda_devices: str = "0") -> None:
+    def run_inference(
+        self, prompt_file: Path, run_id: str, num_gpu: int = 1, cuda_devices: str = "0"
+    ) -> dict:
         """Simulate running inference."""
         prompt_name = prompt_file.stem
 
@@ -318,6 +320,9 @@ class FakeDockerExecutor:
         self.ssh_manager.execute_command(f"mkdir -p {output_dir}")
         self.remote_executor.created_directories.append(output_dir)
 
+        # Create log path
+        log_path = f"outputs/{prompt_name}/logs/run_{run_id if run_id else 'test'}.log"
+
         # Store result
         self.inference_results[prompt_name] = {
             "status": "success",
@@ -326,13 +331,17 @@ class FakeDockerExecutor:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
+        # Return result dict like real implementation
+        return {"status": "success", "log_path": log_path, "prompt_name": prompt_name}
+
     def run_upscaling(
         self,
         prompt_file: Path,
+        run_id: str,
         control_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-    ) -> None:
+    ) -> dict:
         """Simulate running upscaling."""
         prompt_name = prompt_file.stem
 
@@ -358,6 +367,19 @@ class FakeDockerExecutor:
         output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
         self.ssh_manager.execute_command(f"mkdir -p {output_dir}")
         self.remote_executor.created_directories.append(output_dir)
+
+        # Store result
+        self.upscaling_results[prompt_name] = {
+            "status": "success",
+            "output_path": f"{output_dir}/output_upscaled.mp4",
+            "control_weight": control_weight,
+            "duration": 15.2,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Return result dict like real implementation
+        log_path = f"outputs/{prompt_name}_upscaled/logs/run_{run_id}.log"
+        return {"status": "success", "log_path": log_path, "prompt_name": prompt_name}
 
     def get_container_logs(self, container_id: str) -> str:
         """Get logs for a container (stub)."""
@@ -449,8 +471,10 @@ class FakeWorkflowOrchestrator:
             # Simulate file uploads
             self.file_transfer.upload_file(run_spec_path, "/remote/inputs")
 
-            # Simulate Docker execution
-            self.docker_executor.run_inference(run_spec_path, num_gpu=num_gpus)
+            # Simulate Docker execution with fake run_id
+            self.docker_executor.run_inference(
+                run_spec_path, run_id="fake_run_001", num_gpu=num_gpus
+            )
 
             # Simulate results download
             self.file_transfer.download_results(run_spec_path)

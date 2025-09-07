@@ -3,13 +3,12 @@
 Handles remote connections with proper error handling and connection pooling.
 """
 
-import logging
 from contextlib import contextmanager
 from typing import Any
 
 import paramiko
 
-logger = logging.getLogger(__name__)
+from cosmos_workflow.utils.logging import logger
 
 
 class SSHManager:
@@ -26,13 +25,13 @@ class SSHManager:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            logger.info("Connecting to %s:{self.ssh_options['port']}", self.ssh_options["hostname"])
+            logger.info(f"Connecting to {self.ssh_options['hostname']}:{self.ssh_options['port']}")
             self.ssh_client.connect(**self.ssh_options)
 
             logger.info("SSH connection established successfully")
 
         except Exception as e:
-            logger.error("Failed to establish SSH connection: %s", e)
+            logger.error(f"Failed to establish SSH connection: {e}")
             raise ConnectionError(f"SSH connection failed: {e}") from e
 
     def disconnect(self) -> None:
@@ -94,7 +93,7 @@ class SSHManager:
         """
         self.ensure_connected()
 
-        logger.info("Executing command: %s", command)
+        logger.debug(f"Executing command: {command}")
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
@@ -108,11 +107,7 @@ class SSHManager:
                 for line in stdout:
                     line = line.strip()
                     if line:
-                        try:
-                            print(f"  {line}")
-                        except UnicodeEncodeError:
-                            # Fallback for Windows encoding issues
-                            print(f"  {line.encode('ascii', 'ignore').decode('ascii')}")
+                        logger.debug(f"STDOUT: {line}")
                         stdout_lines.append(line)
 
                 # Collect stderr
@@ -121,13 +116,7 @@ class SSHManager:
                     stderr_lines = stderr_output.split("\n")
                     for line in stderr_lines:
                         if line.strip():
-                            try:
-                                print(f"  STDERR: {line.strip()}")
-                            except UnicodeEncodeError:
-                                # Fallback for Windows encoding issues
-                                print(
-                                    f"  STDERR: {line.strip().encode('ascii', 'ignore').decode('ascii')}"
-                                )
+                            logger.warning(f"STDERR: {line.strip()}")
             else:
                 # Collect all output at once
                 stdout_output = stdout.read().decode().strip()
@@ -141,12 +130,12 @@ class SSHManager:
             # Wait for command completion
             exit_code = stdout.channel.recv_exit_status()
 
-            logger.info("Command completed with exit code: %s", exit_code)
+            logger.debug(f"Command completed with exit code: {exit_code}")
 
             return exit_code, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
         except Exception as e:
-            logger.error("Command execution failed: %s", e)
+            logger.error(f"Command execution failed: {e}")
             raise RuntimeError(f"Command execution failed: {e}") from e
 
     def execute_command_success(

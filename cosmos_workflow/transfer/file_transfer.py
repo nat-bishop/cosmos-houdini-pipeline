@@ -5,17 +5,15 @@ Windows implementation using SFTP for file transfers.
 
 from __future__ import annotations
 
-import logging
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from cosmos_workflow.utils.logging import logger
+
 if TYPE_CHECKING:
     from cosmos_workflow.connection.ssh_manager import SSHManager
-
-
-logger = logging.getLogger(__name__)
 
 
 class FileTransferService:

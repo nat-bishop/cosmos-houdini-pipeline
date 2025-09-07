@@ -6,86 +6,49 @@ from pathlib import Path
 
 import gradio as gr
 
-from cosmos_workflow.config import ConfigManager
-from cosmos_workflow.connection.ssh_manager import SSHManager
-from cosmos_workflow.database import init_database
-from cosmos_workflow.execution.docker_executor import DockerExecutor
+from cosmos_workflow.api import WorkflowOperations
 from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
-from cosmos_workflow.services import WorkflowService
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.utils.logging import logger
 
-# Initialize services
-config = ConfigManager()
-local_config = config.get_local_config()
-db_path = local_config.outputs_dir / "cosmos.db"
-db = init_database(str(db_path))
-service = WorkflowService(db, config)
+# Initialize unified operations
+ops = WorkflowOperations()
 
 # Initialize log viewer
 log_viewer = LogViewer(max_lines=2000)
 
-# SSH and Docker for streaming
-ssh_manager = None
-docker_executor = None
-streamer = None
+# Thread for streaming logs
 stream_thread = None
-
-
-def initialize_remote_connection():
-    """Initialize SSH and Docker connections."""
-    global ssh_manager, docker_executor, streamer
-    try:
-        remote_config = config.get_remote_config()
-        ssh_manager = SSHManager(
-            hostname=remote_config.hostname,
-            username=remote_config.username,
-            key_filename=remote_config.ssh_key_path,
-        )
-        docker_executor = DockerExecutor(ssh_manager, config)
-        streamer = RemoteLogStreamer(ssh_manager)
-        return True, "Connected to remote GPU instance"
-    except Exception as e:
-        logger.error("Failed to connect: %s", e)
-        return False, f"Connection failed: {e}"
+streamer = None
 
 
 def get_running_jobs():
-    """Get currently running jobs from the database and Docker."""
+    """Get currently running jobs from database."""
     try:
-        # First check database for running runs
-        running_runs = service.list_runs(status="running", limit=10)
+        # Get running runs from database
+        running_runs = ops.service.list_runs(status="running", limit=10)
+
+        if not running_runs:
+            return None, "No active jobs found"
 
         jobs = []
-
-        # Add database runs
         for run in running_runs:
-            prompt_id = run.get("prompt_id", "Unknown")
-            run_id = run.get("run_id", "Unknown")
-            prompt = service.get_prompt(prompt_id) if prompt_id != "Unknown" else None
+            prompt = ops.get_prompt(run.get("prompt_id"))
             prompt_text = prompt.get("prompt_text", "Unknown")[:50] if prompt else "Unknown"
 
             jobs.append(
                 {
-                    "run_id": run_id,
-                    "prompt_id": prompt_id,
+                    "run_id": run.get("run_id"),
+                    "prompt_name": run.get("prompt_name", "Unknown"),
                     "prompt_text": prompt_text,
                     "started_at": run.get("started_at", "Unknown"),
-                    "source": "database",
                 }
             )
 
-        # Also check for Docker containers if connected
-        # Note: This would require SSH connection which may not always be available
-        # For now, we'll just use database runs
-
-        if not jobs:
-            return None, "No running inference jobs found"
-
-        return jobs, f"Found {len(jobs)} running inference job(s)"
+        return jobs, f"Found {len(jobs)} active job(s)"
     except Exception as e:
         logger.error("Failed to get running jobs: %s", e)
-        return None, f"Error getting running jobs: {e}"
+        return None, f"Error: {e}"
 
 
 def stream_callback(content):
@@ -94,34 +57,36 @@ def stream_callback(content):
 
 
 def start_log_streaming(run_id):
-    """Start streaming logs for a run."""
-    global stream_thread
+    """Start streaming log file for a run."""
+    global stream_thread, streamer
 
     if not run_id:
         return "Please enter a Run ID", log_viewer.get_html()
 
     # Get run details
-    run = service.get_run(run_id)
+    run = ops.get_run(run_id)
     if not run:
         return f"Run {run_id} not found", log_viewer.get_html()
 
     # Clear previous logs
     log_viewer.clear()
 
-    # Check if we have a remote log path
+    # Stop any existing stream
+    if stream_thread and stream_thread.is_alive():
+        return "Stream already running", log_viewer.get_html()
+
+    # Get log paths
     prompt_name = run.get("prompt_name", run_id)
     remote_log_path = f"/workspace/outputs/{prompt_name}/run.log"
     local_log_path = Path(f"outputs/{prompt_name}/logs/run_{run_id}.log")
 
-    # Initialize connection if needed
-    if not ssh_manager:
-        success, msg = initialize_remote_connection()
-        if not success:
-            return msg, log_viewer.get_html()
-
-    # Stop any existing stream
-    if stream_thread and stream_thread.is_alive():
-        return "Stream already running", log_viewer.get_html()
+    # Initialize streamer if needed
+    if not streamer:
+        try:
+            ops.orchestrator._initialize_services()
+            streamer = RemoteLogStreamer(ops.orchestrator.ssh_manager)
+        except Exception as e:
+            return f"Connection failed: {e}", log_viewer.get_html()
 
     # Start streaming in background
     stream_thread = threading.Thread(
@@ -138,7 +103,7 @@ def start_log_streaming(run_id):
     )
     stream_thread.start()
 
-    return f"Streaming logs for run {run_id}", log_viewer.get_html()
+    return f"Streaming logs for {prompt_name}", log_viewer.get_html()
 
 
 def refresh_logs():
@@ -189,14 +154,14 @@ def create_ui():
                 gr.Markdown("### Controls")
 
                 # Running jobs section
-                gr.Markdown("#### Running Inference Jobs")
+                gr.Markdown("#### Active Jobs")
                 running_jobs_display = gr.Textbox(
-                    label="Active Inference Runs",
-                    value="Checking for running inference jobs...",
+                    label="Active Runs",
+                    value="Checking for active jobs...",
                     interactive=False,
                     lines=3,
                 )
-                check_jobs_btn = gr.Button("Check Running Jobs", size="sm")
+                check_jobs_btn = gr.Button("Check Active Jobs", size="sm")
 
                 # Run selection
                 run_id_input = gr.Textbox(

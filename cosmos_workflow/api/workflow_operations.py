@@ -605,16 +605,108 @@ class WorkflowOperations:
         logger.info("Checking remote GPU status")
         return self.orchestrator.check_remote_status()
 
-    def stream_logs(self) -> None:
-        """Stream logs from the most recent container.
+    def get_active_containers(self) -> list[dict[str, str]]:
+        """Get list of active Docker containers.
 
-        Connects to remote instance and streams container logs in real-time.
-        Raises RuntimeError if no container is running.
+        Returns:
+            List of dictionaries with container info:
+                - container_id: Container ID (short form)
+                - name: Container name
+                - image: Image name
+                - status: Container status
+        """
+        logger.info("Getting active Docker containers")
+        self.orchestrator._initialize_services()
+
+        try:
+            with self.orchestrator.ssh_manager:
+                containers = self.orchestrator.docker_executor.get_docker_containers()
+
+                result = []
+                for container in containers:
+                    # Parse container string (format varies)
+                    parts = container.split()
+                    if parts:
+                        result.append(
+                            {
+                                "container_id": parts[0][:12] if parts else "unknown",
+                                "name": parts[1] if len(parts) > 1 else "unknown",
+                                "image": self.orchestrator.docker_executor.docker_image,
+                                "status": "running",
+                            }
+                        )
+
+                return result
+        except Exception as e:
+            logger.error("Failed to get containers: %s", e)
+            return []
+
+    def stream_logs(self, container_id: str | None = None, callback=None) -> None:
+        """Stream logs from a container.
+
+        Args:
+            container_id: Optional container ID. If None, uses most recent.
+            callback: Optional callback function to process log lines.
+                     Called with each line of output.
+
+        Raises:
+            RuntimeError: If no container is running.
         """
         logger.info("Streaming container logs")
         self.orchestrator._initialize_services()
+
         with self.orchestrator.ssh_manager:
-            self.orchestrator.docker_executor.stream_container_logs()
+            if callback:
+                # Stream with callback for Gradio
+                self._stream_logs_with_callback(container_id, callback)
+            else:
+                # Stream to stdout for CLI
+                self.orchestrator.docker_executor.stream_container_logs(container_id)
+
+    def _stream_logs_with_callback(self, container_id: str | None, callback) -> None:
+        """Stream logs with a callback function.
+
+        Internal method to stream Docker logs and process with callback.
+        """
+        if not container_id:
+            # Auto-detect the most recent container
+            containers = self.get_active_containers()
+            if not containers:
+                raise RuntimeError("No running containers found")
+            container_id = containers[0]["container_id"]
+
+        logger.info("Streaming logs from container %s with callback", container_id)
+
+        # Use docker logs with follow
+        import threading
+
+        cmd = f"sudo docker logs -f {container_id}"
+
+        def stream_output():
+            try:
+                # Execute command and stream output
+                exit_code, stdout, stderr = self.orchestrator.ssh_manager.execute_command(
+                    cmd,
+                    timeout=3600,  # 1 hour timeout
+                    stream_output=False,  # We'll handle streaming ourselves
+                )
+
+                # Process output line by line
+                for line in stdout.split("\n"):
+                    if line:
+                        callback(line)
+
+                if stderr:
+                    for line in stderr.split("\n"):
+                        if line:
+                            callback(f"[ERROR] {line}")
+
+            except Exception as e:
+                callback(f"[ERROR] Stream failed: {e}")
+
+        # Run in thread to not block
+        thread = threading.Thread(target=stream_output, daemon=True)
+        thread.start()
 
     def verify_integrity(self) -> dict[str, Any]:
         """Verify database-filesystem integrity.

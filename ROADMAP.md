@@ -124,12 +124,12 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
 ### Prompt Enhancement Tracking
 - [ ] **Make prompt-enhance operations trackable**
   - Currently prompt-enhance creates an operation_id but no database run
-  - Users cannot use `cosmos stream` to review enhancement logs
+  - Users cannot monitor enhancement progress in real-time
   - Option 1: Create "enhance" run type (may cause conceptual confusion - runs produce videos, not text)
   - Option 2: Create lightweight operations table for non-video operations
   - Option 3: Extend runs table to support text outputs for enhance operations
   - Recommended: Option 2 - cleaner separation of concerns
-  - Update `cosmos stream` to check both runs and operations tables
+  - Note: Log streaming now available via `cosmos status --stream` for active containers
 
 ### Remote Environment Setup
 - [ ] **Build Docker image on remote instance**

@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All commands now return immediately actionable results
 
 - **WorkflowOperations API Enhancements**
-  - Added `check_status()`, `stream_logs()`, `verify_integrity()` operations
+  - Added `check_status()`, `stream_container_logs()`, `verify_integrity()` operations
   - Removed deprecated `create_run()` and `execute_run()` methods
   - All operations return simple dictionaries for consistent interface
   - Complete separation between data operations (Service) and execution (Orchestrator)

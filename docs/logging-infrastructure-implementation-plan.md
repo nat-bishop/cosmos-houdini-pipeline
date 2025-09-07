@@ -443,15 +443,15 @@ def get_active_containers() -> list[dict]
     # Returns Docker containers with ID, name, status
 
 # Log streaming (unified for CLI and UI)
-def stream_logs(container_id=None, callback=None)
-    # If callback: streams to callback for UI
+def stream_container_logs(container_id, callback=None)
+    # If callback: streams to callback for UI (Gradio)
     # If no callback: streams to stdout for CLI
 ```
 
 ### Current Flow:
-1. **CLI**: `cosmos status --stream` → `ops.stream_logs()` → stdout
-2. **UI**: `cosmos ui` → `ops.stream_logs(callback=...)` → LogViewer
-3. **Both use same underlying system**: RemoteLogStreamer reading files
+1. **CLI**: `cosmos status --stream` → `ops.stream_container_logs(container_id)` → stdout
+2. **UI**: `cosmos ui` → `ops.stream_container_logs(container_id, callback=...)` → LogViewer
+3. **Both use same underlying system**: Direct Docker log streaming via SSH
 
 ### Why File-Based Won:
 After extensive analysis, file-based logs are superior to Docker logs because:

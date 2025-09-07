@@ -158,7 +158,7 @@ prompt_details = ops.get_prompt("ps_001")
 # System operations
 status = ops.check_status()  # Check GPU status
 integrity = ops.verify_integrity()  # Verify data integrity
-ops.stream_logs()  # Stream container logs
+ops.stream_container_logs(container_id)  # Stream logs from specific container
 
 # Cleanup
 ops.delete_prompt(prompt["id"])
@@ -203,7 +203,7 @@ db.session.query(...)  # Never do this outside Service layer!
 
 #### System Operations
 - `check_status()` - Check remote GPU status
-- `stream_logs()` - Stream container logs
+- `stream_container_logs(container_id, callback=None)` - Stream logs from Docker container (stdout for CLI, callback for Gradio)
 - `verify_integrity()` - Verify database-filesystem integrity
 
 ## CLI Commands

@@ -10,7 +10,8 @@
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_wait_for",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

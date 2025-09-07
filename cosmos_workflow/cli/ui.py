@@ -8,12 +8,12 @@ import click
 @click.option("--share", is_flag=True, help="Create public link")
 def ui(port, share):
     """Launch web interface for workflow management."""
-    from cosmos_workflow.ui.app import create_interface
+    from cosmos_workflow.ui.app import create_ui
 
     click.echo(f"Starting Gradio UI on port {port}...")
     click.echo(f"Open browser to: http://localhost:{port}")
 
-    interface = create_interface()
+    interface = create_ui()
     interface.launch(
         server_port=port,
         share=share,

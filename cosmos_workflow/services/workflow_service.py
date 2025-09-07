@@ -372,8 +372,15 @@ class WorkflowService:
         if not run_id or run_id.isspace():
             raise ValueError("run_id cannot be empty")
 
-        # Validate allowed fields
-        allowed_fields = {"outputs", "metadata", "execution_config", "run_metadata"}
+        # Validate allowed fields (now includes log_path and error_message)
+        allowed_fields = {
+            "outputs",
+            "metadata",
+            "execution_config",
+            "run_metadata",
+            "log_path",
+            "error_message",
+        }
         invalid_fields = set(kwargs.keys()) - allowed_fields
         if invalid_fields:
             raise ValueError(f"Invalid fields: {invalid_fields}. Allowed: {allowed_fields}")
@@ -385,10 +392,21 @@ class WorkflowService:
             if not run:
                 return None
 
-            # Update fields
+            # Update fields with special handling
             for key, value in kwargs.items():
                 if key == "metadata":
                     key = "run_metadata"  # Map to correct column name
+                elif key == "error_message":
+                    # Truncate error messages if too long
+                    value = value[:1000] if value else value
+                    # Also set status to failed when error_message is provided
+                    if value:
+                        run.status = "failed"
+                        # Set completed timestamp if not already set
+                        from datetime import datetime, timezone
+
+                        if run.completed_at is None:
+                            run.completed_at = datetime.now(timezone.utc)
                 setattr(run, key, value)
 
             session.flush()  # Flush to ensure updated_at is set
@@ -405,15 +423,41 @@ class WorkflowService:
                 "updated_at": run.updated_at.isoformat(),
             }
 
-            # Add optional timestamps
+            # Add optional fields
+            if run.log_path:
+                result["log_path"] = run.log_path
+            if run.error_message:
+                result["error_message"] = run.error_message
             if run.started_at:
                 result["started_at"] = run.started_at.isoformat()
             if run.completed_at:
                 result["completed_at"] = run.completed_at.isoformat()
 
             session.commit()
-            logger.info("Updated run %s", run_id)
+
+            # Log appropriately based on what was updated
+            if "error_message" in kwargs:
+                logger.error("Run %s failed: %s", run_id, kwargs["error_message"][:100])
+            else:
+                logger.info("Updated run %s", run_id)
             return result
+
+    # Simplified: These methods now just call update_run with the appropriate fields
+    def update_run_with_log(self, run_id: str, log_path: str) -> dict[str, Any] | None:
+        """Update run with log path.
+
+        DEPRECATED: Use update_run(run_id, log_path=log_path) instead.
+        Kept for backward compatibility.
+        """
+        return self.update_run(run_id, log_path=str(log_path))
+
+    def update_run_error(self, run_id: str, error_message: str) -> dict[str, Any] | None:
+        """Update run with error message and set status to failed.
+
+        DEPRECATED: Use update_run(run_id, error_message=error_message) instead.
+        Kept for backward compatibility.
+        """
+        return self.update_run(run_id, error_message=error_message)
 
     def _generate_run_id(self, prompt_id: str, execution_config: dict[str, Any]) -> str:
         """Generate unique ID for a run.

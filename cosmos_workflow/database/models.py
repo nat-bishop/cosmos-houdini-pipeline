@@ -113,6 +113,10 @@ class Run(Base):
     outputs = Column(JSON, nullable=False)  # Result paths, metrics, logs, etc.
     run_metadata = Column("metadata", JSON, nullable=False)  # User info, priority, session, etc.
 
+    # Logging fields (Phase 2)
+    log_path = Column(String(500), nullable=True)  # Local log file path
+    error_message = Column(Text, nullable=True)  # Brief error description
+
     # Relationships
     prompt = relationship("Prompt", back_populates="runs")
 

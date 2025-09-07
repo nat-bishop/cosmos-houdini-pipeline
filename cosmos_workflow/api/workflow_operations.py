@@ -55,7 +55,7 @@ class WorkflowOperations:
 
         # Create service and orchestrator
         self.service = WorkflowService(db, config)
-        self.orchestrator = WorkflowOrchestrator()
+        self.orchestrator = WorkflowOrchestrator(service=self.service)
 
         logger.info("WorkflowOperations initialized")
 

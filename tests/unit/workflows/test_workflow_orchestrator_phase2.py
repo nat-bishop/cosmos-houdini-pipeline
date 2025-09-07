@@ -52,20 +52,25 @@ class TestWorkflowOrchestratorPhase2:
         """Create a mock docker executor."""
         with patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor") as MockDocker:
             mock_docker = MockDocker.return_value
-            mock_docker.run_inference = Mock(
-                return_value={
+
+            def mock_run_inference(prompt_file, run_id, **kwargs):
+                prompt_name = f"run_{run_id}"
+                return {
                     "status": "success",
-                    "log_path": "outputs/run_rs_test123/logs/run.log",
-                    "prompt_name": "run_rs_test123",
+                    "log_path": f"outputs/{prompt_name}/logs/run.log",
+                    "prompt_name": prompt_name,
                 }
-            )
-            mock_docker.run_upscaling = Mock(
-                return_value={
+
+            def mock_run_upscaling(prompt_file, run_id, **kwargs):
+                prompt_name = f"run_{run_id}"
+                return {
                     "status": "success",
-                    "log_path": "outputs/run_rs_test123_upscaled/logs/run.log",
-                    "prompt_name": "run_rs_test123_upscaled",
+                    "log_path": f"outputs/{prompt_name}_upscaled/logs/run.log",
+                    "prompt_name": f"{prompt_name}_upscaled",
                 }
-            )
+
+            mock_docker.run_inference = Mock(side_effect=mock_run_inference)
+            mock_docker.run_upscaling = Mock(side_effect=mock_run_upscaling)
             yield mock_docker
 
     @pytest.fixture
@@ -79,6 +84,9 @@ class TestWorkflowOrchestratorPhase2:
     def mock_workflow_service(self):
         """Create a mock workflow service."""
         mock_service = Mock()
+        # Mock the unified update_run method
+        mock_service.update_run = Mock(return_value={"id": "rs_test123", "status": "updated"})
+        # Keep the deprecated methods for backward compatibility tests
         mock_service.update_run_with_log = Mock(
             return_value={"id": "rs_test123", "log_path": "outputs/run_rs_test123/logs/run.log"}
         )
@@ -133,9 +141,9 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run
         result = orchestrator.execute_run(run_dict, prompt_dict)
 
-        # Verify update_run_with_log was called
-        mock_workflow_service.update_run_with_log.assert_called_once_with(
-            "rs_test123", "outputs/run_rs_test123/logs/run.log"
+        # Verify update_run was called with log_path
+        mock_workflow_service.update_run.assert_called_once_with(
+            "rs_test123", log_path="outputs/run_rs_test123/logs/run.log"
         )
 
         # Verify result
@@ -183,8 +191,10 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run
         result = orchestrator.execute_run(run_dict, prompt_dict)
 
-        # Verify update_run_error was called
-        mock_workflow_service.update_run_error.assert_called_once_with("rs_test789", error_msg)
+        # Verify update_run was called with error_message
+        mock_workflow_service.update_run.assert_called_once_with(
+            "rs_test789", error_message=error_msg
+        )
 
         # Verify result
         assert result["status"] == "failed"
@@ -228,13 +238,19 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run with upscaling
         result = orchestrator.execute_run(run_dict, prompt_dict, upscale=True, upscale_weight=0.7)
 
-        # Verify update_run_with_log was called for both operations
-        assert mock_workflow_service.update_run_with_log.call_count == 2
+        # Verify update_run was called for both operations
+        assert mock_workflow_service.update_run.call_count == 2
 
         # Check the calls
-        calls = mock_workflow_service.update_run_with_log.call_args_list
-        assert calls[0][0] == ("rs_upscale123", "outputs/run_rs_upscale123/logs/run.log")
-        assert calls[1][0] == ("rs_upscale123", "outputs/run_rs_upscale123_upscaled/logs/run.log")
+        calls = mock_workflow_service.update_run.call_args_list
+        assert calls[0] == (
+            ("rs_upscale123",),
+            {"log_path": "outputs/run_rs_upscale123/logs/run.log"},
+        )
+        assert calls[1] == (
+            ("rs_upscale123",),
+            {"log_path": "outputs/run_rs_upscale123_upscaled/logs/run.log"},
+        )
 
         # Verify result
         assert result["status"] == "success"
@@ -256,7 +272,8 @@ class TestWorkflowOrchestratorPhase2:
         orchestrator.docker_executor = mock_docker_executor
         orchestrator.service = mock_workflow_service
 
-        # Make run_inference return result without log_path
+        # Override the mock to return result without log_path
+        mock_docker_executor.run_inference.side_effect = None
         mock_docker_executor.run_inference.return_value = {
             "status": "success",
             "prompt_name": "run_rs_nopath",
@@ -284,8 +301,8 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run
         result = orchestrator.execute_run(run_dict, prompt_dict)
 
-        # Verify update_run_with_log was NOT called
-        mock_workflow_service.update_run_with_log.assert_not_called()
+        # Verify update_run was NOT called
+        mock_workflow_service.update_run.assert_not_called()
 
         # Verify result still succeeds
         assert result["status"] == "success"
@@ -332,9 +349,11 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run
         result = orchestrator.execute_run(run_dict, prompt_dict)
 
-        # Verify update_run_error was called with the full error
+        # Verify update_run was called with the full error
         # (truncation happens in the service layer)
-        mock_workflow_service.update_run_error.assert_called_once_with("rs_long_err", long_error)
+        mock_workflow_service.update_run.assert_called_once_with(
+            "rs_long_err", error_message=long_error
+        )
 
         # Verify result
         assert result["status"] == "failed"
@@ -380,13 +399,14 @@ class TestWorkflowOrchestratorPhase2:
         # Execute run
         result = orchestrator.execute_run(run_dict, prompt_dict)
 
-        # Verify both methods were called
-        mock_workflow_service.update_run_with_log.assert_called_once_with(
-            "rs_late_fail", "outputs/run_rs_late_fail/logs/run.log"
+        # Verify update_run was called twice (once for log, once for error)
+        assert mock_workflow_service.update_run.call_count == 2
+        calls = mock_workflow_service.update_run.call_args_list
+        assert calls[0] == (
+            ("rs_late_fail",),
+            {"log_path": "outputs/run_rs_late_fail/logs/run.log"},
         )
-        mock_workflow_service.update_run_error.assert_called_once_with(
-            "rs_late_fail", "Download failed"
-        )
+        assert calls[1] == (("rs_late_fail",), {"error_message": "Download failed"})
 
         # Verify result
         assert result["status"] == "failed"

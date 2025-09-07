@@ -20,11 +20,12 @@ from cosmos_workflow.utils.logging import logger
 class WorkflowOrchestrator:
     """Orchestrates complete Cosmos-Transfer1 workflows."""
 
-    def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
+    def __init__(self, config_file: str = "cosmos_workflow/config/config.toml", service=None):
         self.config_manager = ConfigManager(config_file)
         self.ssh_manager: SSHManager | None = None
         self.file_transfer: FileTransferService | None = None
         self.docker_executor: DockerExecutor | None = None
+        self.service = service  # Optional WorkflowService for database updates
 
     def _initialize_services(self):
         """Initialize all workflow services."""
@@ -122,9 +123,8 @@ class WorkflowOrchestrator:
                 )
 
                 # Store log path if available
-                if result.get("log_path"):
-                    # This will be implemented in Phase 2
-                    # self.service.update_run_with_log(run_id, result["log_path"])
+                if result.get("log_path") and self.service:
+                    self.service.update_run(run_id, log_path=result["log_path"])
                     logger.debug(f"Log path for run {run_id}: {result['log_path']}")
 
                 # Run upscaling if requested
@@ -138,6 +138,8 @@ class WorkflowOrchestrator:
                         cuda_devices="0",
                     )
                     if upscale_result.get("log_path"):
+                        if self.service:
+                            self.service.update_run(run_id, log_path=upscale_result["log_path"])
                         logger.debug(
                             f"Upscaling log path for run {run_id}: {upscale_result['log_path']}"
                         )
@@ -170,6 +172,8 @@ class WorkflowOrchestrator:
 
         except Exception as e:
             logger.error(f"Execution failed for run {run_dict['id']}: {e}")
+            if self.service:
+                self.service.update_run(run_dict["id"], error_message=str(e))
             return {
                 "status": "failed",
                 "error": str(e),
@@ -412,6 +416,8 @@ class WorkflowOrchestrator:
         ]
 
         # Create temporary batch file
+        from datetime import datetime, timezone
+
         batch_filename = f"upsample_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
 
         # Use temporary directory for batch file

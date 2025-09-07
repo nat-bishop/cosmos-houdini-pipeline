@@ -3,6 +3,18 @@
 ## Executive Summary
 This document outlines the implementation plan for improving logging and monitoring in the Cosmos Houdini Experiments project. The implementation focuses on centralized logging, database integration, remote log streaming, and comprehensive monitoring capabilities.
 
+## Current Status (2025-01-07)
+- ✅ **Phases 1-3**: Complete (Centralized logging, Database storage, Remote streaming)
+- ✅ **Phase 4**: Log Viewer implemented but NOT integrated
+- ⏳ **Phase 5**: GPU Monitoring - Ready to implement
+- ⏳ **Phase 6**: Testing & Documentation
+
+### Next Steps for New Session:
+1. **Fix LogViewer timezone issue** - Add `timezone.utc` or suppress warning
+2. **Integrate LogViewer into Gradio UI** - Add to app.py inference tab
+3. **Implement GPU monitoring** - Show GPU util% and current job in `cosmos status`
+4. **Test and document** - Verify everything works
+
 **Key Architecture Facts:**
 - Scripts run on remote GPU instances inside Docker containers
 - Logs are captured via `tee` in bash scripts to `outputs/${PROMPT_NAME}/run.log` on remote
@@ -224,122 +236,174 @@ stream_thread.start()
 
 ---
 
-## Phase 4: Enhanced GPU Monitoring (1 day)
+## ✅ Phase 4: Simple Log Visualization (COMPLETED - SIMPLIFIED)
 
 ### Objective
-Add GPU utilization monitoring to status command.
+Simple, practical log viewer for monitoring inference runs.
+
+### What Was Implemented:
+- **Simplified `log_viewer.py`** (119 lines, down from 245) - Color-coded logs with search/filter
+- **Removed `log_viewer_web.py`** (was 368 lines of overengineering)
+- **Simplified tests** (185 lines, down from 900+)
+
+### What Was Kept (Useful):
+- Color-coded log levels (ERROR=red, WARNING=yellow, INFO=blue)
+- Search with highlighting
+- Level filtering (ERROR, WARNING, INFO, ALL)
+- JSON export for debugging
+- Ring buffer (auto-cleanup after 2000 lines)
+- HTML escaping for security
+- Error detection helpers (`has_errors()`, `get_last_error()`)
+
+### What Was Removed (Not Needed):
+- Multiple concurrent streams (you run one job at a time)
+- Virtual scrolling (2000 lines is fine for browsers)
+- CSV export (JSON is enough)
+- Keyboard navigation (mouse works)
+- Timezone handling (all same timezone)
+- Complex caching (2000 lines searches instantly)
+
+### Integration Status:
+**NOT YET INTEGRATED** - The LogViewer class is ready but needs to be integrated:
+
+#### Option 1: Gradio UI Integration (Recommended)
+Add to `cosmos_workflow/ui/app.py` in the inference tab:
+```python
+from cosmos_workflow.ui.log_viewer import LogViewer
+
+# In the interface setup:
+log_viewer = LogViewer()
+
+# Add controls
+with gr.Row():
+    level_filter = gr.Dropdown(["ALL", "ERROR", "WARNING", "INFO"], value="ALL")
+    search = gr.Textbox(placeholder="Search logs...")
+    clear_btn = gr.Button("Clear")
+
+log_display = gr.HTML()
+
+# During inference, feed logs to viewer:
+def stream_callback(content):
+    log_viewer.add_from_stream(content)
+    return log_viewer.get_html()
+```
+
+#### Option 2: CLI Integration (Less useful)
+Could add `cosmos logs <run_id>` command to view stored logs with filtering.
+
+#### Current Issue to Fix:
+- Ruff complains about `datetime.now()` without timezone
+- Simple fix: Add timezone or suppress warning (it's just HH:MM:SS for display)
+
+---
+
+## Phase 5: GPU Utilization Monitoring (NEW - 1 day)
+
+### Objective
+Show actual GPU utilization in `cosmos status` command.
 
 ### Steps
 
-#### 4.1 Create GPU Monitor
-**Files to create:**
-- `cosmos_workflow/monitoring/gpu_monitor.py`
+#### 5.1 Enhanced Status Command
+**Files to update:**
+- `cosmos_workflow/cli/status.py`
+- `cosmos_workflow/api/workflow_operations.py`
 
 **Implementation:**
 ```python
-class GPUMonitor:
-    """Monitor GPU status on remote instance."""
+def check_gpu_status(ssh_manager) -> dict:
+    """Get GPU utilization and current job info."""
 
-    def get_gpu_status(self) -> Dict[str, Any]:
-        """Get GPU status with caching."""
-        # Query nvidia-smi for GPU metrics
-        # Return utilization, memory, temperature, etc.
+    # 1. Check GPU utilization
+    cmd = "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits"
+    _, stdout, _ = ssh_manager.execute_command(cmd)
+
+    # Parse: "45, 8192, 24576" -> 45% util, 8GB/24GB memory
+
+    # 2. Check if cosmos container is running
+    cmd = "docker ps --filter 'ancestor=cosmos' --format '{{.Names}}'"
+    _, container_name, _ = ssh_manager.execute_command(cmd)
+
+    # 3. If container running, get prompt info
+    current_job = None
+    if container_name:
+        # Extract prompt_id from container name or labels
+        cmd = f"docker inspect {container_name} --format '{{{{.Config.Labels}}}}'"
+        # Parse labels to get prompt_id and run_id
+
+    return {
+        "gpu_utilization": 45,  # percentage
+        "memory_used": 8192,     # MB
+        "memory_total": 24576,   # MB
+        "current_job": {
+            "prompt_id": "ps_xxxxx",
+            "run_id": "run_yyyyy",
+            "started_at": "2025-01-07 12:00:00"
+        } if current_job else None
+    }
 ```
 
-#### 4.2 Integrate into Status Command
-Update `WorkflowOperations.check_status()` to include GPU info.
-
-**Verification Checklist:**
-- [ ] GPU stats display correctly
-- [ ] Cache prevents excessive SSH calls
-- [ ] Running job detection works
-
----
-
-## Phase 5: Container Activity Tracking (1 day)
-
-### Objective
-Track container activities with minimal overhead.
-
-### Steps
-
-#### 5.1 Add Container Labels
-Update `DockerCommandBuilder` to add tracking labels:
-```python
-def add_run_labels(self, run_id: str, prompt_id: str):
-    """Add labels for tracking."""
-    self.add_option(f"--label run_id={run_id}")
-    self.add_option(f"--label prompt_id={prompt_id}")
-    self.add_option(f"--label start_time={datetime.now().isoformat()}")
+#### 5.2 Display Format
 ```
+$ cosmos status
 
-#### 5.2 Query Container Info
-```python
-def get_container_info(self, run_id: str) -> dict:
-    """Get container info for a run."""
-    cmd = f"sudo docker ps -a --filter 'label=run_id={run_id}' --format json"
-    # Parse and return container info
+GPU Status:
+  Utilization: 45%
+  Memory: 8.0 GB / 24.0 GB (33%)
+
+Current Job:
+  Prompt: ps_12345 - "flying dragon"
+  Run ID: run_67890
+  Duration: 5 min 23 sec
+
+Status: ✅ GPU Available (running job)
 ```
 
 **Verification Checklist:**
-- [ ] Container labels set correctly
-- [ ] Can query by run_id
-- [ ] No performance impact
+- [ ] GPU utilization shows correctly
+- [ ] Memory usage displays in human-readable format
+- [ ] Current job detected when running
+- [ ] Works when no job is running
+- [ ] Fast response (< 2 seconds)
 
 ---
 
-## Phase 6: Error Recovery & Diagnostics (2 days)
+## Phase 6: Testing & Documentation (1 day)
 
 ### Objective
-Improve error handling and diagnostics collection.
+Test the simplified system and update docs.
 
-### Steps
+### Test Coverage:
+- [x] Simple log viewer works
+- [ ] GPU status displays correctly
+- [ ] Current job detection works
+- [x] Database fields populated
+- [x] Log streaming works
 
-#### 6.1 Enhanced Error Handling
-Wrap all GPU operations with proper error handling and diagnostic collection.
-
-#### 6.2 Diagnostic Collection
-On failure, automatically collect:
-- GPU state
-- Container logs
-- System resources
-- Recent commands
-
-Store diagnostics in `outputs/{prompt_id}/diagnostics/`
-
-**Verification Checklist:**
-- [ ] Errors stored in database
-- [ ] Diagnostics collected on failure
-- [ ] No crash on diagnostic failure
+### Documentation Updates:
+- Update README with new status command output
+- Document simplified log viewer
+- Remove references to removed features
 
 ---
 
-## Phase 7: Testing & Optimization (2 days)
+## REMOVED PHASES (Not Needed)
 
-### Objective
-Comprehensive testing of the logging infrastructure.
+### ~~Phase X: Container Activity Tracking~~
+**Why removed:** GPU utilization and docker ps tells you everything needed
 
-### Test Coverage Required:
-- [ ] Unified logging method works
-- [ ] Log streaming doesn't miss content
-- [ ] Database fields populated correctly
-- [ ] GPU monitoring accuracy
-- [ ] Error handling robust
-- [ ] No memory leaks in streaming
-- [ ] Performance acceptable
+### ~~Phase X: Error Recovery & Diagnostics~~
+**Why removed:** Overengineered - logs already show errors
 
-### Performance Targets:
-- Log streaming latency < 3 seconds
-- GPU status query < 1 second (with cache)
-- No zombie SSH connections
-- Log files < 100MB per run
+### ~~Phase X: Progress Indicators~~
+**Why removed:** Fragile string matching, not reliable
+
+### ~~Phase X: Smart Error Detection~~
+**Why removed:** Users can read error messages themselves
 
 ---
 
-## Phase 8: Documentation Updates (1 day)
-
-### Objective
-Update project documentation with new logging standards.
+## Documentation Standards
 
 ### Documentation to Update:
 
@@ -375,46 +439,58 @@ Update project documentation with new logging standards.
 
 ---
 
-## Timeline Summary
+## Timeline Summary (REVISED)
 
-| Phase | Duration | Status | Dependencies | Risk Level |
-|-------|----------|--------|--------------|------------|
-| 1. Centralized Logging | 2-3 days | ✅ DONE | None | Low |
-| 2. Database Schema | 1 day | ✅ DONE | Phase 1 | Low |
-| 3. Remote Log Streaming | 2 days | ✅ DONE | Phase 1, 2 | Medium |
-| 4. GPU Monitoring | 1 day | Pending | Phase 1 | Low |
-| 5. Container Tracking | 1 day | Pending | Phase 1 | Low |
-| 6. Error Recovery | 2 days | Pending | Phase 1, 2 | Medium |
-| 7. Testing | 2 days | Pending | All phases | Low |
-| 8. Documentation | 1 day | Pending | All phases | Low |
+| Phase | Duration | Status | Dependencies | Notes |
+|-------|----------|--------|--------------|-------|
+| 1. Centralized Logging | 2-3 days | ✅ DONE | None | Complete |
+| 2. Database Schema | 1 day | ✅ DONE | Phase 1 | Complete |
+| 3. Remote Log Streaming | 2 days | ✅ DONE | Phase 1, 2 | Complete |
+| 4. Simple Log Viewer | 1 day | ✅ DONE | Phase 3 | Simplified from original |
+| 5. GPU Monitoring | 1 day | Pending | Phase 1 | Show GPU util & current job |
+| 6. Testing & Docs | 1 day | Pending | All phases | Final validation |
 
-**Total Remaining: 7 days**
+**Total Remaining: 2 days** (down from 7 days)
 
-## Success Metrics
+## Success Metrics (REVISED)
 
+**Completed:**
 - [x] All runs create logs automatically
 - [x] Logs accessible via database log_path
 - [x] Failed runs have error messages
-- [ ] GPU utilization visible in status
 - [x] No duplicate logging methods
 - [x] Efficient log streaming (< 3MB/min bandwidth)
-- [ ] Clean diagnostic collection on errors
 - [x] All tests passing
 - [x] Real-time log streaming during execution
 - [x] Seek-based position tracking implemented
-- [x] Background streaming without execution blocking
+- [x] Simple log viewer with search/filter
+- [x] Color-coded log levels for quick scanning
 
-## Next Steps for Phase 4
+**Remaining:**
+- [ ] GPU utilization visible in status command
+- [ ] Current job detection in status command
 
-1. Create GPUMonitor class for remote GPU status
-2. Integrate GPU monitoring into status command
-3. Add caching to prevent excessive SSH calls
-4. Display GPU utilization, memory, and temperature
-5. Test GPU status accuracy
+**Removed (Not Needed):**
+- ~~Clean diagnostic collection on errors~~ (Overengineered)
+- ~~Progress indicators~~ (Too fragile)
+- ~~Container activity tracking~~ (GPU status is enough)
+- ~~Smart error detection~~ (Users can read errors)
+
+## Next Steps
+
+1. **Phase 5**: Implement GPU utilization monitoring
+   - Query nvidia-smi for GPU/memory usage
+   - Detect running cosmos containers
+   - Show current job info if running
+
+2. **Phase 6**: Final testing and documentation
+   - Verify GPU monitoring works
+   - Update README with new features
+   - Clean up any deprecated code
 
 ---
 
-*Document Version: 4.0 (Phase 3 Complete)*
-*Last Updated: 2025-09-07*
-*Phase 1-3 Completed By: Assistant*
+*Document Version: 5.0 (Simplified Plan)*
+*Last Updated: 2025-01-07*
+*Phases 1-4 Completed*
 *Author: NAT*

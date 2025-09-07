@@ -25,6 +25,60 @@ pre-commit run --all-files
 
 **Important:** Pre-commit hooks will fail if formatting or linting issues are found. Fix them manually before committing (see Code Quality section).
 
+## Architecture Overview
+
+### Facade Pattern Design
+
+The Cosmos Workflow System uses a **facade pattern** with `WorkflowOperations` as the primary interface. Understanding this architecture is critical for development.
+
+```
+┌────────────────────────────────────────────────┐
+│          Your Code (CLI/UI/Scripts)           │
+│                     ↓                          │
+│         WorkflowOperations (FACADE)            │
+│      cosmos_workflow/api/workflow_operations.py│
+│                     ↓                          │
+│        ┌──────────────┬──────────────┐        │
+│        │              │              │        │
+│  WorkflowService   WorkflowOrchestrator*      │
+│    (Database)        (GPU Execution)          │
+└────────────────────────────────────────────────┘
+
+* Despite its name, WorkflowOrchestrator is NOT the main orchestrator
+  It's the GPU execution component. Will be renamed to GPUExecutor in v2.0.
+```
+
+### Development Rules
+
+**✅ ALWAYS Use WorkflowOperations:**
+```python
+from cosmos_workflow.api import WorkflowOperations
+ops = WorkflowOperations()
+# Use ops for everything
+```
+
+**❌ NEVER Import Internal Components Directly:**
+```python
+# WRONG - These are internal components
+from cosmos_workflow.services import WorkflowService  # ❌
+from cosmos_workflow.database import DatabaseConnection  # ❌
+from cosmos_workflow.workflows import WorkflowOrchestrator  # ❌
+```
+
+### When to Use Low-Level Components
+
+Only use low-level components for:
+- Infrastructure tasks (SSH, Docker, file transfers)
+- Writing tests for the components themselves
+- Extending the facade with new functionality
+
+Example infrastructure task:
+```python
+# OK for infrastructure/testing only
+from cosmos_workflow.connection import SSHManager
+from cosmos_workflow.config import ConfigManager
+```
+
 ## Test-Driven Development (TDD)
 
 Follow these 6 gates for every feature:

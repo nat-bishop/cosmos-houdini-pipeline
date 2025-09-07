@@ -77,26 +77,50 @@ All core operations must go through wrappers.
 **Never call raw libraries directly** (e.g., `paramiko`, `docker`, ad-hoc subprocess, or JSON validation).
 If functionality is missing, extend the wrapper instead of bypassing it.
 
-### **Canonical Wrappers**
+### **PRIMARY INTERFACE (Use This!)**
+```python
+from cosmos_workflow.api import WorkflowOperations  # MAIN FACADE - USE THIS!
+
+# This is the ONLY interface you should use for workflow operations:
+ops = WorkflowOperations()
+ops.create_prompt(...)      # Create prompts
+ops.quick_inference(...)    # Run inference
+ops.list_prompts(...)       # Query data
+# etc.
+```
+
+### **Low-Level Wrappers (For Internal Infrastructure Only)**
+These are used internally by WorkflowOperations. Only use directly for infrastructure tasks:
+
 ```python
 from cosmos_workflow.connection import SSHManager, RemoteCommandExecutor
 from cosmos_workflow.execution import DockerExecutor, DockerCommandBuilder, BashScriptBuilder
 from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.transfer import FileTransferService
-from cosmos_workflow.services import WorkflowService
-from cosmos_workflow.database import DatabaseConnection, init_database
 from cosmos_workflow.utils import nvidia_format
+```
+
+### **DO NOT USE DIRECTLY (Internal Components)**
+```python
+# NEVER import these directly - they are internal:
+# ❌ from cosmos_workflow.services import WorkflowService  # Internal data layer
+# ❌ from cosmos_workflow.database import DatabaseConnection  # Internal database
+# ❌ from cosmos_workflow.workflows import WorkflowOrchestrator  # Internal GPU executor
 ```
 
 ### **Responsibilities & Enforcement**
 
-* **SSHManager** — create/manage SSH sessions.
-  Always use for SSH connections. Never call `paramiko.SSHClient()` directly.
+* **WorkflowOperations** — **PRIMARY INTERFACE for all workflow operations**
+  Always use for prompts, runs, inference, queries. This is the main facade.
+  Never bypass this to use WorkflowService or WorkflowOrchestrator directly.
 
-* **RemoteCommandExecutor** — run remote commands via SSH.
-  Always use for remote command execution. Never call inline `ssh` or `subprocess`.
+* **SSHManager** — create/manage SSH sessions (infrastructure only).
+  Use only for low-level SSH tasks. Never call `paramiko.SSHClient()` directly.
 
-* **DockerExecutor** — execute containers, stream logs.
+* **RemoteCommandExecutor** — run remote commands via SSH (infrastructure only).
+  Use only for low-level remote execution. Never call inline `ssh` or `subprocess`.
+
+* **DockerExecutor** — execute containers, stream logs (infrastructure only).
   Always pair with **DockerCommandBuilder**. Never call `docker.from_env()` or raw subprocess Docker commands.
 
 * **DockerCommandBuilder** — construct valid `docker run/exec` commands.
@@ -108,10 +132,7 @@ from cosmos_workflow.utils import nvidia_format
 * **ConfigManager** — load/validate config files and environment.
   Always use for configuration. Never parse environment variables manually.
 
-* **WorkflowService** — manage all prompts and runs in database.
-  Always use for data operations. Never create JSON files for data storage.
-
-* **FileTransferService** — upload/download files with integrity checks.
+* **FileTransferService** — upload/download files with integrity checks (infrastructure only).
   Always use for file transfers. Never use ad-hoc SFTP or `scp`.
 
 ---

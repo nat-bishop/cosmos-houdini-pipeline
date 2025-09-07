@@ -1,6 +1,49 @@
 # ROADMAP - Cosmos Workflow Orchestrator
 
-## 🚀 Priority 0: Architecture Refactoring (NEW)
+## 🎯 Priority 0: Architecture Clarity & Future Refactoring
+
+### Architecture Documentation Improvements ✅ COMPLETED 2025-01-07
+- [x] Clarified WorkflowOperations as the main facade layer
+- [x] Updated README.md to show correct architecture hierarchy
+- [x] Documented that WorkflowOrchestrator is GPU execution component (not facade)
+- [x] Removed old UI file that violated abstraction (app_old.py)
+
+### Future Architecture Renaming Strategy (Version 2.0)
+**Target: Major version release to avoid breaking changes**
+
+Proposed renaming for clearer architecture understanding:
+```
+Current Name              →  Proposed Name           →  Role
+─────────────────────────────────────────────────────────────────
+WorkflowOperations        →  WorkflowOrchestrator    →  Main Facade (primary interface)
+WorkflowOrchestrator      →  GPUExecutor             →  GPU execution component
+WorkflowService           →  DataService             →  Database operations component
+```
+
+**Benefits of renaming:**
+- `WorkflowOrchestrator` as facade name is more intuitive
+- `GPUExecutor` clearly indicates its GPU-specific role
+- `DataService` clearly indicates database focus
+- Matches common architectural patterns
+
+**Migration strategy:**
+1. Version 1.x: Keep current names, use clear documentation
+2. Version 2.0 planning:
+   - Create deprecation warnings in 1.9.x
+   - Provide migration script for existing code
+   - Update all imports with compatibility layer
+   - Full cutover in 2.0 with old names removed
+
+**Implementation checklist for v2.0:**
+- [ ] Create compatibility import layer
+- [ ] Add deprecation warnings to old class names
+- [ ] Update all internal references (148+ occurrences)
+- [ ] Update all documentation (17+ files)
+- [ ] Create migration guide for users
+- [ ] Update test suite
+- [ ] Coordinate with major feature release
+
+## 🚀 Priority 1: Architecture Refactoring (Service-Oriented)
 
 ### Service-Oriented Architecture
 - [ ] **Phase 0: Foundation (Week 1)**

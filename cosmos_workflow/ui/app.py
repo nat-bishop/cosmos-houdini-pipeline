@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Simple Gradio UI for Cosmos Workflow - Log Viewer."""
 
-import threading
-from pathlib import Path
-
 import gradio as gr
 
 from cosmos_workflow.api import WorkflowOperations
-from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.utils.logging import logger
 
@@ -17,16 +13,12 @@ ops = WorkflowOperations()
 # Initialize log viewer
 log_viewer = LogViewer(max_lines=2000)
 
-# Thread for streaming logs
-stream_thread = None
-streamer = None
-
 
 def get_running_jobs():
     """Get currently running jobs from database."""
     try:
         # Get running runs from database
-        running_runs = ops.service.list_runs(status="running", limit=10)
+        running_runs = ops.list_runs(status="running", limit=10)
 
         if not running_runs:
             return None, "No active jobs found"
@@ -38,7 +30,7 @@ def get_running_jobs():
 
             jobs.append(
                 {
-                    "run_id": run.get("run_id"),
+                    "run_id": run.get("id"),  # Fixed: database field is 'id' not 'run_id'
                     "prompt_name": run.get("prompt_name", "Unknown"),
                     "prompt_text": prompt_text,
                     "started_at": run.get("started_at", "Unknown"),
@@ -57,9 +49,7 @@ def stream_callback(content):
 
 
 def start_log_streaming(run_id):
-    """Start streaming log file for a run."""
-    global stream_thread, streamer
-
+    """Start streaming logs for a run using WorkflowOperations facade."""
     if not run_id:
         return "Please enter a Run ID", log_viewer.get_html()
 
@@ -71,39 +61,13 @@ def start_log_streaming(run_id):
     # Clear previous logs
     log_viewer.clear()
 
-    # Stop any existing stream
-    if stream_thread and stream_thread.is_alive():
-        return "Stream already running", log_viewer.get_html()
-
-    # Get log paths
-    prompt_name = run.get("prompt_name", run_id)
-    remote_log_path = f"/workspace/outputs/{prompt_name}/run.log"
-    local_log_path = Path(f"outputs/{prompt_name}/logs/run_{run_id}.log")
-
-    # Initialize streamer if needed
-    if not streamer:
-        try:
-            ops.orchestrator._initialize_services()
-            streamer = RemoteLogStreamer(ops.orchestrator.ssh_manager)
-        except Exception as e:
-            return f"Connection failed: {e}", log_viewer.get_html()
-
-    # Start streaming in background
-    stream_thread = threading.Thread(
-        target=streamer.stream_remote_log,
-        args=(remote_log_path, local_log_path),
-        kwargs={
-            "callback": stream_callback,
-            "poll_interval": 2.0,
-            "timeout": 3600,
-            "wait_for_file": True,
-            "completion_marker": "[COSMOS_COMPLETE]",
-        },
-        daemon=True,
-    )
-    stream_thread.start()
-
-    return f"Streaming logs for {prompt_name}", log_viewer.get_html()
+    try:
+        # Use WorkflowOperations facade for log streaming
+        ops.stream_logs(callback=stream_callback)
+        prompt_name = run.get("prompt_name", run_id)
+        return f"Streaming logs for {prompt_name}", log_viewer.get_html()
+    except Exception as e:
+        return f"Failed to start streaming: {e}", log_viewer.get_html()
 
 
 def refresh_logs():
@@ -144,6 +108,37 @@ def check_running_jobs():
         return message, ""
 
 
+def check_and_auto_stream():
+    """Check for running jobs and auto-start streaming if job exists."""
+    jobs, message = get_running_jobs()
+
+    if jobs:
+        # Auto-start streaming for the first (and typically only) job
+        first_job = jobs[0]
+        run_id = first_job["run_id"]
+        prompt_name = first_job["prompt_name"]
+
+        # Format job display
+        display_text = f"{message}\n\n"
+        for job in jobs:
+            display_text += f"Run ID: {job['run_id']}\n"
+            display_text += f"Prompt: {job['prompt_text']}...\n"
+            display_text += f"Started: {job['started_at']}\n"
+            display_text += "-" * 40 + "\n"
+
+        # Auto-start streaming
+        streaming_status, log_html = start_log_streaming(run_id)
+
+        # Show which job is being streamed
+        job_status = f"Auto-streaming: {prompt_name} ({run_id})"
+
+        return display_text.strip(), job_status, streaming_status, log_html
+    else:
+        # No jobs - show waiting message
+        job_status = "No active jobs. Waiting..."
+        return message, job_status, "Waiting for active jobs", log_viewer.get_html()
+
+
 def create_ui():
     """Create the Gradio interface."""
     with gr.Blocks(title="Cosmos Log Viewer") as app:
@@ -163,15 +158,14 @@ def create_ui():
                 )
                 check_jobs_btn = gr.Button("Check Active Jobs", size="sm")
 
-                # Run selection
-                run_id_input = gr.Textbox(
-                    label="Run ID",
-                    placeholder="Enter run ID (e.g., run_xxxxx)",
+                # Job status display (replaces manual run ID input)
+                job_status = gr.Textbox(
+                    label="Current Job",
+                    value="Checking for active jobs...",
+                    interactive=False,
                 )
 
-                with gr.Row():
-                    start_btn = gr.Button("Start Streaming", variant="primary")
-                    refresh_btn = gr.Button("Refresh")
+                refresh_btn = gr.Button("Refresh", size="sm")
 
                 # Filters
                 gr.Markdown("### Filters")
@@ -216,13 +210,7 @@ def create_ui():
         check_jobs_btn.click(
             fn=check_running_jobs,
             inputs=[],
-            outputs=[running_jobs_display, run_id_input],
-        )
-
-        start_btn.click(
-            fn=start_log_streaming,
-            inputs=[run_id_input],
-            outputs=[status_display, log_display],
+            outputs=[running_jobs_display, job_status],
         )
 
         refresh_btn.click(
@@ -252,11 +240,11 @@ def create_ui():
         # Auto-refresh could be added with a timer if needed
         # For now, users can click the Refresh button
 
-        # Check for running jobs on load
+        # Check for running jobs on load and auto-stream if available
         app.load(
-            fn=check_running_jobs,
+            fn=check_and_auto_stream,
             inputs=[],
-            outputs=[running_jobs_display, run_id_input],
+            outputs=[running_jobs_display, job_status, status_display, log_display],
         )
 
     return app

@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
-"""Workflow orchestrator for Cosmos-Transfer1.
-Handles GPU execution for inference and upscaling workflows.
+"""GPU execution orchestrator for Cosmos-Transfer1.
+
+THIS IS NOT THE MAIN FACADE - This is an internal component that handles
+GPU-specific execution tasks (inference, upscaling, enhancement).
+
+For the main interface, use WorkflowOperations from cosmos_workflow.api
+
+This component:
+- Manages SSH connections to GPU instances
+- Executes Docker containers on remote GPUs
+- Handles file transfers to/from remote systems
+- NO direct database access (takes dictionaries as input)
+
+Used internally by WorkflowOperations facade.
 """
 
 import json
@@ -18,7 +30,21 @@ from cosmos_workflow.utils.logging import logger
 
 
 class WorkflowOrchestrator:
-    """Orchestrates complete Cosmos-Transfer1 workflows."""
+    """GPU execution component for Cosmos-Transfer1 workflows.
+
+    NOT THE MAIN FACADE - This is an internal execution component.
+    Use WorkflowOperations from cosmos_workflow.api as the main interface.
+
+    This class handles GPU-specific operations only:
+    - SSH connections and remote command execution
+    - Docker container management on GPU instances
+    - File transfers (uploads/downloads)
+    - NVIDIA format conversions for GPU scripts
+
+    Does NOT handle:
+    - Database operations (use WorkflowService)
+    - High-level workflow orchestration (use WorkflowOperations)
+    """
 
     def __init__(self, config_file: str = "cosmos_workflow/config/config.toml", service=None):
         self.config_manager = ConfigManager(config_file)

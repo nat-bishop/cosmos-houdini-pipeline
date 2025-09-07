@@ -206,7 +206,7 @@ class FileTransferService:
         """Upload a single file via SFTP to a specific remote absolute path."""
         remote_abs_file = remote_abs_file.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Uploading file: %s -> {remote_abs_file}", local_file)
+            logger.info("Uploading file: %s -> %s", local_file, remote_abs_file)
             sftp.put(str(local_file), remote_abs_file)
             logger.debug("Successfully uploaded %s", local_file.name)
 
@@ -216,7 +216,7 @@ class FileTransferService:
         """
         remote_abs_dir = remote_abs_dir.replace("\\", "/")
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Uploading directory: %s -> {remote_abs_dir}", local_dir)
+            logger.info("Uploading directory: %s -> %s", local_dir, remote_abs_dir)
 
             for item in local_dir.iterdir():
                 if item.is_file():

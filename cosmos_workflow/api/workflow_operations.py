@@ -1,8 +1,20 @@
-"""Unified workflow operations interface.
+"""Main facade interface for Cosmos Workflow System.
 
-This module provides a single, consistent interface for all workflow operations,
-combining service and orchestrator functionality into high-level operations that
-match user intentions.
+THIS IS THE PRIMARY INTERFACE - All CLI commands, UI interactions, and external
+code should use this class as the single entry point to the system.
+
+This facade combines:
+- WorkflowService (database operations)
+- WorkflowOrchestrator (GPU execution)
+
+Into a unified, high-level API that matches user intentions.
+
+Example:
+    from cosmos_workflow.api import WorkflowOperations
+
+    ops = WorkflowOperations()  # Main facade
+    prompt = ops.create_prompt("A futuristic city", "inputs/videos/")
+    result = ops.quick_inference(prompt["id"])
 """
 
 import logging
@@ -30,11 +42,20 @@ DEFAULT_NEGATIVE_PROMPT = (
 
 
 class WorkflowOperations:
-    """Unified interface for all workflow operations.
+    """Main facade for the Cosmos Workflow System.
 
-    This class provides high-level operations that combine database operations
-    (via WorkflowService) with GPU execution (via WorkflowOrchestrator) into
-    simple, user-focused methods.
+    THIS IS THE PRIMARY INTERFACE - Use this class for all interactions with
+    the system. Do not directly use WorkflowService or WorkflowOrchestrator.
+
+    This facade provides:
+    - High-level operations that combine database and GPU functionality
+    - Consistent error handling and validation
+    - Simplified API that matches user intentions
+    - Single point of entry for CLI, UI, and external code
+
+    Internal components (not for direct use):
+    - WorkflowService: Database operations only
+    - WorkflowOrchestrator: GPU execution only (confusing name, will be renamed in v2.0)
     """
 
     def __init__(self, config: ConfigManager | None = None):

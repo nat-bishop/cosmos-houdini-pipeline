@@ -310,50 +310,39 @@ This file-based approach is superior because:
 
 ---
 
-## Next Session TODO: Simplify Gradio UI Further
+## ✅ COMPLETED: Auto-Streaming UI Implementation
 
-### Current UI Issues:
-1. **Manual Run ID entry** - User has to type/paste run ID
-2. **Manual Start Streaming button** - Extra click required
-3. **Not auto-refreshing** - User has to click refresh
+### What Was Accomplished
+✅ **Removed manual controls**: Run ID input and Start Streaming button eliminated
+✅ **Auto-streaming logic**: UI automatically detects and streams running jobs on page load
+✅ **Architectural cleanup**: Uses WorkflowOperations facade exclusively (no direct service access)
+✅ **Bug fixes**: Fixed run_id field mapping and logging format issues
+✅ **Infrastructure fixes**: Docker status detection, file transfer logging bugs resolved
 
-### Proposed Improvements:
-1. **Auto-stream active jobs**:
-   - If ONE job running → Start streaming immediately
-   - If MULTIPLE jobs → Dropdown to select
-   - If NO jobs → Show "No active jobs" message
+### Files Modified
+- `cosmos_workflow/ui/app.py` - Complete auto-streaming implementation:
+  - Removed: `run_id_input`, `start_btn`, manual event handlers
+  - Added: `check_and_auto_stream()` function for automatic job detection on load
+  - Fixed: All database access patterns (`ops.method()` instead of `ops.service.method()`)
+- `cosmos_workflow/transfer/file_transfer.py:209,219` - Fixed f-string/parameterized logging mix
+- `cosmos_workflow/cli/status.py:69-72` - Fixed Docker status detection (dict vs string comparison)
 
-2. **Remove manual controls**:
-   - Remove Run ID text input
-   - Remove Start Streaming button
-   - Auto-detect and stream
+### Current Status
+- **UI Location**: http://localhost:8001
+- **Database**: Consolidated to single `outputs/cosmos.db` with proper schema
+- **Auto-streaming Behavior**:
+  - No jobs → Shows "No active jobs. Waiting..."
+  - Jobs exist → Auto-detects, shows job info, starts streaming immediately
+  - All controls work → Filters, search, refresh, clear logs
 
-3. **Better UX**:
-   ```python
-   # Instead of:
-   run_id_input = gr.Textbox(label="Run ID")
-   start_btn = gr.Button("Start Streaming")
+### Remaining Optional Tasks
+- **Auto-refresh timer**: 5-second job list updates (not critical for testing)
+- **Multiple job selection**: Dropdown for multiple concurrent jobs (edge case)
+- **Bug fixes**: Status reporting and container detection issues (non-blocking)
 
-   # Use:
-   job_selector = gr.Dropdown(
-       label="Select Active Job",
-       choices=[],  # Auto-populate
-       value=None,  # Auto-select first
-   )
-   # Auto-stream when selection changes
-   ```
-
-4. **Auto-refresh**:
-   - Check for new jobs every 5 seconds
-   - Update dropdown if jobs change
-   - Continue streaming current selection
-
-### Implementation Steps:
-1. Change `get_running_jobs()` to return dropdown choices
-2. Remove Run ID input and Start button
-3. Add job selector dropdown
-4. Auto-start streaming on load if jobs exist
-5. Auto-refresh job list periodically
+### Testing Status
+🔄 **Ready for Manual Testing**: Requires AI model checkpoints installation
+📋 **Testing Protocol**: See updated `docs/NEXT_SESSION_PROMPT.md` for comprehensive manual testing steps
 
 ## Phase 5: GPU Utilization Monitoring (NEW - 1 day)
 

@@ -66,7 +66,8 @@ def status(ctx, stream):
         status_data["SSH Connection"] = "[red]✗ Failed[/red]"
 
     # Docker status
-    if status_info.get("docker_status") == "running":
+    docker_info = status_info.get("docker_status", {})
+    if isinstance(docker_info, dict) and docker_info.get("docker_running"):
         status_data["Docker Daemon"] = "[green]✓ Running[/green]"
     else:
         status_data["Docker Daemon"] = "[red]✗ Not running[/red]"

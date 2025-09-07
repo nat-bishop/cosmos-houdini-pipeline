@@ -15,41 +15,49 @@ Complete API documentation for the Cosmos Workflow System.
 
 ### Overview
 
-The Cosmos Workflow System follows a clean, layered architecture with clear separation of concerns. Each layer has a specific responsibility and only communicates with adjacent layers.
+The Cosmos Workflow System follows a **facade pattern** with a clean, layered architecture. **WorkflowOperations is the PRIMARY INTERFACE** - all external code, CLI commands, and UI interactions must go through this facade.
 
 ### Architecture Layers
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   CLI Layer                             │
-│              (cosmos_workflow/cli/)                     │
-│          User-facing commands and display               │
+│             External Code / CLI / UI                    │
+│         ALL interactions go through the facade          │
 └─────────────────────────────────────────────────────────┘
                             │
                             ▼
-┌─────────────────────────────────────────────────────────┐
-│             WorkflowOperations API                      │
-│          (cosmos_workflow/api/workflow_operations.py)   │
-│       Single unified interface for all operations       │
-└─────────────────────────────────────────────────────────┘
+┌═════════════════════════════════════════════════════════┐
+║          WorkflowOperations (MAIN FACADE)               ║
+║       (cosmos_workflow/api/workflow_operations.py)      ║
+║                                                          ║
+║  THE PRIMARY INTERFACE - Use this for everything!       ║
+║  • High-level operations matching user intentions       ║
+║  • Combines database + GPU functionality                ║
+║  • Single point of entry for all operations             ║
+╚═════════════════════════════════════════════════════════╝
                             │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-┌──────────────────────┐    ┌──────────────────────────┐
-│   WorkflowService    │    │   WorkflowOrchestrator   │
-│ (services/workflow_  │    │ (workflows/workflow_     │
-│    service.py)       │    │    orchestrator.py)      │
-│                      │    │                          │
-│ • CRUD operations    │    │ • GPU execution          │
-│ • Data validation    │    │ • Remote operations      │
-│ • Database queries   │    │ • File transfers         │
-└──────────────────────┘    └──────────────────────────┘
+           ┌────────────────┴────────────────┐
+           ▼                                 ▼
+┌──────────────────────────┐    ┌────────────────────────┐
+│   WorkflowService        │    │  WorkflowOrchestrator  │
+│   (INTERNAL - Data)      │    │  (INTERNAL - GPU Exec) │
+│ (services/workflow_      │    │ (workflows/workflow_   │
+│    service.py)           │    │    orchestrator.py)*   │
+│                          │    │                        │
+│ • Database CRUD          │    │ • GPU execution        │
+│ • Data validation        │    │ • SSH/Docker ops       │
+│ • Query operations       │    │ • File transfers       │
+└──────────────────────────┘    └────────────────────────┘
             │                            │
             ▼                            ▼
-┌──────────────────────┐    ┌──────────────────────────┐
-│      Database        │    │    Remote Systems        │
-│   (SQLAlchemy)       │    │  (SSH, Docker, GPU)      │
-└──────────────────────┘    └──────────────────────────┘
+┌──────────────────────────┐    ┌────────────────────────┐
+│      Database            │    │    Remote GPU          │
+│   (SQLAlchemy)           │    │  (SSH, Docker)         │
+└──────────────────────────┘    └────────────────────────┘
+
+* Note: WorkflowOrchestrator name is confusing - it's just the GPU
+  execution component, not the main orchestrator. Will be renamed
+  to GPUExecutor in v2.0.
 ```
 
 ### Layer Responsibilities
@@ -66,32 +74,36 @@ The Cosmos Workflow System follows a clean, layered architecture with clear sepa
   - ❌ NEVER directly imports service, database, or orchestrator modules
   - ❌ NEVER contains business logic
 
-#### 2. WorkflowOperations API (`cosmos_workflow/api/workflow_operations.py`)
-- **Purpose**: Unified interface for all operations
+#### 2. WorkflowOperations API (`cosmos_workflow/api/workflow_operations.py`) - **MAIN FACADE**
+- **Purpose**: THE PRIMARY INTERFACE for the entire system
 - **Responsibilities**:
-  - Combine service and orchestrator functionality
+  - Provide the single point of entry for all operations
+  - Combine service (database) and orchestrator (GPU) functionality
   - Provide high-level operations that match user intentions
   - Handle complex workflows (e.g., create prompt + run inference)
-  - Maintain consistent API for both CLI and future UIs
+  - Maintain consistent API for CLI, UI, and external code
 - **Rules**:
+  - ✅ **THIS IS THE ONLY INTERFACE external code should use**
   - ✅ The ONLY layer that imports both Service and Orchestrator
-  - ✅ All business logic lives here
+  - ✅ All high-level business logic lives here
   - ✅ Returns simple dictionaries (no ORM objects)
+  - ❌ NEVER bypass this to use WorkflowService or WorkflowOrchestrator directly
 
-#### 3. WorkflowService (`cosmos_workflow/services/workflow_service.py`)
-- **Purpose**: Data management and persistence
+#### 3. WorkflowService (`cosmos_workflow/services/workflow_service.py`) - **INTERNAL COMPONENT**
+- **Purpose**: Internal data layer for database operations
 - **Responsibilities**:
   - CRUD operations for prompts and runs
   - Data validation and integrity
   - Database queries and updates
   - Transaction management
 - **Rules**:
+  - ⚠️ **INTERNAL ONLY - Do not use directly, use WorkflowOperations instead**
   - ✅ ONLY handles database operations
   - ❌ NO remote execution logic
   - ❌ NO file system operations (except validation)
 
-#### 4. WorkflowOrchestrator (`cosmos_workflow/workflows/workflow_orchestrator.py`)
-- **Purpose**: Remote execution and GPU operations
+#### 4. WorkflowOrchestrator (`cosmos_workflow/workflows/workflow_orchestrator.py`) - **INTERNAL COMPONENT**
+- **Purpose**: Internal GPU execution layer (confusing name - will be renamed to GPUExecutor in v2.0)
 - **Responsibilities**:
   - Execute inference on remote GPU
   - Manage SSH connections
@@ -99,6 +111,8 @@ The Cosmos Workflow System follows a clean, layered architecture with clear sepa
   - Transfer files to/from remote systems
   - Stream logs and monitor execution
 - **Rules**:
+  - ⚠️ **INTERNAL ONLY - Do not use directly, use WorkflowOperations instead**
+  - ⚠️ **NOT the main orchestrator despite its name - just GPU execution**
   - ✅ ONLY handles execution logic
   - ❌ NO database operations
   - ❌ Receives data from Service layer via Operations

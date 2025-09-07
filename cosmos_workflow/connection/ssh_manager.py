@@ -25,13 +25,15 @@ class SSHManager:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            logger.info(f"Connecting to {self.ssh_options['hostname']}:{self.ssh_options['port']}")
+            logger.info(
+                "Connecting to %s:%d", self.ssh_options["hostname"], self.ssh_options["port"]
+            )
             self.ssh_client.connect(**self.ssh_options)
 
             logger.info("SSH connection established successfully")
 
         except Exception as e:
-            logger.error(f"Failed to establish SSH connection: {e}")
+            logger.error("Failed to establish SSH connection: %s", e)
             raise ConnectionError(f"SSH connection failed: {e}") from e
 
     def disconnect(self) -> None:
@@ -93,7 +95,7 @@ class SSHManager:
         """
         self.ensure_connected()
 
-        logger.debug(f"Executing command: {command}")
+        logger.debug("Executing command: %s", command)
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
@@ -107,7 +109,7 @@ class SSHManager:
                 for line in stdout:
                     line = line.strip()
                     if line:
-                        logger.debug(f"STDOUT: {line}")
+                        logger.debug("STDOUT: %s", line)
                         print(line, flush=True)  # Print to console for real-time streaming
                         stdout_lines.append(line)
 
@@ -117,7 +119,7 @@ class SSHManager:
                     stderr_lines = stderr_output.split("\n")
                     for line in stderr_lines:
                         if line.strip():
-                            logger.warning(f"STDERR: {line.strip()}")
+                            logger.warning("STDERR: %s", line.strip())
                             print(f"[ERROR] {line.strip()}", flush=True)  # Print errors to console
             else:
                 # Collect all output at once
@@ -132,12 +134,12 @@ class SSHManager:
             # Wait for command completion
             exit_code = stdout.channel.recv_exit_status()
 
-            logger.debug(f"Command completed with exit code: {exit_code}")
+            logger.debug("Command completed with exit code: %d", exit_code)
 
             return exit_code, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
         except Exception as e:
-            logger.error(f"Command execution failed: {e}")
+            logger.error("Command execution failed: %s", e)
             raise RuntimeError(f"Command execution failed: {e}") from e
 
     def execute_command_success(

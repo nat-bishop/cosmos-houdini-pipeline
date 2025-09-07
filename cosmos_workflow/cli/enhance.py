@@ -32,15 +32,9 @@ from .helpers import (
     is_flag=True,
     help="Preview what would happen without calling AI API",
 )
-@click.option(
-    "--stream",
-    is_flag=True,
-    default=False,
-    help="Stream logs in real-time during execution (default: disabled)",
-)
 @click.pass_context
 @handle_errors
-def prompt_enhance(ctx, prompt_id, model, create_new, dry_run, stream):
+def prompt_enhance(ctx, prompt_id, model, create_new, dry_run):
     r"""Enhance prompts using AI models.
 
     Uses AI to improve prompt text quality and create better descriptions
@@ -101,7 +95,6 @@ def prompt_enhance(ctx, prompt_id, model, create_new, dry_run, stream):
             prompt_id=prompt_id,
             create_new=create_new,
             enhancement_model=model,
-            stream_logs=stream,  # Pass stream flag
         )
 
         progress.update(task, completed=True)

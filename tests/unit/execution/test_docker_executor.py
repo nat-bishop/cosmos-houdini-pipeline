@@ -578,14 +578,19 @@ class TestDockerExecutorBatchInference:
                 f"{self.remote_dir}/inputs/batches/batch_test.jsonl"
             )
 
-            # Verify output directory was created
-            self.mock_remote_executor.create_directory.assert_called_once_with(
-                f"{self.remote_dir}/outputs/batch_test"
-            )
+            # Verify directories were created (logs and output)
+            create_calls = self.mock_remote_executor.create_directory.call_args_list
+            assert len(create_calls) == 2
+            assert create_calls[0][0][0] == f"{self.remote_dir}/logs/batch"
+            assert create_calls[1][0][0] == f"{self.remote_dir}/outputs/batch_test"
 
-            # Verify batch script was called
+            # Verify batch script was called with log path
             mock_run_script.assert_called_once_with(
-                "batch_test", "batch_test.jsonl", 2, "0,1", None
+                "batch_test",
+                "batch_test.jsonl",
+                2,
+                "0,1",
+                f"{self.remote_dir}/logs/batch/batch_test.log",
             )
 
             # Check result structure - batch now returns immediately with "started" status
@@ -605,9 +610,12 @@ class TestDockerExecutorBatchInference:
                 batch_jsonl_file="missing.jsonl",
             )
 
-        # Should check for file but not create directory or run script
+        # Should check for file and create log directory, but not output directory
         self.mock_remote_executor.file_exists.assert_called_once()
-        self.mock_remote_executor.create_directory.assert_not_called()
+        # Log directory is created before file check
+        self.mock_remote_executor.create_directory.assert_called_once_with(
+            f"{self.remote_dir}/logs/batch"
+        )
 
     def test_run_batch_inference_with_default_gpu_settings(self):
         """Test batch inference with default GPU settings."""
@@ -624,8 +632,14 @@ class TestDockerExecutorBatchInference:
             assert result["batch_name"] == "batch_default"
             assert result["status"] == "started"
 
-            # Should use default num_gpu=1 and cuda_devices="0"
-            mock_run_script.assert_called_once_with("batch_default", "batch.jsonl", 1, "0", None)
+            # Should use default num_gpu=1 and cuda_devices="0" with log path
+            mock_run_script.assert_called_once_with(
+                "batch_default",
+                "batch.jsonl",
+                1,
+                "0",
+                f"{self.remote_dir}/logs/batch/batch_default.log",
+            )
 
     def test_run_batch_inference_script_builds_correct_command(self):
         """Test that batch inference script builds correct Docker command in background."""
@@ -733,7 +747,13 @@ class TestDockerExecutorBatchInference:
             # Name should be preserved exactly
             assert result["batch_name"] == batch_name
             assert result["status"] == "started"
-            mock_run_script.assert_called_once_with(batch_name, f"{batch_name}.jsonl", 1, "0", None)
+            mock_run_script.assert_called_once_with(
+                batch_name,
+                f"{batch_name}.jsonl",
+                1,
+                "0",
+                f"{self.remote_dir}/logs/batch/{batch_name}.log",
+            )
 
 
 if __name__ == "__main__":

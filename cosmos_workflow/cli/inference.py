@@ -68,12 +68,6 @@ from .helpers import (
     is_flag=True,
     help="Preview what would happen without executing",
 )
-@click.option(
-    "--stream",
-    is_flag=True,
-    default=False,
-    help="Stream logs in real-time during execution (default: disabled)",
-)
 @click.pass_context
 @handle_errors
 def inference(
@@ -92,7 +86,6 @@ def inference(
     upscale_weight,
     batch_name,
     dry_run,
-    stream,
 ):
     r"""Run Cosmos Transfer inference on one or more prompts.
 
@@ -207,7 +200,6 @@ def inference(
                 canny_threshold=canny_threshold,
                 upscale=upscale,
                 upscale_weight=upscale_weight,
-                stream_logs=stream,  # Pass stream flag
             )
 
             progress.update(task, completed=True)
@@ -254,7 +246,6 @@ def inference(
                 upscale=upscale,
                 upscale_weight=upscale_weight,
                 batch_name=batch_name,
-                stream_logs=stream,  # Pass stream flag
             )
 
             progress.update(task, completed=True)

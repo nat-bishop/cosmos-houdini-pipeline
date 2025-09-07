@@ -96,7 +96,7 @@ class WorkflowOrchestrator:
         prompt_name = f"run_{run_dict['id']}"
         run_id = run_dict["id"]
 
-        logger.info(f"Executing run {run_id} for prompt {prompt_name}")
+        logger.info("Executing run %s for prompt %s", run_id, prompt_name)
 
         try:
             with self.ssh_manager:
@@ -145,7 +145,7 @@ class WorkflowOrchestrator:
                 prompt_file = Path(f"inputs/prompts/{prompt_name}.json")
 
                 # Run inference - always pass run_id for logging
-                logger.info(f"Running inference on GPU for run {run_dict['id']}")
+                logger.info("Running inference on GPU for run %s", run_dict["id"])
                 result = self.docker_executor.run_inference(
                     prompt_file, run_id=run_id, num_gpu=1, cuda_devices="0", stream_logs=stream_logs
                 )
@@ -153,11 +153,11 @@ class WorkflowOrchestrator:
                 # Store log path if available
                 if result.get("log_path") and self.service:
                     self.service.update_run(run_id, log_path=result["log_path"])
-                    logger.debug(f"Log path for run {run_id}: {result['log_path']}")
+                    logger.debug("Log path for run %s: %s", run_id, result["log_path"])
 
                 # Run upscaling if requested
                 if upscale:
-                    logger.info(f"Running upscaling with weight {upscale_weight}")
+                    logger.info("Running upscaling with weight %s", upscale_weight)
                     upscale_result = self.docker_executor.run_upscaling(
                         prompt_file,
                         run_id=run_id,
@@ -200,7 +200,7 @@ class WorkflowOrchestrator:
                 }
 
         except Exception as e:
-            logger.error(f"Execution failed for run {run_dict['id']}: {e}")
+            logger.error("Execution failed for run %s: %s", run_dict["id"], e)
             if self.service:
                 self.service.update_run(run_dict["id"], error_message=str(e))
             return {
@@ -266,7 +266,7 @@ class WorkflowOrchestrator:
             batch_name = f"batch_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         start_time = datetime.now(timezone.utc)
-        logger.info(f"Starting batch execution {batch_name} with {len(runs_and_prompts)} runs")
+        logger.info("Starting batch execution %s with %d runs", batch_name, len(runs_and_prompts))
 
         try:
             with self.ssh_manager:
@@ -310,7 +310,7 @@ class WorkflowOrchestrator:
                     )
 
                 # Run batch inference
-                logger.info(f"Running batch inference on GPU for {batch_name}")
+                logger.info("Running batch inference on GPU for %s", batch_name)
                 batch_result = self.docker_executor.run_batch_inference(
                     batch_name, jsonl_filename, num_gpu=1, cuda_devices="0", stream_logs=stream_logs
                 )
@@ -344,7 +344,7 @@ class WorkflowOrchestrator:
                 }
 
         except Exception as e:
-            logger.error(f"Batch execution failed: {e}")
+            logger.error("Batch execution failed: %s", e)
             return {
                 "status": "failed",
                 "batch_name": batch_name,
@@ -443,7 +443,7 @@ class WorkflowOrchestrator:
         # Initialize services if not already done
         self._initialize_services()
 
-        logger.info(f"Starting prompt upsampling using {model} model")
+        logger.info("Starting prompt upsampling using %s model", model)
 
         # Prepare batch data for the upsampler script
         batch_data = [
@@ -480,7 +480,7 @@ class WorkflowOrchestrator:
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
                         self.docker_executor.remote_executor.create_directory(remote_videos_dir)
-                        logger.info(f"Uploading video for context: {video_path}")
+                        logger.info("Uploading video for context: %s", video_path)
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
                     # Create scripts directory and upload upsampler script
@@ -511,7 +511,7 @@ class WorkflowOrchestrator:
                     )
 
                     if enhancement_result.get("log_path"):
-                        logger.debug(f"Enhancement log path: {enhancement_result['log_path']}")
+                        logger.debug("Enhancement log path: %s", enhancement_result["log_path"])
 
                     if enhancement_result["status"] != "success":
                         raise RuntimeError(
@@ -538,6 +538,6 @@ class WorkflowOrchestrator:
                         return prompt_text
 
             except Exception as e:
-                logger.error(f"Prompt upsampling failed: {e}")
+                logger.error("Prompt upsampling failed: %s", e)
                 # Return original prompt on failure rather than raising
                 return prompt_text

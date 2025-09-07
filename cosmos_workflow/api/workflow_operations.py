@@ -154,7 +154,6 @@ class WorkflowOperations:
         prompt_id: str,
         create_new: bool = True,
         enhancement_model: str = "pixtral",
-        stream_logs: bool = False,
     ) -> dict[str, Any]:
         """Enhance an existing prompt using AI.
 
@@ -162,7 +161,6 @@ class WorkflowOperations:
             prompt_id: ID of prompt to enhance
             create_new: If True, creates new enhanced prompt. If False, updates existing.
             enhancement_model: Model to use for enhancement (default: "pixtral")
-            stream_logs: If True, stream logs during enhancement
 
         Returns:
             Dictionary containing enhanced prompt data
@@ -190,7 +188,6 @@ class WorkflowOperations:
             prompt_text=original["prompt_text"],
             model=enhancement_model,
             video_path=original["inputs"].get("video"),
-            stream_logs=stream_logs,
         )
 
         if create_new:
@@ -374,7 +371,7 @@ class WorkflowOperations:
             prompt_id: ID of prompt to run
             weights: Control weights (optional, defaults to balanced)
             **kwargs: Additional execution parameters (num_steps, guidance, seed,
-                     upscale, upscale_weight, stream_logs, etc.)
+                     upscale, upscale_weight, etc.)
 
         Returns:
             Dictionary containing execution results with run_id for tracking
@@ -382,7 +379,7 @@ class WorkflowOperations:
         Raises:
             ValueError: If prompt not found
         """
-        logger.info(f"Quick inference for prompt {prompt_id}")
+        logger.info("Quick inference for prompt %s", prompt_id)
 
         # Validate prompt exists
         prompt = self._validate_prompt(prompt_id)
@@ -390,7 +387,6 @@ class WorkflowOperations:
         # Extract upscale params if present (not part of execution config)
         upscale = kwargs.pop("upscale", False)
         upscale_weight = kwargs.pop("upscale_weight", 0.5)
-        stream_logs = kwargs.pop("stream_logs", False)  # Extract stream flag
 
         # Build execution config
         execution_config = self._build_execution_config(weights=weights, **kwargs)
@@ -400,7 +396,7 @@ class WorkflowOperations:
             prompt_id=prompt_id,
             execution_config=execution_config,
         )
-        logger.info(f"Created run {run['id']} for prompt {prompt_id}")
+        logger.info("Created run %s for prompt %s", run["id"], prompt_id)
 
         # Update status and execute
         self.service.update_run_status(run["id"], "running")
@@ -412,7 +408,6 @@ class WorkflowOperations:
                 prompt,
                 upscale=upscale,
                 upscale_weight=upscale_weight,
-                stream_logs=stream_logs,
             )
 
             # Update run with results
@@ -442,7 +437,6 @@ class WorkflowOperations:
         self,
         prompt_ids: list[str],
         shared_weights: dict[str, float] | None = None,
-        stream_logs: bool = False,
         **kwargs,
     ) -> dict[str, Any]:
         """Run inference on multiple prompts as a batch.
@@ -483,7 +477,7 @@ class WorkflowOperations:
                     prompt_id=prompt_id,
                     execution_config=execution_config,
                 )
-                logger.info(f"Created run {run['id']} for prompt {prompt_id}")
+                logger.info("Created run %s for prompt %s", run["id"], prompt_id)
                 runs_and_prompts.append((run, prompt))
 
             except ValueError as e:
@@ -491,9 +485,7 @@ class WorkflowOperations:
                 continue
 
         # Execute as batch
-        batch_result = self.orchestrator.execute_batch_runs(
-            runs_and_prompts, stream_logs=stream_logs
-        )
+        batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts)
 
         # Update run statuses
         for run, _ in runs_and_prompts:

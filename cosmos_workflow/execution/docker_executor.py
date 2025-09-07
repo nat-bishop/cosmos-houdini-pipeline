@@ -321,7 +321,7 @@ class DockerExecutor:
         spec_path = f"{self.remote_dir}/outputs/{prompt_name}/upscaler_spec.json"
 
         self.remote_executor.write_file(spec_path, spec_content)
-        logger.info(f"Created upscaler spec: {spec_path}")
+        logger.info("Created upscaler spec: %s", spec_path)
 
     def _check_remote_file_exists(self, remote_path: str) -> bool:
         """Check if a file exists on the remote system."""
@@ -543,7 +543,7 @@ class DockerExecutor:
         Returns:
             Dictionary with batch results including output paths
         """
-        logger.info(f"Running batch inference {batch_name} with {num_gpu} GPU(s)")
+        logger.info("Running batch inference %s with %d GPU(s)", batch_name, num_gpu)
 
         # Setup logging paths
         remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
@@ -567,7 +567,7 @@ class DockerExecutor:
             batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
         )
 
-        logger.info(f"Batch inference started successfully for {batch_name}")
+        logger.info("Batch inference started successfully for %s", batch_name)
         logger.info("The process is now running in the background on the GPU")
 
         return {
@@ -635,7 +635,7 @@ class DockerExecutor:
         """
         if not container_id:
             # Use get_active_container for auto-detection
-            logger.info(f"Auto-detecting active container for image {self.docker_image}")
+            logger.info("Auto-detecting active container for image %s", self.docker_image)
             container = self.get_active_container()
 
             if not container:
@@ -647,7 +647,7 @@ class DockerExecutor:
             if "warning" in container:
                 print(f"[WARNING] {container['warning']}")
 
-        logger.info(f"Streaming logs from container {container_id}")
+        logger.info("Streaming logs from container %s", container_id)
         print(f"[INFO] Streaming logs from container {container_id[:12]}...")
         print("[INFO] Press Ctrl+C to stop streaming\n")
 

@@ -67,85 +67,36 @@ Use `execution_config` JSON to establish relationships:
 
 ## Implementation Phases
 
-### Phase 1: Clean Up Obsolete Code (Low Risk)
-**Goal**: Remove confusion before making functional changes
+### Phase 1: Clean Up Obsolete Code ✅ COMPLETED
+**What was done**:
+- Removed misleading docstrings about "seek-based position tracking" from DockerExecutor
+- Removed `--stream` flag from CLI commands (inference, enhance)
+- Removed unused `stream_logs` parameter from entire call chain
+- Updated docstrings to reflect actual behavior (returns immediately with "started" status)
+- Confirmed that log streaming works via `cosmos status --stream` using `docker logs -f`
 
-**Tasks**:
-1. Remove misleading docstrings about "seek-based position tracking"
-2. Remove unused `stream_logs` parameters throughout codebase
-3. Update documentation to reflect actual Docker container streaming
-4. Remove orphaned test files for old streaming implementation
-
-**Files to modify**:
-- `cosmos_workflow/execution/docker_executor.py` (docstrings)
-- `cosmos_workflow/workflows/workflow_orchestrator.py` (parameters)
-- `cosmos_workflow/api/workflow_operations.py` (already has working docker logs)
-- Various test files
-
-**Success criteria**:
-- No references to "seek-based position tracking"
-- No unused `stream_logs` parameters
-- All tests pass
+**Key decision**: Kept streaming simple - only via `cosmos status --stream`, not during execution
 
 ### Phase 2: Prompt Enhancement as Database Run
-**Goal**: Establish pattern with working feature
+**Goal**: Make prompt enhancement a proper database run
 
-**Changes**:
+**Key changes needed**:
 1. Create database run with `model_type="enhance"`
-2. Change from `operation_id` to `run_id`
-3. Convert from blocking to async execution (consistency)
-4. Store enhanced prompt info in `outputs` JSON
+2. Use `run_id` instead of `operation_id`
+3. Convert from blocking to async execution for consistency
+4. Store enhanced text in `outputs` JSON field
 
-**Implementation**:
-```python
-# In WorkflowOperations.enhance_prompt()
-run = service.create_run(
-    prompt_id=prompt_id,
-    model_type="enhance",
-    execution_config={
-        "model": "pixtral",
-        "offload": True
-    }
-)
-
-# In DockerExecutor.run_prompt_enhancement()
-# Accept run_id instead of operation_id
-# Run in background like inference
-```
-
-**Success criteria**:
-- Enhancement creates database run
-- Can track enhancement progress
-- Logs properly associated with run
+**Input**: Takes `prompt_id` as input (operates on prompt text)
 
 ### Phase 3: Fix Upscaling as Separate Run
-**Goal**: Make upscaling truly independent
+**Goal**: Make upscaling an independent database run
 
-**Changes**:
+**Key changes needed**:
 1. Create separate run with `model_type="upscale"`
-2. Link to parent inference run via `execution_config`
+2. Link to parent inference run via `execution_config["parent_run_id"]`
 3. Independent status tracking and logs
-4. Proper error handling for missing input video
 
-**Implementation**:
-```python
-# After inference completes
-upscale_run = service.create_run(
-    prompt_id=prompt_id,
-    model_type="upscale",
-    execution_config={
-        "parent_run_id": inference_run_id,
-        "control_weight": 0.5,
-        "input_video": f"outputs/{prompt_name}/output.mp4"
-    }
-)
-```
-
-**Success criteria**:
-- Upscaling has its own run_id
-- Parent-child relationship preserved
-- Independent log files
-- Can upscale any completed inference
+**Critical insight**: Takes `run_id` as input (not `prompt_id`) since it operates on the output video of a specific inference run
 
 ### Phase 4: Unified Status Tracking
 **Goal**: Single source of truth for GPU operations
@@ -241,19 +192,57 @@ Each phase is independent and can be rolled back:
 - **Although never is often better than *right* now**: Phased approach
 - **If implementation is easy to explain**: One GPU op = one database run
 
-## Timeline Estimate
+## Remaining Timeline Estimate
 
-- **Phase 1**: 1-2 hours (cleanup)
 - **Phase 2**: 2-3 hours (enhancement integration)
 - **Phase 3**: 3-4 hours (upscaling fix)
 - **Phase 4**: 2-3 hours (status unification)
 - **Phase 5**: 2-3 hours (CLI/UI updates)
 
-Total: 10-15 hours of focused work
+Remaining: 9-13 hours of focused work
 
-## Notes
+## Completed Work Summary
 
-- Database schema already supports this (well-designed!)
-- Container log streaming via Docker is sufficient
+### Phase 1 Status: ✅ COMPLETE
+- Removed all obsolete log streaming references
+- Simplified to single streaming method: `cosmos status --stream`
+- All tests passing
+- Code is cleaner and more maintainable
+
+## Next Session Prompt
+
+```
+The GPU Operations Unification Plan (docs/GPU_OPERATIONS_UNIFICATION_PLAN.md) is in progress.
+
+Phase 1 (Cleanup) is COMPLETE:
+- Removed misleading docstrings and unused stream_logs parameters
+- Streaming now only via `cosmos status --stream` using docker logs -f
+- All tests passing
+
+BEFORE starting Phase 2, please:
+1. Run full test suite: `pytest tests/` to ensure no regressions
+2. Test CLI commands manually:
+   - `cosmos inference ps_xxx` (should return immediately)
+   - `cosmos status --stream` (should stream logs)
+   - `cosmos prompt-enhance ps_xxx` (should work without --stream flag)
+3. Verify DockerExecutor methods have accurate docstrings
+
+Phase 2 (Prompt Enhancement as Database Run) is NEXT:
+- Make prompt enhancement create a database run with model_type="enhance"
+- Takes prompt_id as input (operates on prompt text)
+- Currently uses operation_id, needs to use run_id
+- Currently blocking, needs to be async like inference
+
+Phase 3 (Upscaling as Separate Run) follows:
+- IMPORTANT: Upscaling takes run_id as input (not prompt_id)
+- Operates on output video from specific inference run
+- Needs parent_run_id in execution_config for tracking
+
+Key architectural principle: One GPU operation = One database run
+```
+
+## Notes for Implementation
+
+- Database schema already supports all changes (no migrations needed)
+- Keep operations atomic and independent
 - Each phase delivers value independently
-- Maintains backward compatibility throughout

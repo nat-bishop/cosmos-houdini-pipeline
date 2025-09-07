@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
 
 class TestWorkflowOrchestratorPhase2:
@@ -76,7 +76,7 @@ class TestWorkflowOrchestratorPhase2:
     @pytest.fixture
     def workflow_orchestrator(self, mock_config_manager):
         """Create WorkflowOrchestrator instance."""
-        orchestrator = WorkflowOrchestrator()
+        orchestrator = GPUExecutor()
         orchestrator.config_manager = mock_config_manager
         return orchestrator
 

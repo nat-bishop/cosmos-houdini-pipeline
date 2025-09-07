@@ -122,32 +122,32 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
 #### Correct Usage - Through WorkflowOperations
 
 ```python
-from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.api import CosmosAPI
 
 # Initialize the API (this is the ONLY import you need)
-ops = WorkflowOperations()
+ops = CosmosAPI()
 
 # Create a prompt
 prompt = ops.create_prompt(
-    prompt_text="A cyberpunk city at night",
-    video_dir="/path/to/videos",
-    name="cyberpunk_test"
+  prompt_text="A cyberpunk city at night",
+  video_dir="/path/to/videos",
+  name="cyberpunk_test"
 )
 print(f"Created prompt: {prompt['id']}")
 
 # Run inference (no manual run creation needed!)
 result = ops.quick_inference(
-    prompt_id=prompt["id"],
-    weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
-    num_steps=50,
-    upscale=True
+  prompt_id=prompt["id"],
+  weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
+  num_steps=50,
+  upscale=True
 )
 print(f"Output: {result['output_path']}")
 
 # Batch inference for multiple prompts
 results = ops.batch_inference(
-    prompt_ids=["ps_001", "ps_002", "ps_003"],
-    shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+  prompt_ids=["ps_001", "ps_002", "ps_003"],
+  shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
 )
 
 # List and search operations
@@ -168,17 +168,20 @@ ops.delete_prompt(prompt["id"])
 
 ```python
 # ❌ WRONG - CLI directly using Service
-from cosmos_workflow.services import WorkflowService
-service = WorkflowService()
+from cosmos_workflow.services import DataRepository
+
+service = DataRepository()
 prompt = service.create_prompt(...)  # Don't do this in CLI!
 
 # ❌ WRONG - CLI directly using Orchestrator
-from cosmos_workflow.workflows import WorkflowOrchestrator
-orchestrator = WorkflowOrchestrator()
+from cosmos_workflow.workflows import GPUExecutor
+
+orchestrator = GPUExecutor()
 orchestrator.execute_run(...)  # Don't do this in CLI!
 
 # ❌ WRONG - Direct database access
 from cosmos_workflow.database import DatabaseConnection
+
 db = DatabaseConnection()
 db.session.query(...)  # Never do this outside Service layer!
 ```
@@ -827,16 +830,16 @@ The WorkflowService provides the complete business logic layer for managing prom
 #### Query Methods
 
 ```python
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 
 # Initialize service (used by CLI commands)
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.config import ConfigManager
 
 db_connection = DatabaseConnection()
 config_manager = ConfigManager()
-service = WorkflowService(db_connection, config_manager)
+service = DataRepository(db_connection, config_manager)
 
 # List prompts with optional filtering
 prompts = service.list_prompts(model_type="transfer", limit=50, offset=0)
@@ -995,7 +998,7 @@ CREATE INDEX idx_runs_prompt_id ON runs(prompt_id);
 The service layer provides business logic for managing prompts and runs with transaction safety and comprehensive validation.
 
 ```python
-from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.services import DataRepository
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.config import ConfigManager
 
@@ -1003,34 +1006,34 @@ from cosmos_workflow.config import ConfigManager
 db_connection = DatabaseConnection(":memory:")
 db_connection.create_tables()
 config_manager = ConfigManager()
-service = WorkflowService(db_connection, config_manager)
+service = DataRepository(db_connection, config_manager)
 
 # Create prompts for any AI model
 prompt_data = service.create_prompt(
-    model_type="transfer",  # or "reason", "predict", future models
-    prompt_text="A futuristic cityscape at night",
-    inputs={
-        "video_path": "/inputs/scene.mp4",
-        "depth_path": "/inputs/scene_depth.mp4"
-    },
-    parameters={
-        "num_steps": 35,
-        "guidance_scale": 7.5,
-        "cfg_scale": 8.0
-    }
+  model_type="transfer",  # or "reason", "predict", future models
+  prompt_text="A futuristic cityscape at night",
+  inputs={
+    "video_path": "/inputs/scene.mp4",
+    "depth_path": "/inputs/scene_depth.mp4"
+  },
+  parameters={
+    "num_steps": 35,
+    "guidance_scale": 7.5,
+    "cfg_scale": 8.0
+  }
 )
 # Returns: {"id": "ps_abcd1234", "model_type": "transfer", ...}
 
 # Create execution runs
 run_data = service.create_run(
-    prompt_id=prompt_data["id"],
-    execution_config={
-        "gpu_node": "gpu-001",
-        "docker_image": "cosmos:latest",
-        "output_dir": "/outputs/run_001"
-    },
-    metadata={"user": "NAT", "priority": "high"},
-    initial_status="pending"  # or "queued", "running", etc.
+  prompt_id=prompt_data["id"],
+  execution_config={
+    "gpu_node": "gpu-001",
+    "docker_image": "cosmos:latest",
+    "output_dir": "/outputs/run_001"
+  },
+  metadata={"user": "NAT", "priority": "high"},
+  initial_status="pending"  # or "queued", "running", etc.
 )
 # Returns: {"id": "rs_wxyz5678", "prompt_id": "ps_abcd1234", ...}
 
@@ -1089,36 +1092,36 @@ run = service.get_run("rs_wxyz5678")
 Unified interface for all workflow operations, combining service and orchestrator functionality into high-level operations.
 
 ```python
-from cosmos_workflow.api.workflow_operations import WorkflowOperations
+from cosmos_workflow.api.cosmos_api import CosmosAPI
 
 # Initialize operations (auto-creates service and orchestrator)
-ops = WorkflowOperations()
+ops = CosmosAPI()
 
 # Primary inference method - accepts prompt_id directly
 result = ops.quick_inference(
-    prompt_id="ps_abc123",
-    weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
-    num_steps=35,
-    guidance=7.0,
-    upscale=True,
-    upscale_weight=0.5
+  prompt_id="ps_abc123",
+  weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
+  num_steps=35,
+  guidance=7.0,
+  upscale=True,
+  upscale_weight=0.5
 )
 # Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
 
 # Batch inference method - accepts list of prompt_ids
 batch_result = ops.batch_inference(
-    prompt_ids=["ps_abc123", "ps_def456", "ps_ghi789"],
-    shared_weights={"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
-    num_steps=50,
-    guidance=8.0
+  prompt_ids=["ps_abc123", "ps_def456", "ps_ghi789"],
+  shared_weights={"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+  num_steps=50,
+  guidance=8.0
 )
 # Returns: {"output_mapping": {...}, "successful": 3, "failed": 0}
 
 # Create prompt (same as WorkflowService)
 prompt = ops.create_prompt(
-    prompt_text="A futuristic city",
-    video_dir="inputs/videos/scene1",
-    name="futuristic_city"
+  prompt_text="A futuristic city",
+  video_dir="inputs/videos/scene1",
+  name="futuristic_city"
 )
 # Returns: {"id": "ps_abc123", ...}
 ```
@@ -1161,28 +1164,28 @@ prompt = ops.create_prompt(
 Simplified orchestrator handling ONLY GPU execution (no data persistence).
 
 ```python
-from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
-orchestrator = WorkflowOrchestrator()
+orchestrator = GPUExecutor()
 
 # Execute a run from database data
 result = orchestrator.execute_run(
-    run_dict={"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
-    prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}},
-    upscale=True,
-    upscale_weight=0.5
+  run_dict={"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
+  prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}},
+  upscale=True,
+  upscale_weight=0.5
 )
 # Returns: {"status": "completed", "output_path": "/outputs/result.mp4", "duration": 362.1}
 
 # Execute multiple runs as a batch
 batch_result = orchestrator.execute_batch_runs(
-    runs_and_prompts=[
-        ({"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
-         {"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/video1.mp4"}}),
-        ({"id": "rs_xyz789", "execution_config": {"weights": [0.4, 0.3, 0.2, 0.1]}},
-         {"id": "ps_ghi012", "prompt_text": "Cyberpunk street", "inputs": {"video": "/path/video2.mp4"}})
-    ],
-    batch_name="urban_scenes_batch"
+  runs_and_prompts=[
+    ({"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
+     {"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/video1.mp4"}}),
+    ({"id": "rs_xyz789", "execution_config": {"weights": [0.4, 0.3, 0.2, 0.1]}},
+     {"id": "ps_ghi012", "prompt_text": "Cyberpunk street", "inputs": {"video": "/path/video2.mp4"}})
+  ],
+  batch_name="urban_scenes_batch"
 )
 # Returns: {"status": "success", "batch_name": "urban_scenes_batch", "output_mapping": {...}, "duration_seconds": 456.7}
 

@@ -65,7 +65,7 @@ class TestInferenceBehavior:
         This verifies that the system connects to the GPU server,
         regardless of how the connection is implemented.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -79,7 +79,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,
@@ -99,7 +99,7 @@ class TestInferenceBehavior:
         This verifies that files are uploaded for processing,
         without caring about file formats or storage mechanisms.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -113,7 +113,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,
@@ -133,7 +133,7 @@ class TestInferenceBehavior:
         This verifies that Docker inference is triggered,
         without caring about specific Docker commands or configurations.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -147,7 +147,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,
@@ -167,7 +167,7 @@ class TestInferenceBehavior:
         This verifies that results are retrieved after processing,
         without caring about file types or download mechanisms.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -181,7 +181,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     result = orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,
@@ -205,7 +205,7 @@ class TestInferenceBehavior:
         This verifies that when upscaling is requested, both steps execute,
         without caring about the specific upscaling implementation.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -219,7 +219,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,
@@ -243,7 +243,7 @@ class TestInferenceBehavior:
         This verifies error handling behavior,
         without caring about specific error types or recovery mechanisms.
         """
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         # Make Docker fail
         mock_dependencies["docker"].run_inference.return_value = (
@@ -264,7 +264,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
 
                     # Should not raise an exception
                     result = orchestrator.execute_run(
@@ -292,7 +292,7 @@ class TestInferenceBehavior:
             "seed": 12345,
         }
 
-        from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+        from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
             "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
@@ -306,7 +306,7 @@ class TestInferenceBehavior:
                     "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
-                    orchestrator = WorkflowOrchestrator()
+                    orchestrator = GPUExecutor()
                     orchestrator.execute_run(
                         run_dict=sample_run_dict,
                         prompt_dict=sample_prompt_dict,

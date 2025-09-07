@@ -17,7 +17,7 @@ def get_operations() -> Any:
     """Get the workflow operations from context.
 
     Returns:
-        WorkflowOperations: The workflow operations instance.
+        CosmosAPI: The workflow operations instance.
     """
     ctx = click.get_current_context()
     return ctx.obj.get_operations()

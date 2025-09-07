@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+from cosmos_workflow.execution.gpu_executor import GPUExecutor
 from tests.fixtures.fakes import FakeFileTransferService, FakeSSHManager
 
 
@@ -19,7 +19,7 @@ class TestWorkflowOrchestratorBatchExecution:
         """Set up test fixtures before each test method."""
         # Create orchestrator with test config
         with patch("cosmos_workflow.workflows.workflow_orchestrator.ConfigManager"):
-            self.orchestrator = WorkflowOrchestrator()
+            self.orchestrator = GPUExecutor()
 
         # Create fake SSH and file transfer
         self.fake_ssh = FakeSSHManager(connected=True)

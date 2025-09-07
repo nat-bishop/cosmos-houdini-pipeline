@@ -1,5 +1,5 @@
 """API layer for unified workflow operations."""
 
-from .workflow_operations import WorkflowOperations
+from .cosmos_api import CosmosAPI
 
-__all__ = ["WorkflowOperations"]
+__all__ = ["CosmosAPI"]

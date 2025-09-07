@@ -107,17 +107,17 @@ For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION
 
 The system implements a clean facade pattern with separation of concerns:
 
-- **WorkflowOperations** - Main facade providing unified API for all operations
-- **WorkflowService** - Data layer handling SQLAlchemy database operations
-- **WorkflowOrchestrator** - GPU execution layer managing SSH, Docker, and file transfers
+- **CosmosAPI** - Main facade providing unified API for all operations
+- **DataRepository** - Data layer handling SQLAlchemy database operations
+- **GPUExecutor** - GPU execution layer managing SSH, Docker, and file transfers
 - **CLI & Gradio UI** - User interfaces consuming the facade API
 
 ### Python API Example
 
 ```python
-from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.api import CosmosAPI
 
-ops = WorkflowOperations()
+ops = CosmosAPI()
 
 # Create and execute
 prompt = ops.create_prompt("cyberpunk city", "inputs/videos/scene1")

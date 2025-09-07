@@ -8,7 +8,7 @@ import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
-from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.services import DataRepository
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def test_db():
 def test_service(test_db):
     """Create a test WorkflowService with in-memory database."""
     config = ConfigManager()
-    return WorkflowService(test_db, config)
+    return DataRepository(test_db, config)
 
 
 @pytest.fixture

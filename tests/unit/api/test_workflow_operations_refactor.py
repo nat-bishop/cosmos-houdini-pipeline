@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cosmos_workflow.api.workflow_operations import WorkflowOperations
+from cosmos_workflow.api.cosmos_api import CosmosAPI
 from cosmos_workflow.config.config_manager import ConfigManager
 
 
@@ -46,7 +46,7 @@ class TestQuickInferenceRefactored:
                     "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
                     return_value=mock_orchestrator,
                 ):
-                    ops = WorkflowOperations(mock_config)
+                    ops = CosmosAPI(mock_config)
                     ops.service = mock_service
                     ops.orchestrator = mock_orchestrator
                     return ops
@@ -199,7 +199,7 @@ class TestBatchInferenceRefactored:
                     "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
                     return_value=mock_orchestrator,
                 ):
-                    ops = WorkflowOperations(mock_config)
+                    ops = CosmosAPI(mock_config)
                     ops.service = mock_service
                     ops.orchestrator = mock_orchestrator
                     return ops
@@ -383,7 +383,7 @@ class TestCreateAndExecuteMethods:
         with patch("cosmos_workflow.api.workflow_operations.init_database"):
             with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
                 with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
-                    return WorkflowOperations(mock_config)
+                    return CosmosAPI(mock_config)
 
     def test_quick_inference_replaces_create_and_execute(self, ops):
         """Test that quick_inference is the new primary method."""

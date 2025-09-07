@@ -4,15 +4,15 @@ THIS IS THE PRIMARY INTERFACE - All CLI commands, UI interactions, and external
 code should use this class as the single entry point to the system.
 
 This facade combines:
-- WorkflowService (database operations)
-- WorkflowOrchestrator (GPU execution)
+- DataRepository (database operations)
+- GPUExecutor (GPU execution)
 
 Into a unified, high-level API that matches user intentions.
 
 Example:
-    from cosmos_workflow.api import WorkflowOperations
+    from cosmos_workflow.api import CosmosAPI
 
-    ops = WorkflowOperations()  # Main facade
+    ops = CosmosAPI()  # Main facade
     prompt = ops.create_prompt("A futuristic city", "inputs/videos/")
     result = ops.quick_inference(prompt["id"])
 """
@@ -23,11 +23,11 @@ from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import init_database
+from cosmos_workflow.execution import GPUExecutor
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder
-from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.services import DataRepository
 from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
-from cosmos_workflow.workflows import WorkflowOrchestrator
 
 # Default negative prompt for video generation
 DEFAULT_NEGATIVE_PROMPT = (
@@ -40,11 +40,11 @@ DEFAULT_NEGATIVE_PROMPT = (
 )
 
 
-class WorkflowOperations:
+class CosmosAPI:
     """Main facade for the Cosmos Workflow System.
 
     THIS IS THE PRIMARY INTERFACE - Use this class for all interactions with
-    the system. Do not directly use WorkflowService or WorkflowOrchestrator.
+    the system. Do not directly use DataRepository or GPUExecutor.
 
     This facade provides:
     - High-level operations that combine database and GPU functionality
@@ -53,8 +53,8 @@ class WorkflowOperations:
     - Single point of entry for CLI, UI, and external code
 
     Internal components (not for direct use):
-    - WorkflowService: Database operations only
-    - WorkflowOrchestrator: GPU execution only (confusing name, will be renamed in v2.0)
+    - DataRepository: Database operations only
+    - GPUExecutor: GPU execution only
     """
 
     def __init__(self, config: ConfigManager | None = None):
@@ -74,10 +74,10 @@ class WorkflowOperations:
         db = init_database(str(db_path))
 
         # Create service and orchestrator
-        self.service = WorkflowService(db, config)
-        self.orchestrator = WorkflowOrchestrator(service=self.service)
+        self.service = DataRepository(db, config)
+        self.orchestrator = GPUExecutor(service=self.service)
 
-        logger.info("WorkflowOperations initialized")
+        logger.info("CosmosAPI initialized")
 
     # ========== Prompt Operations ==========
 

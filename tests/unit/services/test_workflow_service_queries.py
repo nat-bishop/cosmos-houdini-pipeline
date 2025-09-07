@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 
 
 class TestWorkflowServiceQueries:
@@ -39,7 +39,7 @@ class TestWorkflowServiceQueries:
     @pytest.fixture
     def service(self, mock_db_connection, mock_config_manager):
         """Create WorkflowService instance with mocks."""
-        return WorkflowService(db_connection=mock_db_connection, config_manager=mock_config_manager)
+        return DataRepository(db_connection=mock_db_connection, config_manager=mock_config_manager)
 
     # Test list_prompts method
     def test_list_prompts_default(self, service, mock_session):

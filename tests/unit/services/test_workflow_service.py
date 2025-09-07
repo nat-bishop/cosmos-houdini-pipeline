@@ -8,7 +8,7 @@ import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
-from cosmos_workflow.services import WorkflowService
+from cosmos_workflow.services import DataRepository
 
 
 class TestWorkflowServiceInit:
@@ -20,7 +20,7 @@ class TestWorkflowServiceInit:
         db_connection.create_tables()
         config_manager = ConfigManager()
 
-        service = WorkflowService(db_connection, config_manager)
+        service = DataRepository(db_connection, config_manager)
         assert service.db == db_connection
         assert service.config == config_manager
 
@@ -28,13 +28,13 @@ class TestWorkflowServiceInit:
         """Test that initializing with None db raises error."""
         config_manager = ConfigManager()
         with pytest.raises(ValueError, match="db_connection cannot be None"):
-            WorkflowService(None, config_manager)
+            DataRepository(None, config_manager)
 
     def test_init_with_none_config(self):
         """Test that initializing with None config raises error."""
         db_connection = DatabaseConnection(":memory:")
         with pytest.raises(ValueError, match="config_manager cannot be None"):
-            WorkflowService(db_connection, None)
+            DataRepository(db_connection, None)
 
 
 class TestWorkflowServiceCreatePrompt:
@@ -46,7 +46,7 @@ class TestWorkflowServiceCreatePrompt:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        return WorkflowService(db_connection, config_manager)
+        return DataRepository(db_connection, config_manager)
 
     def test_create_prompt_transfer(self, service):
         """Test creating a transfer model prompt."""
@@ -131,7 +131,7 @@ class TestWorkflowServiceCreateRun:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        service = WorkflowService(db_connection, config_manager)
+        service = DataRepository(db_connection, config_manager)
 
         # Create a test prompt
         prompt = service.create_prompt(
@@ -204,7 +204,7 @@ class TestWorkflowServiceGetPrompt:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        service = WorkflowService(db_connection, config_manager)
+        service = DataRepository(db_connection, config_manager)
 
         # Create test prompts
         prompt1 = service.create_prompt(
@@ -275,7 +275,7 @@ class TestWorkflowServiceGetRun:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        service = WorkflowService(db_connection, config_manager)
+        service = DataRepository(db_connection, config_manager)
 
         # Create test prompt and runs
         prompt = service.create_prompt(
@@ -345,7 +345,7 @@ class TestWorkflowServiceTransactions:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        return WorkflowService(db_connection, config_manager)
+        return DataRepository(db_connection, config_manager)
 
     def test_rollback_on_error(self, service):
         """Test that transactions are rolled back on error."""

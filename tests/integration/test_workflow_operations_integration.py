@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.connection import SSHManager
 
 
@@ -38,7 +38,7 @@ class TestWorkflowOperationsIntegration:
         # Mock ConfigManager to use test configuration
         with patch("cosmos_workflow.api.workflow_operations.ConfigManager") as mock_config:
             mock_config.return_value.get.side_effect = lambda key: test_config.get(key)
-            ops = WorkflowOperations()
+            ops = CosmosAPI()
             yield ops
             # Cleanup: close SSH connections
             if hasattr(ops, "orchestrator") and hasattr(ops.orchestrator, "ssh_manager"):

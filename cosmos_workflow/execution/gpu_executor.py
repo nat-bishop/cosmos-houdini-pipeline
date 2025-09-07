@@ -29,7 +29,7 @@ from cosmos_workflow.utils import nvidia_format
 from cosmos_workflow.utils.logging import logger
 
 
-class WorkflowOrchestrator:
+class GPUExecutor:
     """GPU execution component for Cosmos-Transfer1 workflows.
 
     NOT THE MAIN FACADE - This is an internal execution component.
@@ -71,7 +71,6 @@ class WorkflowOrchestrator:
         prompt_dict: dict[str, Any],
         upscale: bool = False,
         upscale_weight: float = 0.5,
-        **kwargs,
     ) -> dict[str, Any]:
         """Execute a run on GPU infrastructure.
 
@@ -83,7 +82,6 @@ class WorkflowOrchestrator:
             prompt_dict: Prompt data from database
             upscale: Whether to run upscaling
             upscale_weight: Weight for upscaling (0.0-1.0)
-            **kwargs: Additional options (e.g., log_path for logging)
 
         Returns:
             Dictionary with execution results including output paths
@@ -503,7 +501,6 @@ class WorkflowOrchestrator:
                         run_id=temp_run_id,  # Changed from operation_id to run_id
                         offload=True,  # Memory efficient for single prompts
                         checkpoint_dir="/workspace/checkpoints",
-                        timeout=600,
                     )
 
                     if enhancement_result.get("log_path"):

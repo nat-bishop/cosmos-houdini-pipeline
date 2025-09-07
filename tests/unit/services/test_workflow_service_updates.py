@@ -8,7 +8,7 @@ import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 
 
 class TestWorkflowServiceUpdateRunStatus:
@@ -20,7 +20,7 @@ class TestWorkflowServiceUpdateRunStatus:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        return WorkflowService(db_connection, config_manager)
+        return DataRepository(db_connection, config_manager)
 
     @pytest.fixture
     def sample_prompt(self, service):
@@ -134,7 +134,7 @@ class TestWorkflowServiceUpdateRun:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        return WorkflowService(db_connection, config_manager)
+        return DataRepository(db_connection, config_manager)
 
     @pytest.fixture
     def sample_prompt(self, service):
@@ -246,7 +246,7 @@ class TestWorkflowServiceEnhancementSupport:
         db_connection = DatabaseConnection(":memory:")
         db_connection.create_tables()
         config_manager = ConfigManager()
-        return WorkflowService(db_connection, config_manager)
+        return DataRepository(db_connection, config_manager)
 
     def test_create_prompt_with_enhancement_type(self, service):
         """Test creating a prompt with enhancement model type."""

@@ -51,18 +51,21 @@ The Cosmos Workflow System uses a **facade pattern** with `WorkflowOperations` a
 ### Development Rules
 
 **✅ ALWAYS Use WorkflowOperations:**
+
 ```python
-from cosmos_workflow.api import WorkflowOperations
-ops = WorkflowOperations()
+from cosmos_workflow.api import CosmosAPI
+
+ops = CosmosAPI()
 # Use ops for everything
 ```
 
 **❌ NEVER Import Internal Components Directly:**
+
 ```python
 # WRONG - These are internal components
-from cosmos_workflow.services import WorkflowService  # ❌
+from cosmos_workflow.services import DataRepository  # ❌
 from cosmos_workflow.database import DatabaseConnection  # ❌
-from cosmos_workflow.workflows import WorkflowOrchestrator  # ❌
+from cosmos_workflow.workflows import GPUExecutor  # ❌
 ```
 
 ### When to Use Low-Level Components

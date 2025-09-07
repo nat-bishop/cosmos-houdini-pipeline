@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cosmos_workflow.api.workflow_operations import WorkflowOperations
+from cosmos_workflow.api.cosmos_api import CosmosAPI
 
 
 class TestStreamContainerLogs:
@@ -42,7 +42,7 @@ class TestStreamContainerLogs:
         with patch("cosmos_workflow.api.workflow_operations.init_database"):
             with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
                 with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
-                    ops = WorkflowOperations(MagicMock())
+                    ops = CosmosAPI(MagicMock())
                     ops.orchestrator = mock_orchestrator
                     return ops
 

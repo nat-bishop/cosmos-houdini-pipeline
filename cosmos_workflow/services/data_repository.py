@@ -28,7 +28,7 @@ class PromptNotFoundError(ValueError):
     pass
 
 
-class WorkflowService:
+class DataRepository:
     """Service for managing workflow operations.
 
     Handles prompt and run creation, retrieval, and management

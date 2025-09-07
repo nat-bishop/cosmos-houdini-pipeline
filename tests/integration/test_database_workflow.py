@@ -8,8 +8,8 @@ import pytest
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
-from cosmos_workflow.services import WorkflowService
-from cosmos_workflow.workflows.workflow_orchestrator import WorkflowOrchestrator
+from cosmos_workflow.execution.gpu_executor import GPUExecutor
+from cosmos_workflow.services import DataRepository
 
 
 class TestDatabaseWorkflow:
@@ -26,12 +26,12 @@ class TestDatabaseWorkflow:
     def test_service(self, test_db):
         """Create a test WorkflowService with in-memory database."""
         config = ConfigManager()
-        return WorkflowService(test_db, config)
+        return DataRepository(test_db, config)
 
     @pytest.fixture
     def test_orchestrator(self):
         """Create a WorkflowOrchestrator for testing."""
-        return WorkflowOrchestrator()
+        return GPUExecutor()
 
     @pytest.fixture
     def sample_video_files(self, tmp_path):

@@ -56,9 +56,8 @@ Tests are the contract. Commit them unchanged.
 - [cosmos_workflow/](cosmos_workflow/) — package root
   - [services/](cosmos_workflow/services/) — business logic & data operations
   - [database/](cosmos_workflow/database/) — SQLAlchemy models & connection
-  - [workflows/](cosmos_workflow/workflows/) — orchestration & GPU flows
+  - [execution/](cosmos_workflow/execution/) — GPU execution & Docker commands
   - [connection/](cosmos_workflow/connection/) — SSH & file transfer
-  - [execution/](cosmos_workflow/execution/) — Docker & command exec
   - [transfer/](cosmos_workflow/transfer/) — File Transfer
   - [config/](cosmos_workflow/config/) — config and `config.toml`
   - [local_ai/](cosmos_workflow/local_ai/) — local AI utils
@@ -78,19 +77,20 @@ All core operations must go through wrappers.
 If functionality is missing, extend the wrapper instead of bypassing it.
 
 ### **PRIMARY INTERFACE (Use This!)**
+
 ```python
-from cosmos_workflow.api import WorkflowOperations  # MAIN FACADE - USE THIS!
+from cosmos_workflow.api import CosmosAPI  # MAIN FACADE - USE THIS!
 
 # This is the ONLY interface you should use for workflow operations:
-ops = WorkflowOperations()
-ops.create_prompt(...)      # Create prompts
-ops.quick_inference(...)    # Run inference
-ops.list_prompts(...)       # Query data
+ops = CosmosAPI()
+ops.create_prompt(...)  # Create prompts
+ops.quick_inference(...)  # Run inference
+ops.list_prompts(...)  # Query data
 # etc.
 ```
 
 ### **Low-Level Wrappers (For Internal Infrastructure Only)**
-These are used internally by WorkflowOperations. Only use directly for infrastructure tasks:
+These are used internally by CosmosAPI. Only use directly for infrastructure tasks:
 
 ```python
 from cosmos_workflow.connection import SSHManager, RemoteCommandExecutor
@@ -103,16 +103,16 @@ from cosmos_workflow.utils import nvidia_format
 ### **DO NOT USE DIRECTLY (Internal Components)**
 ```python
 # NEVER import these directly - they are internal:
-# ❌ from cosmos_workflow.services import WorkflowService  # Internal data layer
+# ❌ from cosmos_workflow.services import DataRepository  # Internal data layer
 # ❌ from cosmos_workflow.database import DatabaseConnection  # Internal database
-# ❌ from cosmos_workflow.workflows import WorkflowOrchestrator  # Internal GPU executor
+# ❌ from cosmos_workflow.execution import GPUExecutor  # Internal GPU executor
 ```
 
 ### **Responsibilities & Enforcement**
 
-* **WorkflowOperations** — **PRIMARY INTERFACE for all workflow operations**
+* **CosmosAPI** — **PRIMARY INTERFACE for all workflow operations**
   Always use for prompts, runs, inference, queries. This is the main facade.
-  Never bypass this to use WorkflowService or WorkflowOrchestrator directly.
+  Never bypass this to use DataRepository or GPUExecutor directly.
 
 * **SSHManager** — create/manage SSH sessions (infrastructure only).
   Use only for low-level SSH tasks. Never call `paramiko.SSHClient()` directly.
@@ -155,7 +155,7 @@ from cosmos_workflow.utils import nvidia_format
  - Docstrings: **Google-style** (`Args/Returns/Raises`)
  - Exceptions: **catch specific exceptions**; never bare `except:`
  - Encoding: **ASCII only** in code/logs; no emojis/unicode
- - Use our **wrappers** (SSHManager, DockerExecutor, ConfigManager, WorkflowService); never raw libs
+ - Use our **wrappers** (SSHManager, DockerExecutor, ConfigManager, DataRepository); never raw libs
 
 ---
 

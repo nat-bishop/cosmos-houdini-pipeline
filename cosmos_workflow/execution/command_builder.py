@@ -45,10 +45,9 @@ class DockerCommandBuilder:
 
     def build(self) -> str:
         """Build the complete Docker command."""
-        parts = ["sudo docker run"]
+        parts = ["sudo docker run", "--rm"]
 
         # Add standard options
-        parts.append("--rm")
 
         # Add GPU support
         if self.gpu_enabled:

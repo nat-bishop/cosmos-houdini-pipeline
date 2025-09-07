@@ -168,7 +168,6 @@ class DockerExecutor:
         run_id: str | None = None,  # Changed from operation_id to run_id for consistency
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
-        timeout: int = 600,
     ) -> dict:
         """Run prompt enhancement using Pixtral model on GPU.
 
@@ -181,7 +180,6 @@ class DockerExecutor:
             run_id: Run ID for tracking (REQUIRED for consistency with inference)
             offload: Whether to offload model between prompts (True for memory efficiency)
             checkpoint_dir: Directory containing model checkpoints
-            timeout: Not used for background execution (kept for compatibility)
 
         Returns:
             Dict containing status ('started') and log_path to local log file.

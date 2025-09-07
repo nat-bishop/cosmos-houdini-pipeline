@@ -3,7 +3,7 @@
 
 import gradio as gr
 
-from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.utils.logging import logger
@@ -12,7 +12,7 @@ from cosmos_workflow.utils.logging import logger
 config = ConfigManager()
 
 # Initialize unified operations
-ops = WorkflowOperations(config=config)
+ops = CosmosAPI(config=config)
 
 # Initialize log viewer
 log_viewer = LogViewer(max_lines=2000)

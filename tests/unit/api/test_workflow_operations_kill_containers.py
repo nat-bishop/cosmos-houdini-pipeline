@@ -4,7 +4,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from cosmos_workflow.api.workflow_operations import WorkflowOperations
+from cosmos_workflow.api.cosmos_api import CosmosAPI
 
 
 class TestWorkflowOperationsKillContainers(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
                         self.mock_orchestrator.docker_executor = self.mock_docker_executor
 
                         # Create the WorkflowOperations instance
-                        self.ops = WorkflowOperations()
+                        self.ops = CosmosAPI()
 
     def test_kill_containers_follows_established_pattern(self):
         """Test that kill_containers uses orchestrator pattern correctly."""

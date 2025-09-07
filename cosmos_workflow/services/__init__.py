@@ -4,6 +4,6 @@ Provides business logic for workflow operations including prompt creation,
 run management, and query capabilities.
 """
 
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 
-__all__ = ["WorkflowService"]
+__all__ = ["DataRepository"]

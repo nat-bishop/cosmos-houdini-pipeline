@@ -37,9 +37,9 @@ class CLIContext:
         All database operations, GPU execution, and business logic go through here.
         """
         if self.operations is None:
-            from cosmos_workflow.api import WorkflowOperations
+            from cosmos_workflow.api import CosmosAPI
 
-            self.operations = WorkflowOperations()
+            self.operations = CosmosAPI()
         return self.operations
 
 

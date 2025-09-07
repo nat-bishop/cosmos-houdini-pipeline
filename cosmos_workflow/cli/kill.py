@@ -5,7 +5,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.utils.logging import logger
 
 
@@ -43,7 +43,7 @@ def kill(force: bool) -> None:
 
     try:
         console.print("\n[cyan]Connecting to GPU instance...[/cyan]")
-        ops = WorkflowOperations()
+        ops = CosmosAPI()
 
         # Kill containers
         console.print("[cyan]Searching for running containers...[/cyan]")

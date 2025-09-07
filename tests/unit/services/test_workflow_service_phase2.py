@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from cosmos_workflow.database.models import Run
-from cosmos_workflow.services.workflow_service import WorkflowService
+from cosmos_workflow.services.data_repository import DataRepository
 
 
 class TestWorkflowServicePhase2Updates:
@@ -31,7 +31,7 @@ class TestWorkflowServicePhase2Updates:
     def workflow_service(self, mock_db_connection, mock_config_manager):
         """Create WorkflowService instance with mocks."""
         mock_db, _ = mock_db_connection
-        return WorkflowService(mock_db, mock_config_manager)
+        return DataRepository(mock_db, mock_config_manager)
 
     def test_update_run_with_log_method_exists(self, workflow_service):
         """Test that update_run_with_log method exists."""

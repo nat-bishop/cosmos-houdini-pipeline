@@ -14,6 +14,8 @@ This document outlines the implementation plan for improving logging and monitor
 2. ✅ **Created minimal Gradio app** - Simplified from 1600+ to 250 lines
 3. ✅ **Integrated with `cosmos ui` command** - Works via CLI
 4. ✅ **Unified log streaming approach** - File-based logs consistently
+5. ✅ **Simplified LogViewer further** - Removed unused methods (now ~95 lines)
+6. ✅ **Updated tests** - All 10 tests passing
 
 ### Key Architecture Decisions:
 - **File-based logs are superior to Docker logs** for our use case
@@ -307,6 +309,51 @@ This file-based approach is superior because:
 - Single source of truth for CLI and UI
 
 ---
+
+## Next Session TODO: Simplify Gradio UI Further
+
+### Current UI Issues:
+1. **Manual Run ID entry** - User has to type/paste run ID
+2. **Manual Start Streaming button** - Extra click required
+3. **Not auto-refreshing** - User has to click refresh
+
+### Proposed Improvements:
+1. **Auto-stream active jobs**:
+   - If ONE job running → Start streaming immediately
+   - If MULTIPLE jobs → Dropdown to select
+   - If NO jobs → Show "No active jobs" message
+
+2. **Remove manual controls**:
+   - Remove Run ID text input
+   - Remove Start Streaming button
+   - Auto-detect and stream
+
+3. **Better UX**:
+   ```python
+   # Instead of:
+   run_id_input = gr.Textbox(label="Run ID")
+   start_btn = gr.Button("Start Streaming")
+
+   # Use:
+   job_selector = gr.Dropdown(
+       label="Select Active Job",
+       choices=[],  # Auto-populate
+       value=None,  # Auto-select first
+   )
+   # Auto-stream when selection changes
+   ```
+
+4. **Auto-refresh**:
+   - Check for new jobs every 5 seconds
+   - Update dropdown if jobs change
+   - Continue streaming current selection
+
+### Implementation Steps:
+1. Change `get_running_jobs()` to return dropdown choices
+2. Remove Run ID input and Start button
+3. Add job selector dropdown
+4. Auto-start streaming on load if jobs exist
+5. Auto-refresh job list periodically
 
 ## Phase 5: GPU Utilization Monitoring (NEW - 1 day)
 

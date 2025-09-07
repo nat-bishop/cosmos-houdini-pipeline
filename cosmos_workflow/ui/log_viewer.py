@@ -2,7 +2,6 @@
 """Simple log viewer for monitoring GPU inference runs."""
 
 import html
-import json
 from collections import deque
 from datetime import datetime, timezone
 
@@ -21,13 +20,6 @@ class LogViewer:
                 self.entries.append(
                     {"time": datetime.now(timezone.utc).strftime("%H:%M:%S"), "text": line.strip()}
                 )
-
-    def add_line(self, line: str):
-        """Add a single log line."""
-        if line:
-            self.entries.append(
-                {"time": datetime.now(timezone.utc).strftime("%H:%M:%S"), "text": line.strip()}
-            )
 
     def get_html(self, level_filter=None, search=None) -> str:
         """Get colored HTML with optional filtering.
@@ -91,24 +83,9 @@ class LogViewer:
         html_lines.append("</div>")
         return "\n".join(html_lines)
 
-    def export_json(self) -> str:
-        """Export logs as JSON for debugging."""
-        return json.dumps(list(self.entries), indent=2)
-
     def clear(self):
         """Clear all logs."""
         self.entries.clear()
-
-    def has_errors(self) -> bool:
-        """Quick check if any errors occurred."""
-        return any("ERROR" in e["text"] or "Error" in e["text"] for e in self.entries)
-
-    def get_last_error(self) -> str | None:
-        """Get the most recent error for quick debugging."""
-        for entry in reversed(self.entries):
-            if "ERROR" in entry["text"] or "Error" in entry["text"]:
-                return entry["text"]
-        return None
 
     def get_stats(self) -> dict:
         """Get quick statistics about the logs."""

@@ -5,21 +5,28 @@ This document outlines the implementation plan for improving logging and monitor
 
 ## Current Status (2025-01-07)
 - ✅ **Phases 1-3**: Complete (Centralized logging, Database storage, Remote streaming)
-- ✅ **Phase 4**: Log Viewer implemented but NOT integrated
+- ✅ **Phase 4**: Log Viewer implemented and integrated with Gradio UI
 - ⏳ **Phase 5**: GPU Monitoring - Ready to implement
 - ⏳ **Phase 6**: Testing & Documentation
 
-### Next Steps for New Session:
-1. **Fix LogViewer timezone issue** - Add `timezone.utc` or suppress warning
-2. **Integrate LogViewer into Gradio UI** - Add to app.py inference tab
-3. **Implement GPU monitoring** - Show GPU util% and current job in `cosmos status`
-4. **Test and document** - Verify everything works
+### Latest Updates (Session 2):
+1. ✅ **Fixed LogViewer timezone issue** - Added `timezone.utc`
+2. ✅ **Created minimal Gradio app** - Simplified from 1600+ to 250 lines
+3. ✅ **Integrated with `cosmos ui` command** - Works via CLI
+4. ✅ **Unified log streaming approach** - File-based logs consistently
 
-**Key Architecture Facts:**
-- Scripts run on remote GPU instances inside Docker containers
-- Logs are captured via `tee` in bash scripts to `outputs/${PROMPT_NAME}/run.log` on remote
-- Files are transferred back via SFTP after completion
-- We use seek-based position tracking for efficient log streaming
+### Key Architecture Decisions:
+- **File-based logs are superior to Docker logs** for our use case
+- Scripts write to `/workspace/outputs/{prompt_name}/run.log`
+- RemoteLogStreamer reads these files with position tracking
+- Logs persist after container stops (can review failed runs)
+- Single source of truth for both CLI and Gradio UI
+
+### What the Current System Does:
+1. **During execution**: Scripts redirect output to log files
+2. **For monitoring**: RemoteLogStreamer reads files in real-time
+3. **For UI**: LogViewer displays with color coding and filtering
+4. **For persistence**: Logs saved locally and paths stored in database
 
 ## Current Implementation Status
 
@@ -276,17 +283,28 @@ Simple, practical log viewer for monitoring inference runs.
 
 #### How to use:
 ```bash
-# Start the Gradio app
-python cosmos_workflow/ui/app.py
+# Start the UI via CLI
+cosmos ui
+
+# Or specify a custom port
+cosmos ui --port 8080
 
 # Access at http://localhost:7860
-# Enter a Run ID to stream logs
-# Use filters and search to find specific entries
+# App will auto-detect running jobs
+# Click on a run ID to stream its logs
 ```
 
-#### Ready for testing:
-The app is ready to test with actual inference runs. The streaming callback
-will populate the LogViewer during GPU execution.
+#### Architecture:
+```
+Scripts → Write to log files → RemoteLogStreamer reads → LogViewer displays
+         (/workspace/outputs/{prompt_name}/run.log)
+```
+
+This file-based approach is superior because:
+- Logs persist after container stops
+- Can resume from position if disconnected
+- Works with database (stores log paths)
+- Single source of truth for CLI and UI
 
 ---
 
@@ -379,6 +397,33 @@ Test the simplified system and update docs.
 - Remove references to removed features
 
 ---
+
+## Unified Operations Architecture
+
+### WorkflowOperations Methods (Session 2 additions):
+```python
+# Container management
+def get_active_containers() -> list[dict]
+    # Returns Docker containers with ID, name, status
+
+# Log streaming (unified for CLI and UI)
+def stream_logs(container_id=None, callback=None)
+    # If callback: streams to callback for UI
+    # If no callback: streams to stdout for CLI
+```
+
+### Current Flow:
+1. **CLI**: `cosmos status --stream` → `ops.stream_logs()` → stdout
+2. **UI**: `cosmos ui` → `ops.stream_logs(callback=...)` → LogViewer
+3. **Both use same underlying system**: RemoteLogStreamer reading files
+
+### Why File-Based Won:
+After extensive analysis, file-based logs are superior to Docker logs because:
+- **Already implemented**: Scripts use `tee` to write logs
+- **Persistent**: Survive container removal
+- **Seekable**: Can resume from position
+- **Database-integrated**: Paths stored with runs
+- **Unified**: One system for all use cases
 
 ## REMOVED PHASES (Not Needed)
 

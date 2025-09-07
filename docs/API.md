@@ -6,6 +6,7 @@ Complete API documentation for the Cosmos Workflow System.
 - [System Architecture](#system-architecture)
 - [CLI Commands](#cli-commands)
 - [Core Modules](#core-modules)
+- [Log Visualization](#log-visualization)
 - [Schemas](#schemas)
 - [Configuration](#configuration)
 - [Utilities](#utilities)
@@ -514,6 +515,188 @@ When using `--stream`:
 - Auto-detects the most recent Docker container
 - Streams logs in real-time until interrupted with Ctrl+C
 - Shows helpful error messages if no containers are running
+
+## Log Visualization
+
+The Cosmos Workflow System includes a comprehensive log visualization interface that provides real-time log streaming, advanced filtering, and interactive web-based viewing capabilities.
+
+### LogViewer
+
+Core log viewer component for managing and displaying logs with real-time streaming capabilities.
+
+```python
+from cosmos_workflow.ui.log_viewer import LogViewer, LogFilter, LogEntry
+from datetime import datetime
+
+# Initialize log viewer with buffer management
+log_viewer = LogViewer(max_entries=1000, buffer_size=50)
+
+# Add log entries from various sources
+log_viewer.add_log_line("2024-01-01 12:00:00 [INFO] Starting inference process")
+
+# Create custom log entry
+entry = LogEntry(
+    timestamp=datetime.now(),
+    level="INFO",
+    message="Custom log message",
+    source="inference.py",
+    line_number=42
+)
+log_viewer.add_entry(entry)
+
+# Set up real-time streaming from remote source
+callback = log_viewer.get_stream_callback(stream_id="gpu_logs")
+# callback can be used with RemoteLogStreamer for real-time updates
+
+# Apply filters
+filter_obj = LogFilter(
+    levels=["ERROR", "WARNING"],
+    search_text="inference",
+    start_time=datetime(2024, 1, 1),
+    end_time=datetime(2024, 1, 2)
+)
+log_viewer.set_filter(filter_obj)
+filtered_entries = log_viewer.get_filtered_entries()
+
+# Export logs in various formats
+json_export = log_viewer.export_json(filtered=True)
+text_export = log_viewer.export_text()
+html_output = log_viewer.get_formatted_html()
+
+# Search functionality
+results = log_viewer.search("error")
+
+# Pagination for large log sets
+page_entries = log_viewer.get_page(page=0, page_size=50)
+```
+
+**Key Features:**
+- **Real-time streaming** with configurable buffer sizes and update callbacks
+- **Advanced filtering** by log level, search text, regex patterns, and time ranges
+- **Multiple export formats** including JSON, plain text, and HTML with syntax highlighting
+- **Performance optimization** with virtual scrolling and caching for large log sets
+- **Stream integration** with callback system for RemoteLogStreamer integration
+- **Memory management** with configurable maximum entries and automatic cleanup
+
+### LogFilter
+
+Flexible filtering system for log entries based on multiple criteria.
+
+```python
+from cosmos_workflow.ui.log_viewer import LogFilter
+from datetime import datetime
+
+# Create comprehensive filter
+log_filter = LogFilter(
+    levels=["ERROR", "WARNING", "INFO"],  # Include specific log levels
+    search_text="docker",                   # Search for specific text
+    regex_pattern=r"\berror\d+\b",          # Regex pattern matching
+    start_time=datetime(2024, 1, 1, 8, 0),  # Time range filtering
+    end_time=datetime(2024, 1, 1, 18, 0)
+)
+
+# Apply filter to log entries
+filtered_logs = log_filter.apply(all_log_entries)
+```
+
+### LogViewerWeb
+
+Web-based log viewer component designed for Gradio integration with advanced UI features.
+
+```python
+from cosmos_workflow.ui.log_viewer_web import LogViewerWeb, create_log_viewer_interface
+import gradio as gr
+
+# Initialize web log viewer
+web_viewer = LogViewerWeb()
+
+# Add log streams for real-time monitoring
+stream_id = web_viewer.add_stream(run_id="rs_abc123", log_path="/remote/logs/inference.log")
+
+# Configure UI settings
+web_viewer.set_theme("dark")
+web_viewer.enable_auto_refresh(interval=2.0)
+web_viewer.set_viewport_size("desktop")
+
+# Render logs with syntax highlighting
+html_output = web_viewer.render_html()
+
+# Performance optimizations
+page_html = web_viewer.render_page(page=0, page_size=50)
+viewport_config = web_viewer.get_viewport_config()
+
+# Search and filtering
+results = web_viewer.incremental_search("error", previous_query="err")
+web_viewer.apply_filter(levels=["ERROR", "WARNING"])
+filtered_html = web_viewer.get_filtered_html()
+
+# Accessibility features
+announcement = web_viewer.get_screen_reader_announcement()
+keyboard_shortcuts = web_viewer.get_keyboard_shortcuts()
+
+# Create complete Gradio interface
+interface = create_log_viewer_interface()
+interface.launch()
+```
+
+**Web Interface Features:**
+- **Gradio integration** with interactive filtering controls and real-time updates
+- **Responsive design** with mobile, tablet, and desktop layouts
+- **Theme support** with dark and light modes
+- **Accessibility features** including screen reader support and keyboard navigation
+- **Performance optimization** with virtual scrolling, caching, and incremental search
+- **Export capabilities** supporting JSON, text, and CSV formats
+- **Auto-refresh** with configurable intervals for real-time monitoring
+
+### Integration with RemoteLogStreamer
+
+The log visualization system integrates seamlessly with the existing RemoteLogStreamer infrastructure:
+
+```python
+from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+from cosmos_workflow.ui.log_viewer import LogViewer
+
+# Create log viewer and streamer
+log_viewer = LogViewer()
+streamer = RemoteLogStreamer(
+    ssh_manager=ssh_manager,
+    remote_log_path="/remote/logs/inference.log",
+    local_log_path="local/logs/inference.log"
+)
+
+# Connect log viewer to streamer
+callback = log_viewer.get_stream_callback(stream_id="inference")
+streamer.start_streaming(callback=callback)
+
+# Logs will now appear in real-time in the log viewer
+# with automatic parsing, filtering, and display capabilities
+```
+
+### Usage in Gradio UI
+
+The log visualization interface is designed to integrate into the existing Gradio UI:
+
+```python
+# Add to existing UI tabs
+with gr.Tab("Logs"):
+    log_interface = create_log_viewer_interface()
+
+# Or embed in existing inference tab
+with gr.Tab("Generate"):
+    # ... existing UI components ...
+
+    log_display = gr.HTML(
+        label="Execution Logs",
+        value="",
+        elem_classes=["log-display"]
+    )
+
+    # Update logs during inference
+    def update_logs():
+        return web_viewer.render_html()
+
+    gr.Timer(fn=update_logs, outputs=[log_display], active=True)
+```
 
 ## Core Modules
 

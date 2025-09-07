@@ -2,7 +2,7 @@
 """Tests for log visualization interface components."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 from cosmos_workflow.ui.log_viewer import (
@@ -301,7 +301,7 @@ class TestLogParsing:
         line = "2024-01-01 12:00:00 [INFO] Starting application"
         entry = parse_log_line(line)
 
-        assert entry.timestamp == datetime(2024, 1, 1, 12, 0, 0)
+        assert entry.timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         assert entry.level == "INFO"
         assert entry.message == "Starting application"
 
@@ -378,7 +378,9 @@ class TestLogViewerPerformance:
 
         # Add 2000 entries
         for i in range(2000):
-            viewer.add_log_line(f"2024-01-01 12:00:{i:02d} [INFO] Message {i}")
+            # Ensure seconds are valid (00-59)
+            seconds = i % 60
+            viewer.add_log_line(f"2024-01-01 12:00:{seconds:02d} [INFO] Message {i}")
 
         # Should only keep max_entries
         assert len(viewer.entries) == 1000
@@ -407,8 +409,12 @@ class TestLogViewerPerformance:
         for i in range(25):
             viewer.add_log_line(f"2024-01-01 12:00:{i:02d} [INFO] Message {i}")
 
-        # Should have triggered updates based on buffer size
-        assert update_count == 3  # 25 entries / 10 buffer size = 2.5, rounded up to 3
+        # Should have triggered updates based on buffer size (2 full buffers)
+        assert update_count == 2  # 25 entries / 10 buffer size = 2 full buffers
+
+        # Flush remaining buffer
+        viewer.flush_buffer()
+        assert update_count == 3  # Now we should have 3 updates total
 
     def test_virtual_scrolling_support(self):
         """Test support for virtual scrolling with large datasets."""
@@ -416,7 +422,9 @@ class TestLogViewerPerformance:
 
         # Add many entries
         for i in range(100):
-            viewer.add_log_line(f"2024-01-01 12:00:{i:02d} [INFO] Message {i}")
+            # Ensure seconds are valid (00-59)
+            seconds = i % 60
+            viewer.add_log_line(f"2024-01-01 12:00:{seconds:02d} [INFO] Message {i}")
 
         # Get paginated results
         page_1 = viewer.get_page(page=0, page_size=10)

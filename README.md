@@ -293,7 +293,8 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 - **Real-Time Progress** - Granular tracking through all execution stages
 - **Rich CLI Interface** - Database IDs, colored tables, JSON output support
 - **Real-Time Log Streaming** - Live Docker execution logs with efficient seek-based tailing
-- **Gradio Web UI** - Interactive web interface with live log streaming
+- **Log Visualization Interface** - Advanced web-based log viewer with filtering, search, export, and real-time updates
+- **Gradio Web UI** - Interactive web interface with live log streaming and integrated log viewer
 - **AI Enhancement** - Prompt improvement using Pixtral with full tracking
 - **Query & Search** - List, filter, and search prompts with highlighting
 - **Production Ready** - 453 passing tests, comprehensive error handling
@@ -312,6 +313,7 @@ cosmos ui
 - **All Control Weights**: Configure visual, edge, depth, and segmentation weights (0.0-1.0)
 - **Real-Time Log Streaming**: Live Docker execution logs streamed from remote GPU with efficient seek-based position tracking
 - **Background Log Monitoring**: Non-blocking log streaming during inference execution
+- **Advanced Log Visualization**: Interactive web-based log viewer with filtering, search, export, and syntax highlighting
 - **Prompt Management**: View all prompts with video status indicators
 - **Run Tracking**: Monitor inference progress and status with live logs
 - **Gallery View**: Browse completed video generations

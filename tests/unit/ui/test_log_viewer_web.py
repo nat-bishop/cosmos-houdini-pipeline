@@ -166,10 +166,14 @@ class TestGradioIntegration:
 
     def test_create_log_viewer_interface(self):
         """Test creating the Gradio interface for log viewer."""
-        with patch("gradio.Blocks") as mock_blocks:
+        with patch("cosmos_workflow.ui.log_viewer_web.gr") as mock_gr:
+            mock_blocks = mock_gr.Blocks.return_value
+            mock_blocks.__enter__ = lambda self: self
+            mock_blocks.__exit__ = lambda self, *args: None
+
             interface = create_log_viewer_interface()
 
-            mock_blocks.assert_called_once()
+            mock_gr.Blocks.assert_called_once()
             assert interface is not None
 
     def test_handle_log_search(self):
@@ -265,7 +269,7 @@ class TestPerformanceOptimization:
         page_html = viewer.render_page(page=0, page_size=50)
 
         # Should only render requested page
-        assert page_html.count('<div class="log-entry">') == 50
+        assert page_html.count('<div class="log-entry log-info">') == 50
 
     def test_virtual_scrolling(self):
         """Test virtual scrolling implementation."""
@@ -372,6 +376,11 @@ class TestAccessibility:
     def test_keyboard_navigation(self):
         """Test keyboard navigation support."""
         viewer = LogViewerWeb()
+
+        # Add some entries first
+        viewer.log_viewer.add_log_line("2024-01-01 12:00:00 [INFO] Entry 0")
+        viewer.log_viewer.add_log_line("2024-01-01 12:00:01 [INFO] Entry 1")
+        viewer.log_viewer.add_log_line("2024-01-01 12:00:02 [INFO] Entry 2")
 
         # Test navigation actions
         viewer.handle_keyboard_event("ArrowDown")

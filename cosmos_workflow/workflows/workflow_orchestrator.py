@@ -221,6 +221,12 @@ class WorkflowOrchestrator:
                 # Check Docker status
                 docker_status = self.docker_executor.get_docker_status()
 
+                # Get GPU information
+                gpu_info = self.docker_executor.get_gpu_info()
+
+                # Get active container
+                container = self.docker_executor.get_active_container()
+
                 # Check remote directory
                 remote_config = self.config_manager.get_remote_config()
                 remote_dir_exists = self.file_transfer.file_exists_remote(remote_config.remote_dir)
@@ -228,6 +234,8 @@ class WorkflowOrchestrator:
                 return {
                     "ssh_status": ssh_status,
                     "docker_status": docker_status,
+                    "gpu_info": gpu_info,
+                    "container": container,
                     "remote_directory_exists": remote_dir_exists,
                     "remote_directory": remote_config.remote_dir,
                 }

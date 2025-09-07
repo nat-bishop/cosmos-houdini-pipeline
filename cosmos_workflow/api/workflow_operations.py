@@ -653,23 +653,20 @@ class WorkflowOperations:
 
         try:
             with self.orchestrator.ssh_manager:
-                containers = self.orchestrator.docker_executor.get_docker_containers()
+                container = self.orchestrator.docker_executor.get_active_container()
 
-                result = []
-                for container in containers:
-                    # Parse container string (format varies)
-                    parts = container.split()
-                    if parts:
-                        result.append(
-                            {
-                                "container_id": parts[0][:12] if parts else "unknown",
-                                "name": parts[1] if len(parts) > 1 else "unknown",
-                                "image": self.orchestrator.docker_executor.docker_image,
-                                "status": "running",
-                            }
-                        )
-
-                return result
+                if container:
+                    # Return as list for backward compatibility
+                    # Map field names to match existing interface
+                    return [
+                        {
+                            "container_id": container["id_short"],
+                            "name": container["name"],
+                            "image": container["image"],
+                            "status": container["status"],
+                        }
+                    ]
+                return []
         except Exception as e:
             logger.error("Failed to get containers: %s", e)
             return []

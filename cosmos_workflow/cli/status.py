@@ -61,16 +61,17 @@ def status(ctx, stream):
     else:
         status_data["GPU"] = "[yellow]Not detected[/yellow]"
 
-    # Container information
-    containers = status_info.get("containers", [])
-    if containers:
-        status_data["Running Containers"] = f"[cyan]{len(containers)}[/cyan]"
-        for i, container in enumerate(containers[:3]):  # Show first 3
-            name = container.get("name", "unknown")
-            state = container.get("state", "unknown")
-            status_data[f"  Container {i + 1}"] = f"{name} ({state})"
+    # Container information (now expecting single container)
+    container = status_info.get("container")
+    if container:
+        status_data["Running Container"] = f"[cyan]{container['name']}[/cyan]"
+        status_data["  Status"] = container["status"]
+        status_data["  Container ID"] = container["id_short"]
+        # Show warning if multiple containers detected
+        if "warning" in container:
+            console.print(f"\n[yellow]Warning:[/yellow] {container['warning']}")
     else:
-        status_data["Running Containers"] = "[yellow]None[/yellow]"
+        status_data["Running Container"] = "[yellow]None[/yellow]"
 
     # Display the table
     console.print("\n[bold cyan]Remote GPU Status[/bold cyan]")
@@ -82,20 +83,20 @@ def status(ctx, stream):
         console.print(
             "\n[yellow]Tip:[/yellow] Check your SSH configuration and network connection."
         )
-    elif status_info.get("docker_status") != "running":
+    elif isinstance(docker_info, dict) and not docker_info.get("docker_running"):
         console.print("\n[yellow]Tip:[/yellow] Docker may not be running on the remote instance.")
     elif not gpu_info:
         console.print("\n[yellow]Tip:[/yellow] GPU drivers may not be properly installed.")
-    elif not containers:
+    elif not container:
         console.print("\n[yellow]Tip:[/yellow] Use 'cosmos inference' to start a container.")
 
-    # Stream logs if requested and containers are running
-    if stream and containers:
+    # Stream logs if requested and container is running
+    if stream and container:
         console.print("\n[cyan]Starting log stream...[/cyan]")
         console.print("[dim]Press Ctrl+C to stop streaming[/dim]\n")
 
         # We already have the container info from status check
-        container_id = containers[0]["container_id"]
+        container_id = container["id"]
 
         try:
             ops.stream_container_logs(container_id)
@@ -103,5 +104,5 @@ def status(ctx, stream):
             console.print(f"[red]Error streaming logs:[/red] {e}")
         except KeyboardInterrupt:
             console.print("\n[cyan]Stopped streaming logs[/cyan]")
-    elif stream and not containers:
-        console.print("\n[yellow]No containers running to stream logs from.[/yellow]")
+    elif stream and not container:
+        console.print("\n[yellow]No container running to stream logs from.[/yellow]")

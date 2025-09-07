@@ -349,20 +349,132 @@ class DockerExecutor:
                 "sudo docker images", stream_output=False
             )
 
-            # Check running containers
-            containers_output = self.ssh_manager.execute_command_success(
-                "sudo docker ps", stream_output=False
-            )
+            # Use get_active_container for container info
+            container = self.get_active_container()
 
             return {
                 "docker_running": True,
                 "docker_info": docker_info,
                 "available_images": images_output,
-                "running_containers": containers_output,
+                "active_container": container,  # More structured than raw text
             }
 
         except Exception as e:
             return {"docker_running": False, "error": str(e)}
+
+    def get_active_container(self) -> dict[str, str] | None:
+        """Get the active cosmos container (expects exactly one).
+
+        Returns:
+            Dict with container info if found:
+                - id: Full container ID
+                - id_short: First 12 chars of ID
+                - name: Container name
+                - status: Container status
+                - image: Image name
+                - created: Creation timestamp
+                - warning: Optional warning if multiple containers
+            None if no containers found
+        """
+        try:
+            # Get containers matching our image
+            cmd = (
+                f'sudo docker ps --filter "ancestor={self.docker_image}" '
+                f'--format "{{{{.ID}}}}|{{{{.Names}}}}|{{{{.Status}}}}|'
+                f'{{{{.Image}}}}|{{{{.CreatedAt}}}}"'
+            )
+            output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
+
+            if not output or not output.strip():
+                return None
+
+            lines = output.strip().split("\n")
+            containers = []
+
+            for line in lines:
+                if "|" in line:
+                    parts = line.split("|")
+                    if len(parts) >= 5:
+                        containers.append(
+                            {
+                                "id": parts[0],
+                                "id_short": parts[0][:12],
+                                "name": parts[1],
+                                "status": parts[2],
+                                "image": parts[3],
+                                "created": parts[4],
+                            }
+                        )
+
+            if not containers:
+                return None
+
+            # Return first container, with warning if multiple
+            container = containers[0]
+            if len(containers) > 1:
+                container["warning"] = (
+                    f"Multiple containers detected ({len(containers)}), "
+                    f"using most recent: {container['name']}"
+                )
+                logger.warning(
+                    "Multiple cosmos containers found: %d. Using %s",
+                    len(containers),
+                    container["name"],
+                )
+
+            return container
+
+        except Exception as e:
+            logger.error("Failed to get active container: %s", e)
+            return None
+
+    def get_gpu_info(self) -> dict[str, str] | None:
+        """Get GPU information from the remote instance.
+
+        Returns:
+            Dict with GPU info if available:
+                - name: GPU model name
+                - memory_total: Total GPU memory
+                - cuda_version: CUDA version
+            None if GPU not available or nvidia-smi fails
+        """
+        try:
+            # Query GPU info using nvidia-smi
+            cmd = (
+                "nvidia-smi --query-gpu=name,memory.total,driver_version "
+                "--format=csv,noheader,nounits"
+            )
+            output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
+
+            if not output or not output.strip():
+                return None
+
+            # Parse CSV output (e.g., "Tesla T4, 15360, 525.60.13")
+            parts = [p.strip() for p in output.strip().split(",")]
+            if len(parts) >= 3:
+                gpu_info = {
+                    "name": parts[0],
+                    "memory_total": f"{parts[1]} MB",
+                    "driver_version": parts[2],
+                }
+
+                # Try to get CUDA version
+                try:
+                    cuda_output = self.ssh_manager.execute_command_success(
+                        "nvidia-smi | grep 'CUDA Version' | sed 's/.*CUDA Version: \\([0-9.]*\\).*/\\1/'",
+                        stream_output=False,
+                    )
+                    if cuda_output and cuda_output.strip():
+                        gpu_info["cuda_version"] = cuda_output.strip()
+                except Exception:
+                    # CUDA version is optional, skip if retrieval fails
+                    logger.debug("Could not retrieve CUDA version")
+
+                return gpu_info
+
+        except Exception as e:
+            logger.debug("GPU not available or nvidia-smi failed: %s", e)
+            return None
 
     def cleanup_containers(self) -> None:
         """Clean up any stopped containers on remote."""
@@ -501,15 +613,18 @@ class DockerExecutor:
             RuntimeError: If no running containers are found.
         """
         if not container_id:
-            # Auto-detect the most recent container matching our image
-            logger.info(f"Auto-detecting most recent container for image {self.docker_image}")
-            cmd = f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"'
-            container_id = self.ssh_manager.execute_command_success(
-                cmd, stream_output=False
-            ).strip()
+            # Use get_active_container for auto-detection
+            logger.info(f"Auto-detecting active container for image {self.docker_image}")
+            container = self.get_active_container()
 
-            if not container_id:
+            if not container:
                 raise RuntimeError("No running containers found")
+
+            container_id = container["id"]
+
+            # Show warning if multiple containers detected
+            if "warning" in container:
+                print(f"[WARNING] {container['warning']}")
 
         logger.info(f"Streaming logs from container {container_id}")
         print(f"[INFO] Streaming logs from container {container_id[:12]}...")

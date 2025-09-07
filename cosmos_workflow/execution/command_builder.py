@@ -78,6 +78,53 @@ class DockerCommandBuilder:
 
         return " \\\n  ".join(parts)
 
+    @staticmethod
+    def build_logs_command(container_id: str, follow: bool = False) -> str:
+        """Build docker logs command.
+
+        Args:
+            container_id: Container ID to get logs from
+            follow: If True, follow log output with -f flag
+
+        Returns:
+            Docker logs command string
+        """
+        cmd = "sudo docker logs"
+        if follow:
+            cmd += " -f"
+        cmd += f" {container_id}"
+        return cmd
+
+    @staticmethod
+    def build_info_command() -> str:
+        """Build docker info command.
+
+        Returns:
+            Docker info command string
+        """
+        return "sudo docker info"
+
+    @staticmethod
+    def build_images_command() -> str:
+        """Build docker images command.
+
+        Returns:
+            Docker images command string
+        """
+        return "sudo docker images"
+
+    @staticmethod
+    def build_kill_command(container_ids: list[str]) -> str:
+        """Build docker kill command.
+
+        Args:
+            container_ids: List of container IDs to kill
+
+        Returns:
+            Docker kill command string
+        """
+        return f"sudo docker kill {' '.join(container_ids)}"
+
 
 class BashScriptBuilder:
     """Builds bash script commands with proper error handling."""

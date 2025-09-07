@@ -16,7 +16,9 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
         with patch("cosmos_workflow.api.workflow_operations.ConfigManager"):
             with patch("cosmos_workflow.api.workflow_operations.init_database"):
                 with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
-                    with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator") as MockOrchestrator:
+                    with patch(
+                        "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"
+                    ) as MockOrchestrator:
                         # Set up the orchestrator mock
                         self.mock_orchestrator = MagicMock()
                         MockOrchestrator.return_value = self.mock_orchestrator
@@ -36,7 +38,7 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
         self.mock_docker_executor.kill_containers.return_value = {
             "status": "success",
             "killed_count": 2,
-            "killed_containers": ["abc123", "def456"]
+            "killed_containers": ["abc123", "def456"],
         }
 
         # Call the method
@@ -64,7 +66,7 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
         self.mock_docker_executor.kill_containers.return_value = {
             "status": "success",
             "killed_count": 0,
-            "killed_containers": []
+            "killed_containers": [],
         }
 
         # Call the method
@@ -82,7 +84,7 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
             "status": "failed",
             "error": "Docker daemon not responding",
             "killed_count": 0,
-            "killed_containers": []
+            "killed_containers": [],
         }
 
         # Call the method
@@ -96,7 +98,9 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
     def test_kill_containers_handles_exception(self):
         """Test kill_containers handles exceptions gracefully."""
         # Set up the mock to raise an exception
-        self.mock_orchestrator._initialize_services.side_effect = ConnectionError("SSH connection failed")
+        self.mock_orchestrator._initialize_services.side_effect = ConnectionError(
+            "SSH connection failed"
+        )
 
         # Call the method
         result = self.ops.kill_containers()
@@ -110,7 +114,9 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
     def test_kill_containers_uses_context_manager_properly(self):
         """Test that SSH context manager is used even if kill_containers raises."""
         # Set up the mock to raise an exception inside the context
-        self.mock_docker_executor.kill_containers.side_effect = RuntimeError("Container kill failed")
+        self.mock_docker_executor.kill_containers.side_effect = RuntimeError(
+            "Container kill failed"
+        )
 
         # Call the method
         result = self.ops.kill_containers()

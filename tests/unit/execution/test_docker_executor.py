@@ -508,14 +508,14 @@ class TestDockerExecutor:
         """Test that whitespace is stripped from auto-detected container ID."""
         # Mock get_active_container to return container with whitespace
         detected_container = "  container789  \n"
-        with patch.object(self.docker_executor, 'get_active_container') as mock_get_active:
+        with patch.object(self.docker_executor, "get_active_container") as mock_get_active:
             mock_get_active.return_value = {
-                'id': detected_container.strip(),  # get_active_container should already strip
-                'id_short': 'container789'[:12],
-                'name': 'test-container',
-                'status': 'Up 5 minutes',
-                'image': self.docker_image,
-                'created': '2025-01-07'
+                "id": detected_container.strip(),  # get_active_container should already strip
+                "id_short": "container789"[:12],
+                "name": "test-container",
+                "status": "Up 5 minutes",
+                "image": self.docker_image,
+                "created": "2025-01-07",
             }
 
             # Mock the execute_command for streaming

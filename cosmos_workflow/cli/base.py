@@ -25,6 +25,11 @@ class CLIContext:
             handlers=[logging.StreamHandler(sys.stdout)],
         )
 
+        # Silence paramiko to avoid exposing SSH implementation details
+        # Paramiko will only log warnings and errors, not connection info
+        logging.getLogger("paramiko").setLevel(logging.WARNING)
+        logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
+
     def get_operations(self):
         """Get or create workflow operations (lazy-loaded).
 

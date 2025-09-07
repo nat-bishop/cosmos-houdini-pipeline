@@ -50,6 +50,44 @@ def initialize_remote_connection():
         return False, f"Connection failed: {e}"
 
 
+def get_running_jobs():
+    """Get currently running jobs from the database and Docker."""
+    try:
+        # First check database for running runs
+        running_runs = service.list_runs(status="running", limit=10)
+
+        jobs = []
+
+        # Add database runs
+        for run in running_runs:
+            prompt_id = run.get("prompt_id", "Unknown")
+            run_id = run.get("run_id", "Unknown")
+            prompt = service.get_prompt(prompt_id) if prompt_id != "Unknown" else None
+            prompt_text = prompt.get("prompt_text", "Unknown")[:50] if prompt else "Unknown"
+
+            jobs.append(
+                {
+                    "run_id": run_id,
+                    "prompt_id": prompt_id,
+                    "prompt_text": prompt_text,
+                    "started_at": run.get("started_at", "Unknown"),
+                    "source": "database",
+                }
+            )
+
+        # Also check for Docker containers if connected
+        # Note: This would require SSH connection which may not always be available
+        # For now, we'll just use database runs
+
+        if not jobs:
+            return None, "No running inference jobs found"
+
+        return jobs, f"Found {len(jobs)} running inference job(s)"
+    except Exception as e:
+        logger.error("Failed to get running jobs: %s", e)
+        return None, f"Error getting running jobs: {e}"
+
+
 def stream_callback(content):
     """Callback for log streaming."""
     log_viewer.add_from_stream(content)
@@ -125,6 +163,22 @@ def clear_logs():
     return log_viewer.get_html(), "Logs cleared"
 
 
+def check_running_jobs():
+    """Check for running jobs and format for display."""
+    jobs, message = get_running_jobs()
+
+    if jobs:
+        display_text = f"{message}\n\n"
+        for job in jobs:
+            display_text += f"Run ID: {job['run_id']}\n"
+            display_text += f"Prompt: {job['prompt_text']}...\n"
+            display_text += f"Started: {job['started_at']}\n"
+            display_text += "-" * 40 + "\n"
+        return display_text.strip(), jobs[0]["run_id"] if jobs else ""
+    else:
+        return message, ""
+
+
 def create_ui():
     """Create the Gradio interface."""
     with gr.Blocks(title="Cosmos Log Viewer") as app:
@@ -133,6 +187,16 @@ def create_ui():
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown("### Controls")
+
+                # Running jobs section
+                gr.Markdown("#### Running Inference Jobs")
+                running_jobs_display = gr.Textbox(
+                    label="Active Inference Runs",
+                    value="Checking for running inference jobs...",
+                    interactive=False,
+                    lines=3,
+                )
+                check_jobs_btn = gr.Button("Check Running Jobs", size="sm")
 
                 # Run selection
                 run_id_input = gr.Textbox(
@@ -184,6 +248,12 @@ def create_ui():
                 )
 
         # Event handlers
+        check_jobs_btn.click(
+            fn=check_running_jobs,
+            inputs=[],
+            outputs=[running_jobs_display, run_id_input],
+        )
+
         start_btn.click(
             fn=start_log_streaming,
             inputs=[run_id_input],
@@ -216,6 +286,13 @@ def create_ui():
 
         # Auto-refresh could be added with a timer if needed
         # For now, users can click the Refresh button
+
+        # Check for running jobs on load
+        app.load(
+            fn=check_running_jobs,
+            inputs=[],
+            outputs=[running_jobs_display, run_id_input],
+        )
 
     return app
 

@@ -4,11 +4,15 @@
 import gradio as gr
 
 from cosmos_workflow.api import WorkflowOperations
+from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.utils.logging import logger
 
+# Load configuration
+config = ConfigManager()
+
 # Initialize unified operations
-ops = WorkflowOperations()
+ops = WorkflowOperations(config=config)
 
 # Initialize log viewer
 log_viewer = LogViewer(max_lines=2000)
@@ -251,5 +255,17 @@ def create_ui():
 
 
 if __name__ == "__main__":
+    # Get UI configuration from config.toml
+    ui_config = config.config.get("ui", {})
+    host = ui_config.get("host", "0.0.0.0")  # noqa: S104
+    port = ui_config.get("port", 7860)
+    share = ui_config.get("share", False)
+
+    logger.info(f"Starting Gradio UI on {host}:{port}")
+
     app = create_ui()
-    app.launch(share=False, server_name="0.0.0.0", server_port=7860)  # noqa: S104
+    app.launch(
+        share=share,
+        server_name=host,
+        server_port=port,
+    )

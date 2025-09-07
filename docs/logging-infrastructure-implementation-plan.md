@@ -550,21 +550,80 @@ After extensive analysis, file-based logs are superior to Docker logs because:
 - ~~Container activity tracking~~ (GPU status is enough)
 - ~~Smart error detection~~ (Users can read errors)
 
-## Next Steps
+## Manual Testing After Checkpoint Installation
 
-1. **Phase 5**: Implement GPU utilization monitoring
-   - Query nvidia-smi for GPU/memory usage
-   - Detect running cosmos containers
-   - Show current job info if running
+### Prerequisites for Manual Testing
+- [ ] AI model checkpoints installed at `./checkpoints/nvidia/Cosmos-Transfer1-7B/base_model.pt` on remote GPU instance
+- [ ] Docker daemon running on remote instance
+- [ ] SSH connection functional
+- [ ] Fresh database at `outputs/cosmos.db` (prepared)
 
-2. **Phase 6**: Final testing and documentation
-   - Verify GPU monitoring works
-   - Update README with new features
-   - Clean up any deprecated code
+### Test Environment
+Available test prompts:
+- `ps_4943750370622cfefc54` - "manual test - debugging CLI and Docker logs" (recommended)
+- `ps_84374dabad0fc2458261` - "test fresh database with fixed logging"
+- `ps_f12d1c219c2a3736f35c` - "fresh test for UI streaming"
+
+### Quick Testing Steps
+
+1. **Verify Status**: `cosmos status` (SSH ✓, Docker ✓)
+2. **Test CLI**: `cosmos inference ps_4943750370622cfefc54` (should run >60 seconds, real AI work)
+3. **Test UI**: `cosmos ui --port 8001` → http://localhost:8001 (auto-detects jobs, streams logs)
+4. **Validate**: Logs stream in real-time with color coding, all controls work
+
+### Success Indicators
+- Jobs run several minutes (not seconds)
+- Logs show actual AI inference progress
+- UI auto-detects and streams running jobs
+- No FileNotFoundError for model checkpoints
+
+### Docker Log Access
+```bash
+# Connect to remote
+./ssh_lambda.sh
+
+# View running containers
+sudo docker ps
+
+# View live logs
+sudo docker logs -f <container_name>
+
+# Execute commands in container
+sudo docker exec -it <container_name> /bin/bash
+```
+
+### Known Issues (Non-blocking)
+- Status reporting bug: Failed runs marked as "completed success"
+- Container detection bug: `cosmos status --stream` can't find containers (use UI instead)
+
+## Discovered Bugs Documentation
+
+### Critical Issues
+1. **Missing AI Model Checkpoints** (USER ACTION REQUIRED)
+   - Error: `FileNotFoundError: './checkpoints/nvidia/Cosmos-Transfer1-7B/base_model.pt'`
+   - Impact: All inference jobs fail after ~9 seconds
+   - Status: User downloading checkpoints
+
+### High Priority Bugs
+2. **Status Reporting Bug** - Failed jobs marked as "completed success"
+   - Location: Workflow orchestrator run status logic
+   - Impact: Misleading success messages for failed jobs
+
+3. **Container Detection Bug** - `cosmos status --stream` cannot find running containers
+   - Location: DockerExecutor image filtering logic
+   - Impact: CLI log streaming fails
+   - Workaround: Use UI for log streaming
+
+### Fixed Issues
+4. **Docker Status Detection Bug** (RESOLVED)
+   - Fixed type mismatch in `cosmos_workflow/cli/status.py:69-72`
+
+5. **File Transfer Logging Bug** (RESOLVED)
+   - Fixed mixed f-string/parameterized logging in `cosmos_workflow/transfer/file_transfer.py:209,219`
 
 ---
 
-*Document Version: 5.0 (Simplified Plan)*
+*Document Version: 6.0 (Testing Ready)*
 *Last Updated: 2025-01-07*
-*Phases 1-4 Completed*
+*Auto-Streaming UI Complete - Ready for Manual Testing*
 *Author: NAT*

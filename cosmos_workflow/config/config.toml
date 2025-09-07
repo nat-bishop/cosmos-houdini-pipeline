@@ -20,6 +20,12 @@ local_notes_dir = "./notes"
 [docker]
 image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 
+# ===== Gradio UI Configuration =====
+[ui]
+port = 7860  # Default Gradio port
+host = "0.0.0.0"  # Bind to all interfaces for SSH tunnel access
+share = false  # Don't create public Gradio share links
+
 # ===== Environment variable overrides =====
 # These can be set via environment variables to override the defaults above
 # Example: export REMOTE_HOST="192.168.1.100" to override the host

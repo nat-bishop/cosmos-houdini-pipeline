@@ -492,13 +492,15 @@ class WorkflowOrchestrator:
 
                     # Execute prompt enhancement via DockerExecutor wrapper
                     logger.info("Executing prompt upsampling on GPU...")
+                    import uuid
                     from datetime import datetime
 
-                    operation_id = f"enhance_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+                    # Generate a temporary run_id for now (Phase 2 will create proper database runs)
+                    temp_run_id = f"enhance_{uuid.uuid4().hex[:8]}"
 
                     enhancement_result = self.docker_executor.run_prompt_enhancement(
                         batch_filename=batch_filename,
-                        operation_id=operation_id,
+                        run_id=temp_run_id,  # Changed from operation_id to run_id
                         offload=True,  # Memory efficient for single prompts
                         checkpoint_dir="/workspace/checkpoints",
                         timeout=600,
@@ -507,17 +509,44 @@ class WorkflowOrchestrator:
                     if enhancement_result.get("log_path"):
                         logger.debug("Enhancement log path: %s", enhancement_result["log_path"])
 
-                    if enhancement_result["status"] != "success":
+                    if enhancement_result["status"] == "failed":
                         raise RuntimeError(
                             f"Prompt enhancement failed: {enhancement_result.get('error', 'Unknown error')}"
                         )
 
-                    # Download results
+                    # Since it's now non-blocking, we need to wait for completion
+                    # For now, we'll poll for the results file (Phase 2 will improve this)
+                    import time
+
                     remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
                     remote_results_file = f"{remote_outputs_dir}/batch_results.json"
                     local_results_path = Path(temp_dir) / "results.json"
 
-                    self.file_transfer.download_file(remote_results_file, str(local_results_path))
+                    # Poll for results (max 120 seconds)
+                    max_wait = 120
+                    poll_interval = 5
+                    elapsed = 0
+
+                    logger.info("Waiting for prompt enhancement to complete...")
+                    while elapsed < max_wait:
+                        try:
+                            # Check if results file exists
+                            if self.file_transfer.file_exists_remote(remote_results_file):
+                                # Download results
+                                self.file_transfer.download_file(
+                                    remote_results_file, str(local_results_path)
+                                )
+                                break
+                        except Exception:
+                            # File might not exist yet, continue polling
+                            logger.debug("Results file not ready yet, continuing to poll...")
+
+                        time.sleep(poll_interval)
+                        elapsed += poll_interval
+
+                    if elapsed >= max_wait:
+                        logger.warning("Prompt enhancement timed out, returning original prompt")
+                        return prompt_text
 
                     # Parse results
                     with open(local_results_path) as f:

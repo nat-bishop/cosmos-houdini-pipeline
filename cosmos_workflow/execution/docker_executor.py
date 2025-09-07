@@ -165,44 +165,50 @@ class DockerExecutor:
     def run_prompt_enhancement(
         self,
         batch_filename: str,
-        operation_id: str | None = None,
+        run_id: str | None = None,  # Changed from operation_id to run_id for consistency
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
         timeout: int = 600,
     ) -> dict:
         """Run prompt enhancement using Pixtral model on GPU.
 
-        Processes a batch of prompts using the prompt_upsampler.py script.
-        Note: This doesn't create a Run in the database, but we still
-        track operations for debugging.
+        Starts enhancement as a background process on the GPU. Returns immediately
+        with 'started' status. Use 'cosmos status --stream' or Docker container
+        logs to monitor progress.
 
         Args:
             batch_filename: Name of batch JSON file in inputs directory
-            operation_id: Optional operation ID for tracking
+            run_id: Run ID for tracking (REQUIRED for consistency with inference)
             offload: Whether to offload model between prompts (True for memory efficiency)
             checkpoint_dir: Directory containing model checkpoints
-            timeout: Execution timeout in seconds
+            timeout: Not used for background execution (kept for compatibility)
 
         Returns:
-            Dict with status and optional log_path if operation_id provided
+            Dict containing status ('started') and log_path to local log file.
+
+        Raises:
+            FileNotFoundError: If script or batch file not found.
+            Exception: If enhancement launch fails.
         """
-        # Setup logger
-        if operation_id:
-            local_log_path = get_log_path("enhancement", "prompt_enhancement", operation_id)
-            # Use bound logger for this operation
-            op_logger = logger.bind(operation_id=operation_id)
+        # Setup run-specific logger (consistent with inference)
+        if run_id:
+            run_logger = get_run_logger(
+                run_id, f"prompt_enhancement_{batch_filename.split('.')[0]}"
+            )
+            local_log_path = get_log_path("enhancement", f"prompt_enhancement_{run_id}", run_id)
         else:
+            run_logger = logger
             local_log_path = None
-            op_logger = logger
 
-        op_logger.info("Running prompt enhancement for batch %s", batch_filename)
+        run_logger.info("Running prompt enhancement for batch %s", batch_filename)
 
-        # Setup remote log path if we have an operation_id
-        remote_log_path = None
-        if operation_id:
-            remote_log_path = f"{self.remote_dir}/logs/prompt_enhancement/op_{operation_id}.log"
-            # Ensure log directory exists
-            self.remote_executor.create_directory(f"{self.remote_dir}/logs/prompt_enhancement")
+        # Setup container log path (inside container, like inference.sh does)
+        container_log_path = None
+        if run_id:
+            # Use /workspace path inside container (gets mounted from remote_dir)
+            container_log_path = f"/workspace/logs/enhancement_{run_id}/run.log"
+            # Ensure log directory exists on remote
+            self.remote_executor.create_directory(f"{self.remote_dir}/logs/enhancement_{run_id}")
 
         try:
             # Verify script exists on remote
@@ -241,33 +247,44 @@ class DockerExecutor:
             if offload_flag:
                 cmd += f" {offload_flag}"
 
-            # Add logging redirection if we have a log path
-            if remote_log_path:
+            # Add logging redirection if we have a log path (use container path)
+            if container_log_path:
                 # Wrap in bash -c for proper shell operator interpretation
-                cmd = f"({cmd}) 2>&1 | tee {remote_log_path}; echo '[COSMOS_COMPLETE]' >> {remote_log_path}"
+                cmd = f"({cmd}) 2>&1 | tee {container_log_path}; echo '[COSMOS_COMPLETE]' >> {container_log_path}"
                 cmd = f'bash -c "{cmd}"'
 
             builder.set_command(cmd)
 
-            # Execute via remote executor (blocking - we need the result)
-            op_logger.info("Starting prompt enhancement on GPU...")
-            op_logger.info("This is typically fast (under 30 seconds)")
+            # Build the docker command
+            command = builder.build()
 
-            self.remote_executor.execute_docker(builder, timeout=timeout)
+            # Run in background like inference does
+            background_command = f"nohup {command} > /dev/null 2>&1 &"
 
-            op_logger.info("Prompt enhancement completed for batch %s", batch_filename)
+            # Execute in background - returns immediately
+            run_logger.info("Starting prompt enhancement on GPU...")
+            run_logger.info("Use 'cosmos status --stream' to monitor progress")
+            run_logger.info("Launching enhancement in background...")
 
-            result = {"status": "success"}
-            if local_log_path:
-                result["log_path"] = str(local_log_path)
-            return result
+            # This returns immediately since we're running in background
+            self.ssh_manager.execute_command(background_command, timeout=5)
+
+            run_logger.info("Prompt enhancement started successfully for batch %s", batch_filename)
+            run_logger.info("The process is now running in the background on the GPU")
+
+            return {
+                "status": "started",  # Changed from "success" to "started" for consistency
+                "log_path": str(local_log_path) if local_log_path else None,
+                "batch_filename": batch_filename,
+            }
 
         except Exception as e:
-            op_logger.error("Prompt enhancement failed: %s", e)
-            result = {"status": "failed", "error": str(e)}
-            if local_log_path:
-                result["log_path"] = str(local_log_path)
-            return result
+            run_logger.error("Prompt enhancement launch failed: %s", e)
+            return {
+                "status": "failed",
+                "error": str(e),
+                "log_path": str(local_log_path) if local_log_path else None,
+            }
 
     def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
         """Run inference using the bash script in background."""

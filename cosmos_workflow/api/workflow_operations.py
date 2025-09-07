@@ -207,7 +207,12 @@ class WorkflowOperations:
                 },
             )
             logger.info("Created enhanced prompt: %s", enhanced["id"])
-            return enhanced
+            # Return in expected format for CLI
+            return {
+                "enhanced_prompt_id": enhanced["id"],
+                "enhanced_text": enhanced["prompt_text"],
+                "original_prompt_id": prompt_id,
+            }
         else:
             # Update existing prompt
             self.service.update_prompt(
@@ -222,7 +227,12 @@ class WorkflowOperations:
             )
             updated = self.service.get_prompt(prompt_id)
             logger.info("Updated prompt %s with enhanced text", prompt_id)
-            return updated
+            # Return in expected format for CLI
+            return {
+                "enhanced_prompt_id": prompt_id,  # Same ID when updating
+                "enhanced_text": updated["prompt_text"],
+                "original_prompt_id": prompt_id,
+            }
 
     # ========== Internal Helper Methods ==========
 

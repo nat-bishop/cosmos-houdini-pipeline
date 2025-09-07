@@ -183,6 +183,38 @@ db = DatabaseConnection()
 db.session.query(...)  # Never do this outside Service layer!
 ```
 
+### DockerCommandBuilder
+Centralized Docker command construction following wrapper pattern for security and consistency.
+
+```python
+from cosmos_workflow.execution.command_builder import DockerCommandBuilder
+
+# Build various Docker commands using static methods
+logs_cmd = DockerCommandBuilder.build_logs_command("container_id", follow=True)
+# Returns: "sudo docker logs -f container_id"
+
+info_cmd = DockerCommandBuilder.build_info_command()
+# Returns: "sudo docker info"
+
+images_cmd = DockerCommandBuilder.build_images_command()
+# Returns: "sudo docker images"
+
+kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
+# Returns: "sudo docker kill container1 container2"
+```
+
+**Methods:**
+- `build_logs_command(container_id, follow=False)`: Construct Docker logs command with optional follow flag
+- `build_info_command()`: Construct Docker system info command
+- `build_images_command()`: Construct Docker images listing command
+- `build_kill_command(container_ids)`: Construct Docker kill command for multiple containers
+
+**Design Principles:**
+- All Docker commands must use wrapper methods instead of raw strings
+- Prevents command injection and ensures consistent error handling
+- Centralizes Docker command construction for maintainability
+- Required by project architecture as documented in CLAUDE.md
+
 ### WorkflowOperations API Methods
 
 #### Core Operations
@@ -1249,7 +1281,7 @@ file_transfer.download_results(Path("prompt.json"))
 - `list_remote_directory()`: List remote directory
 
 ### DockerExecutor
-Executes Docker commands on remote instance with centralized container management and GPU detection.
+Executes Docker commands on remote instance with centralized container management and GPU detection. All Docker operations use the wrapper pattern through DockerCommandBuilder for consistent security and error handling.
 
 ```python
 from cosmos_workflow.execution.docker_executor import DockerExecutor
@@ -1332,9 +1364,12 @@ docker_executor.stream_container_logs(container_id="abc123")  # Specific contain
   - Used by `cosmos status` command for GPU information display
 - `run_upscaling()`: Execute upscaling pipeline
 - `get_docker_status()`: Check Docker status
-- `kill_containers()`: Kill all running containers for the Cosmos docker image
-- `stream_container_logs(container_id=None)`: Stream container logs in real-time
+- `kill_containers()`: Kill all running containers using DockerCommandBuilder.build_kill_command()
+  - Follows wrapper pattern for consistent security and error handling
+  - Works with multiple containers simultaneously
+- `stream_container_logs(container_id=None)`: Stream container logs using DockerCommandBuilder.build_logs_command()
   - Auto-detects most recent container if ID not provided
+  - Uses wrapper pattern for proper command construction
   - Gracefully handles Ctrl+C interruption
   - Uses 24-hour timeout for long-running streams
 

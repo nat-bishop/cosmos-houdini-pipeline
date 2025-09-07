@@ -89,10 +89,15 @@ class DockerCommandBuilder:
         Returns:
             Docker logs command string
         """
+        from shlex import quote
+
+        if not container_id or not container_id.strip():
+            raise ValueError("Container ID cannot be empty")
+
         cmd = "sudo docker logs"
         if follow:
             cmd += " -f"
-        cmd += f" {container_id}"
+        cmd += f" {quote(container_id.strip())}"
         return cmd
 
     @staticmethod
@@ -123,7 +128,19 @@ class DockerCommandBuilder:
         Returns:
             Docker kill command string
         """
-        return f"sudo docker kill {' '.join(container_ids)}"
+        from shlex import quote
+
+        if not isinstance(container_ids, list):
+            raise TypeError("container_ids must be a list")
+
+        # Validate and escape each container ID
+        escaped_ids = [quote(cid) for cid in container_ids if cid and cid.strip()]
+
+        if not escaped_ids:
+            # No valid container IDs to kill
+            return "sudo docker kill"
+
+        return f"sudo docker kill {' '.join(escaped_ids)}"
 
 
 class BashScriptBuilder:

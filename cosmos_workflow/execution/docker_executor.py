@@ -28,13 +28,12 @@ class DockerExecutor:
         run_id: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-        stream_logs: bool = False,
     ) -> dict:
         """Run Cosmos-Transfer1 inference on remote instance.
 
-        Executes inference with real-time log streaming. Logs are streamed
-        from the remote instance using efficient seek-based position tracking
-        in a background thread during execution.
+        Starts inference as a background process on the GPU. Returns immediately
+        with 'started' status. Use 'cosmos status --stream' or Docker container
+        logs to monitor progress.
 
         Args:
             prompt_file: Name of prompt file (without path).
@@ -43,11 +42,11 @@ class DockerExecutor:
             cuda_devices: CUDA device IDs to use.
 
         Returns:
-            Dict containing status (success/failed), log_path to local log file,
+            Dict containing status ('started'), log_path to local log file,
             and prompt_name for the executed inference.
 
         Raises:
-            Exception: If inference execution fails or streaming encounters errors.
+            Exception: If inference launch fails.
         """
         prompt_name = prompt_file.stem
 
@@ -96,13 +95,12 @@ class DockerExecutor:
         control_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-        stream_logs: bool = False,
     ) -> dict:
         """Run 4K upscaling on remote instance.
 
-        Executes upscaling with real-time log streaming. Logs are streamed
-        from the remote instance using efficient seek-based position tracking
-        in a background thread during execution.
+        Starts upscaling as a background process on the GPU. Returns immediately
+        with 'started' status. Use 'cosmos status --stream' or Docker container
+        logs to monitor progress.
 
         Args:
             prompt_file: Name of prompt file (without path).
@@ -112,11 +110,11 @@ class DockerExecutor:
             cuda_devices: CUDA device IDs to use.
 
         Returns:
-            Dict containing status (success/failed) and log_path to local log file.
+            Dict containing status ('started') and log_path to local log file.
 
         Raises:
             FileNotFoundError: If input video for upscaling is not found.
-            Exception: If upscaling execution fails or streaming encounters errors.
+            Exception: If upscaling launch fails.
         """
         prompt_name = prompt_file.stem
 
@@ -171,7 +169,6 @@ class DockerExecutor:
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
         timeout: int = 600,
-        stream_logs: bool = False,
     ) -> dict:
         """Run prompt enhancement using Pixtral model on GPU.
 
@@ -336,12 +333,12 @@ class DockerExecutor:
         try:
             # Check if Docker is running
             docker_info = self.ssh_manager.execute_command_success(
-                "sudo docker info", stream_output=False
+                DockerCommandBuilder.build_info_command(), stream_output=False
             )
 
             # Check available images
             images_output = self.ssh_manager.execute_command_success(
-                "sudo docker images", stream_output=False
+                DockerCommandBuilder.build_images_command(), stream_output=False
             )
 
             # Use get_active_container for container info
@@ -503,7 +500,7 @@ class DockerExecutor:
                 }
 
             # Kill all containers
-            kill_cmd = f"sudo docker kill {' '.join(container_ids)}"
+            kill_cmd = DockerCommandBuilder.build_kill_command(container_ids)
             self.ssh_manager.execute_command_success(kill_cmd, stream_output=False)
 
             logger.info("Killed %d containers: %s", len(container_ids), container_ids)
@@ -523,7 +520,7 @@ class DockerExecutor:
         """Get logs from a specific container."""
         try:
             return self.ssh_manager.execute_command_success(
-                f"sudo docker logs {container_id}", stream_output=False
+                DockerCommandBuilder.build_logs_command(container_id), stream_output=False
             )
         except Exception as e:
             logger.error("Failed to get container logs: %s", e)
@@ -535,7 +532,6 @@ class DockerExecutor:
         batch_jsonl_file: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
-        stream_logs: bool = False,
     ) -> dict[str, Any]:
         """Run batch inference for multiple prompts/videos.
 
@@ -663,7 +659,7 @@ class DockerExecutor:
         try:
             # Stream logs using existing SSH streaming infrastructure
             self.ssh_manager.execute_command(
-                f"sudo docker logs -f {container_id}",
+                DockerCommandBuilder.build_logs_command(container_id, follow=True),
                 timeout=86400,  # 24 hour timeout for long-running streams
                 stream_output=True,
             )

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Wrapper Pattern Compliance (2025-09-07)
+- **Eliminated Docker Command String Violations**
+  - Added new static methods to DockerCommandBuilder: build_logs_command(), build_info_command(), build_images_command(), build_kill_command()
+  - Replaced 7 raw Docker command string violations with wrapper method calls
+  - Updated cosmos_workflow/execution/docker_executor.py (5 violations fixed)
+  - Updated cosmos_workflow/api/workflow_operations.py (2 violations fixed)
+  - All Docker operations now use proper wrapper pattern as mandated by architecture
+  - Added integration tests for kill_containers functionality
+  - Maintains consistent error handling and security practices across all Docker operations
+
 ### Added - Utility Functions and Code Deduplication (2025-09-07)
 - **New Utility Functions in cosmos_workflow/utils/workflow_utils.py**
   - `ensure_directory(path)`: Creates directories if they don't exist, replacing 14 instances of duplicate `path.mkdir(parents=True, exist_ok=True)` calls

@@ -250,6 +250,58 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
   - Ensure consistent user experience across all commands
   - Document default value rationale and override mechanisms
 
+- [ ] **Implement Wrapper Compliance & Automatic Detection System**
+  **Target: Version 1.3 - High Priority**
+
+  **Current State:**
+  - 7 files using f-string logging (violates parameterized logging rule)
+  - No automated enforcement of wrapper patterns
+  - Good news: No direct paramiko/docker/subprocess imports found
+
+  **Phase 1: Immediate Fixes (1 hour)**
+  - [ ] Fix f-string logging in 7 files:
+    - cosmos_workflow/api/workflow_operations.py
+    - cosmos_workflow/execution/docker_executor.py
+    - cosmos_workflow/transfer/file_transfer.py
+    - cosmos_workflow/workflows/workflow_orchestrator.py
+    - cosmos_workflow/ui/app.py
+    - cosmos_workflow/connection/ssh_manager.py
+    - cosmos_workflow/services/workflow_service.py
+
+  **Phase 2: Import-Linter Setup (2 hours)**
+  - [ ] Install and configure import-linter
+  - [ ] Create .importlinter configuration file with contracts:
+    - Forbidden: CLI cannot import WorkflowService/DatabaseConnection directly
+    - Layers: CLI → API → Service/Orchestrator → Infrastructure
+    - Independence: Prevent circular dependencies between modules
+  - [ ] Add to pre-commit hooks
+  - [ ] Add to CI/CD pipeline
+
+  **Phase 3: Architecture Tests (4-6 hours)**
+  - [ ] Create tests/test_architecture.py with AST-based validation
+  - [ ] Check for direct library imports (paramiko, docker, subprocess)
+  - [ ] Validate logging uses parameterized format
+  - [ ] Ensure JSON operations use appropriate wrappers
+  - [ ] Check that CLI only uses WorkflowOperations
+
+  **Phase 4: Documentation (2-3 hours)**
+  - [ ] Create docs/ARCHITECTURE_ENFORCEMENT.md
+  - [ ] Add wrapper usage examples to each wrapper module
+  - [ ] Create wrapper cheat sheet for quick reference
+  - [ ] Document violation examples and fixes
+
+  **Expected Benefits:**
+  - Prevents architectural drift (saves 10-20 hours/month)
+  - Makes onboarding 50% faster with clear boundaries
+  - Reduces bugs from improper wrapper usage
+  - ROI: 10 hours investment pays for itself in first month
+
+  **Implementation Notes:**
+  - Start with warning mode, move to strict after cleanup
+  - Use industry-standard import-linter (no custom tooling)
+  - Leverage existing pre-commit infrastructure
+  - Skip custom Ruff plugins (too complex, low ROI)
+
 - [x] **Fixed overfit-verifier agent scope and clarified TDD workflow**
 
   **Changes Made (2025-09-04):**

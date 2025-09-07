@@ -23,6 +23,7 @@ from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import init_database
+from cosmos_workflow.execution.command_builder import DockerCommandBuilder
 from cosmos_workflow.services import WorkflowService
 from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
@@ -690,7 +691,7 @@ class WorkflowOperations:
             # Gradio mode - use callback with threading to not block UI
             import threading
 
-            cmd = f"sudo docker logs -f {container_id}"
+            cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
 
             def stream_output():
                 try:
@@ -720,7 +721,7 @@ class WorkflowOperations:
             thread.start()
         else:
             # CLI mode - stream directly to stdout
-            cmd = f"sudo docker logs -f {container_id}"
+            cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
             self.orchestrator.ssh_manager.execute_command(
                 cmd,
                 timeout=86400,  # 24 hour timeout for long streams

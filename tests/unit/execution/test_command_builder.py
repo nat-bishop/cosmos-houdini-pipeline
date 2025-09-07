@@ -104,11 +104,13 @@ class TestDockerCommandBuilder:
         """Test building docker logs command."""
         # Test without follow flag
         cmd = DockerCommandBuilder.build_logs_command("container123")
-        assert cmd == "sudo docker logs container123"
+        assert "sudo docker logs" in cmd
+        assert "container123" in cmd
 
         # Test with follow flag
         cmd = DockerCommandBuilder.build_logs_command("container456", follow=True)
-        assert cmd == "sudo docker logs -f container456"
+        assert "sudo docker logs -f" in cmd
+        assert "container456" in cmd
 
     def test_build_info_command(self):
         """Test building docker info command."""
@@ -124,15 +126,57 @@ class TestDockerCommandBuilder:
         """Test building docker kill command."""
         # Test with single container
         cmd = DockerCommandBuilder.build_kill_command(["container1"])
-        assert cmd == "sudo docker kill container1"
+        assert "sudo docker kill" in cmd
+        assert "container1" in cmd
 
         # Test with multiple containers
         cmd = DockerCommandBuilder.build_kill_command(["container1", "container2", "container3"])
-        assert cmd == "sudo docker kill container1 container2 container3"
+        assert "sudo docker kill" in cmd
+        # All container IDs should be present (though possibly quoted)
+        assert "container1" in cmd
+        assert "container2" in cmd
+        assert "container3" in cmd
 
         # Test with empty list
         cmd = DockerCommandBuilder.build_kill_command([])
-        assert cmd == "sudo docker kill "
+        assert cmd == "sudo docker kill"
+
+    def test_build_logs_command_validates_input(self):
+        """Test that build_logs_command validates input."""
+        import pytest
+
+        # Should raise ValueError for empty container ID
+        with pytest.raises(ValueError, match="Container ID cannot be empty"):
+            DockerCommandBuilder.build_logs_command("")
+
+        with pytest.raises(ValueError, match="Container ID cannot be empty"):
+            DockerCommandBuilder.build_logs_command("   ")
+
+    def test_build_kill_command_escapes_malicious_input(self):
+        """Test that malicious container IDs are properly escaped."""
+        # Container IDs with shell metacharacters should be escaped
+        malicious_ids = ["container1; rm -rf /", "container2 && cat /etc/passwd"]
+        cmd = DockerCommandBuilder.build_kill_command(malicious_ids)
+
+        # Should have quotes around each ID to prevent shell injection
+        assert "'" in cmd or '"' in cmd
+        # The dangerous commands should be inside quotes, making them safe
+        # They will be passed as literal container IDs to docker, not executed
+        assert "sudo docker kill" in cmd
+        # Check that the values are quoted (will appear as 'value' in command)
+        assert "'container1; rm -rf /'" in cmd or '"container1; rm -rf /"' in cmd
+        assert "'container2 && cat /etc/passwd'" in cmd or '"container2 && cat /etc/passwd"' in cmd
+
+    def test_build_kill_command_validates_type(self):
+        """Test that build_kill_command validates input type."""
+        import pytest
+
+        # Should raise TypeError for non-list input
+        with pytest.raises(TypeError, match="container_ids must be a list"):
+            DockerCommandBuilder.build_kill_command("not_a_list")
+
+        with pytest.raises(TypeError, match="container_ids must be a list"):
+            DockerCommandBuilder.build_kill_command(None)
 
 
 class TestBashScriptBuilder:

@@ -46,7 +46,7 @@ class WorkflowOrchestrator:
     - High-level workflow orchestration (use WorkflowOperations)
     """
 
-    def __init__(self, config_file: str = "cosmos_workflow/config/config.toml", service=None):
+    def __init__(self, config_file: str | None = None, service=None):
         self.config_manager = ConfigManager(config_file)
         self.ssh_manager: SSHManager | None = None
         self.file_transfer: FileTransferService | None = None
@@ -71,6 +71,7 @@ class WorkflowOrchestrator:
         prompt_dict: dict[str, Any],
         upscale: bool = False,
         upscale_weight: float = 0.5,
+        stream_logs: bool = False,
         **kwargs,
     ) -> dict[str, Any]:
         """Execute a run on GPU infrastructure.
@@ -83,6 +84,7 @@ class WorkflowOrchestrator:
             prompt_dict: Prompt data from database
             upscale: Whether to run upscaling
             upscale_weight: Weight for upscaling (0.0-1.0)
+            stream_logs: Whether to stream logs during execution
             **kwargs: Additional options (e.g., log_path for logging)
 
         Returns:
@@ -145,7 +147,7 @@ class WorkflowOrchestrator:
                 # Run inference - always pass run_id for logging
                 logger.info(f"Running inference on GPU for run {run_dict['id']}")
                 result = self.docker_executor.run_inference(
-                    prompt_file, run_id=run_id, num_gpu=1, cuda_devices="0"
+                    prompt_file, run_id=run_id, num_gpu=1, cuda_devices="0", stream_logs=stream_logs
                 )
 
                 # Store log path if available
@@ -162,6 +164,7 @@ class WorkflowOrchestrator:
                         control_weight=upscale_weight,
                         num_gpu=1,
                         cuda_devices="0",
+                        stream_logs=stream_logs,
                     )
                     if upscale_result.get("log_path"):
                         if self.service:
@@ -236,6 +239,7 @@ class WorkflowOrchestrator:
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
         batch_name: str | None = None,
+        stream_logs: bool = False,
         **kwargs,
     ) -> dict[str, Any]:
         """Execute multiple runs as a batch on GPU infrastructure.
@@ -300,7 +304,7 @@ class WorkflowOrchestrator:
                 # Run batch inference
                 logger.info(f"Running batch inference on GPU for {batch_name}")
                 batch_result = self.docker_executor.run_batch_inference(
-                    batch_name, jsonl_filename, num_gpu=1, cuda_devices="0"
+                    batch_name, jsonl_filename, num_gpu=1, cuda_devices="0", stream_logs=stream_logs
                 )
 
                 # Split outputs to individual run folders
@@ -412,6 +416,7 @@ class WorkflowOrchestrator:
         prompt_text: str,
         model: str = "pixtral",
         video_path: str | None = None,
+        stream_logs: bool = False,
     ) -> str:
         """Run prompt upsampling on remote GPU using Pixtral model.
 
@@ -494,6 +499,7 @@ class WorkflowOrchestrator:
                         offload=True,  # Memory efficient for single prompts
                         checkpoint_dir="/workspace/checkpoints",
                         timeout=600,
+                        stream_logs=stream_logs,
                     )
 
                     if enhancement_result.get("log_path"):

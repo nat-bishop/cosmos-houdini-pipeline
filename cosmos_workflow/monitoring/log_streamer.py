@@ -26,6 +26,28 @@ class RemoteLogStreamer:
         self.buffer_size = buffer_size
         self.position = 0
 
+    def tail_log(self, remote_path: str, lines: int = 100) -> str:
+        """Get the tail of a remote log file.
+
+        Args:
+            remote_path: Path to log file on remote
+            lines: Number of lines to return from end of file
+
+        Returns:
+            The last N lines of the file as a string
+        """
+        try:
+            cmd = f"tail -n {lines} {remote_path}"
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(cmd, timeout=30)
+            if exit_code == 0:
+                return stdout
+            else:
+                logger.warning("Failed to tail log %s: %s", remote_path, stderr)
+                return ""
+        except Exception as e:
+            logger.error("Error tailing log: %s", e)
+            return ""
+
     def stream_remote_log(
         self,
         remote_path: str,

@@ -7,45 +7,16 @@ from .helpers import console, create_info_table, create_progress_context
 
 
 @click.command()
-@click.option(
-    "--stream",
-    is_flag=True,
-    help="Stream container logs in real-time instead of showing status",
-)
 @click.pass_context
 @handle_errors
-def status(ctx, stream):
-    """Check remote GPU instance status or stream container logs.
+def status(ctx):
+    """Check remote GPU instance status.
 
     Shows SSH connectivity, Docker status, and available resources
     on the configured remote GPU instance.
-
-    Use --stream to stream logs from the most recent container in real-time.
     """
     ctx_obj: CLIContext = ctx.obj
     ops = ctx_obj.get_operations()
-
-    # Handle streaming mode
-    if stream:
-        with create_progress_context("[cyan]Connecting to remote instance...") as progress:
-            task = progress.add_task("[cyan]Connecting to remote instance...", total=None)
-            progress.update(task, completed=True)
-
-        console.print("\n[bold][STREAMING] Docker Container Logs[/bold]\n")
-
-        try:
-            # Stream logs using operations
-            ops.stream_logs()
-        except RuntimeError as e:
-            console.print(f"\n[red]Error:[/red] {e}")
-            console.print(
-                "[yellow]Tip:[/yellow] Make sure a container is running. Use 'cosmos inference' to start one."
-            )
-        except KeyboardInterrupt:
-            # Already handled in stream_container_logs, just exit cleanly
-            pass
-
-        return  # Exit after streaming
 
     # Regular status check
     with create_progress_context("[cyan]Checking remote status...") as progress:

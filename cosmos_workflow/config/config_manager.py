@@ -38,16 +38,23 @@ class LocalConfig:
 class ConfigManager:
     """Manages configuration loading from TOML files with environment variable overrides."""
 
-    def __init__(self, config_file: str = "cosmos_workflow/config/config.toml"):
+    def __init__(self, config_file: str | None = None):
         """Initialize the ConfigManager.
 
         Args:
-            config_file: Path to the TOML configuration file.
+            config_file: Path to the TOML configuration file. If None, uses default location.
 
         Raises:
             FileNotFoundError: If the configuration file doesn't exist.
         """
-        self.config_file = Path(config_file)
+        if config_file is None:
+            # Find config.toml relative to this module's location
+            # config_manager.py is in cosmos_workflow/config/
+            # So we need to go to the same directory for config.toml
+            config_dir = Path(__file__).parent
+            self.config_file = config_dir / "config.toml"
+        else:
+            self.config_file = Path(config_file)
         self._config_data: dict[str, Any] | None = None
         self._remote_config: RemoteConfig | None = None
         self._local_config: LocalConfig | None = None
@@ -212,6 +219,17 @@ class ConfigManager:
             "port": remote_config.port,
             "key_filename": str(Path(remote_config.ssh_key).expanduser()),
         }
+
+    def get_config_section(self, section: str) -> dict[str, Any]:
+        """Get a specific configuration section.
+
+        Args:
+            section: The configuration section name (e.g., 'ui', 'remote', 'docker')
+
+        Returns:
+            Dictionary containing the configuration section, or empty dict if not found.
+        """
+        return self._config_data.get(section, {})
 
     def reload_config(self) -> None:
         """Reload configuration from file.

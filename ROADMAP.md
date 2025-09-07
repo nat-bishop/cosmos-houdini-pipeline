@@ -43,6 +43,50 @@ WorkflowService           →  DataService             →  Database operations 
 - [ ] Update test suite
 - [ ] Coordinate with major feature release
 
+## 🔧 Technical Debt: Architectural Coupling
+
+### Issue: Cross-Cutting Concerns Not Properly Abstracted
+The `--stream` flag represents a cross-cutting concern that violates separation of concerns:
+
+**Current Problem:**
+- `stream_logs` parameter passed through 5+ layers (CLI → API → Orchestrator → Executor)
+- DockerExecutor knows about log streaming (violates single responsibility)
+- 4x code duplication for streaming setup in DockerExecutor methods
+- Mixing execution logic with monitoring/streaming logic
+
+**Why Simple Refactoring Won't Work:**
+- Adding helper methods in DockerExecutor increases coupling (makes it responsible for streaming)
+- Moving streaming to orchestrator still leaves parameter passing through layers
+- The core issue is architectural, not just code duplication
+
+**Proper Architectural Solutions:**
+
+1. **Event-Driven Architecture**
+   - DockerExecutor publishes execution events
+   - Streaming service subscribes to events independently
+   - Complete decoupling of execution from monitoring
+
+2. **Context Object Pattern**
+   - Single ExecutionContext object with all cross-cutting concerns
+   - Components query context for their needs
+   - Reduces parameter proliferation
+
+3. **Aspect-Oriented / Decorator Pattern**
+   - Wrap execution methods with streaming decorator
+   - Keep core logic unaware of streaming
+   - Add/remove features without modifying core
+
+4. **Configuration Service**
+   - Centralized configuration that components can query
+   - No need to pass flags through layers
+   - Runtime feature toggles
+
+**Current State:**
+- Keeping duplication for now (explicit is better than wrong abstraction)
+- DockerExecutor remains cohesive (only responsible for Docker execution)
+- Streaming is optional and doesn't affect core execution logic
+- Trade-off: Some duplication vs maintaining proper boundaries
+
 ## 🚀 Priority 1: Architecture Refactoring (Service-Oriented)
 
 ### Service-Oriented Architecture

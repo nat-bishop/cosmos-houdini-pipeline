@@ -15,7 +15,7 @@ def ui(port, host, share):
 
     # Load configuration
     config = ConfigManager()
-    ui_config = config.config.get("ui", {})
+    ui_config = config._config_data.get("ui", {})
 
     # Use command line args if provided, otherwise use config
     port = port or ui_config.get("port", 7860)

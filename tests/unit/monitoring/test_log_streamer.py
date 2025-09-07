@@ -29,6 +29,63 @@ class TestRemoteLogStreamer:
 
         assert streamer.buffer_size == 16384
 
+    def test_tail_log_returns_last_lines(self):
+        """Test tail_log returns the last N lines of a file (behavior)."""
+        ssh_manager = MagicMock()
+        streamer = RemoteLogStreamer(ssh_manager)
+
+        # Mock successful tail command
+        expected_output = "line 98\nline 99\nline 100"
+        ssh_manager.execute_command.return_value = (0, expected_output, "")
+
+        result = streamer.tail_log("/remote/log.log", lines=3)
+
+        # Verify correct command was executed
+        ssh_manager.execute_command.assert_called_once_with("tail -n 3 /remote/log.log", timeout=30)
+
+        # Verify output returned
+        assert result == expected_output
+
+    def test_tail_log_handles_default_lines(self):
+        """Test tail_log uses default of 100 lines when not specified (behavior)."""
+        ssh_manager = MagicMock()
+        streamer = RemoteLogStreamer(ssh_manager)
+
+        ssh_manager.execute_command.return_value = (0, "output", "")
+
+        streamer.tail_log("/remote/log.log")
+
+        # Verify default 100 lines was used
+        ssh_manager.execute_command.assert_called_once_with(
+            "tail -n 100 /remote/log.log", timeout=30
+        )
+
+    def test_tail_log_handles_command_failure(self):
+        """Test tail_log returns empty string on command failure (edge case)."""
+        ssh_manager = MagicMock()
+        streamer = RemoteLogStreamer(ssh_manager)
+
+        # Mock failed tail command
+        ssh_manager.execute_command.return_value = (1, "", "No such file")
+
+        result = streamer.tail_log("/remote/missing.log", lines=50)
+
+        # Should return empty string on failure
+        assert result == ""
+
+    def test_tail_log_handles_ssh_exception(self):
+        """Test tail_log handles SSH exceptions gracefully (edge case)."""
+        ssh_manager = MagicMock()
+        streamer = RemoteLogStreamer(ssh_manager)
+
+        # Mock SSH exception
+        ssh_manager.execute_command.side_effect = Exception("SSH connection lost")
+
+        result = streamer.tail_log("/remote/log.log", lines=10)
+
+        # Should return empty string on exception
+        assert result == ""
+
     def test_stream_remote_log_creates_local_file(self):
         """Test that streaming creates the local log file with parent directories."""
         ssh_manager = MagicMock()

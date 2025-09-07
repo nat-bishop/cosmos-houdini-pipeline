@@ -4,13 +4,11 @@ Handles running Docker commands on remote instances with proper logging and erro
 """
 
 import json
-import threading
 from pathlib import Path
 from typing import Any
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
-from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
 from cosmos_workflow.utils.logging import get_run_logger, logger
 
 
@@ -24,7 +22,12 @@ class DockerExecutor:
         self.remote_executor = RemoteCommandExecutor(ssh_manager)
 
     def run_inference(
-        self, prompt_file: Path, run_id: str, num_gpu: int = 1, cuda_devices: str = "0"
+        self,
+        prompt_file: Path,
+        run_id: str,
+        num_gpu: int = 1,
+        cuda_devices: str = "0",
+        stream_logs: bool = False,
     ) -> dict:
         """Run Cosmos-Transfer1 inference on remote instance.
 
@@ -63,31 +66,40 @@ class DockerExecutor:
         local_log_path = log_dir / f"run_{run_id}.log"
 
         try:
-            # Start log streaming in background thread
+            # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}/run.log"
-            streamer = RemoteLogStreamer(self.ssh_manager)
+            run_logger.info("Remote log path: %s", remote_log_path)
 
-            # Start streaming in a daemon thread so it doesn't block
-            stream_thread = threading.Thread(
-                target=streamer.stream_remote_log,
-                args=(remote_log_path, local_log_path),
-                kwargs={
-                    "poll_interval": 2.0,
-                    "timeout": 3600,
-                    "wait_for_file": True,
-                    "completion_marker": "[COSMOS_COMPLETE]",
-                },
-                daemon=True,
-            )
-            stream_thread.start()
-            run_logger.info("Started log streaming from remote...")
+            # Conditionally stream logs
+            if stream_logs:
+                import threading
+
+                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+
+                streamer = RemoteLogStreamer(self.ssh_manager)
+                stream_thread = threading.Thread(
+                    target=streamer.stream_remote_log,
+                    args=(remote_log_path, local_log_path),
+                    kwargs={
+                        "poll_interval": 2.0,
+                        "timeout": 3600,
+                        "wait_for_file": True,
+                        "completion_marker": "[COSMOS_COMPLETE]",
+                    },
+                    daemon=True,
+                )
+                stream_thread.start()
+                run_logger.info("Started log streaming from remote...")
+            else:
+                run_logger.info("Use 'cosmos stream' to view logs in real-time")
 
             # Execute inference using bash script
             run_logger.info("Executing inference script on remote...")
             self._run_inference_script(prompt_name, num_gpu, cuda_devices)
 
-            # Give streaming a moment to catch final output
-            stream_thread.join(timeout=5)
+            # Wait for streaming thread if enabled
+            if stream_logs:
+                stream_thread.join(timeout=5)
 
             run_logger.info("Inference completed successfully for %s", prompt_name)
 
@@ -108,6 +120,7 @@ class DockerExecutor:
         control_weight: float = 0.5,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        stream_logs: bool = False,
     ) -> dict:
         """Run 4K upscaling on remote instance.
 
@@ -153,30 +166,40 @@ class DockerExecutor:
             # Create upscaler spec
             self._create_upscaler_spec(prompt_name, control_weight)
 
-            # Start log streaming in background thread
+            # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}_upscaled/run.log"
-            streamer = RemoteLogStreamer(self.ssh_manager)
+            run_logger.info("Remote log path: %s", remote_log_path)
 
-            stream_thread = threading.Thread(
-                target=streamer.stream_remote_log,
-                args=(remote_log_path, local_log_path),
-                kwargs={
-                    "poll_interval": 2.0,
-                    "timeout": 1800,  # 30 minutes for upscaling
-                    "wait_for_file": True,
-                    "completion_marker": "[COSMOS_COMPLETE]",
-                },
-                daemon=True,
-            )
-            stream_thread.start()
-            run_logger.info("Started log streaming for upscaling...")
+            # Conditionally stream logs
+            if stream_logs:
+                import threading
+
+                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+
+                streamer = RemoteLogStreamer(self.ssh_manager)
+                stream_thread = threading.Thread(
+                    target=streamer.stream_remote_log,
+                    args=(remote_log_path, local_log_path),
+                    kwargs={
+                        "poll_interval": 2.0,
+                        "timeout": 1800,  # 30 minutes for upscaling
+                        "wait_for_file": True,
+                        "completion_marker": "[COSMOS_COMPLETE]",
+                    },
+                    daemon=True,
+                )
+                stream_thread.start()
+                run_logger.info("Started log streaming for upscaling...")
+            else:
+                run_logger.info("Use 'cosmos stream' to view logs in real-time")
 
             # Execute upscaling using bash script
             run_logger.info("Starting upscaling...")
             self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
 
-            # Give streaming a moment to catch final output
-            stream_thread.join(timeout=5)
+            # Wait for streaming thread if enabled
+            if stream_logs:
+                stream_thread.join(timeout=5)
 
             run_logger.info("Upscaling completed successfully for %s", prompt_name)
 
@@ -197,6 +220,7 @@ class DockerExecutor:
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
         timeout: int = 600,
+        stream_logs: bool = False,
     ) -> dict:
         """Run prompt enhancement using Pixtral model on GPU.
 
@@ -226,6 +250,13 @@ class DockerExecutor:
             op_logger = logger
 
         op_logger.info("Running prompt enhancement for batch %s", batch_filename)
+
+        # Setup remote log path if we're streaming
+        remote_log_path = None
+        if stream_logs and operation_id:
+            remote_log_path = f"{self.remote_dir}/logs/prompt_enhancement/op_{operation_id}.log"
+            # Ensure log directory exists
+            self.remote_executor.create_directory(f"{self.remote_dir}/logs/prompt_enhancement")
 
         try:
             # Verify script exists on remote
@@ -263,7 +294,33 @@ class DockerExecutor:
             )
             if offload_flag:
                 cmd += f" {offload_flag}"
+
+            # Add logging redirection if streaming
+            if remote_log_path:
+                cmd = f"({cmd}) 2>&1 | tee {remote_log_path}; echo '[COSMOS_COMPLETE]' >> {remote_log_path}"
+
             builder.set_command(cmd)
+
+            # Start streaming thread if requested
+            if stream_logs and remote_log_path and local_log_path:
+                import threading
+
+                from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+
+                streamer = RemoteLogStreamer(self.ssh_manager)
+                stream_thread = threading.Thread(
+                    target=streamer.stream_remote_log,
+                    args=(remote_log_path, local_log_path),
+                    kwargs={
+                        "poll_interval": 2.0,
+                        "timeout": timeout + 60,  # Give extra time for cleanup
+                        "wait_for_file": True,
+                        "completion_marker": "[COSMOS_COMPLETE]",
+                    },
+                    daemon=True,
+                )
+                stream_thread.start()
+                op_logger.info("Started log streaming for prompt enhancement")
 
             # Execute via remote executor
             op_logger.info("Starting prompt enhancement (batch mode)...")
@@ -385,6 +442,7 @@ class DockerExecutor:
         batch_jsonl_file: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        stream_logs: bool = False,
     ) -> dict[str, Any]:
         """Run batch inference for multiple prompts/videos.
 
@@ -399,6 +457,16 @@ class DockerExecutor:
         """
         logger.info("Running batch inference %s with %d GPU(s)", batch_name, num_gpu)
 
+        # Setup logging paths if streaming
+        remote_log_path = None
+        local_log_path = None
+        if stream_logs:
+            remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
+            local_log_path = Path(f"outputs/batch/{batch_name}/batch.log")
+            local_log_path.parent.mkdir(parents=True, exist_ok=True)
+            # Ensure remote log directory exists
+            self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
+
         # Check if batch file exists
         batch_path = f"{self.remote_dir}/inputs/batches/{batch_jsonl_file}"
         if not self.remote_executor.file_exists(batch_path):
@@ -408,9 +476,32 @@ class DockerExecutor:
         remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         self.remote_executor.create_directory(remote_output_dir)
 
+        # Start streaming thread if requested
+        if stream_logs and remote_log_path and local_log_path:
+            import threading
+
+            from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+
+            streamer = RemoteLogStreamer(self.ssh_manager)
+            stream_thread = threading.Thread(
+                target=streamer.stream_remote_log,
+                args=(remote_log_path, local_log_path),
+                kwargs={
+                    "poll_interval": 2.0,
+                    "timeout": 7200 + 60,  # 2 hour timeout + extra time
+                    "wait_for_file": True,
+                    "completion_marker": "[COSMOS_COMPLETE]",
+                },
+                daemon=True,
+            )
+            stream_thread.start()
+            logger.info("Started log streaming for batch inference")
+
         # Execute batch inference using bash script
         logger.info("Starting batch inference...")
-        self._run_batch_inference_script(batch_name, batch_jsonl_file, num_gpu, cuda_devices)
+        self._run_batch_inference_script(
+            batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
+        )
 
         # Get list of output files
         output_files = self._get_batch_output_files(batch_name)
@@ -423,7 +514,12 @@ class DockerExecutor:
         }
 
     def _run_batch_inference_script(
-        self, batch_name: str, batch_jsonl_file: str, num_gpu: int, cuda_devices: str
+        self,
+        batch_name: str,
+        batch_jsonl_file: str,
+        num_gpu: int,
+        cuda_devices: str,
+        remote_log_path: str | None = None,
     ) -> None:
         """Run batch inference using the bash script."""
         builder = DockerCommandBuilder(self.docker_image)
@@ -432,9 +528,13 @@ class DockerExecutor:
         builder.add_option("--shm-size=8g")
         builder.add_volume(self.remote_dir, "/workspace")
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
-        builder.set_command(
-            f'bash -lc "/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"'
-        )
+
+        # Build command with optional logging
+        cmd = f"/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
+        if remote_log_path:
+            cmd = f'({cmd}) 2>&1 | tee {remote_log_path}; echo "[COSMOS_COMPLETE]" >> {remote_log_path}'
+
+        builder.set_command(f'bash -lc "{cmd}"')
 
         self.remote_executor.execute_docker(builder, timeout=7200)  # 2 hour timeout for batch
 

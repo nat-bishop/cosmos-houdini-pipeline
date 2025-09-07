@@ -53,7 +53,7 @@ def stream_callback(content):
 
 
 def start_log_streaming(run_id):
-    """Start streaming logs for a run using WorkflowOperations facade."""
+    """Start streaming logs for a run using the new RemoteLogStreamer API."""
     if not run_id:
         return "Please enter a Run ID", log_viewer.get_html()
 
@@ -66,8 +66,8 @@ def start_log_streaming(run_id):
     log_viewer.clear()
 
     try:
-        # Use WorkflowOperations facade for log streaming
-        ops.stream_logs(callback=stream_callback)
+        # Use the new stream_run_logs API with callback
+        ops.stream_run_logs(run_id=run_id, callback=stream_callback, follow=True)
         prompt_name = run.get("prompt_name", run_id)
         return f"Streaming logs for {prompt_name}", log_viewer.get_html()
     except Exception as e:
@@ -256,7 +256,7 @@ def create_ui():
 
 if __name__ == "__main__":
     # Get UI configuration from config.toml
-    ui_config = config.config.get("ui", {})
+    ui_config = config._config_data.get("ui", {})
     host = ui_config.get("host", "0.0.0.0")  # noqa: S104
     port = ui_config.get("port", 7860)
     share = ui_config.get("share", False)

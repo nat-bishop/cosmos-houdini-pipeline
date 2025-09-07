@@ -155,6 +155,7 @@ class WorkflowOperations:
         prompt_id: str,
         create_new: bool = True,
         enhancement_model: str = "pixtral",
+        stream_logs: bool = False,
     ) -> dict[str, Any]:
         """Enhance an existing prompt using AI.
 
@@ -162,6 +163,7 @@ class WorkflowOperations:
             prompt_id: ID of prompt to enhance
             create_new: If True, creates new enhanced prompt. If False, updates existing.
             enhancement_model: Model to use for enhancement (default: "pixtral")
+            stream_logs: If True, stream logs during enhancement
 
         Returns:
             Dictionary containing enhanced prompt data
@@ -189,6 +191,7 @@ class WorkflowOperations:
             prompt_text=original["prompt_text"],
             model=enhancement_model,
             video_path=original["inputs"].get("video"),
+            stream_logs=stream_logs,
         )
 
         if create_new:
@@ -372,7 +375,7 @@ class WorkflowOperations:
             prompt_id: ID of prompt to run
             weights: Control weights (optional, defaults to balanced)
             **kwargs: Additional execution parameters (num_steps, guidance, seed,
-                     upscale, upscale_weight, etc.)
+                     upscale, upscale_weight, stream_logs, etc.)
 
         Returns:
             Dictionary containing execution results with run_id for tracking
@@ -388,6 +391,7 @@ class WorkflowOperations:
         # Extract upscale params if present (not part of execution config)
         upscale = kwargs.pop("upscale", False)
         upscale_weight = kwargs.pop("upscale_weight", 0.5)
+        stream_logs = kwargs.pop("stream_logs", False)  # Extract stream flag
 
         # Build execution config
         execution_config = self._build_execution_config(weights=weights, **kwargs)
@@ -409,6 +413,7 @@ class WorkflowOperations:
                 prompt,
                 upscale=upscale,
                 upscale_weight=upscale_weight,
+                stream_logs=stream_logs,
             )
 
             # Update run with results
@@ -438,6 +443,7 @@ class WorkflowOperations:
         self,
         prompt_ids: list[str],
         shared_weights: dict[str, float] | None = None,
+        stream_logs: bool = False,
         **kwargs,
     ) -> dict[str, Any]:
         """Run inference on multiple prompts as a batch.
@@ -486,7 +492,9 @@ class WorkflowOperations:
                 continue
 
         # Execute as batch
-        batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts)
+        batch_result = self.orchestrator.execute_batch_runs(
+            runs_and_prompts, stream_logs=stream_logs
+        )
 
         # Update run statuses
         for run, _ in runs_and_prompts:
@@ -734,6 +742,131 @@ class WorkflowOperations:
         # Run in thread to not block
         thread = threading.Thread(target=stream_output, daemon=True)
         thread.start()
+
+    def stream_run_logs(
+        self,
+        run_id: str | None = None,
+        callback=None,
+        tail_lines: int = 0,
+        follow: bool = True,
+    ) -> dict[str, Any]:
+        """Stream logs from a run using RemoteLogStreamer.
+
+        This is a thin facade that delegates to RemoteLogStreamer for actual work.
+
+        Args:
+            run_id: Run ID to stream logs from. If None, uses most recent run.
+            callback: Optional callback function for each log line.
+            tail_lines: Number of previous lines to show before streaming (0 for none).
+            follow: If True, continues streaming until completion.
+
+        Returns:
+            Dictionary with run info and status.
+
+        Raises:
+            ValueError: If run not found or has no log path.
+        """
+        from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
+
+        logger.info("Streaming logs for run %s", run_id)
+
+        # Get run
+        if not run_id:
+            runs = self.service.list_runs(limit=1)
+            if not runs:
+                raise ValueError("No runs found")
+            run = runs[0]
+            run_id = run["id"]
+        else:
+            run = self.service.get_run(run_id)
+            if not run:
+                raise ValueError(f"Run not found: {run_id}")
+
+        # Get paths
+        prompt = self.service.get_prompt(run["prompt_id"])
+        prompt_name = prompt.get("prompt_name", run["prompt_id"]) if prompt else run_id
+        local_path = Path(run.get("log_path", f"outputs/{prompt_name}/logs/run_{run_id}.log"))
+        remote_config = self.config.get_remote_config()
+        remote_path = f"{remote_config.remote_dir}/outputs/{prompt_name}/run.log"
+
+        # Initialize and use RemoteLogStreamer
+        self.orchestrator._initialize_services()
+
+        with self.orchestrator.ssh_manager:
+            streamer = RemoteLogStreamer(self.orchestrator.ssh_manager)
+
+            # Show tail if requested
+            if tail_lines > 0:
+                tail_output = streamer.tail_log(remote_path, tail_lines)
+                if tail_output and not callback:
+                    # For CLI - output directly using logger which goes to console
+                    from cosmos_workflow.utils.logging import logger
+
+                    for line in tail_output.splitlines():
+                        logger.info(line)
+
+            # Stream if following
+            if follow:
+                if callback:
+                    # Async streaming with callback (for Gradio)
+                    import threading
+
+                    def stream_thread():
+                        streamer.stream_remote_log(
+                            remote_path,
+                            local_path,
+                            poll_interval=2.0,
+                            timeout=3600,
+                            wait_for_file=True,
+                            completion_marker="[COSMOS_COMPLETE]",
+                            callback=callback,
+                        )
+
+                    thread = threading.Thread(target=stream_thread, daemon=True)
+                    thread.start()
+                else:
+                    # For CLI - stream directly using logger callback
+                    from cosmos_workflow.utils.logging import logger
+
+                    def log_callback(content):
+                        # Output each line through logger (no newline needed, content has them)
+                        for line in content.rstrip("\n").split("\n"):
+                            if line:  # Skip empty lines
+                                logger.info(line)
+
+                    streamer.stream_remote_log(
+                        remote_path,
+                        local_path,
+                        poll_interval=2.0,
+                        timeout=3600,
+                        wait_for_file=True,
+                        completion_marker="[COSMOS_COMPLETE]",
+                        callback=log_callback,
+                    )
+
+        return {
+            "run_id": run_id,
+            "log_path": str(local_path),
+            "remote_path": remote_path,
+            "status": "streaming" if follow else "tailed",
+        }
+
+    def get_latest_run_logs(self, tail_lines: int = 100) -> dict[str, Any]:
+        """Get the latest run's logs without streaming.
+
+        Simple wrapper around stream_run_logs with follow=False.
+
+        Args:
+            tail_lines: Number of lines to return from the end of the log.
+
+        Returns:
+            Dictionary with run info and log lines.
+        """
+        try:
+            # Use stream_run_logs with follow=False to just get tail
+            return self.stream_run_logs(run_id=None, tail_lines=tail_lines, follow=False)
+        except ValueError as e:
+            return {"error": str(e), "lines": []}
 
     def verify_integrity(self) -> dict[str, Any]:
         """Verify database-filesystem integrity.

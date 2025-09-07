@@ -4,11 +4,13 @@ Handles running Docker commands on remote instances with proper logging and erro
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
+from cosmos_workflow.monitoring.log_streamer import RemoteLogStreamer
 from cosmos_workflow.utils.logging import get_run_logger, logger
 
 
@@ -26,25 +28,30 @@ class DockerExecutor:
     ) -> dict:
         """Run Cosmos-Transfer1 inference on remote instance.
 
-        Note: Logging is always enabled. The run.log file on remote
-        is created by tee in the bash script and will be streamed locally.
+        Executes inference with real-time log streaming. Logs are streamed
+        from the remote instance using efficient seek-based position tracking
+        in a background thread during execution.
 
         Args:
-            prompt_file: Name of prompt file (without path)
-            run_id: Run ID for tracking (REQUIRED)
-            num_gpu: Number of GPUs to use
-            cuda_devices: CUDA device IDs to use
+            prompt_file: Name of prompt file (without path).
+            run_id: Run ID for tracking (REQUIRED).
+            num_gpu: Number of GPUs to use.
+            cuda_devices: CUDA device IDs to use.
 
         Returns:
-            Dict with log_path, status, and prompt_name
+            Dict containing status (success/failed), log_path to local log file,
+            and prompt_name for the executed inference.
+
+        Raises:
+            Exception: If inference execution fails or streaming encounters errors.
         """
         prompt_name = prompt_file.stem
 
         # Setup run-specific logger
         run_logger = get_run_logger(run_id, prompt_name)
 
-        run_logger.info(f"Starting inference for prompt: {prompt_name}")
-        run_logger.debug(f"GPU config: num_gpu={num_gpu}, devices={cuda_devices}")
+        run_logger.info("Starting inference for prompt: %s", prompt_name)
+        run_logger.debug("GPU config: num_gpu=%d, devices=%s", num_gpu, cuda_devices)
 
         # Create output directory on remote
         remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
@@ -56,14 +63,33 @@ class DockerExecutor:
         local_log_path = log_dir / f"run_{run_id}.log"
 
         try:
+            # Start log streaming in background thread
+            remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}/run.log"
+            streamer = RemoteLogStreamer(self.ssh_manager)
+
+            # Start streaming in a daemon thread so it doesn't block
+            stream_thread = threading.Thread(
+                target=streamer.stream_remote_log,
+                args=(remote_log_path, local_log_path),
+                kwargs={
+                    "poll_interval": 2.0,
+                    "timeout": 3600,
+                    "wait_for_file": True,
+                    "completion_marker": "[COSMOS_COMPLETE]",
+                },
+                daemon=True,
+            )
+            stream_thread.start()
+            run_logger.info("Started log streaming from remote...")
+
             # Execute inference using bash script
             run_logger.info("Executing inference script on remote...")
             self._run_inference_script(prompt_name, num_gpu, cuda_devices)
 
-            # Note: In Phase 3, we'll add log streaming here
-            # For now, just log that inference completed
+            # Give streaming a moment to catch final output
+            stream_thread.join(timeout=5)
 
-            run_logger.info(f"Inference completed successfully for {prompt_name}")
+            run_logger.info("Inference completed successfully for %s", prompt_name)
 
             return {
                 "status": "success",
@@ -72,7 +98,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            run_logger.error(f"Inference failed for {prompt_name}: {e}")
+            run_logger.error("Inference failed for %s: %s", prompt_name, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_upscaling(
@@ -85,21 +111,29 @@ class DockerExecutor:
     ) -> dict:
         """Run 4K upscaling on remote instance.
 
+        Executes upscaling with real-time log streaming. Logs are streamed
+        from the remote instance using efficient seek-based position tracking
+        in a background thread during execution.
+
         Args:
-            prompt_file: Name of prompt file (without path)
-            run_id: Run ID for tracking (REQUIRED)
-            control_weight: Control weight for upscaling
-            num_gpu: Number of GPUs to use
-            cuda_devices: CUDA device IDs to use
+            prompt_file: Name of prompt file (without path).
+            run_id: Run ID for tracking (REQUIRED).
+            control_weight: Control weight for upscaling (0.0-1.0).
+            num_gpu: Number of GPUs to use.
+            cuda_devices: CUDA device IDs to use.
 
         Returns:
-            Dict with log_path and status
+            Dict containing status (success/failed) and log_path to local log file.
+
+        Raises:
+            FileNotFoundError: If input video for upscaling is not found.
+            Exception: If upscaling execution fails or streaming encounters errors.
         """
         prompt_name = prompt_file.stem
 
         # Setup run-specific logger
         run_logger = get_run_logger(run_id, f"{prompt_name}_upscaled")
-        run_logger.info(f"Running upscaling for {prompt_name} with weight {control_weight}")
+        run_logger.info("Running upscaling for %s with weight %f", prompt_name, control_weight)
 
         # Setup local log path
         log_dir = Path(f"outputs/{prompt_name}_upscaled/logs")
@@ -119,11 +153,32 @@ class DockerExecutor:
             # Create upscaler spec
             self._create_upscaler_spec(prompt_name, control_weight)
 
+            # Start log streaming in background thread
+            remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}_upscaled/run.log"
+            streamer = RemoteLogStreamer(self.ssh_manager)
+
+            stream_thread = threading.Thread(
+                target=streamer.stream_remote_log,
+                args=(remote_log_path, local_log_path),
+                kwargs={
+                    "poll_interval": 2.0,
+                    "timeout": 1800,  # 30 minutes for upscaling
+                    "wait_for_file": True,
+                    "completion_marker": "[COSMOS_COMPLETE]",
+                },
+                daemon=True,
+            )
+            stream_thread.start()
+            run_logger.info("Started log streaming for upscaling...")
+
             # Execute upscaling using bash script
             run_logger.info("Starting upscaling...")
             self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
 
-            run_logger.info(f"Upscaling completed successfully for {prompt_name}")
+            # Give streaming a moment to catch final output
+            stream_thread.join(timeout=5)
+
+            run_logger.info("Upscaling completed successfully for %s", prompt_name)
 
             return {
                 "status": "success",
@@ -132,7 +187,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            run_logger.error(f"Upscaling failed for {prompt_name}: {e}")
+            run_logger.error("Upscaling failed for %s: %s", prompt_name, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
@@ -170,7 +225,7 @@ class DockerExecutor:
             local_log_path = None
             op_logger = logger
 
-        op_logger.info(f"Running prompt enhancement for batch {batch_filename}")
+        op_logger.info("Running prompt enhancement for batch %s", batch_filename)
 
         try:
             # Verify script exists on remote
@@ -214,7 +269,7 @@ class DockerExecutor:
             op_logger.info("Starting prompt enhancement (batch mode)...")
             self.remote_executor.execute_docker(builder, timeout=timeout)
 
-            op_logger.info(f"Prompt enhancement completed for batch {batch_filename}")
+            op_logger.info("Prompt enhancement completed for batch %s", batch_filename)
 
             result = {"status": "success"}
             if local_log_path:
@@ -222,7 +277,7 @@ class DockerExecutor:
             return result
 
         except Exception as e:
-            op_logger.error(f"Prompt enhancement failed: {e}")
+            op_logger.error("Prompt enhancement failed: %s", e)
             result = {"status": "failed", "error": str(e)}
             if local_log_path:
                 result["log_path"] = str(local_log_path)

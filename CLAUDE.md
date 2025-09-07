@@ -143,6 +143,8 @@ from cosmos_workflow.utils import nvidia_format
  - "**Zen of Python**" mindset (readability, explicitness, simplicity)
  - Avoid Over-Engineering
  - Batch independent read operations and validation checks
+ - Focus on understanding the problem requirements and implementing the correct algorithm.
+ - If the task is unreasonable or infeasible, or if any of the tests are incorrect, please tell me. The solution should be robust, maintainable, and extendable.
 
 ---
 
@@ -155,7 +157,8 @@ from cosmos_workflow.utils import nvidia_format
 
 ## **Operating Procedures**
 - All temporary/intermediary files go in → .claude/workspace/ only
-- Delete temporary/debug/test artifacts after use
+- If you create any temporary new files, scripts, or helper files for iteration, clean up these files by removing them at the end of the task.
+- After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
 - Update [ROADMAP.md](ROADMAP.md) when completing a feature
 
 ---

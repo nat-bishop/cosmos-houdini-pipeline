@@ -292,7 +292,8 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 - **Batch Inference Processing** - Run multiple inference jobs together for improved efficiency
 - **Real-Time Progress** - Granular tracking through all execution stages
 - **Rich CLI Interface** - Database IDs, colored tables, JSON output support
-- **Gradio Web UI** - Interactive web interface for prompt creation and inference
+- **Real-Time Log Streaming** - Live Docker execution logs with efficient seek-based tailing
+- **Gradio Web UI** - Interactive web interface with live log streaming
 - **AI Enhancement** - Prompt improvement using Pixtral with full tracking
 - **Query & Search** - List, filter, and search prompts with highlighting
 - **Production Ready** - 453 passing tests, comprehensive error handling
@@ -309,9 +310,10 @@ cosmos ui
 - **Two-Step Workflow**: Create prompts → Run inference with custom weights
 - **Flexible Video Inputs**: Color video required, depth/segmentation optional
 - **All Control Weights**: Configure visual, edge, depth, and segmentation weights (0.0-1.0)
-- **Live Log Streaming**: Real-time Docker output with efficient seek-based tailing
+- **Real-Time Log Streaming**: Live Docker execution logs streamed from remote GPU with efficient seek-based position tracking
+- **Background Log Monitoring**: Non-blocking log streaming during inference execution
 - **Prompt Management**: View all prompts with video status indicators
-- **Run Tracking**: Monitor inference progress and status
+- **Run Tracking**: Monitor inference progress and status with live logs
 - **Gallery View**: Browse completed video generations
 - **GPU Status**: Real-time GPU utilization and Docker container monitoring
 

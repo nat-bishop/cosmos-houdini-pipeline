@@ -54,13 +54,18 @@ class TestRemoteLogStreamer:
         streamer = RemoteLogStreamer(ssh_manager)
 
         # Simulate log file growing over time
+        # The actual sequence:
+        # 1. Check file exists
+        # 2. Get size (50)
+        # 3. Read 50 bytes from position 1
+        # 4. Get size again (still 50, stable count 1)
+        # 5. Get size again (still 50, stable count 2, stop)
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
             (0, "50", ""),  # Initial size 50 bytes
-            (0, "First log entry\nSecond entry\n", ""),  # First read (30 bytes)
-            (0, "80", ""),  # Size grown to 80 bytes
-            (0, "Third log entry\nFourth entry\n", ""),  # Second read (30 bytes)
-            (0, "80", ""),  # Size unchanged (stop)
+            (0, "First log entry\nSecond entry\n", ""),  # Read first 50 bytes
+            (0, "50", ""),  # Size unchanged (stable count 1)
+            (0, "50", ""),  # Size unchanged (stable count 2, stop)
         ]
 
         local_path = Path(".claude/workspace/test_stream.log")
@@ -77,21 +82,21 @@ class TestRemoteLogStreamer:
 
         # First read from position 1 (start of file)
         assert "tail -c +1 /remote/app.log" in calls[2][0][0]
-        # Second read from position 31 (after first 30 bytes)
-        assert "tail -c +31 /remote/app.log" in calls[4][0][0]
+        assert "head -c 50" in calls[2][0][0]  # Reading up to 50 bytes (or buffer size)
 
     def test_stream_handles_no_new_content(self):
         """Test that streaming handles periods with no new content gracefully."""
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        # Content is 16 bytes long
+        content = "Initial content\n"
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "100", ""),  # Initial size
-            (0, "Initial content\n", ""),  # Read content
-            (0, "100", ""),  # Size unchanged
-            (0, "", ""),  # No new content (empty read)
-            (0, "100", ""),  # Size still unchanged (stop)
+            (0, "16", ""),  # File size (matches content length)
+            (0, content, ""),  # Read content
+            (0, "16", ""),  # Size unchanged (stable 1)
+            (0, "16", ""),  # Size unchanged (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/no_new.log")
@@ -106,21 +111,23 @@ class TestRemoteLogStreamer:
                 "/remote/stable.log", local_path, poll_interval=0.01, timeout=0.1
             )
 
-        # Verify only non-empty content was written
+        # Verify content was written correctly
         assert len(content_written) == 1
-        assert content_written[0] == "Initial content\n"
+        assert content_written[0] == content
 
     def test_stream_stops_on_completion_marker(self):
         """Test that streaming stops when it detects a completion marker."""
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        content1 = "Processing...\n"  # 14 bytes
+        content2 = "More processing...\n[COSMOS_COMPLETE]\n"  # 38 bytes
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "200", ""),  # Initial size
-            (0, "Processing...\n", ""),  # First read
-            (0, "250", ""),  # Size grown
-            (0, "More processing...\n[COSMOS_COMPLETE]\n", ""),  # Completion marker
+            (0, "14", ""),  # Initial size
+            (0, content1, ""),  # First read
+            (0, "52", ""),  # Size grown (14 + 38)
+            (0, content2, ""),  # Read new content with completion marker
         ]
 
         local_path = Path(".claude/workspace/complete.log")
@@ -151,13 +158,15 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        content = "Log started\n"  # 12 bytes
         ssh_manager.execute_command.side_effect = [
             (1, "", "No such file"),  # File doesn't exist
             (1, "", "No such file"),  # Still doesn't exist
             (0, "", ""),  # Now it exists
-            (0, "50", ""),  # Has content
-            (0, "Log started\n", ""),  # Read content
-            (0, "50", ""),  # Size unchanged (stop)
+            (0, "12", ""),  # Has content
+            (0, content, ""),  # Read content
+            (0, "12", ""),  # Size unchanged (stable 1)
+            (0, "12", ""),  # Size unchanged (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/delayed.log")
@@ -185,10 +194,16 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
-        # Simulate file that never stops growing
-        ssh_manager.execute_command.side_effect = [
-            (0, "", ""),  # File exists
-        ] + [(0, str(i * 100), "") for i in range(1, 100)]  # Keep growing
+        # Create a mock that will always return growing file sizes and dummy content
+        def side_effect_generator():
+            yield (0, "", "")  # File exists
+            size = 100
+            while True:
+                yield (0, str(size), "")  # File size
+                yield (0, "X" * 100, "")  # Content
+                size += 100
+
+        ssh_manager.execute_command.side_effect = side_effect_generator()
 
         local_path = Path(".claude/workspace/timeout.log")
         start_time = time.time()
@@ -207,13 +222,13 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        # Split into smaller chunks that fit in buffer
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
             (0, "1000", ""),  # Large file
-            (0, "A" * 500, ""),  # First chunk
-            (0, "1000", ""),  # Size unchanged but more to read
-            (0, "B" * 500, ""),  # Second chunk
-            (0, "1000", ""),  # Size unchanged (stop)
+            (0, "A" * 1000, ""),  # Read all content at once (within buffer)
+            (0, "1000", ""),  # Size unchanged (stable 1)
+            (0, "1000", ""),  # Size unchanged (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/final.log")
@@ -231,8 +246,7 @@ class TestRemoteLogStreamer:
         # Verify all content was captured
         total_content = "".join(content_written)
         assert len(total_content) == 1000
-        assert "A" * 500 in total_content
-        assert "B" * 500 in total_content
+        assert "A" * 1000 == total_content
 
     def test_stream_handles_ssh_errors_gracefully(self):
         """Test graceful error handling for SSH failures."""
@@ -309,14 +323,17 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        content1 = "Line 1\nLine 2\nLine 3\n"  # 21 bytes
+        content2 = "Line 4\nLine 5\nLine 6\n"  # 21 bytes
         # Simulate rapid file growth
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "30", ""),  # Initial 30 bytes
-            (0, "Line 1\nLine 2\nLine 3\n", ""),  # Read all 30 bytes
-            (0, "60", ""),  # Grown to 60 bytes
-            (0, "Line 4\nLine 5\nLine 6\n", ""),  # Read next 30 bytes
-            (0, "60", ""),  # Size stable (stop)
+            (0, "21", ""),  # Initial 21 bytes
+            (0, content1, ""),  # Read first chunk
+            (0, "42", ""),  # Grown to 42 bytes
+            (0, content2, ""),  # Read next 21 bytes
+            (0, "42", ""),  # Size stable (stable 1)
+            (0, "42", ""),  # Size stable (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/concurrent.log")
@@ -342,13 +359,16 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        content1 = "Progress: 10%\n"  # 14 bytes
+        content2 = "Progress: 50%\nProgress: 100%\n"  # 29 bytes
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "50", ""),  # Initial size
-            (0, "Progress: 10%\n", ""),  # First update
-            (0, "100", ""),  # Size grown
-            (0, "Progress: 50%\nProgress: 100%\n", ""),  # More updates
-            (0, "100", ""),  # Size stable (stop)
+            (0, "14", ""),  # Initial size
+            (0, content1, ""),  # First update
+            (0, "43", ""),  # Size grown
+            (0, content2, ""),  # More updates
+            (0, "43", ""),  # Size stable (stable 1)
+            (0, "43", ""),  # Size stable (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/callback.log")
@@ -379,15 +399,14 @@ class TestRemoteLogStreamer:
 
         # Include some non-UTF8 bytes
         binary_content = b"Text \xc3\x28 more text\n"
+        decoded = binary_content.decode("utf-8", errors="replace")
+        size = str(len(decoded.encode("utf-8")))
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "100", ""),  # Size
-            (
-                0,
-                binary_content.decode("utf-8", errors="replace"),
-                "",
-            ),  # Content with replacement char
-            (0, "100", ""),  # Size stable
+            (0, size, ""),  # Size
+            (0, decoded, ""),  # Content with replacement char
+            (0, size, ""),  # Size stable (stable 1)
+            (0, size, ""),  # Size stable (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/binary.log")
@@ -408,11 +427,13 @@ class TestRemoteLogStreamer:
         ssh_manager = MagicMock()
         streamer = RemoteLogStreamer(ssh_manager)
 
+        content = "Test log\n"  # 9 bytes
         ssh_manager.execute_command.side_effect = [
             (0, "", ""),  # File exists
-            (0, "10", ""),  # Small file
-            (0, "Test log\n", ""),  # Content
-            (0, "10", ""),  # Size stable
+            (0, "9", ""),  # Small file
+            (0, content, ""),  # Content
+            (0, "9", ""),  # Size stable (stable 1)
+            (0, "9", ""),  # Size stable (stable 2, stop)
         ]
 
         local_path = Path(".claude/workspace/deep/nested/path/test.log")

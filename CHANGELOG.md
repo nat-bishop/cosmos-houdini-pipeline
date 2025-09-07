@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Real-Time Log Streaming Infrastructure (2025-09-07)
+- **Complete Phase 3 Logging Infrastructure Implementation**
+  - New `RemoteLogStreamer` class with seek-based position tracking using `tail -c +position`
+  - Real-time log streaming integrated into DockerExecutor for both inference and upscaling
+  - Background thread streaming during GPU execution without blocking execution flow
+  - Efficient streaming that only reads new content, preventing re-reading of entire files
+  - Support for completion markers, callback functions, and configurable timeouts
+  - Automatic parent directory creation for local log files
+  - Buffer size control for memory efficiency (8KB default)
+  - Error resilience with graceful fallback and comprehensive logging
+
+- **New Monitoring Module**
+  - `cosmos_workflow/monitoring/log_streamer.py`: Complete RemoteLogStreamer implementation
+  - `cosmos_workflow/monitoring/__init__.py`: Module initialization and exports
+  - Comprehensive test coverage with 23 unit tests across streaming and integration scenarios
+  - `tests/unit/monitoring/test_log_streamer.py`: Core streaming functionality tests
+  - `tests/unit/execution/test_docker_executor_streaming.py`: DockerExecutor integration tests
+
+- **Enhanced Docker Execution**
+  - Updated `cosmos_workflow/execution/docker_executor.py` with integrated log streaming
+  - Log streaming starts automatically during inference and upscaling operations
+  - Configurable poll intervals (default 2.0s) and timeout handling (default 3600s)
+  - Completion marker detection for clean stream termination
+  - Thread safety with daemon threads that don't block process shutdown
+
 ### Changed - Complete 2-Step Workflow Refactoring (2025-09-06)
 - **Major Architecture Refactoring to 2-Step Workflow**
   - Eliminated manual run creation - `cosmos create run` command removed

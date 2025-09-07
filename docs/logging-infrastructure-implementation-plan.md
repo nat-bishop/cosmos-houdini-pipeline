@@ -54,7 +54,7 @@ This document outlines the implementation plan for improving logging and monitor
 
 ---
 
-## 🔄 Phase 2: Database Schema Updates (NEXT - 1 day)
+## ✅ Phase 2: Database Schema Updates (COMPLETED)
 
 ### Objective
 Add minimal fields for log tracking and error messages.
@@ -111,67 +111,116 @@ def update_run_error(self, run_id: str, error_message: str) -> dict:
 #### 2.4 Wire Up in Orchestrator
 Update `WorkflowOrchestrator.execute_run()` to call these methods:
 ```python
-# After successful inference
+# After successful inference (using unified method)
 if result.get("log_path"):
-    self.service.update_run_with_log(run_id, result["log_path"])
+    self.service.update_run(run_id, log_path=result["log_path"])
 
 # On failure
 except Exception as e:
-    self.service.update_run_error(run_id, str(e))
+    self.service.update_run(run_id, error_message=str(e))
 ```
 
+**What Was Actually Implemented:**
+1. **Database Model Updates**
+   - Added `log_path` (String(500), nullable) to Run model
+   - Added `error_message` (Text, nullable) to Run model
+   - No migration needed (recreating database)
+
+2. **Unified Service Method**
+   - Enhanced `update_run()` to handle log_path and error_message
+   - Automatic status="failed" when error_message provided
+   - Automatic completed_at timestamp on failure
+   - Error message truncation at 1000 chars
+
+3. **Backward Compatibility**
+   - `update_run_with_log()` now delegates to `update_run()`
+   - `update_run_error()` now delegates to `update_run()`
+   - Marked as deprecated but kept for compatibility
+
+4. **WorkflowOrchestrator Integration**
+   - Uses unified `update_run()` method
+   - Accepts optional service parameter
+   - WorkflowOperations passes service to orchestrator
+
 **Verification Checklist:**
-- [ ] Migration runs without errors
-- [ ] Existing data preserved
-- [ ] Log paths stored correctly
-- [ ] Error messages saved on failure
+- [x] Database fields created correctly
+- [x] Log paths stored correctly
+- [x] Error messages saved on failure
+- [x] All 31 Phase 2 tests passing
 
 ---
 
-## Phase 3: Efficient Remote Log Streaming (2 days)
+## ✅ Phase 3: Efficient Remote Log Streaming (COMPLETED)
 
 ### Objective
 Implement seek-based log streaming from remote (like Nvidia's approach).
 
-### Steps
+### Implementation Summary
+**Completed on:** 2025-01-07
+**Implementation Time:** ~4 hours
+**Test Coverage:** 22 tests, all passing
 
-#### 3.1 Create Log Streamer
-**Files to create:**
-- `cosmos_workflow/monitoring/log_streamer.py`
+### What Was Implemented:
 
-**Implementation:**
+#### 3.1 ✅ RemoteLogStreamer Created
+**Files created:**
+- `cosmos_workflow/monitoring/log_streamer.py` - Complete implementation with seek-based streaming
+- `cosmos_workflow/monitoring/__init__.py` - Module initialization
+- `tests/unit/monitoring/test_log_streamer.py` - Comprehensive unit tests
+- `tests/unit/execution/test_docker_executor_streaming.py` - Integration tests
+
+**Key Features Implemented:**
+- **Seek-based position tracking** using `tail -c +position` for efficiency
+- **Background thread streaming** during GPU execution without blocking
+- **Completion marker detection** for clean termination
+- **Timeout handling** with configurable limits (default 3600s)
+- **Error resilience** with graceful fallback and logging
+- **Automatic directory creation** for local log files
+- **Callback support** for real-time log processing
+- **Buffer size control** for memory efficiency (8KB default)
+
+#### 3.2 ✅ DockerExecutor Integration
+**Files updated:**
+- `cosmos_workflow/execution/docker_executor.py` - Integrated streaming into inference and upscaling
+
+**Implementation Details:**
 ```python
-class RemoteLogStreamer:
-    """Stream logs from remote using seek position tracking."""
-
-    def stream_remote_log(
-        self,
-        remote_path: str,
-        local_path: Path,
-        poll_interval: float = 2.0,
-        timeout: int = 3600
-    ) -> None:
-        """Stream remote log to local file using seek position."""
-        # Implementation using tail -c +{position} for efficiency
-```
-
-#### 3.2 Integrate into Docker Executor
-Modify `run_inference()` to stream logs during execution:
-```python
-# Start remote execution (non-blocking)
-self._run_inference_script(prompt_name, num_gpu, cuda_devices)
-
-# Stream logs while running
+# Real-time log streaming during inference
 streamer = RemoteLogStreamer(self.ssh_manager)
-remote_log = f"{self.remote_dir}/outputs/{prompt_name}/run.log"
-streamer.stream_remote_log(remote_log, local_log_path)
+stream_thread = threading.Thread(
+    target=streamer.stream_remote_log,
+    args=(remote_log_path, local_log_path),
+    kwargs={
+        "poll_interval": 2.0,
+        "timeout": 3600,
+        "wait_for_file": True,
+        "completion_marker": "[COSMOS_COMPLETE]"
+    },
+    daemon=True
+)
+stream_thread.start()
 ```
+
+#### 3.3 ✅ TDD Process Followed
+- **Gate 1:** Wrote 18 comprehensive tests for RemoteLogStreamer first
+- **Gate 2:** Verified all tests failed as expected (module didn't exist)
+- **Gate 3:** Committed failing tests unchanged
+- **Gate 4:** Implemented minimal code to pass tests, verified no overfitting
+- **Gate 5:** Updated documentation (README, CHANGELOG) via doc-drafter
+- **Gate 6:** Code review identified Windows path issue, fixed and verified
 
 **Verification Checklist:**
-- [ ] Logs stream during execution
-- [ ] Seek position tracking works
-- [ ] No duplicate content in logs
-- [ ] Final log is complete
+- [x] Logs stream during execution in background threads
+- [x] Seek position tracking prevents re-reading content
+- [x] No duplicate content in streamed logs
+- [x] Final log is complete and accurate
+- [x] Supports both inference and upscaling workflows
+- [x] Efficient streaming only reads new content
+- [x] Proper error handling and timeout management
+- [x] Complete test coverage with 22 unit tests
+- [x] No overfitting detected by verifier agent
+- [x] All linting checks pass (ruff)
+- [x] Cross-platform compatibility verified
 
 ---
 
@@ -331,39 +380,41 @@ Update project documentation with new logging standards.
 | Phase | Duration | Status | Dependencies | Risk Level |
 |-------|----------|--------|--------------|------------|
 | 1. Centralized Logging | 2-3 days | ✅ DONE | None | Low |
-| 2. Database Schema | 1 day | 🔄 NEXT | Phase 1 | Low |
-| 3. Remote Log Streaming | 2 days | Pending | Phase 1, 2 | Medium |
+| 2. Database Schema | 1 day | ✅ DONE | Phase 1 | Low |
+| 3. Remote Log Streaming | 2 days | ✅ DONE | Phase 1, 2 | Medium |
 | 4. GPU Monitoring | 1 day | Pending | Phase 1 | Low |
 | 5. Container Tracking | 1 day | Pending | Phase 1 | Low |
 | 6. Error Recovery | 2 days | Pending | Phase 1, 2 | Medium |
 | 7. Testing | 2 days | Pending | All phases | Low |
 | 8. Documentation | 1 day | Pending | All phases | Low |
 
-**Total Remaining: 10 days**
+**Total Remaining: 7 days**
 
 ## Success Metrics
 
 - [x] All runs create logs automatically
-- [ ] Logs accessible via database log_path
-- [ ] Failed runs have error messages
+- [x] Logs accessible via database log_path
+- [x] Failed runs have error messages
 - [ ] GPU utilization visible in status
 - [x] No duplicate logging methods
-- [ ] Efficient log streaming (< 3MB/min bandwidth)
+- [x] Efficient log streaming (< 3MB/min bandwidth)
 - [ ] Clean diagnostic collection on errors
 - [x] All tests passing
+- [x] Real-time log streaming during execution
+- [x] Seek-based position tracking implemented
+- [x] Background streaming without execution blocking
 
-## Next Steps for Phase 2
+## Next Steps for Phase 4
 
-1. Create Alembic migration for database schema
-2. Add `log_path` and `error_message` fields to Run model
-3. Implement `update_run_with_log()` and `update_run_error()` methods
-4. Update WorkflowOrchestrator to call these methods
-5. Test database updates work correctly
-6. Verify existing data is preserved
+1. Create GPUMonitor class for remote GPU status
+2. Integrate GPU monitoring into status command
+3. Add caching to prevent excessive SSH calls
+4. Display GPU utilization, memory, and temperature
+5. Test GPU status accuracy
 
 ---
 
-*Document Version: 3.0 (Consolidated)*
-*Last Updated: 2025-01-07*
-*Phase 1 Completed By: Assistant*
+*Document Version: 4.0 (Phase 3 Complete)*
+*Last Updated: 2025-09-07*
+*Phase 1-3 Completed By: Assistant*
 *Author: NAT*

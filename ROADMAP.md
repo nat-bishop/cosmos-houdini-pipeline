@@ -112,6 +112,25 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
 
 ## Priority 1: Critical Issues
 
+### Critical: Log Recovery on Failure
+- [ ] **Ensure logs always download even on Docker failure**
+  - Currently logs may be lost if Docker execution fails
+  - Add finally block to DockerExecutor methods (run_inference, run_upscaling, run_batch_inference)
+  - Explicitly download remote log file before raising exceptions
+  - Critical for debugging GPU errors (CUDA OOM, model loading failures, etc.)
+  - Implementation: Add `_ensure_log_downloaded()` method and call in finally blocks
+  - Test with intentional failures to verify log preservation
+
+### Prompt Enhancement Tracking
+- [ ] **Make prompt-enhance operations trackable**
+  - Currently prompt-enhance creates an operation_id but no database run
+  - Users cannot use `cosmos stream` to review enhancement logs
+  - Option 1: Create "enhance" run type (may cause conceptual confusion - runs produce videos, not text)
+  - Option 2: Create lightweight operations table for non-video operations
+  - Option 3: Extend runs table to support text outputs for enhance operations
+  - Recommended: Option 2 - cleaner separation of concerns
+  - Update `cosmos stream` to check both runs and operations tables
+
 ### Remote Environment Setup
 - [ ] **Build Docker image on remote instance**
   - Run: `sudo docker build -f Dockerfile . -t nvcr.io/ubuntu/cosmos-transfer1:v1.0.0`
@@ -224,6 +243,40 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
   - Add workflow clarification: Claude checks for report, never creates it
 
 ## Priority 2: Features & Enhancements
+
+### Video Upscaling Implementation (4K Enhancement)
+- [ ] **Implement upscaling as separate database run**
+  - Upscaling must be a completely separate GPU execution after inference
+  - Create new run type: "upscale" (distinct from "inference")
+  - Link upscale run to parent inference run in database
+
+- [ ] **Upscale controlnet specification**
+  - Minimal JSON with only:
+    ```json
+    {
+      "input_video_path": "outputs/{inference_run_id}/output.mp4",
+      "upscale": {"control_weight": 0.5}
+    }
+    ```
+  - No other controls (vis, edge, depth, seg) should be included
+
+- [ ] **Upscale execution flow**
+  1. Complete inference run successfully
+  2. Create new "upscale" run in database
+  3. Use inference output as upscale input
+  4. Execute with dedicated upscale.sh script
+  5. Track separately in database with own status/logs
+
+- [ ] **CLI commands**
+  - `cosmos upscale <run_id>` - Upscale a completed inference run
+  - `cosmos inference --with-upscale` - Run inference then auto-upscale
+  - Keep upscale weight configurable (default 0.5)
+
+- [ ] **Technical requirements**
+  - Separate DockerExecutor method for upscaling
+  - Independent log file for upscale process
+  - Proper error handling if inference output missing
+  - Support for NUM_GPU=4 for faster upscaling
 
 ### Performance Optimization
 - [ ] **Implement batch processing**

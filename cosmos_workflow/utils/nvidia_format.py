@@ -53,6 +53,26 @@ def to_cosmos_inference_json(
 
         return unix_path
 
+    # Flatten video paths to match actual upload location
+    def flatten_video_path(path: str) -> str:
+        """Flatten video path to match how files are uploaded.
+
+        Since files are uploaded flat to inputs/videos/, we need to
+        strip any subdirectories and keep only the filename.
+
+        Example:
+            inputs/videos/city_scene_20250830_203504/color.mp4 -> inputs/videos/color.mp4
+        """
+        if not path:
+            return path
+
+        # Convert to Path to extract filename
+        path_obj = Path(path)
+        filename = path_obj.name
+
+        # Return flattened path
+        return f"inputs/videos/{filename}"
+
     # Extract negative prompt from parameters if not at top level
     negative_prompt = prompt_dict.get("negative_prompt", "")
     if not negative_prompt and "parameters" in prompt_dict:
@@ -66,7 +86,7 @@ def to_cosmos_inference_json(
     cosmos_json = {
         "prompt": prompt_dict.get("prompt_text", ""),
         "negative_prompt": negative_prompt,
-        "input_video_path": to_unix_path(inputs.get("video", "")),
+        "input_video_path": flatten_video_path(inputs.get("video", "")),
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
         "guidance": execution_config.get("guidance", 7.0),
@@ -74,6 +94,11 @@ def to_cosmos_inference_json(
         "seed": execution_config.get("seed", 42),
         "fps": execution_config.get("fps", 8),
     }
+
+    # TODO: Upscaling should NOT be included in inference JSON
+    # It needs to be a separate GPU run with its own controlnet spec
+    # containing only input_video_path and upscale control weight.
+    # See ROADMAP.md for implementation details.
 
     # Add control configurations only if weight > 0
     # This matches NVIDIA's approach where controls are optional
@@ -91,7 +116,7 @@ def to_cosmos_inference_json(
         # Only add input_control if video path exists
         depth_path = inputs.get("depth", "")
         if depth_path:
-            cosmos_json["depth"]["input_control"] = to_unix_path(depth_path)
+            cosmos_json["depth"]["input_control"] = flatten_video_path(depth_path)
 
     seg_weight = weights.get("seg", 0.25)
     if seg_weight > 0:
@@ -99,7 +124,7 @@ def to_cosmos_inference_json(
         # Only add input_control if video path exists
         seg_path = inputs.get("seg", "")
         if seg_path:
-            cosmos_json["seg"]["input_control"] = to_unix_path(seg_path)
+            cosmos_json["seg"]["input_control"] = flatten_video_path(seg_path)
 
     return cosmos_json
 
@@ -109,6 +134,14 @@ def to_cosmos_upscale_json(
 ) -> dict[str, Any]:
     """Convert database dicts to NVIDIA Cosmos upscale format.
 
+    TODO: Upscaling should be implemented as a separate GPU run with its own database entry.
+    The upscale process requires:
+    1. The output video from initial inference as input
+    2. A minimal controlnet spec with just input_video_path and upscale control weight
+    3. Its own dedicated run in the database to track the upscaling process
+
+    For now, this function is disabled. See ROADMAP.md for implementation plan.
+
     Args:
         prompt_dict: Prompt data from database
         run_dict: Run data from database
@@ -116,17 +149,14 @@ def to_cosmos_upscale_json(
 
     Returns:
         Dictionary in NVIDIA Cosmos format for upscale.sh
+
+    Raises:
+        NotImplementedError: Upscaling needs to be reimplemented as separate run
     """
-    # Upscaling uses similar format but with upscale-specific params
-    cosmos_json = to_cosmos_inference_json(prompt_dict, run_dict)
-
-    # Add upscale specific configuration
-    cosmos_json["upscale"] = {"control_weight": upscale_weight}
-
-    # For upscaling, we typically use fewer steps
-    cosmos_json["num_steps"] = 10
-
-    return cosmos_json
+    raise NotImplementedError(
+        "Upscaling is temporarily disabled. It needs to be implemented as a separate "
+        "GPU run with its own database entry. See ROADMAP.md for details."
+    )
 
 
 def write_cosmos_json(cosmos_data: dict[str, Any], output_path: str | Path) -> Path:
@@ -160,11 +190,15 @@ def to_cosmos_batch_json(prompts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     batch_data = []
     for prompt in prompts:
         inputs = prompt.get("inputs", {})
+        video_path = inputs.get("video", "")
+        # Flatten video path if present
+        if video_path:
+            video_path = f"inputs/videos/{Path(video_path).name}"
         batch_data.append(
             {
                 "name": f"prompt_{prompt.get('id', 'unknown')}",
                 "prompt": prompt.get("prompt_text", ""),
-                "video_path": inputs.get("video", ""),
+                "video_path": video_path,
                 "spec_id": prompt.get("id", ""),
             }
         )
@@ -194,9 +228,10 @@ def to_cosmos_batch_inference_jsonl(
         inputs = prompt_dict.get("inputs", {})
         visual_input = inputs.get("video", "")
 
-        # Convert Windows paths to Unix for GPU server
+        # Flatten video path to match actual upload location
         if visual_input:
-            visual_input = visual_input.replace("\\", "/")
+            # Extract just the filename and put in inputs/videos/
+            visual_input = f"inputs/videos/{Path(visual_input).name}"
 
         # Build the JSONL line
         line = {
@@ -215,9 +250,9 @@ def to_cosmos_batch_inference_jsonl(
         if seg_weight > 0:
             seg_input = inputs.get("seg", "")
             if seg_input:
-                # Use provided segmentation video
+                # Use provided segmentation video (flattened path)
                 control_overrides["seg"] = {
-                    "input_control": seg_input.replace("\\", "/"),
+                    "input_control": f"inputs/videos/{Path(seg_input).name}",
                     "control_weight": seg_weight,
                 }
             else:
@@ -229,9 +264,9 @@ def to_cosmos_batch_inference_jsonl(
         if depth_weight > 0:
             depth_input = inputs.get("depth", "")
             if depth_input:
-                # Use provided depth video
+                # Use provided depth video (flattened path)
                 control_overrides["depth"] = {
-                    "input_control": depth_input.replace("\\", "/"),
+                    "input_control": f"inputs/videos/{Path(depth_input).name}",
                     "control_weight": depth_weight,
                 }
             else:

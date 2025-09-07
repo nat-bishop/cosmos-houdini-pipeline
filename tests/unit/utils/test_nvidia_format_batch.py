@@ -57,7 +57,7 @@ class TestBatchInferenceJsonl:
 
         # First entry
         first = result[0]
-        assert first["visual_input"] == "inputs/videos/city/color.mp4"
+        assert first["visual_input"] == "inputs/videos/color.mp4"
         assert first["prompt"] == "A futuristic city"
         assert "control_overrides" in first
         assert first["control_overrides"]["vis"]["control_weight"] == 0.3
@@ -67,7 +67,7 @@ class TestBatchInferenceJsonl:
 
         # Second entry with depth
         second = result[1]
-        assert second["visual_input"] == "inputs/videos/landscape/color.mp4"
+        assert second["visual_input"] == "inputs/videos/color.mp4"
         assert second["prompt"] == "A serene landscape"
         assert second["control_overrides"]["vis"]["control_weight"] == 0.5
         # Depth weight is 0, should not be included
@@ -92,7 +92,7 @@ class TestBatchInferenceJsonl:
 
         result = nvidia_format.to_cosmos_batch_inference_jsonl(runs_and_prompts)
 
-        assert result[0]["visual_input"] == "C:/Users/test/videos/color.mp4"
+        assert result[0]["visual_input"] == "inputs/videos/color.mp4"
         # Depth with 0 weight won't be included by default
 
     def test_handles_optional_depth_and_seg_videos(self):
@@ -135,10 +135,10 @@ class TestBatchInferenceJsonl:
         # First has all controls
         first = result[0]
         assert "depth" in first["control_overrides"]
-        assert first["control_overrides"]["depth"]["input_control"] == "inputs/depth.mp4"
+        assert first["control_overrides"]["depth"]["input_control"] == "inputs/videos/depth.mp4"
         assert first["control_overrides"]["depth"]["control_weight"] == 0.3
         assert "seg" in first["control_overrides"]
-        assert first["control_overrides"]["seg"]["input_control"] == "inputs/seg.mp4"
+        assert first["control_overrides"]["seg"]["input_control"] == "inputs/videos/seg.mp4"
 
         # Second has only vis and edge (non-zero weights)
         second = result[1]

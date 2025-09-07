@@ -96,7 +96,7 @@ class WorkflowService:
             raise ValueError("parameters cannot be None")
 
         # Generate prompt ID based on content
-        prompt_id = self._generate_prompt_id(model_type, prompt_text, inputs)
+        prompt_id = self._generate_prompt_id(model_type, prompt_text, inputs, parameters)
 
         # Create prompt in database
         with self.db.get_session() as session:
@@ -271,19 +271,25 @@ class WorkflowService:
 
             return result
 
-    def _generate_prompt_id(self, model_type: str, prompt_text: str, inputs: dict[str, Any]) -> str:
+    def _generate_prompt_id(
+        self, model_type: str, prompt_text: str, inputs: dict[str, Any], parameters: dict[str, Any]
+    ) -> str:
         """Generate unique ID for a prompt.
 
         Args:
             model_type: Type of AI model
             prompt_text: The prompt text
             inputs: Input data
+            parameters: Model-specific parameters
 
         Returns:
             Unique ID string starting with 'ps_'
         """
-        # Create deterministic string representation
-        content = f"{model_type}|{prompt_text}|{sorted(inputs.items())}"
+        # Create deterministic string representation including parameters
+        # This ensures enhanced prompts get different IDs even with same text
+        content = (
+            f"{model_type}|{prompt_text}|{sorted(inputs.items())}|{sorted(parameters.items())}"
+        )
 
         # Generate hash
         hash_obj = hashlib.sha256(content.encode("utf-8"))

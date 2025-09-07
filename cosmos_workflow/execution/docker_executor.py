@@ -243,7 +243,9 @@ class DockerExecutor:
 
             # Add logging redirection if we have a log path
             if remote_log_path:
+                # Wrap in bash -c for proper shell operator interpretation
                 cmd = f"({cmd}) 2>&1 | tee {remote_log_path}; echo '[COSMOS_COMPLETE]' >> {remote_log_path}"
+                cmd = f'bash -c "{cmd}"'
 
             builder.set_command(cmd)
 

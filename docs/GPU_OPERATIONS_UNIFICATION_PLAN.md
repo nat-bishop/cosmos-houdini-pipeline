@@ -192,57 +192,29 @@ Each phase is independent and can be rolled back:
 - **Although never is often better than *right* now**: Phased approach
 - **If implementation is easy to explain**: One GPU op = one database run
 
-## Remaining Timeline Estimate
-
-- **Phase 2**: 2-3 hours (enhancement integration)
-- **Phase 3**: 3-4 hours (upscaling fix)
-- **Phase 4**: 2-3 hours (status unification)
-- **Phase 5**: 2-3 hours (CLI/UI updates)
-
-Remaining: 9-13 hours of focused work
-
-## Completed Work Summary
-
-### Phase 1 Status: ✅ COMPLETE
-- Removed all obsolete log streaming references
-- Simplified to single streaming method: `cosmos status --stream`
-- All tests passing
-- Code is cleaner and more maintainable
-
-## Next Session Prompt
-
-```
-The GPU Operations Unification Plan (docs/GPU_OPERATIONS_UNIFICATION_PLAN.md) is in progress.
-
-Phase 1 (Cleanup) is COMPLETE:
-- Removed misleading docstrings and unused stream_logs parameters
-- Streaming now only via `cosmos status --stream` using docker logs -f
-- All tests passing
-
-BEFORE starting Phase 2, please:
-1. Run full test suite: `pytest tests/` to ensure no regressions
-2. Test CLI commands manually:
-   - `cosmos inference ps_xxx` (should return immediately)
-   - `cosmos status --stream` (should stream logs)
-   - `cosmos prompt-enhance ps_xxx` (should work without --stream flag)
-3. Verify DockerExecutor methods have accurate docstrings
-
-Phase 2 (Prompt Enhancement as Database Run) is NEXT:
-- Make prompt enhancement create a database run with model_type="enhance"
-- Takes prompt_id as input (operates on prompt text)
-- Currently uses operation_id, needs to use run_id
-- Currently blocking, needs to be async like inference
-
-Phase 3 (Upscaling as Separate Run) follows:
-- IMPORTANT: Upscaling takes run_id as input (not prompt_id)
-- Operates on output video from specific inference run
-- Needs parent_run_id in execution_config for tracking
-
-Key architectural principle: One GPU operation = One database run
-```
-
 ## Notes for Implementation
 
 - Database schema already supports all changes (no migrations needed)
 - Keep operations atomic and independent
 - Each phase delivers value independently
+- All run directory names should be based on run_id (e.g., `outputs/run_{run_id}/`)
+  - This applies to inference, upscaling, and prompt enhancement
+  - Ensures consistent directory structure across all operations
+  - Makes it easy to find outputs for any run
+
+## Phase 6: Remote Log Download
+
+### Goal
+Download remote GPU logs back to local machine for debugging and monitoring
+
+### Changes Required
+1. After each GPU operation completes, download the remote log file
+2. Store in local run directory: `outputs/run_{run_id}/logs/`
+3. Update DockerExecutor methods to return both local and remote log paths
+4. Implement log download in WorkflowOrchestrator after operation completion
+
+### Implementation
+- Add `download_log()` method to FileTransferService
+- Call after each GPU operation (inference, upscaling, enhancement)
+- Store alongside local orchestration logs
+- Handle missing logs gracefully (operation may have failed before creating log)

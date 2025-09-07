@@ -6,6 +6,8 @@ the exact format expected by NVIDIA Cosmos Transfer scripts.
 
 import json
 
+import pytest
+
 from cosmos_workflow.utils import nvidia_format
 
 
@@ -89,6 +91,7 @@ def test_inference_format_matches_nvidia_requirements():
     assert json_str  # Should not raise
 
 
+@pytest.mark.skip(reason="Upscaling is temporarily disabled - see ROADMAP.md")
 def test_upscale_format_matches_nvidia_requirements():
     """Test that upscale JSON matches NVIDIA's expected format."""
     # Create sample database dicts

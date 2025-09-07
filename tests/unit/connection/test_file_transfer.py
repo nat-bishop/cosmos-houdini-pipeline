@@ -150,16 +150,15 @@ class TestFileTransferService:
                 video_dir.mkdir()
 
                 # Call the deprecated method and verify it logs a warning
-                import logging
+                from cosmos_workflow.utils.logging import logger
 
-                with patch.object(
-                    logging.getLogger("cosmos_workflow.transfer.file_transfer"), "warning"
-                ) as mock_log:
+                with patch.object(logger, "warning") as mock_log:
                     self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
 
                 # Check that deprecation warning was logged
-                mock_log.assert_called_once()
-                assert "deprecated" in str(mock_log.call_args)
+                mock_log.assert_called_once_with(
+                    "upload_prompt_and_videos is deprecated and will be removed"
+                )
 
     # Removed test for bash scripts functionality - deprecated feature
 

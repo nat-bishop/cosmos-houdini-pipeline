@@ -43,8 +43,17 @@ def create_mock_docker_executor():
     operations stubbed out.
     """
     docker = MagicMock()
-    docker.run_inference.return_value = (0, "Inference complete", "")
-    docker.run_upscaling.return_value = (0, "Upscaling complete", "")
+    # Updated to match new return format from DockerExecutor
+    docker.run_inference.return_value = {
+        "status": "started",
+        "log_path": "/tmp/outputs/test/logs/run_test.log",
+        "prompt_name": "test",
+    }
+    docker.run_upscaling.return_value = {
+        "status": "started",
+        "log_path": "/tmp/outputs/test_upscaled/logs/run_test.log",
+        "prompt_name": "test",
+    }
     docker.get_docker_status.return_value = {"status": "ready"}
     docker.check_gpu_availability.return_value = True
     docker.stream_logs = MagicMock()

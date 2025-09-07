@@ -196,6 +196,7 @@ class TestInferenceBehavior:
                     # Verify output path is returned
                     assert "output_path" in result, "Should return path to downloaded results"
 
+    @pytest.mark.skip(reason="Upscaling is temporarily disabled - see ROADMAP.md")
     def test_inference_with_upscaling_runs_both_steps(
         self, mock_dependencies, sample_prompt_dict, sample_run_dict
     ):

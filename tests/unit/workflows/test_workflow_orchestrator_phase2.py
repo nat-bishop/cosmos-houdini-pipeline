@@ -200,6 +200,7 @@ class TestWorkflowOrchestratorPhase2:
         assert result["status"] == "failed"
         assert result["error"] == error_msg
 
+    @pytest.mark.skip(reason="Upscaling is temporarily disabled - see ROADMAP.md")
     def test_execute_run_with_upscaling_updates_log_paths(
         self,
         workflow_orchestrator,

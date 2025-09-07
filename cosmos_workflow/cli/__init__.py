@@ -7,6 +7,7 @@ from .create import create
 from .delete import delete_group
 from .enhance import prompt_enhance
 from .inference import inference
+from .kill import kill
 from .list_commands import list_group
 from .prepare import prepare
 from .search import search_command
@@ -47,6 +48,7 @@ def cli(ctx, verbose):
 cli.add_command(create)
 cli.add_command(delete_group)
 cli.add_command(inference)
+cli.add_command(kill)
 cli.add_command(list_group)
 cli.add_command(prompt_enhance)
 cli.add_command(prepare)

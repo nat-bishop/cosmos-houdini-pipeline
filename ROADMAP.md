@@ -112,6 +112,58 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
 
 ## Priority 1: Critical Issues
 
+### Container Management Improvements
+**Status:** Partially Complete (2025-01-07)
+
+#### Completed:
+- [x] Removed unused `cleanup_containers()` method
+- [x] Added `kill_containers()` method to forcefully terminate running containers
+- [x] Created `cosmos kill` CLI command for emergency container termination
+- [x] Added kill_containers to WorkflowOperations API
+
+#### Future Improvements (Run-Specific Container Management):
+**Target: Version 1.5**
+
+1. **Container Labeling with Run IDs**
+   - Add `--label run_id={run_id}` to container creation
+   - Enables targeting specific runs for termination
+   - Preserves other running jobs when killing one
+
+2. **Kill Specific Runs**
+   - New method: `kill_run(run_id: str)`
+   - CLI: `cosmos kill --run <run_id>`
+   - Finds container by run_id label
+   - Downloads partial logs before killing
+   - Updates database status to "cancelled"
+
+3. **Add "cancelled" Status**
+   - Update database model to include "cancelled" as valid status
+   - Update WorkflowService validation to accept "cancelled"
+   - Set completed_at timestamp when cancelling
+   - Preserve partial outputs and logs
+
+4. **Graceful Shutdown Option**
+   - Add `--graceful` flag to kill command
+   - Use `docker stop` (SIGTERM) instead of `docker kill` (SIGKILL)
+   - Allow containers time to clean up before termination
+   - Default timeout: 30 seconds before force kill
+
+5. **Container Lifecycle Tracking**
+   - Store container ID in database when run starts
+   - Track container state changes
+   - Auto-cleanup orphaned containers on startup
+   - Periodic health checks for running containers
+
+**Implementation Plan:**
+- [ ] Add container labeling support to DockerCommandBuilder
+- [ ] Update inference/upscaling to use run_id labels
+- [ ] Implement kill_run() in DockerExecutor
+- [ ] Add "cancelled" status to database schema
+- [ ] Update WorkflowService to handle cancelled status
+- [ ] Create run-specific kill CLI command
+- [ ] Add container ID tracking to Run model
+- [ ] Implement graceful shutdown options
+
 ### Critical: Log Recovery on Failure
 - [ ] **Ensure logs always download even on Docker failure**
   - Currently logs may be lost if Docker execution fails

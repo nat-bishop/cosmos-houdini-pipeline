@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cosmos_workflow.utils.logging import logger
+from cosmos_workflow.utils.workflow_utils import ensure_directory, sanitize_remote_path
 
 if TYPE_CHECKING:
     from cosmos_workflow.connection.ssh_manager import SSHManager
@@ -55,7 +56,7 @@ class FileTransferService:
         local_path = Path(local_path) if isinstance(local_path, str) else local_path
         if not local_path.exists():
             raise FileNotFoundError(local_path)
-        remote_dir = remote_dir.replace("\\", "/")
+        remote_dir = sanitize_remote_path(remote_dir)
         self._remote_mkdirs([remote_dir])
         self._sftp_upload_file(local_path, f"{remote_dir}/{local_path.name}")
         return True
@@ -65,7 +66,7 @@ class FileTransferService:
         local_dir = Path(local_dir) if isinstance(local_dir, str) else local_dir
         if not local_dir.exists():
             raise FileNotFoundError(local_dir)
-        remote_dir = remote_dir.replace("\\", "/")
+        remote_dir = sanitize_remote_path(remote_dir)
         self._remote_mkdirs([remote_dir])
         self._sftp_upload_dir(local_dir, remote_dir)
         return True
@@ -87,7 +88,7 @@ class FileTransferService:
         """
         # Convert to Path if string
         local_path = Path(local_file) if isinstance(local_file, str) else local_file
-        local_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_directory(local_path.parent)
 
         # Convert Windows paths to POSIX for remote
         remote_file = remote_file.replace("\\", "/")
@@ -120,8 +121,8 @@ class FileTransferService:
     def download_directory(self, remote_dir: str, local_dir: Path | str) -> bool:
         """Download a directory recursively from remote via SFTP."""
         local_dir = Path(local_dir) if isinstance(local_dir, str) else local_dir
-        local_dir.mkdir(parents=True, exist_ok=True)
-        remote_dir = remote_dir.replace("\\", "/")
+        ensure_directory(local_dir)
+        remote_dir = sanitize_remote_path(remote_dir)
         self._sftp_download_dir(remote_dir, local_dir)
         return True
 
@@ -135,7 +136,7 @@ class FileTransferService:
         # Main outputs
         remote_out = f"{self.remote_dir}/outputs/{prompt_name}"
         local_out = Path(f"outputs/{prompt_name}")
-        local_out.mkdir(parents=True, exist_ok=True)
+        ensure_directory(local_out)
         if self.file_exists_remote(remote_out):
             self._sftp_download_dir(remote_out, local_out)
             # Create manifest of downloaded files
@@ -147,7 +148,7 @@ class FileTransferService:
         remote_up = f"{remote_out}_upscaled"
         local_up = Path(f"outputs/{prompt_name}_upscaled")
         if self.file_exists_remote(remote_up):
-            local_up.mkdir(parents=True, exist_ok=True)
+            ensure_directory(local_up)
             self._sftp_download_dir(remote_up, local_up)
             # Create manifest for upscaled outputs
             self._create_manifest(local_up)
@@ -204,7 +205,7 @@ class FileTransferService:
 
     def _sftp_upload_file(self, local_file: Path, remote_abs_file: str) -> None:
         """Upload a single file via SFTP to a specific remote absolute path."""
-        remote_abs_file = remote_abs_file.replace("\\", "/")
+        remote_abs_file = sanitize_remote_path(remote_abs_file)
         with self.ssh_manager.get_sftp() as sftp:
             logger.info(f"Uploading file: {local_file} -> {remote_abs_file}")
             sftp.put(str(local_file), remote_abs_file)
@@ -214,7 +215,7 @@ class FileTransferService:
         """Upload a directory to a remote absolute directory via SFTP.
         Copies all files in the directory recursively.
         """
-        remote_abs_dir = remote_abs_dir.replace("\\", "/")
+        remote_abs_dir = sanitize_remote_path(remote_abs_dir)
         with self.ssh_manager.get_sftp() as sftp:
             logger.info("Uploading directory: %s -> %s", local_dir, remote_abs_dir)
 
@@ -231,7 +232,7 @@ class FileTransferService:
 
     def _sftp_download_dir(self, remote_abs_dir: str, local_dir: Path) -> None:
         """Download a remote directory to a local directory via SFTP."""
-        remote_abs_dir = remote_abs_dir.replace("\\", "/")
+        remote_abs_dir = sanitize_remote_path(remote_abs_dir)
         with self.ssh_manager.get_sftp() as sftp:
             logger.info("Downloading directory: %s -> %s", remote_abs_dir, local_dir)
 
@@ -248,7 +249,7 @@ class FileTransferService:
 
                 if stat.S_ISDIR(item.st_mode):
                     # Recursively download subdirectories
-                    local_path.mkdir(parents=True, exist_ok=True)
+                    ensure_directory(local_path)
                     self._sftp_download_dir(remote_path, local_path)
                 else:
                     # Download file

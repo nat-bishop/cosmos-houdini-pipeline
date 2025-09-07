@@ -385,10 +385,25 @@ class FakeDockerExecutor:
         """Get logs for a container (stub)."""
         return f"Logs for container {container_id}"
 
-    def cleanup_containers(self) -> None:
-        """Clean up containers (stub)."""
+    def kill_containers(self) -> dict[str, Any]:
+        """Kill all running containers for the docker image."""
+        # Simulate finding and killing containers
+        container_count = len(self.containers_run)
         self.containers_run.clear()
-        self.inference_results.clear()
+
+        if container_count == 0:
+            return {
+                "status": "success",
+                "killed_count": 0,
+                "killed_containers": [],
+                "message": "No running containers found",
+            }
+
+        return {
+            "status": "success",
+            "killed_count": container_count,
+            "killed_containers": [f"fake_container_{i}" for i in range(container_count)],
+        }
 
     def get_docker_status(self) -> dict[str, Any]:
         """Get Docker status."""

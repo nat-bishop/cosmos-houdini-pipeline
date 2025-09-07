@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - GPU Detection and Container Management (2025-09-07)
+- **Centralized Container Management**
+  - New `get_active_container()` method in DockerExecutor for single-source container detection
+  - Automatic detection and warning for multiple running containers
+  - Structured container information with ID, name, status, and creation time
+  - Refactored `stream_container_logs()` to use centralized container detection
+  - Eliminated duplicate `docker ps` calls throughout codebase
+- **GPU Detection Features**
+  - New `get_gpu_info()` method to detect GPU via nvidia-smi
+  - Automatic detection of GPU model, memory, driver version, and CUDA version
+  - Integration with `cosmos status` command to display GPU information
+  - Graceful handling when GPU drivers are not available
+- **Status Command Improvements**
+  - Fixed `cosmos status` to properly display GPU information
+  - Updated to show single container paradigm with warnings for multiple containers
+  - Improved status tips based on actual system state
+
 ### Added - Log Visualization Interface (2025-09-07)
 - **Complete Log Visualization System**
   - New `cosmos_workflow/ui/log_viewer.py`: Core log viewer component with LogEntry dataclass, LogFilter, and LogViewer classes

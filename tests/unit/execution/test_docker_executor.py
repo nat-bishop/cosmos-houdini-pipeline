@@ -295,7 +295,7 @@ class TestDockerExecutor:
         self.mock_ssh_manager.execute_command_success.side_effect = [
             "Docker info output",  # docker info
             "Image list output",  # docker images
-            "Container list output",  # docker ps
+            "",  # No containers from get_active_container
         ]
 
         # Get Docker status
@@ -305,7 +305,7 @@ class TestDockerExecutor:
         assert status["docker_running"] is True
         assert status["docker_info"] == "Docker info output"
         assert status["available_images"] == "Image list output"
-        assert status["running_containers"] == "Container list output"
+        assert status["active_container"] is None  # No containers running
 
         # Check that commands were executed
         assert self.mock_ssh_manager.execute_command_success.call_count == 3
@@ -322,29 +322,87 @@ class TestDockerExecutor:
         assert status["docker_running"] is False
         assert "Docker not running" in status["error"]
 
-    def test_cleanup_containers_executes_cleanup_command(self):
-        """Test that cleanup_containers executes the cleanup command."""
-        # Mock successful cleanup
-        self.mock_ssh_manager.execute_command_success.return_value = None
+    def test_kill_containers_with_no_running_containers(self):
+        """Test kill_containers when no containers are running."""
+        # Mock no containers found
+        self.mock_ssh_manager.execute_command_success.return_value = ""
 
-        # Cleanup containers
-        self.docker_executor.cleanup_containers()
+        # Kill containers
+        result = self.docker_executor.kill_containers()
 
-        # Check that cleanup command was executed
-        self.mock_ssh_manager.execute_command_success.assert_called_once_with(
-            "sudo docker container prune -f", stream_output=False
+        # Check result
+        assert result["killed_count"] == 0
+        assert result["status"] == "success"
+        assert result["message"] == "No running containers found"
+
+        # Check that we queried for containers
+        self.mock_ssh_manager.execute_command_success.assert_called_with(
+            f'sudo docker ps --filter "ancestor={self.docker_image}" --format "{{{{.ID}}}}"',
+            stream_output=False,
         )
 
-    def test_cleanup_containers_handles_failure_gracefully(self):
-        """Test that cleanup_containers handles failure gracefully."""
-        # Mock failed cleanup
-        self.mock_ssh_manager.execute_command_success.side_effect = Exception("Cleanup failed")
+    def test_kill_containers_with_single_container(self):
+        """Test kill_containers with one running container."""
+        # Mock one container found
+        container_id = "abc123def456"
+        self.mock_ssh_manager.execute_command_success.side_effect = [
+            container_id,  # First call returns container ID
+            None,  # Second call kills container
+        ]
 
-        # Should not raise exception, just log warning
-        self.docker_executor.cleanup_containers()
+        # Kill containers
+        result = self.docker_executor.kill_containers()
 
-        # Check that cleanup command was attempted
-        self.mock_ssh_manager.execute_command_success.assert_called_once()
+        # Check result
+        assert result["killed_count"] == 1
+        assert result["status"] == "success"
+        assert container_id in result["killed_containers"]
+
+        # Check that docker kill was called
+        calls = self.mock_ssh_manager.execute_command_success.call_args_list
+        assert len(calls) == 2
+        assert f"sudo docker kill {container_id}" in calls[1][0][0]
+
+    def test_kill_containers_with_multiple_containers(self):
+        """Test kill_containers with multiple running containers."""
+        # Mock multiple containers found
+        container_ids = ["abc123def456", "789xyz012345", "mno456pqr789"]
+        self.mock_ssh_manager.execute_command_success.side_effect = [
+            "\n".join(container_ids),  # First call returns container IDs
+            None,  # Second call kills all containers
+        ]
+
+        # Kill containers
+        result = self.docker_executor.kill_containers()
+
+        # Check result
+        assert result["killed_count"] == 3
+        assert result["status"] == "success"
+        assert all(cid in result["killed_containers"] for cid in container_ids)
+
+        # Check that docker kill was called with all container IDs
+        calls = self.mock_ssh_manager.execute_command_success.call_args_list
+        assert len(calls) == 2
+        kill_command = calls[1][0][0]
+        for cid in container_ids:
+            assert cid in kill_command
+
+    def test_kill_containers_handles_docker_kill_failure(self):
+        """Test that kill_containers handles docker kill failure gracefully."""
+        # Mock container found but kill fails
+        container_id = "abc123def456"
+        self.mock_ssh_manager.execute_command_success.side_effect = [
+            container_id,  # First call returns container ID
+            Exception("Failed to kill container"),  # Second call fails
+        ]
+
+        # Kill containers should handle error
+        result = self.docker_executor.kill_containers()
+
+        # Check result indicates failure
+        assert result["status"] == "failed"
+        assert "error" in result
+        assert "Failed to kill container" in result["error"]
 
     def test_get_container_logs_returns_logs_when_successful(self):
         """Test that get_container_logs returns logs when successful."""
@@ -389,39 +447,47 @@ class TestDockerExecutor:
 
     def test_stream_container_logs_auto_detect_latest_container(self):
         """Test auto-detecting and streaming from the latest container."""
-        # Mock auto-detection to return a container ID
+        # Mock get_active_container to return a container
         detected_container = "xyz789abc123"
-        self.mock_ssh_manager.execute_command_success.return_value = detected_container
+        with patch.object(self.docker_executor, "get_active_container") as mock_get_active:
+            mock_get_active.return_value = {
+                "id": detected_container,
+                "id_short": detected_container[:12],
+                "name": "test-container",
+                "status": "Up 5 minutes",
+                "image": self.docker_image,
+                "created": "2025-01-07",
+            }
 
-        # Call stream_container_logs without container ID
-        self.docker_executor.stream_container_logs()
+            # Mock the execute_command for streaming
+            self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
-        # Should first detect the container
-        self.mock_ssh_manager.execute_command_success.assert_called_once_with(
-            f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"', stream_output=False
-        )
+            # Call stream_container_logs without container ID
+            self.docker_executor.stream_container_logs()
 
-        # Then stream logs from detected container
-        self.mock_ssh_manager.execute_command.assert_called_once_with(
-            f"sudo docker logs -f {detected_container}", timeout=86400, stream_output=True
-        )
+            # Should call get_active_container
+            mock_get_active.assert_called_once()
+
+            # Then stream logs from detected container
+            self.mock_ssh_manager.execute_command.assert_called_once_with(
+                f"sudo docker logs -f {detected_container}", timeout=86400, stream_output=True
+            )
 
     def test_stream_container_logs_no_running_containers(self):
         """Test error handling when no containers are running."""
-        # Mock auto-detection to return empty (no containers)
-        self.mock_ssh_manager.execute_command_success.return_value = ""
+        # Mock get_active_container to return None (no containers)
+        with patch.object(self.docker_executor, "get_active_container") as mock_get_active:
+            mock_get_active.return_value = None
 
-        # Should raise RuntimeError when no containers found
-        with pytest.raises(RuntimeError, match="No running containers found"):
-            self.docker_executor.stream_container_logs()
+            # Should raise RuntimeError when no containers found
+            with pytest.raises(RuntimeError, match="No running containers found"):
+                self.docker_executor.stream_container_logs()
 
-        # Should have attempted to detect container
-        self.mock_ssh_manager.execute_command_success.assert_called_once_with(
-            f'sudo docker ps -l -q --filter "ancestor={self.docker_image}"', stream_output=False
-        )
+            # Should have attempted to detect container
+            mock_get_active.assert_called_once()
 
-        # Should not attempt to stream logs
-        self.mock_ssh_manager.execute_command.assert_not_called()
+            # Should not attempt to stream logs
+            self.mock_ssh_manager.execute_command.assert_not_called()
 
     def test_stream_container_logs_handles_keyboard_interrupt(self):
         """Test graceful handling of Ctrl+C during streaming."""

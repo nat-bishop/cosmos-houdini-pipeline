@@ -23,6 +23,7 @@ from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import init_database
+from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.services import WorkflowService
 from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
@@ -794,3 +795,36 @@ class WorkflowOperations:
             "warnings": warnings,
             "stats": stats,
         }
+
+    def kill_containers(self) -> dict[str, Any]:
+        """Kill all running cosmos containers on the GPU instance.
+
+        Returns:
+            Dict with status, killed_count, and list of killed container IDs.
+        """
+        logger.info("Killing all running cosmos containers")
+
+        try:
+            # Initialize connection to GPU instance
+            self._initialize_ssh()
+
+            with self.ssh_manager:
+                # Initialize Docker executor
+                remote_config = self.config_manager.get_remote_config()
+                docker_executor = DockerExecutor(
+                    self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
+                )
+
+                # Kill containers
+                result = docker_executor.kill_containers()
+
+                if result["status"] == "success":
+                    logger.info("Successfully killed %d container(s)", result["killed_count"])
+                else:
+                    logger.error("Failed to kill containers: %s", result.get("error"))
+
+                return result
+
+        except Exception as e:
+            logger.error("Failed to kill containers: %s", e)
+            return {"status": "failed", "error": str(e), "killed_count": 0, "killed_containers": []}

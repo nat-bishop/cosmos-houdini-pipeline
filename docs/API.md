@@ -1209,8 +1209,19 @@ docker_executor.run_upscaling(
     control_weight=0.5
 )
 
+# Get active container (centralized container detection)
+container = docker_executor.get_active_container()
+# Returns: {"id": "abc123...", "id_short": "abc123", "name": "cosmos_inf", "status": "Up 5 minutes", ...}
+# Returns None if no containers running
+# Includes "warning" field if multiple containers detected
+
+# Get GPU information
+gpu_info = docker_executor.get_gpu_info()
+# Returns: {"name": "NVIDIA H100", "memory_total": "80GB", "cuda_version": "12.8", ...}
+# Returns None if GPU not available
+
 # Stream container logs
-docker_executor.stream_container_logs()  # Auto-detect latest container
+docker_executor.stream_container_logs()  # Auto-detect using get_active_container()
 docker_executor.stream_container_logs(container_id="abc123")  # Specific container
 ```
 
@@ -1222,6 +1233,14 @@ docker_executor.stream_container_logs(container_id="abc123")  # Specific contain
   - Validates JSONL file exists before execution
   - Returns batch execution results with output file list
   - Handles Docker container orchestration for batch processing
+- `get_active_container()`: Get the active cosmos container (expects one, warns if multiple)
+  - Returns structured container info with id, name, status, etc.
+  - Central source for container detection, eliminates duplicate docker ps calls
+  - Returns None if no containers running
+- `get_gpu_info()`: Detect GPU information via nvidia-smi
+  - Returns GPU model, memory, driver version, and CUDA version
+  - Returns None if GPU drivers not available
+  - Gracefully handles systems without GPU
 - `run_upscaling()`: Execute upscaling pipeline
 - `get_docker_status()`: Check Docker status
 - `cleanup_containers()`: Clean up stopped containers

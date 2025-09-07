@@ -10,6 +10,7 @@ from typing import Any
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
 from cosmos_workflow.utils.logging import get_run_logger, logger
+from cosmos_workflow.utils.workflow_utils import get_log_path
 
 
 class DockerExecutor:
@@ -61,9 +62,7 @@ class DockerExecutor:
         self.remote_executor.create_directory(remote_output_dir)
 
         # Setup local log path
-        log_dir = Path(f"outputs/{prompt_name}/logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        local_log_path = log_dir / f"run_{run_id}.log"
+        local_log_path = get_log_path("inference", prompt_name, run_id)
 
         try:
             # Log path for reference
@@ -126,9 +125,7 @@ class DockerExecutor:
         run_logger.info("Running upscaling for %s with weight %s", prompt_name, control_weight)
 
         # Setup local log path
-        log_dir = Path(f"outputs/{prompt_name}_upscaled/logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        local_log_path = log_dir / f"run_{run_id}.log"
+        local_log_path = get_log_path("upscaling", f"{prompt_name}_upscaled", run_id)
 
         try:
             # Check if input video exists
@@ -194,9 +191,7 @@ class DockerExecutor:
         """
         # Setup logger
         if operation_id:
-            log_dir = Path("outputs/prompt_enhancement/logs")
-            log_dir.mkdir(parents=True, exist_ok=True)
-            local_log_path = log_dir / f"op_{operation_id}.log"
+            local_log_path = get_log_path("enhancement", "prompt_enhancement", operation_id)
             # Use bound logger for this operation
             op_logger = logger.bind(operation_id=operation_id)
         else:
@@ -476,15 +471,53 @@ class DockerExecutor:
             logger.debug("GPU not available or nvidia-smi failed: %s", e)
             return None
 
-    def cleanup_containers(self) -> None:
-        """Clean up any stopped containers on remote."""
+    def kill_containers(self) -> dict[str, Any]:
+        """Kill all running containers for the cosmos docker image.
+
+        Returns:
+            Dict with status, killed_count, and list of killed container IDs.
+        """
         try:
-            self.ssh_manager.execute_command_success(
-                "sudo docker container prune -f", stream_output=False
-            )
-            logger.info("Cleaned up stopped containers")
+            # Get all running containers for our image
+            cmd = f'sudo docker ps --filter "ancestor={self.docker_image}" --format "{{{{.ID}}}}"'
+            output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
+
+            if not output or not output.strip():
+                logger.info("No running containers found for image %s", self.docker_image)
+                return {
+                    "status": "success",
+                    "killed_count": 0,
+                    "killed_containers": [],
+                    "message": "No running containers found",
+                }
+
+            # Parse container IDs
+            container_ids = [cid.strip() for cid in output.strip().split("\n") if cid.strip()]
+
+            if not container_ids:
+                return {
+                    "status": "success",
+                    "killed_count": 0,
+                    "killed_containers": [],
+                    "message": "No running containers found",
+                }
+
+            # Kill all containers
+            kill_cmd = f"sudo docker kill {' '.join(container_ids)}"
+            self.ssh_manager.execute_command_success(kill_cmd, stream_output=False)
+
+            logger.info("Killed %d containers: %s", len(container_ids), container_ids)
+
+            return {
+                "status": "success",
+                "killed_count": len(container_ids),
+                "killed_containers": container_ids,
+                "message": f"Successfully killed {len(container_ids)} container(s)",
+            }
+
         except Exception as e:
-            logger.warning("Failed to cleanup containers: %s", e)
+            logger.error("Failed to kill containers: %s", e)
+            return {"status": "failed", "error": str(e), "killed_count": 0, "killed_containers": []}
 
     def get_container_logs(self, container_id: str) -> str:
         """Get logs from a specific container."""
@@ -519,11 +552,8 @@ class DockerExecutor:
 
         # Setup logging paths if streaming
         remote_log_path = None
-        local_log_path = None
         if stream_logs:
             remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
-            local_log_path = Path(f"outputs/batch/{batch_name}/batch.log")
-            local_log_path.parent.mkdir(parents=True, exist_ok=True)
             # Ensure remote log directory exists
             self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
 

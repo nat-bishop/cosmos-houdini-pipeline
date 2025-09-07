@@ -7,9 +7,12 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from cosmos_workflow.utils.workflow_utils import (
+    ensure_directory,
     ensure_path_exists,
     format_duration,
+    get_log_path,
     log_workflow_event,
+    sanitize_remote_path,
     validate_gpu_configuration,
 )
 
@@ -92,3 +95,53 @@ class TestUtilityFunctions:
         assert validate_gpu_configuration(2, "0") is False  # Mismatch count
         assert validate_gpu_configuration(1, "abc") is False  # Non-numeric device
         assert validate_gpu_configuration(1, "-1") is False  # Negative device ID
+
+    def test_ensure_directory(self, tmp_path):
+        """Test ensure_directory creates directory."""
+        # Test with Path object
+        test_dir = tmp_path / "new_dir"
+        result = ensure_directory(test_dir)
+        assert test_dir.exists()
+        assert test_dir.is_dir()
+        assert result == test_dir
+
+        # Test with string path
+        test_dir2 = tmp_path / "another_dir"
+        result2 = ensure_directory(str(test_dir2))
+        assert test_dir2.exists()
+        assert test_dir2.is_dir()
+        assert result2 == test_dir2
+
+        # Test idempotence (calling again on existing dir)
+        result3 = ensure_directory(test_dir)
+        assert result3 == test_dir
+
+    def test_get_log_path(self, tmp_path):
+        """Test get_log_path creates correct log paths."""
+        # Mock ensure_directory to use tmp_path
+        with patch("cosmos_workflow.utils.workflow_utils.ensure_directory") as mock_ensure:
+            mock_ensure.return_value = tmp_path / "outputs/test_id/inference_logs"
+
+            # Test with run_id
+            log_path = get_log_path("inference", "test_id", "run_123")
+            assert log_path.name == "inference_run_123.log"
+            assert "inference_logs" in str(log_path)
+
+            # Test without run_id (should use timestamp)
+            log_path2 = get_log_path("batch", "batch_test", None)
+            assert log_path2.name.startswith("batch_")
+            assert log_path2.name.endswith(".log")
+
+    def test_sanitize_remote_path(self):
+        """Test sanitize_remote_path converts backslashes to forward slashes."""
+        # Windows path
+        assert sanitize_remote_path("C:\\Users\\test\\file.txt") == "C:/Users/test/file.txt"
+
+        # Already POSIX path
+        assert sanitize_remote_path("/home/user/file.txt") == "/home/user/file.txt"
+
+        # Mixed slashes
+        assert sanitize_remote_path("C:\\Users/test\\file.txt") == "C:/Users/test/file.txt"
+
+        # Empty string
+        assert sanitize_remote_path("") == ""

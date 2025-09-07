@@ -12,10 +12,11 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     exit 1
 fi
 
-# Extract user, host, and SSH key from TOML using grep and sed, handling comments
-USER=$(grep "^user = " "$CONFIG_FILE" | sed 's/^user = "\([^"]*\)".*/\1/')
-HOST=$(grep "^host = " "$CONFIG_FILE" | sed 's/^host = "\([^"]*\)".*/\1/')
-SSH_KEY=$(grep "^ssh_key = " "$CONFIG_FILE" | sed 's/^ssh_key = "\([^"]*\)".*/\1/')
+# Extract user, host, and SSH key from TOML's [remote] section only
+# Use awk to extract values only from the [remote] section
+USER=$(awk '/^\[remote\]/{flag=1} /^\[/{if(!/^\[remote\]/)flag=0} flag && /^user = /{gsub(/^user = "|".*/, ""); print; exit}' "$CONFIG_FILE")
+HOST=$(awk '/^\[remote\]/{flag=1} /^\[/{if(!/^\[remote\]/)flag=0} flag && /^host = /{gsub(/^host = "|".*/, ""); print; exit}' "$CONFIG_FILE")
+SSH_KEY=$(awk '/^\[remote\]/{flag=1} /^\[/{if(!/^\[remote\]/)flag=0} flag && /^ssh_key = /{gsub(/^ssh_key = "|".*/, ""); print; exit}' "$CONFIG_FILE")
 
 # Validate extracted values
 if [[ -z "$USER" || -z "$HOST" || -z "$SSH_KEY" ]]; then

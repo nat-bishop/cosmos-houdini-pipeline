@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Utility Functions and Code Deduplication (2025-09-07)
+- **New Utility Functions in cosmos_workflow/utils/workflow_utils.py**
+  - `ensure_directory(path)`: Creates directories if they don't exist, replacing 14 instances of duplicate `path.mkdir(parents=True, exist_ok=True)` calls
+  - `get_log_path(operation, identifier, run_id)`: Standardizes log path generation across 8 different locations in the codebase
+  - `sanitize_remote_path(path)`: Converts Windows paths to POSIX format for remote systems, replacing 11 instances of manual path conversion
+- **Enhanced DockerExecutor with New Detection Methods**
+  - `get_active_container()`: Returns structured info about the single active cosmos container, expects exactly one running container
+  - `get_gpu_info()`: Detects GPU information via nvidia-smi, returns GPU model, memory, driver version, and CUDA version
+  - Added warning system when multiple containers detected (violates single container paradigm)
+  - Improved container auto-detection for log streaming functionality
+- **Code Reduction and Standardization**
+  - Eliminated approximately 100 lines of duplicate code through centralized utility functions
+  - Standardized directory creation, log path generation, and remote path handling across entire codebase
+  - Single container paradigm enforcement with warnings for multiple running containers
+  - Fixed `cosmos status` command to properly display GPU information (e.g., "NVIDIA H100 PCIe (81559 MB)")
+- **Improved Status Command**
+  - GPU detection now works correctly and displays GPU model and memory information
+  - Container detection uses centralized `get_active_container()` method
+  - Status tips updated to reflect current system state and single container expectation
+
 ### Added - GPU Detection and Container Management (2025-09-07)
 - **Centralized Container Management**
   - New `get_active_container()` method in DockerExecutor for single-source container detection

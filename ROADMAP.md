@@ -120,6 +120,12 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
 - [x] Added `kill_containers()` method to forcefully terminate running containers
 - [x] Created `cosmos kill` CLI command for emergency container termination
 - [x] Added kill_containers to WorkflowOperations API
+- [x] **Centralized Container Detection (2025-09-07)**
+  - Added `get_active_container()` method for single-source container detection
+  - Eliminated duplicate `docker ps` calls throughout codebase
+  - Single container paradigm with warnings when multiple containers detected
+  - Structured container information with ID, name, status, image, and creation time
+  - Improved `cosmos status` command with GPU detection via `get_gpu_info()` method
 
 #### Future Improvements (Run-Specific Container Management):
 **Target: Version 1.5**

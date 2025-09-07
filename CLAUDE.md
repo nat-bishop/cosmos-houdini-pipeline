@@ -116,6 +116,7 @@ from cosmos_workflow.utils import nvidia_format
 
 * **SSHManager** — create/manage SSH sessions (infrastructure only).
   Use only for low-level SSH tasks. Never call `paramiko.SSHClient()` directly.
+  **ALWAYS use as context manager**: `with ssh_manager:` ensures connection/cleanup.
 
 * **RemoteCommandExecutor** — run remote commands via SSH (infrastructure only).
   Use only for low-level remote execution. Never call inline `ssh` or `subprocess`.

@@ -205,6 +205,7 @@ db.session.query(...)  # Never do this outside Service layer!
 - `check_status()` - Check remote GPU status
 - `stream_container_logs(container_id, callback=None)` - Stream logs from Docker container (stdout for CLI, callback for Gradio)
 - `verify_integrity()` - Verify database-filesystem integrity
+- `kill_containers()` - Kill all running Cosmos containers on GPU instance
 
 ## CLI Commands
 
@@ -529,6 +530,79 @@ When using `--stream`:
 - Auto-detects the most recent Docker container
 - Streams logs in real-time until interrupted with Ctrl+C
 - Shows helpful error messages if no containers are running
+
+### kill
+Kill all running Cosmos containers on the GPU instance.
+
+```bash
+cosmos kill [OPTIONS]
+```
+
+**Options:**
+- `--force, -f`: Skip confirmation prompt
+
+**Examples:**
+```bash
+cosmos kill            # Prompts for confirmation before killing
+cosmos kill --force    # Kills immediately without confirmation
+```
+
+**Warning:** This command will immediately terminate all running inference and upscaling jobs. Logs may be incomplete for terminated jobs.
+
+### delete
+Delete prompts or runs from the database.
+
+```bash
+cosmos delete prompt PS_ID [OPTIONS]
+cosmos delete run RS_ID [OPTIONS]
+```
+
+**Arguments:**
+- `PS_ID`: Prompt ID to delete (e.g., ps_abc123)
+- `RS_ID`: Run ID to delete (e.g., rs_xyz789)
+
+**Options:**
+- `--force`: Skip confirmation prompt
+
+**Examples:**
+```bash
+cosmos delete prompt ps_abc123    # Delete prompt and all its runs
+cosmos delete run rs_xyz789       # Delete a specific run
+```
+
+### verify
+Verify database-filesystem integrity.
+
+```bash
+cosmos verify [OPTIONS]
+```
+
+**Options:**
+- `--fix`: Attempt to fix integrity issues (clean orphaned files/records)
+
+**Examples:**
+```bash
+cosmos verify         # Check integrity and report issues
+cosmos verify --fix   # Fix integrity issues automatically
+```
+
+### ui
+Launch the Gradio web interface.
+
+```bash
+cosmos ui [OPTIONS]
+```
+
+**Options:**
+- `--port`: Port to run the server on (default: 7860)
+- `--share`: Create a public share link
+
+**Examples:**
+```bash
+cosmos ui                    # Launch on localhost:7860
+cosmos ui --port 8080        # Launch on custom port
+cosmos ui --share            # Create public share link
+```
 
 ## Log Visualization
 
@@ -1175,16 +1249,15 @@ file_transfer.download_results(Path("prompt.json"))
 - `list_remote_directory()`: List remote directory
 
 ### DockerExecutor
-Executes Docker commands on remote instance.
+Executes Docker commands on remote instance with centralized container management and GPU detection.
 
 ```python
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 
 docker_executor = DockerExecutor(
     ssh_manager=ssh_manager,
-    remote_executor=remote_executor,
-    docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest",
-    remote_dir="/workspace"
+    remote_dir="/workspace",
+    docker_image="nvcr.io/ubuntu/cosmos-transfer1:latest"
 )
 
 # Run inference
@@ -1211,14 +1284,26 @@ docker_executor.run_upscaling(
 
 # Get active container (centralized container detection)
 container = docker_executor.get_active_container()
-# Returns: {"id": "abc123...", "id_short": "abc123", "name": "cosmos_inf", "status": "Up 5 minutes", ...}
+# Returns: {
+#   "id": "abc123456789...",
+#   "id_short": "abc123456789",
+#   "name": "cosmos_inference",
+#   "status": "Up 5 minutes",
+#   "image": "nvcr.io/ubuntu/cosmos-transfer1:latest",
+#   "created": "2025-09-07 12:00:00",
+#   "warning": "Multiple containers detected (2), using most recent: cosmos_inference"  # Optional
+# }
 # Returns None if no containers running
-# Includes "warning" field if multiple containers detected
 
-# Get GPU information
+# Get GPU information via nvidia-smi
 gpu_info = docker_executor.get_gpu_info()
-# Returns: {"name": "NVIDIA H100", "memory_total": "80GB", "cuda_version": "12.8", ...}
-# Returns None if GPU not available
+# Returns: {
+#   "name": "NVIDIA H100 PCIe",
+#   "memory_total": "81559 MB",
+#   "driver_version": "525.60.13",
+#   "cuda_version": "12.2"  # Optional if detection fails
+# }
+# Returns None if GPU not available or nvidia-smi fails
 
 # Stream container logs
 docker_executor.stream_container_logs()  # Auto-detect using get_active_container()
@@ -1233,17 +1318,21 @@ docker_executor.stream_container_logs(container_id="abc123")  # Specific contain
   - Validates JSONL file exists before execution
   - Returns batch execution results with output file list
   - Handles Docker container orchestration for batch processing
-- `get_active_container()`: Get the active cosmos container (expects one, warns if multiple)
-  - Returns structured container info with id, name, status, etc.
-  - Central source for container detection, eliminates duplicate docker ps calls
+- `get_active_container()`: Get the active cosmos container (single container paradigm)
+  - Returns structured container info: id, id_short, name, status, image, created timestamp
+  - Expects exactly one running container, warns if multiple detected
+  - Central source for container detection, eliminates duplicate docker ps calls across codebase
   - Returns None if no containers running
-- `get_gpu_info()`: Detect GPU information via nvidia-smi
-  - Returns GPU model, memory, driver version, and CUDA version
-  - Returns None if GPU drivers not available
-  - Gracefully handles systems without GPU
+  - Includes optional "warning" field when multiple containers found
+- `get_gpu_info()`: Detect GPU information via nvidia-smi query
+  - Returns GPU model name, total memory in MB, driver version
+  - Attempts to detect CUDA version from nvidia-smi output
+  - Returns None if GPU drivers not available or nvidia-smi command fails
+  - Gracefully handles systems without GPU hardware
+  - Used by `cosmos status` command for GPU information display
 - `run_upscaling()`: Execute upscaling pipeline
 - `get_docker_status()`: Check Docker status
-- `cleanup_containers()`: Clean up stopped containers
+- `kill_containers()`: Kill all running containers for the Cosmos docker image
 - `stream_container_logs(container_id=None)`: Stream container logs in real-time
   - Auto-detects most recent container if ID not provided
   - Gracefully handles Ctrl+C interruption
@@ -1486,6 +1575,68 @@ offload_vae = true
 ```
 
 ## Utilities
+
+### Workflow Utilities
+Common utility functions for workflow orchestration and code deduplication.
+
+```python
+from cosmos_workflow.utils.workflow_utils import (
+    ensure_directory,
+    get_log_path,
+    sanitize_remote_path,
+    format_duration,
+    log_workflow_event,
+    validate_gpu_configuration
+)
+
+# Directory management
+output_dir = ensure_directory("outputs/run_123")
+# Creates directory if it doesn't exist, returns Path object
+
+# Standardized log path generation
+log_path = get_log_path("inference", "my_prompt", "run_abc123")
+# Returns: outputs/my_prompt/inference_logs/inference_run_abc123.log
+# Creates parent directories automatically
+
+# Without run_id, uses timestamp
+log_path = get_log_path("upscaling", "my_prompt")
+# Returns: outputs/my_prompt/upscaling_logs/upscaling_20250907_143022.log
+
+# Cross-platform path handling
+remote_path = sanitize_remote_path(r"C:\Users\files\video.mp4")
+# Returns: "C:/Users/files/video.mp4" (forward slashes for remote systems)
+
+# Duration formatting
+duration_str = format_duration(3665.5)  # seconds
+# Returns: "1h 1m 5s"
+
+# Workflow event logging
+log_workflow_event(
+    event_type="SUCCESS",
+    workflow_name="inference_run_123",
+    metadata={"duration": 180.5, "gpu_used": "H100"},
+    log_dir=Path("notes")
+)
+# Writes to notes/run_history.log with timestamp
+
+# GPU configuration validation
+is_valid = validate_gpu_configuration(num_gpu=2, cuda_devices="0,1")
+# Returns: True if configuration is valid
+```
+
+**Key Functions:**
+- `ensure_directory(path)`: Ensures directory exists, creating if needed. Replaces 14+ duplicate `mkdir` calls
+- `get_log_path(operation, identifier, run_id=None)`: Standardizes log path generation across 8 locations
+- `sanitize_remote_path(path)`: Converts Windows paths to POSIX format, replaces 11+ manual conversions
+- `format_duration(seconds)`: Human-readable duration formatting (e.g., "2h 15m 30s")
+- `log_workflow_event()`: Centralized workflow event logging to run history
+- `validate_gpu_configuration()`: Validates GPU count matches CUDA device specification
+
+**Code Reduction Impact:**
+- Eliminated ~100 lines of duplicate code across the codebase
+- Centralized common operations for consistency and maintainability
+- Standardized directory creation, log paths, and remote path handling
+- Single source of truth for workflow utility operations
 
 ### NVIDIA Format Utilities
 Convert database formats to NVIDIA Cosmos Transfer compatible formats.

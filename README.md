@@ -93,7 +93,13 @@ cosmos status
 - `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
+- `cosmos kill [--force]` - Kill all running Cosmos containers on GPU instance
+
+### System Management
 - `cosmos verify [--fix]` - Verify database-filesystem integrity
+- `cosmos delete prompt ps_xxxxx` - Delete a prompt and its runs
+- `cosmos delete run rs_xxxxx` - Delete a specific run
+- `cosmos ui` - Launch Gradio web interface
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
 

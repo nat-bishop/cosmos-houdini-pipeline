@@ -100,6 +100,40 @@ class TestDockerCommandBuilder:
         assert "nvidia/cuda:12.0" in command
         assert "python train.py" in command
 
+    def test_build_logs_command(self):
+        """Test building docker logs command."""
+        # Test without follow flag
+        cmd = DockerCommandBuilder.build_logs_command("container123")
+        assert cmd == "sudo docker logs container123"
+
+        # Test with follow flag
+        cmd = DockerCommandBuilder.build_logs_command("container456", follow=True)
+        assert cmd == "sudo docker logs -f container456"
+
+    def test_build_info_command(self):
+        """Test building docker info command."""
+        cmd = DockerCommandBuilder.build_info_command()
+        assert cmd == "sudo docker info"
+
+    def test_build_images_command(self):
+        """Test building docker images command."""
+        cmd = DockerCommandBuilder.build_images_command()
+        assert cmd == "sudo docker images"
+
+    def test_build_kill_command(self):
+        """Test building docker kill command."""
+        # Test with single container
+        cmd = DockerCommandBuilder.build_kill_command(["container1"])
+        assert cmd == "sudo docker kill container1"
+
+        # Test with multiple containers
+        cmd = DockerCommandBuilder.build_kill_command(["container1", "container2", "container3"])
+        assert cmd == "sudo docker kill container1 container2 container3"
+
+        # Test with empty list
+        cmd = DockerCommandBuilder.build_kill_command([])
+        assert cmd == "sudo docker kill "
+
 
 class TestBashScriptBuilder:
     """Test BashScriptBuilder class."""

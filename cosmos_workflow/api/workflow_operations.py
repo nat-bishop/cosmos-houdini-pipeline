@@ -23,7 +23,6 @@ from typing import Any
 
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import init_database
-from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.services import WorkflowService
 from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
@@ -805,18 +804,12 @@ class WorkflowOperations:
         logger.info("Killing all running cosmos containers")
 
         try:
-            # Initialize connection to GPU instance
-            self._initialize_ssh()
+            # Initialize services through orchestrator (follows established pattern)
+            self.orchestrator._initialize_services()
 
-            with self.ssh_manager:
-                # Initialize Docker executor
-                remote_config = self.config_manager.get_remote_config()
-                docker_executor = DockerExecutor(
-                    self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
-                )
-
-                # Kill containers
-                result = docker_executor.kill_containers()
+            with self.orchestrator.ssh_manager:
+                # Use orchestrator's docker executor
+                result = self.orchestrator.docker_executor.kill_containers()
 
                 if result["status"] == "success":
                     logger.info("Successfully killed %d container(s)", result["killed_count"])

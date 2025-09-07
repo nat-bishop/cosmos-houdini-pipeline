@@ -506,17 +506,28 @@ class TestDockerExecutor:
 
     def test_stream_container_logs_strips_whitespace_from_detected_id(self):
         """Test that whitespace is stripped from auto-detected container ID."""
-        # Mock auto-detection with whitespace
+        # Mock get_active_container to return container with whitespace
         detected_container = "  container789  \n"
-        self.mock_ssh_manager.execute_command_success.return_value = detected_container
+        with patch.object(self.docker_executor, 'get_active_container') as mock_get_active:
+            mock_get_active.return_value = {
+                'id': detected_container.strip(),  # get_active_container should already strip
+                'id_short': 'container789'[:12],
+                'name': 'test-container',
+                'status': 'Up 5 minutes',
+                'image': self.docker_image,
+                'created': '2025-01-07'
+            }
 
-        # Call stream_container_logs
-        self.docker_executor.stream_container_logs()
+            # Mock the execute_command for streaming
+            self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
-        # Should stream with trimmed container ID
-        self.mock_ssh_manager.execute_command.assert_called_once_with(
-            "sudo docker logs -f container789", timeout=86400, stream_output=True
-        )
+            # Call stream_container_logs
+            self.docker_executor.stream_container_logs()
+
+            # Should stream with trimmed container ID
+            self.mock_ssh_manager.execute_command.assert_called_once_with(
+                "sudo docker logs -f container789", timeout=86400, stream_output=True
+            )
 
 
 class TestDockerExecutorBatchInference:

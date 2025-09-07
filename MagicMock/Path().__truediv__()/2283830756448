@@ -1,0 +1,22 @@
+{
+  "prompt": "Test prompt",
+  "negative_prompt": "low quality, blurry, distorted",
+  "input_video_path": "",
+  "num_steps": 35,
+  "guidance": 7.0,
+  "sigma_max": 70.0,
+  "seed": 42,
+  "fps": 8,
+  "vis": {
+    "control_weight": 0.25
+  },
+  "edge": {
+    "control_weight": 0.25
+  },
+  "depth": {
+    "control_weight": 0.25
+  },
+  "seg": {
+    "control_weight": 0.25
+  }
+}

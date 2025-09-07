@@ -197,9 +197,9 @@ class DockerExecutor:
 
         op_logger.info("Running prompt enhancement for batch %s", batch_filename)
 
-        # Setup remote log path if we're streaming
+        # Setup remote log path if we have an operation_id
         remote_log_path = None
-        if stream_logs and operation_id:
+        if operation_id:
             remote_log_path = f"{self.remote_dir}/logs/prompt_enhancement/op_{operation_id}.log"
             # Ensure log directory exists
             self.remote_executor.create_directory(f"{self.remote_dir}/logs/prompt_enhancement")
@@ -241,16 +241,15 @@ class DockerExecutor:
             if offload_flag:
                 cmd += f" {offload_flag}"
 
-            # Add logging redirection if streaming
+            # Add logging redirection if we have a log path
             if remote_log_path:
                 cmd = f"({cmd}) 2>&1 | tee {remote_log_path}; echo '[COSMOS_COMPLETE]' >> {remote_log_path}"
 
             builder.set_command(cmd)
 
             # Execute via remote executor (blocking - we need the result)
-            if stream_logs:
-                op_logger.info("Starting prompt enhancement on GPU...")
-                op_logger.info("This is typically fast (under 30 seconds)")
+            op_logger.info("Starting prompt enhancement on GPU...")
+            op_logger.info("This is typically fast (under 30 seconds)")
 
             self.remote_executor.execute_docker(builder, timeout=timeout)
 
@@ -546,12 +545,10 @@ class DockerExecutor:
         """
         logger.info(f"Running batch inference {batch_name} with {num_gpu} GPU(s)")
 
-        # Setup logging paths if streaming
-        remote_log_path = None
-        if stream_logs:
-            remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
-            # Ensure remote log directory exists
-            self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
+        # Setup logging paths
+        remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
+        # Ensure remote log directory exists
+        self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
 
         # Check if batch file exists
         batch_path = f"{self.remote_dir}/inputs/batches/{batch_jsonl_file}"
@@ -563,10 +560,8 @@ class DockerExecutor:
         self.remote_executor.create_directory(remote_output_dir)
 
         # Execute batch inference using bash script
-        if stream_logs:
-            logger.info("Starting batch inference on GPU. This may take a while...")
-            logger.info("Use 'cosmos status --stream' to monitor progress")
-
+        logger.info("Starting batch inference on GPU. This may take a while...")
+        logger.info("Use 'cosmos status --stream' to monitor progress")
         logger.info("Launching batch inference in background...")
         self._run_batch_inference_script(
             batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path

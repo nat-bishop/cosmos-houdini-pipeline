@@ -264,36 +264,29 @@ Simple, practical log viewer for monitoring inference runs.
 - Complex caching (2000 lines searches instantly)
 
 ### Integration Status:
-**NOT YET INTEGRATED** - The LogViewer class is ready but needs to be integrated:
+**✅ INTEGRATED** - Simple Gradio app created with LogViewer
 
-#### Option 1: Gradio UI Integration (Recommended)
-Add to `cosmos_workflow/ui/app.py` in the inference tab:
-```python
-from cosmos_workflow.ui.log_viewer import LogViewer
+#### What was implemented:
+- Created new minimal Gradio app in `cosmos_workflow/ui/app.py` (225 lines)
+- Backed up old complex app to `app_old.py` for reference
+- Fixed timezone issues (added timezone.utc)
+- Integrated LogViewer with RemoteLogStreamer callbacks
+- Added controls: Run ID input, filters, search, clear logs
+- Tested with Playwright - all UI elements functional
 
-# In the interface setup:
-log_viewer = LogViewer()
+#### How to use:
+```bash
+# Start the Gradio app
+python cosmos_workflow/ui/app.py
 
-# Add controls
-with gr.Row():
-    level_filter = gr.Dropdown(["ALL", "ERROR", "WARNING", "INFO"], value="ALL")
-    search = gr.Textbox(placeholder="Search logs...")
-    clear_btn = gr.Button("Clear")
-
-log_display = gr.HTML()
-
-# During inference, feed logs to viewer:
-def stream_callback(content):
-    log_viewer.add_from_stream(content)
-    return log_viewer.get_html()
+# Access at http://localhost:7860
+# Enter a Run ID to stream logs
+# Use filters and search to find specific entries
 ```
 
-#### Option 2: CLI Integration (Less useful)
-Could add `cosmos logs <run_id>` command to view stored logs with filtering.
-
-#### Current Issue to Fix:
-- Ruff complains about `datetime.now()` without timezone
-- Simple fix: Add timezone or suppress warning (it's just HH:MM:SS for display)
+#### Ready for testing:
+The app is ready to test with actual inference runs. The streaming callback
+will populate the LogViewer during GPU execution.
 
 ---
 

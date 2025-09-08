@@ -48,6 +48,11 @@
 * **FileTransferService** — upload/download files with integrity checks (infrastructure only).
   Always use for file transfers. Never use ad-hoc SFTP or `scp`.
 
+ ## **Common Mistakes to Avoid**
+ - Writing `ssh.exec_command()` → Use RemoteCommandExecutor
+ - Writing `docker run` strings → Use DockerCommandBuilder
+ - Parsing JSON manually → Use ConfigManager validators
+
 ---
 
 ## **Agent Model**
@@ -61,7 +66,7 @@
 
 
 ## **Code Conventions**
- - Path ops: `Path(a) / b` (never `os.path.join`)
+ - Path ops: `use pathlib.Path instead of os.path (ex, Path(a) / b rather than os.path.join)
  - Logging: **parameterized logging** `logger.info("%s", var)` (no f-strings)
  - Type hints: **required** for all public functions
  - Docstrings: **Google-style** (`Args/Returns/Raises`)
@@ -73,13 +78,16 @@
 
 ## **Best Practices**
  - You must follow the "Zen of Python" mindset
+ - DRY code: Extract common patterns into helpers, don't copy-paste
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
  - Avoid Over-Engineering and overly complex solutions
  - Write a high quality, general purpose solution.
  - Focus on understanding the problem requirements and implementing the correct algorithm
  - Try different methods if your first approach doesn't work
- - For maximum efficiency, whenever you need to perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially.
+ - Analyze your work after each step to see if is correct
+ - YAGNI - Do not add functionality until it is necessary
+ - For maximum efficiency, whenever you need to perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially
 
 ---
 

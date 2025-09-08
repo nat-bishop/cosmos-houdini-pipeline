@@ -61,7 +61,7 @@ class TestListCommands:
         assert "ps_001" in result.output
         assert "ps_002" in result.output
         assert "transfer" in result.output
-        assert "enhancement" in result.output
+        assert "enhance" in result.output
         mock_operations.list_prompts.assert_called_once_with(model_type=None, limit=50)
 
     @patch("cosmos_workflow.cli.list_commands.get_operations")

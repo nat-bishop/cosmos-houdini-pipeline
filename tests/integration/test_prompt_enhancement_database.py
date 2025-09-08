@@ -21,7 +21,7 @@ class TestPromptEnhancementDatabaseIntegration:
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
-        db = DatabaseConnection(f"sqlite:///{db_path}")
+        db = DatabaseConnection(db_path)
         db.create_tables()
         yield db
 

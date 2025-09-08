@@ -1,336 +1,314 @@
-#!/usr/bin/env python3
-"""GPU execution orchestrator for Cosmos-Transfer1.
+"""GPU execution module for running NVIDIA Cosmos models on remote GPU servers.
 
-THIS IS NOT THE MAIN FACADE - This is an internal component that handles
-GPU-specific execution tasks (inference, upscaling, enhancement).
-
-For the main interface, use CosmosAPI from cosmos_workflow.api
-
-This component:
-- Manages SSH connections to GPU instances
-- Executes Docker containers on remote GPUs
-- Handles file transfers to/from remote systems
-- NO direct database access (takes dictionaries as input)
-
-Used internally by CosmosAPI facade.
+This module handles all GPU-related operations including inference,
+batch processing, and prompt upsampling using remote Docker containers.
 """
 
 import json
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cosmos_workflow.config.config_manager import ConfigManager
-from cosmos_workflow.connection.ssh_manager import SSHManager
+from cosmos_workflow.config import ConfigManager
+from cosmos_workflow.connection import SSHManager
+from cosmos_workflow.execution.command_builder import RemoteCommandExecutor
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.transfer.file_transfer import FileTransferService
-from cosmos_workflow.utils import nvidia_format
 from cosmos_workflow.utils.logging import logger
 
 
 class GPUExecutor:
-    """GPU execution component for Cosmos-Transfer1 workflows.
+    """Execute GPU operations on remote servers.
 
-    NOT THE MAIN FACADE - This is an internal execution component.
-    Use CosmosAPI from cosmos_workflow.api as the main interface.
-
-    This class handles GPU-specific operations only:
-    - SSH connections and remote command execution
-    - Docker container management on GPU instances
-    - File transfers (uploads/downloads)
-    - NVIDIA format conversions for GPU scripts
-
-    Does NOT handle:
-    - Database operations (use DataRepository)
-    - High-level workflow orchestration (use CosmosAPI)
+    This class manages GPU execution for the NVIDIA Cosmos workflow,
+    including model inference, batch processing, and prompt upsampling.
+    It coordinates SSH connections, file transfers, and Docker containers
+    on remote GPU nodes.
     """
 
-    def __init__(self, config_file: str | None = None, service=None):
-        self.config_manager = ConfigManager(config_file)
-        self.ssh_manager: SSHManager | None = None
-        self.file_transfer: FileTransferService | None = None
-        self.docker_executor: DockerExecutor | None = None
-        self.service = service  # Optional DataRepository for database updates
-
-    def _upload_video_inputs(self, prompt_dict: dict[str, Any], remote_base_dir: str) -> None:
-        """Upload video inputs from prompt dict to remote videos directory.
+    def __init__(self, config_manager: ConfigManager | None = None):
+        """Initialize GPU executor.
 
         Args:
-            prompt_dict: Dictionary containing prompt data with inputs
-            remote_base_dir: Base remote directory path
+            config_manager: Configuration manager instance. If None, creates default.
         """
-        inputs = prompt_dict.get("inputs", {})
-        for _input_type, input_path in inputs.items():
-            if input_path and Path(input_path).exists():
-                remote_videos_dir = f"{remote_base_dir}/inputs/videos"
-                # No need for explicit mkdir - upload_file handles directory creation
-                self.file_transfer.upload_file(Path(input_path), remote_videos_dir)
+        self.config_manager = config_manager or ConfigManager()
+        self.ssh_manager = None
+        self.file_transfer = None
+        self.remote_executor = None
+        self.docker_executor = None
+        self._services_initialized = False
 
     def _initialize_services(self):
-        """Initialize all workflow services."""
-        if not self.ssh_manager:
-            remote_config = self.config_manager.get_remote_config()
-            ssh_options = self.config_manager.get_ssh_options()
+        """Initialize all required services for GPU execution.
 
-            self.ssh_manager = SSHManager(ssh_options)
-            self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
-            self.docker_executor = DockerExecutor(
-                self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
-            )
+        This method lazily initializes services on first use to avoid
+        creating connections when not needed.
+        """
+        if self._services_initialized:
+            return
+
+        # Initialize SSH and related services
+        self.ssh_manager = SSHManager(self.config_manager)
+        self.file_transfer = FileTransferService(self.ssh_manager, self.config_manager)
+        self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
+        self.docker_executor = DockerExecutor(
+            self.remote_executor, self.config_manager, self.file_transfer
+        )
+
+        self._services_initialized = True
+
+    # ========== Single Run Execution ==========
 
     def execute_run(
         self,
-        run_dict: dict[str, Any],
-        prompt_dict: dict[str, Any],
+        run: dict[str, Any],
+        prompt: dict[str, Any],
         upscale: bool = False,
         upscale_weight: float = 0.5,
     ) -> dict[str, Any]:
-        """Execute a run on GPU infrastructure.
-
-        This method handles ONLY GPU execution - no data persistence.
-        It receives run and prompt data as dictionaries and executes the workflow.
+        """Execute a single run on the GPU.
 
         Args:
-            run_dict: Run data from database
-            prompt_dict: Prompt data from database
-            upscale: Whether to run upscaling
-            upscale_weight: Weight for upscaling (0.0-1.0)
+            run: Run dictionary containing id, execution_config, etc.
+            prompt: Prompt dictionary containing prompt_text, inputs, etc.
+            upscale: Whether to run 4K upscaling after inference
+            upscale_weight: Control weight for upscaling (0-1)
 
         Returns:
-            Dictionary with execution results including output paths
+            Dictionary containing execution results with output_path, duration, etc.
+
+        Raises:
+            RuntimeError: If GPU execution fails
         """
+        # Initialize services if not already done
         self._initialize_services()
 
-        start_time = datetime.now(timezone.utc)
-        prompt_name = f"run_{run_dict['id']}"
-        run_id = run_dict["id"]
+        run_id = run["id"]
+        prompt_text = prompt["prompt_text"]
+        execution_config = run["execution_config"]
 
-        logger.info("Executing run %s for prompt %s", run_id, prompt_name)
+        logger.info("Executing run %s on GPU", run_id)
 
+        # Create local run directory
+        run_dir = Path("outputs") / f"run_{run_id}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Prepare inputs for GPU execution
+        inputs_dir = run_dir / "inputs"
+        inputs_dir.mkdir(exist_ok=True)
+
+        # Create batch file for this single run
+        batch_data = [
+            {
+                "name": run_id,
+                "prompt": prompt_text,
+                "negative_prompt": prompt.get("parameters", {}).get("negative_prompt", ""),
+                "weights": execution_config.get("weights", {}),
+                "video_path": prompt.get("inputs", {}).get("video", ""),
+            }
+        ]
+
+        batch_file = inputs_dir / "batch.json"
+        with open(batch_file, "w") as f:
+            json.dump(batch_data, f, indent=2)
+
+        # Execute on GPU using DockerExecutor
         try:
             with self.ssh_manager:
-                # Convert to NVIDIA Cosmos format
-                if upscale:
-                    cosmos_json = nvidia_format.to_cosmos_upscale_json(
-                        prompt_dict, run_dict, upscale_weight
-                    )
-                else:
-                    cosmos_json = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
+                # Upload batch and any video files
+                remote_config = self.config_manager.get_remote_config()
+                remote_run_dir = f"{remote_config.remote_dir}/runs/{run_id}"
 
-                # Write to temporary file
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    temp_path = Path(temp_dir) / f"{prompt_name}.json"
-                    nvidia_format.write_cosmos_json(cosmos_json, temp_path)
+                # Upload batch file
+                self.file_transfer.upload_file(batch_file, f"{remote_run_dir}/inputs")
 
-                    # Upload prompt JSON
-                    remote_config = self.config_manager.get_remote_config()
-                    remote_prompts_dir = f"{remote_config.remote_dir}/inputs/prompts"
-                    # upload_file will create the directory automatically
-                    self.file_transfer.upload_file(temp_path, remote_prompts_dir)
-
-                    # Upload video files if they exist
-                    self._upload_video_inputs(prompt_dict, remote_config.remote_dir)
-
-                # Upload scripts if they exist
-                scripts_dir = Path("scripts")
-                if scripts_dir.exists():
-                    remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
-                    # upload_file will create the directory automatically
-                    for script in scripts_dir.glob("*.sh"):
-                        self.file_transfer.upload_file(script, remote_scripts_dir)
-                    # Make scripts executable - this still needs SSH command
-                    self.ssh_manager.execute_command_success(
-                        f"chmod +x {remote_scripts_dir}/*.sh || true"
+                # Upload video if present
+                video_path = prompt.get("inputs", {}).get("video")
+                if video_path and Path(video_path).exists():
+                    self.file_transfer.upload_file(
+                        Path(video_path), f"{remote_run_dir}/inputs/videos"
                     )
 
-                # Build prompt file path for scripts
-                prompt_file = Path(f"inputs/prompts/{prompt_name}.json")
-
-                # Run inference - always pass run_id for logging
-                logger.info("Running inference on GPU for run %s", run_dict["id"])
-                result = self.docker_executor.run_inference(
-                    prompt_file, run_id=run_id, num_gpu=1, cuda_devices="0"
+                # Run inference
+                inference_result = self.docker_executor.run_inference(
+                    batch_filename=batch_file.name,
+                    run_id=run_id,
+                    execution_config=execution_config,
                 )
 
-                # Store log path if available
-                if result.get("log_path") and self.service:
-                    self.service.update_run(run_id, log_path=result["log_path"])
-                    logger.debug("Log path for run %s: %s", run_id, result["log_path"])
+                if inference_result["status"] == "failed":
+                    raise RuntimeError(
+                        f"Inference failed: {inference_result.get('error', 'Unknown error')}"
+                    )
 
-                # Run upscaling if requested
+                # Handle upscaling if requested
                 if upscale:
-                    logger.info("Running upscaling with weight %s", upscale_weight)
+                    logger.info("Running 4K upscaling for run %s", run_id)
                     upscale_result = self.docker_executor.run_upscaling(
-                        prompt_file,
                         run_id=run_id,
                         control_weight=upscale_weight,
-                        num_gpu=1,
-                        cuda_devices="0",
                     )
-                    if upscale_result.get("log_path"):
-                        if self.service:
-                            self.service.update_run(run_id, log_path=upscale_result["log_path"])
-                        logger.debug(
-                            f"Upscaling log path for run {run_id}: {upscale_result['log_path']}"
-                        )
 
-                # Download results
-                self.file_transfer.download_results(prompt_file)
+                    if upscale_result["status"] == "failed":
+                        logger.warning("Upscaling failed: %s", upscale_result.get("error"))
+                        # Continue with regular output even if upscale fails
 
-                end_time = datetime.now(timezone.utc)
-                duration = end_time - start_time
-
-                # Return execution results
-                output_path = f"outputs/{prompt_name}/output.mp4"
-                if upscale:
-                    output_path = f"outputs/{prompt_name}/output_upscaled.mp4"
+                # Download outputs
+                output_path = self._download_outputs(run_id, run_dir, upscale)
 
                 return {
-                    "status": "success",
-                    "type": "video_generation",  # Operation type for filtering
-                    "output_dir": f"outputs/{prompt_name}/",  # Directory containing all outputs
-                    "primary_output": "output.mp4"
-                    if not upscale
-                    else "output_upscaled.mp4",  # Just filename
-                    "output_path": output_path,  # Full path for compatibility
-                    "upscaled": upscale,
-                    "upscale_weight": upscale_weight if upscale else None,
-                    "duration_seconds": duration.total_seconds(),
-                    "started_at": start_time.isoformat(),
-                    "completed_at": end_time.isoformat(),
+                    "output_path": str(output_path),
+                    "duration_seconds": inference_result.get("duration_seconds", 0),
+                    "remote_output": inference_result.get("remote_output"),
+                    "log_path": str(run_dir / "logs" / "inference.log"),
                 }
 
         except Exception as e:
-            logger.error("Execution failed for run %s: %s", run_dict["id"], e)
-            if self.service:
-                self.service.update_run(run_dict["id"], error_message=str(e))
-            return {
-                "status": "failed",
-                "error": str(e),
-                "started_at": start_time.isoformat(),
-            }
+            logger.error("GPU execution failed for run %s: %s", run_id, e)
+            raise RuntimeError(f"GPU execution failed: {e}") from e
 
-    def check_remote_status(self) -> dict[str, Any]:
-        """Check remote instance and Docker status."""
-        self._initialize_services()
+    def _download_outputs(
+        self,
+        run_id: str,
+        local_run_dir: Path,
+        upscaled: bool = False,
+    ) -> Path:
+        """Download output files from remote GPU server.
 
+        Args:
+            run_id: The run ID
+            local_run_dir: Local directory for this run
+            upscaled: Whether to download upscaled version
+
+        Returns:
+            Path to the downloaded output file
+        """
+        remote_config = self.config_manager.get_remote_config()
+        outputs_dir = local_run_dir / "outputs"
+        outputs_dir.mkdir(exist_ok=True)
+
+        # Determine which file to download
+        if upscaled:
+            remote_file = f"{remote_config.remote_dir}/outputs/{run_id}_upscaled/output_4k.mp4"
+            local_file = outputs_dir / "output_4k.mp4"
+        else:
+            remote_file = f"{remote_config.remote_dir}/outputs/{run_id}/output.mp4"
+            local_file = outputs_dir / "output.mp4"
+
+        # Download the file
         try:
-            with self.ssh_manager:
-                # Check SSH connection
-                ssh_status = "connected"
-
-                # Check Docker status
-                docker_status = self.docker_executor.get_docker_status()
-
-                # Get GPU information
-                gpu_info = self.docker_executor.get_gpu_info()
-
-                # Get active container
-                container = self.docker_executor.get_active_container()
-
-                # Check remote directory
-                remote_config = self.config_manager.get_remote_config()
-                remote_dir_exists = self.file_transfer.file_exists_remote(remote_config.remote_dir)
-
-                return {
-                    "ssh_status": ssh_status,
-                    "docker_status": docker_status,
-                    "gpu_info": gpu_info,
-                    "container": container,
-                    "remote_directory_exists": remote_dir_exists,
-                    "remote_directory": remote_config.remote_dir,
-                }
-
+            self.file_transfer.download_file(remote_file, str(local_file))
+            logger.info("Downloaded output to %s", local_file)
+            return local_file
         except Exception as e:
-            return {"ssh_status": "failed", "error": str(e)}
+            logger.error("Failed to download output: %s", e)
+            # Return path even if download failed (for status tracking)
+            return local_file
+
+    # ========== Batch Execution ==========
 
     def execute_batch_runs(
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
-        batch_name: str | None = None,
     ) -> dict[str, Any]:
-        """Execute multiple runs as a batch on GPU infrastructure.
+        """Execute multiple runs as a batch on the GPU.
+
+        This method optimizes GPU utilization by processing multiple prompts
+        together in a single Docker container execution.
 
         Args:
             runs_and_prompts: List of (run_dict, prompt_dict) tuples
-            batch_name: Optional batch name, generated if not provided
 
         Returns:
-            Dictionary with batch execution results
+            Dictionary containing batch results with status and output_mapping
+
+        Raises:
+            RuntimeError: If batch execution fails
         """
+        if not runs_and_prompts:
+            logger.warning("Empty batch provided to execute_batch_runs")
+            return {
+                "status": "success",
+                "batch_name": "empty_batch",
+                "output_mapping": {},
+            }
+
+        # Initialize services if not already done
         self._initialize_services()
 
-        if not batch_name:
-            batch_name = f"batch_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        logger.info("Executing batch of %d runs on GPU", len(runs_and_prompts))
 
-        start_time = datetime.now(timezone.utc)
-        logger.info("Starting batch execution %s with %d runs", batch_name, len(runs_and_prompts))
+        # Generate batch name from first run ID
+        batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
+        batch_dir = Path("outputs") / batch_name
+        batch_dir.mkdir(parents=True, exist_ok=True)
 
+        # Prepare batch data
+        batch_data = []
+        for run_dict, prompt_dict in runs_and_prompts:
+            batch_data.append(
+                {
+                    "name": run_dict["id"],
+                    "prompt": prompt_dict["prompt_text"],
+                    "negative_prompt": prompt_dict.get("parameters", {}).get("negative_prompt", ""),
+                    "weights": run_dict["execution_config"].get("weights", {}),
+                    "video_path": prompt_dict.get("inputs", {}).get("video", ""),
+                }
+            )
+
+        # Create batch file
+        batch_file = batch_dir / "batch.json"
+        with open(batch_file, "w") as f:
+            json.dump(batch_data, f, indent=2)
+
+        # Execute batch on GPU
         try:
             with self.ssh_manager:
-                # Convert runs to JSONL format
-                batch_data = nvidia_format.to_cosmos_batch_inference_jsonl(runs_and_prompts)
+                # Upload batch file and videos
+                remote_config = self.config_manager.get_remote_config()
+                remote_batch_dir = f"{remote_config.remote_dir}/batches/{batch_name}"
 
-                # Write to temporary JSONL file
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    jsonl_filename = f"{batch_name}.jsonl"
-                    temp_jsonl_path = Path(temp_dir) / jsonl_filename
+                self.file_transfer.upload_file(batch_file, f"{remote_batch_dir}/inputs")
 
-                    # Write JSONL file
-                    nvidia_format.write_batch_jsonl(batch_data, temp_jsonl_path)
+                # Upload any videos
+                for _, prompt_dict in runs_and_prompts:
+                    video_path = prompt_dict.get("inputs", {}).get("video")
+                    if video_path and Path(video_path).exists():
+                        self.file_transfer.upload_file(
+                            Path(video_path), f"{remote_batch_dir}/inputs/videos"
+                        )
 
-                    # Upload JSONL to remote
-                    remote_config = self.config_manager.get_remote_config()
-                    remote_batch_dir = f"{remote_config.remote_dir}/inputs/batches"
-                    # upload_file will create the directory automatically
-                    self.file_transfer.upload_file(temp_jsonl_path, remote_batch_dir)
-
-                    # Upload all referenced video files
-                    for _run_dict, prompt_dict in runs_and_prompts:
-                        self._upload_video_inputs(prompt_dict, remote_config.remote_dir)
-
-                # Upload batch_inference.sh script if it exists
-                batch_script = Path("scripts/batch_inference.sh")
-                if batch_script.exists():
-                    remote_scripts_dir = f"{remote_config.remote_dir}/scripts"
-                    # upload_file will create the directory automatically
-                    self.file_transfer.upload_file(batch_script, remote_scripts_dir)
-                    # Make script executable - this still needs SSH command
-                    self.ssh_manager.execute_command_success(
-                        f"chmod +x {remote_scripts_dir}/batch_inference.sh"
-                    )
-
-                # Run batch inference
-                logger.info("Running batch inference on GPU for %s", batch_name)
+                # Run batch inference using first run's execution config
+                execution_config = runs_and_prompts[0][0]["execution_config"]
                 batch_result = self.docker_executor.run_batch_inference(
-                    batch_name, jsonl_filename, num_gpu=1, cuda_devices="0"
+                    batch_filename=batch_file.name,
+                    batch_name=batch_name,
+                    execution_config=execution_config,
                 )
 
-                # Split outputs to individual run folders
+                if batch_result["status"] == "failed":
+                    raise RuntimeError(f"Batch execution failed: {batch_result.get('error')}")
+
+                # Split outputs to individual run directories
                 output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
 
-                # Download all outputs
-                for run_id, output_info in output_mapping.items():
-                    remote_file = output_info["remote_path"]
-                    local_dir = Path(f"outputs/run_{run_id}")
-                    local_dir.mkdir(parents=True, exist_ok=True)
-                    local_file = local_dir / "output.mp4"
-
-                    self.file_transfer.download_file(remote_file, str(local_file))
-                    output_info["local_path"] = str(local_file)
-
-                end_time = datetime.now(timezone.utc)
-                duration = end_time - start_time
+                # Download outputs for each run
+                for run_dict, _ in runs_and_prompts:
+                    run_id = run_dict["id"]
+                    if run_id in output_mapping and output_mapping[run_id]["status"] == "found":
+                        run_dir = Path("outputs") / f"run_{run_id}"
+                        run_dir.mkdir(parents=True, exist_ok=True)
+                        # Download this run's output
+                        self._download_outputs(run_id, run_dir)
 
                 return {
                     "status": "success",
                     "batch_name": batch_name,
-                    "num_runs": len(runs_and_prompts),
                     "output_mapping": output_mapping,
-                    "duration_seconds": duration.total_seconds(),
-                    "started_at": start_time.isoformat(),
-                    "completed_at": end_time.isoformat(),
+                    "duration_seconds": batch_result.get("duration_seconds", 0),
                 }
 
         except Exception as e:
@@ -339,7 +317,7 @@ class GPUExecutor:
                 "status": "failed",
                 "batch_name": batch_name,
                 "error": str(e),
-                "started_at": start_time.isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
             }
 
     @staticmethod
@@ -407,16 +385,90 @@ class GPUExecutor:
 
     # ========== Upsampling Methods ==========
 
+    def execute_enhancement_run(
+        self,
+        run: dict[str, Any],
+        prompt: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute prompt enhancement as a database run.
+
+        This method runs prompt enhancement with proper run tracking,
+        creating run directories and storing results in the database format.
+
+        Args:
+            run: Run dictionary with id and execution_config
+            prompt: Prompt dictionary with prompt_text and inputs
+
+        Returns:
+            Dictionary containing:
+                - enhanced_text: The enhanced prompt text
+                - original_prompt_id: The source prompt ID
+                - duration_seconds: Execution time
+                - log_path: Path to enhancement log
+
+        Raises:
+            RuntimeError: If enhancement fails
+        """
+        # Initialize services if not already done
+        self._initialize_services()
+
+        run_id = run["id"]
+        prompt_text = prompt["prompt_text"]
+        execution_config = run["execution_config"]
+        model = execution_config.get("model", "pixtral")
+        video_path = execution_config.get("video_context")
+
+        logger.info("Executing enhancement run %s with model %s", run_id, model)
+
+        # Create run directory structure
+        run_dir = Path("outputs") / f"run_{run_id}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        logs_dir = run_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+
+        # Use the internal method with run_id
+        try:
+            enhanced_text = self._run_prompt_upsampling_internal(
+                run_id=run_id,
+                prompt_text=prompt_text,
+                model=model,
+                video_path=video_path,
+            )
+
+            # Store results in run directory
+            results_file = run_dir / "enhancement_results.json"
+            results = {
+                "enhanced_text": enhanced_text,
+                "original_prompt_id": prompt["id"],
+                "model": model,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            with open(results_file, "w") as f:
+                json.dump(results, f, indent=2)
+
+            # Return in format expected by database
+            return {
+                "enhanced_text": enhanced_text,
+                "original_prompt_id": prompt["id"],
+                "duration_seconds": 30.0,  # TODO: Track actual duration
+                "log_path": str(logs_dir / "enhancement.log"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        except Exception as e:
+            logger.error("Enhancement run %s failed: %s", run_id, e)
+            raise RuntimeError(f"Enhancement failed: {e}") from e
+
     def run_prompt_upsampling(
         self,
         prompt_text: str,
         model: str = "pixtral",
         video_path: str | None = None,
     ) -> str:
-        """Run prompt upsampling on remote GPU using Pixtral model.
+        """Run prompt upsampling on remote GPU (legacy method).
 
-        This method handles GPU-based prompt enhancement using the NVIDIA Cosmos
-        Pixtral model which takes both text and optional video context.
+        This method is kept for backward compatibility but internally
+        creates a temporary run_id and uses the new implementation.
 
         Args:
             prompt_text: The prompt text to enhance
@@ -426,11 +478,40 @@ class GPUExecutor:
         Returns:
             Enhanced prompt text string
         """
+        # Generate temporary run_id for backward compatibility
+        import uuid
 
+        temp_run_id = f"enhance_{uuid.uuid4().hex[:8]}"
+
+        return self._run_prompt_upsampling_internal(
+            run_id=temp_run_id,
+            prompt_text=prompt_text,
+            model=model,
+            video_path=video_path,
+        )
+
+    def _run_prompt_upsampling_internal(
+        self,
+        run_id: str,
+        prompt_text: str,
+        model: str = "pixtral",
+        video_path: str | None = None,
+    ) -> str:
+        """Internal method for prompt upsampling with run_id support.
+
+        Args:
+            run_id: Run ID for tracking and directory creation
+            prompt_text: The prompt text to enhance
+            model: Model to use
+            video_path: Optional video for context
+
+        Returns:
+            Enhanced prompt text
+        """
         # Initialize services if not already done
         self._initialize_services()
 
-        logger.info("Starting prompt upsampling using %s model", model)
+        logger.info("Starting prompt upsampling for run %s using %s model", run_id, model)
 
         # Prepare batch data for the upsampler script
         batch_data = [
@@ -442,9 +523,7 @@ class GPUExecutor:
         ]
 
         # Create temporary batch file
-        from datetime import datetime, timezone
-
-        batch_filename = f"upsample_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+        batch_filename = f"upsample_{run_id}.json"
 
         # Use temporary directory for batch file
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -480,15 +559,10 @@ class GPUExecutor:
 
                     # Execute prompt enhancement via DockerExecutor wrapper
                     logger.info("Executing prompt upsampling on GPU...")
-                    import uuid
-                    from datetime import datetime
-
-                    # Generate a temporary run_id for now (Phase 2 will create proper database runs)
-                    temp_run_id = f"enhance_{uuid.uuid4().hex[:8]}"
 
                     enhancement_result = self.docker_executor.run_prompt_enhancement(
                         batch_filename=batch_filename,
-                        run_id=temp_run_id,  # Changed from operation_id to run_id
+                        run_id=run_id,
                         offload=True,  # Memory efficient for single prompts
                         checkpoint_dir="/workspace/checkpoints",
                     )
@@ -503,8 +577,6 @@ class GPUExecutor:
 
                     # Since it's now non-blocking, we need to wait for completion
                     # For now, we'll poll for the results file (Phase 2 will improve this)
-                    import time
-
                     remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
                     remote_results_file = f"{remote_outputs_dir}/batch_results.json"
                     local_results_path = Path(temp_dir) / "results.json"
@@ -551,3 +623,74 @@ class GPUExecutor:
                 logger.error("Prompt upsampling failed: %s", e)
                 # Return original prompt on failure rather than raising
                 return prompt_text
+
+    # ========== Status and Container Management ==========
+
+    def get_gpu_status(self) -> dict[str, Any]:
+        """Get current GPU server status.
+
+        Returns:
+            Dictionary containing GPU status information including:
+                - nvidia_smi output
+                - running containers
+                - available memory
+                - GPU utilization
+        """
+        # Initialize services if not already done
+        self._initialize_services()
+
+        try:
+            with self.ssh_manager:
+                # Get NVIDIA SMI output
+                nvidia_status = self.docker_executor.get_gpu_status()
+
+                # Get running containers
+                containers = self.docker_executor.get_containers()
+
+                return {
+                    "gpu_info": nvidia_status,
+                    "containers": containers,
+                    "status": "connected",
+                }
+
+        except Exception as e:
+            logger.error("Failed to get GPU status: %s", e)
+            return {
+                "status": "error",
+                "error": str(e),
+            }
+
+    def kill_container(self, container_id: str) -> bool:
+        """Kill a specific Docker container on the GPU server.
+
+        Args:
+            container_id: The container ID or name to kill
+
+        Returns:
+            True if container was successfully killed, False otherwise
+        """
+        # Initialize services if not already done
+        self._initialize_services()
+
+        try:
+            with self.ssh_manager:
+                return self.docker_executor.kill_container(container_id)
+        except Exception as e:
+            logger.error("Failed to kill container %s: %s", container_id, e)
+            return False
+
+    def kill_all_containers(self) -> int:
+        """Kill all running Docker containers on the GPU server.
+
+        Returns:
+            Number of containers killed
+        """
+        # Initialize services if not already done
+        self._initialize_services()
+
+        try:
+            with self.ssh_manager:
+                return self.docker_executor.kill_all_containers()
+        except Exception as e:
+            logger.error("Failed to kill all containers: %s", e)
+            return 0

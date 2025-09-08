@@ -155,7 +155,10 @@ class CosmosAPI:
         create_new: bool = True,
         enhancement_model: str = "pixtral",
     ) -> dict[str, Any]:
-        """Enhance an existing prompt using AI.
+        """Enhance an existing prompt using AI with database run tracking.
+
+        This method uses GPU-based AI models to improve prompt text quality,
+        creating a proper database run for tracking the enhancement operation.
 
         Args:
             prompt_id: ID of prompt to enhance
@@ -163,10 +166,14 @@ class CosmosAPI:
             enhancement_model: Model to use for enhancement (default: "pixtral")
 
         Returns:
-            Dictionary containing enhanced prompt data
+            Dictionary containing:
+                - run_id: The enhancement run ID for tracking
+                - enhanced_text: The enhanced prompt text
+                - enhanced_prompt_id: ID of enhanced prompt (new or updated)
+                - status: "success" or "failed"
 
         Raises:
-            ValueError: If prompt not found or enhancement fails
+            ValueError: If prompt not found
         """
         logger.info("Enhancing prompt %s with model %s", prompt_id, enhancement_model)
 
@@ -183,55 +190,101 @@ class CosmosAPI:
                     f"Cannot overwrite prompt {prompt_id} - has {len(runs)} associated runs"
                 )
 
-        # Run enhancement using orchestrator
-        enhanced_text = self.orchestrator.run_prompt_upsampling(
-            prompt_text=original["prompt_text"],
-            model=enhancement_model,
-            video_path=original["inputs"].get("video"),
-        )
+        # Build execution config for enhancement
+        execution_config = {
+            "model": enhancement_model,
+            "offload": True,  # Memory efficient for single prompts
+            "batch_size": 1,
+            "video_context": original["inputs"].get("video"),
+            "create_new": create_new,
+        }
 
-        if create_new:
-            # Create new enhanced prompt
-            name = original["parameters"].get("name", "unnamed")
-            enhanced = self.service.create_prompt(
-                model_type=original["model_type"],
-                prompt_text=enhanced_text,
-                inputs=original["inputs"],
-                parameters={
-                    **original["parameters"],
-                    "name": f"{name}_enhanced",
-                    "enhanced": True,
-                    "parent_prompt_id": prompt_id,
-                    "enhancement_model": enhancement_model,
-                    "enhanced_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            logger.info("Created enhanced prompt: %s", enhanced["id"])
-            # Return in expected format for CLI
-            return {
-                "enhanced_prompt_id": enhanced["id"],
-                "enhanced_text": enhanced["prompt_text"],
+        # Create database run with model_type="enhance"
+        run = self.service.create_run(
+            prompt_id=prompt_id,
+            model_type="enhance",  # New model type for enhancement
+            execution_config=execution_config,
+        )
+        logger.info("Created enhancement run %s for prompt %s", run["id"], prompt_id)
+
+        # Update status to running
+        self.service.update_run_status(run["id"], "running")
+
+        try:
+            # Execute enhancement on GPU using new method
+            result = self.orchestrator.execute_enhancement_run(run, original)
+
+            enhanced_text = result["enhanced_text"]
+
+            # Handle prompt creation/update based on create_new flag
+            if create_new:
+                # Create new enhanced prompt
+                name = original["parameters"].get("name", "unnamed")
+                enhanced = self.service.create_prompt(
+                    model_type=original["model_type"],
+                    prompt_text=enhanced_text,
+                    inputs=original["inputs"],
+                    parameters={
+                        **original["parameters"],
+                        "name": f"{name}_enhanced",
+                        "enhanced": True,
+                        "parent_prompt_id": prompt_id,
+                        "enhancement_model": enhancement_model,
+                        "enhanced_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                logger.info("Created enhanced prompt: %s", enhanced["id"])
+                enhanced_prompt_id = enhanced["id"]
+            else:
+                # Update existing prompt
+                self.service.update_prompt(
+                    prompt_id,
+                    prompt_text=enhanced_text,
+                    parameters={
+                        **original["parameters"],
+                        "enhanced": True,
+                        "enhancement_model": enhancement_model,
+                        "enhanced_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                logger.info("Updated prompt %s with enhanced text", prompt_id)
+                enhanced_prompt_id = prompt_id
+
+            # Update run with outputs
+            outputs = {
+                "enhanced_text": enhanced_text,
                 "original_prompt_id": prompt_id,
+                "enhanced_prompt_id": enhanced_prompt_id,
+                "duration_seconds": result.get("duration_seconds", 0),
+                "timestamp": result.get("timestamp"),
             }
-        else:
-            # Update existing prompt
-            self.service.update_prompt(
-                prompt_id,
-                prompt_text=enhanced_text,
-                parameters={
-                    **original["parameters"],
-                    "enhanced": True,
-                    "enhancement_model": enhancement_model,
-                    "enhanced_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            updated = self.service.get_prompt(prompt_id)
-            logger.info("Updated prompt %s with enhanced text", prompt_id)
-            # Return in expected format for CLI
+            self.service.update_run(run["id"], outputs=outputs)
+            self.service.update_run_status(run["id"], "completed")
+            logger.info("Enhancement run %s completed successfully", run["id"])
+
+            # Return in format expected by tests and CLI
             return {
-                "enhanced_prompt_id": prompt_id,  # Same ID when updating
-                "enhanced_text": updated["prompt_text"],
+                "run_id": run["id"],
+                "enhanced_prompt_id": enhanced_prompt_id,
+                "enhanced_text": enhanced_text,
                 "original_prompt_id": prompt_id,
+                "status": "success",
+            }
+
+        except Exception as e:
+            logger.exception("Enhancement run %s failed", run["id"])
+            self.service.update_run_status(run["id"], "failed")
+            self.service.update_run(
+                run["id"],
+                error_message=str(e),
+            )
+            return {
+                "run_id": run["id"],
+                "enhanced_prompt_id": None,
+                "enhanced_text": None,
+                "original_prompt_id": prompt_id,
+                "status": "failed",
+                "error": str(e),
             }
 
     # ========== Internal Helper Methods ==========

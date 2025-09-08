@@ -129,6 +129,7 @@ class DataRepository:
         execution_config: dict[str, Any],
         metadata: dict[str, Any] | None = None,
         initial_status: str = "pending",
+        model_type: str | None = None,
     ) -> dict[str, Any]:
         """Create a new run for a prompt.
 
@@ -137,6 +138,8 @@ class DataRepository:
             execution_config: Execution configuration (GPU node, weights, etc.)
             metadata: Optional metadata (user, priority, etc.)
             initial_status: Initial status for the run (default: "pending")
+            model_type: Override model type (default: use prompt's model_type)
+                       Used for "enhance" and "upscale" runs
 
         Returns:
             Dictionary containing run data
@@ -164,11 +167,14 @@ class DataRepository:
             # Generate run ID
             run_id = self._generate_run_id()
 
+            # Use provided model_type or default to prompt's model_type
+            run_model_type = model_type if model_type is not None else prompt.model_type
+
             # Create run
             run = Run(
                 id=run_id,
                 prompt_id=prompt_id,
-                model_type=prompt.model_type,
+                model_type=run_model_type,
                 status=initial_status,
                 execution_config=execution_config,
                 outputs={},  # Empty initially
@@ -190,7 +196,12 @@ class DataRepository:
             }
 
             session.commit()
-            logger.info("Created run with id=%s for prompt=%s", run.id, prompt_id)
+            logger.info(
+                "Created run with id=%s for prompt=%s with model_type=%s",
+                run.id,
+                prompt_id,
+                run_model_type,
+            )
             return result
 
     def get_prompt(self, prompt_id: str) -> dict[str, Any] | None:

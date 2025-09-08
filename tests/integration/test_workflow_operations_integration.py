@@ -1,4 +1,4 @@
-"""Integration tests for WorkflowOperations.
+"""Integration tests for CosmosAPI.
 
 Tests actual SSH and Docker interactions when test environment is available.
 Skip tests if TEST_GPU_HOST environment variable is not set.
@@ -15,8 +15,8 @@ from cosmos_workflow.connection import SSHManager
 
 @pytest.mark.integration
 @pytest.mark.skipif(not os.getenv("TEST_GPU_HOST"), reason="No test environment configured")
-class TestWorkflowOperationsIntegration:
-    """Integration tests for WorkflowOperations with real SSH/Docker."""
+class TestCosmosAPIIntegration:
+    """Integration tests for CosmosAPI with real SSH/Docker."""
 
     @pytest.fixture
     def test_config(self):
@@ -34,9 +34,9 @@ class TestWorkflowOperationsIntegration:
 
     @pytest.fixture
     def workflow_ops(self, test_config):
-        """Create WorkflowOperations instance with test configuration."""
+        """Create CosmosAPI instance with test configuration."""
         # Mock ConfigManager to use test configuration
-        with patch("cosmos_workflow.api.workflow_operations.ConfigManager") as mock_config:
+        with patch("cosmos_workflow.api.cosmos_api.ConfigManager") as mock_config:
             mock_config.return_value.get.side_effect = lambda key: test_config.get(key)
             ops = CosmosAPI()
             yield ops

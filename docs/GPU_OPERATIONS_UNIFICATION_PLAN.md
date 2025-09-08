@@ -211,7 +211,7 @@ Download remote GPU logs back to local machine for debugging and monitoring
 1. After each GPU operation completes, download the remote log file
 2. Store in local run directory: `outputs/run_{run_id}/logs/`
 3. Update DockerExecutor methods to return both local and remote log paths
-4. Implement log download in WorkflowOrchestrator after operation completion
+4. Implement log download in GPUExecutor after operation completion
 
 ### Implementation
 - Add `download_log()` method to FileTransferService

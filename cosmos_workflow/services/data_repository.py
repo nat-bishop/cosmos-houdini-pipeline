@@ -271,8 +271,9 @@ class DataRepository:
 
             return result
 
+    @staticmethod
     def _generate_prompt_id(
-        self, model_type: str, prompt_text: str, inputs: dict[str, Any], parameters: dict[str, Any]
+        model_type: str, prompt_text: str, inputs: dict[str, Any], parameters: dict[str, Any]
     ) -> str:
         """Generate unique ID for a prompt.
 
@@ -465,7 +466,8 @@ class DataRepository:
         """
         return self.update_run(run_id, error_message=error_message)
 
-    def _generate_run_id(self, prompt_id: str, execution_config: dict[str, Any]) -> str:
+    @staticmethod
+    def _generate_run_id(prompt_id: str, execution_config: dict[str, Any]) -> str:
         """Generate unique ID for a run.
 
         Args:
@@ -644,7 +646,8 @@ class DataRepository:
             logger.error("Error searching prompts: %s", e)
             return []
 
-    def _sanitize_input(self, text: str) -> str:
+    @staticmethod
+    def _sanitize_input(text: str) -> str:
         """Sanitize input text by stripping whitespace."""
         return text.strip() if text else ""
 

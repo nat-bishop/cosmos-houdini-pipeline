@@ -1,4 +1,4 @@
-"""Tests for Phase 2 WorkflowOrchestrator integration with logging."""
+"""Tests for Phase 2 GPUExecutor integration with logging."""
 
 from unittest.mock import MagicMock, Mock, patch
 
@@ -7,13 +7,13 @@ import pytest
 from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
 
-class TestWorkflowOrchestratorPhase2:
-    """Test WorkflowOrchestrator integration with WorkflowService logging methods."""
+class TestGPUExecutorPhase2:
+    """Test GPUExecutor integration with DataRepository logging methods."""
 
     @pytest.fixture
     def mock_config_manager(self):
         """Create a mock config manager."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.ConfigManager") as MockConfig:
+        with patch("cosmos_workflow.execution.gpu_executor.ConfigManager") as MockConfig:
             mock_config = MockConfig.return_value
 
             # Mock remote config
@@ -31,7 +31,7 @@ class TestWorkflowOrchestratorPhase2:
     @pytest.fixture
     def mock_ssh_manager(self):
         """Create a mock SSH manager."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.SSHManager") as MockSSH:
+        with patch("cosmos_workflow.execution.gpu_executor.SSHManager") as MockSSH:
             mock_ssh = MockSSH.return_value
             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
             mock_ssh.__exit__ = Mock(return_value=None)
@@ -41,7 +41,7 @@ class TestWorkflowOrchestratorPhase2:
     @pytest.fixture
     def mock_file_transfer(self):
         """Create a mock file transfer service."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.FileTransferService") as MockFT:
+        with patch("cosmos_workflow.execution.gpu_executor.FileTransferService") as MockFT:
             mock_ft = MockFT.return_value
             mock_ft.upload_file = Mock()
             mock_ft.download_results = Mock()
@@ -50,7 +50,7 @@ class TestWorkflowOrchestratorPhase2:
     @pytest.fixture
     def mock_docker_executor(self):
         """Create a mock docker executor."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor") as MockDocker:
+        with patch("cosmos_workflow.execution.gpu_executor.DockerExecutor") as MockDocker:
             mock_docker = MockDocker.return_value
 
             def mock_run_inference(prompt_file, run_id, **kwargs):
@@ -75,7 +75,7 @@ class TestWorkflowOrchestratorPhase2:
 
     @pytest.fixture
     def workflow_orchestrator(self, mock_config_manager):
-        """Create WorkflowOrchestrator instance."""
+        """Create GPUExecutor instance."""
         orchestrator = GPUExecutor()
         orchestrator.config_manager = mock_config_manager
         return orchestrator
@@ -96,7 +96,7 @@ class TestWorkflowOrchestratorPhase2:
         return mock_service
 
     def test_orchestrator_has_service_attribute(self, workflow_orchestrator):
-        """Test that WorkflowOrchestrator has a service attribute for Phase 2."""
+        """Test that GPUExecutor has a service attribute for Phase 2."""
         # The service attribute will be set when implementation is done
         # For now, we're testing that it can be set
         mock_service = Mock()
@@ -413,8 +413,8 @@ class TestWorkflowOrchestratorPhase2:
         assert result["status"] == "failed"
         assert result["error"] == "Download failed"
 
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.Path")
-    @patch("cosmos_workflow.workflows.workflow_orchestrator.tempfile.TemporaryDirectory")
+    @patch("cosmos_workflow.execution.gpu_executor.Path")
+    @patch("cosmos_workflow.execution.gpu_executor.tempfile.TemporaryDirectory")
     def test_execute_run_with_service_none_doesnt_crash(
         self,
         mock_temp_dir,

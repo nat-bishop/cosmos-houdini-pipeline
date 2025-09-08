@@ -38,12 +38,10 @@ class TestQuickInferenceRefactored:
     @pytest.fixture
     def ops(self, mock_config, mock_service, mock_orchestrator):
         """Create WorkflowOperations instance with mocked dependencies."""
-        with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch(
-                "cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service
-            ):
+        with patch("cosmos_workflow.api.cosmos_api.init_database"):
+            with patch("cosmos_workflow.api.cosmos_api.DataRepository", return_value=mock_service):
                 with patch(
-                    "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
+                    "cosmos_workflow.api.cosmos_api.GPUExecutor",
                     return_value=mock_orchestrator,
                 ):
                     ops = CosmosAPI(mock_config)
@@ -191,12 +189,10 @@ class TestBatchInferenceRefactored:
     @pytest.fixture
     def ops(self, mock_config, mock_service, mock_orchestrator):
         """Create WorkflowOperations instance with mocked dependencies."""
-        with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch(
-                "cosmos_workflow.api.workflow_operations.WorkflowService", return_value=mock_service
-            ):
+        with patch("cosmos_workflow.api.cosmos_api.init_database"):
+            with patch("cosmos_workflow.api.cosmos_api.DataRepository", return_value=mock_service):
                 with patch(
-                    "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator",
+                    "cosmos_workflow.api.cosmos_api.GPUExecutor",
                     return_value=mock_orchestrator,
                 ):
                     ops = CosmosAPI(mock_config)
@@ -380,9 +376,9 @@ class TestCreateAndExecuteMethods:
     @pytest.fixture
     def ops(self, mock_config):
         """Create WorkflowOperations instance."""
-        with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
-                with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
+        with patch("cosmos_workflow.api.cosmos_api.init_database"):
+            with patch("cosmos_workflow.api.cosmos_api.DataRepository"):
+                with patch("cosmos_workflow.api.cosmos_api.GPUExecutor"):
                     return CosmosAPI(mock_config)
 
     def test_quick_inference_replaces_create_and_execute(self, ops):

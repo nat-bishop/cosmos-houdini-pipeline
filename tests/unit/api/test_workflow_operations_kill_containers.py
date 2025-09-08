@@ -13,12 +13,10 @@ class TestWorkflowOperationsKillContainers(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Create WorkflowOperations with mocked dependencies
-        with patch("cosmos_workflow.api.workflow_operations.ConfigManager"):
-            with patch("cosmos_workflow.api.workflow_operations.init_database"):
-                with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
-                    with patch(
-                        "cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"
-                    ) as MockOrchestrator:
+        with patch("cosmos_workflow.api.cosmos_api.ConfigManager"):
+            with patch("cosmos_workflow.api.cosmos_api.init_database"):
+                with patch("cosmos_workflow.api.cosmos_api.DataRepository"):
+                    with patch("cosmos_workflow.api.cosmos_api.GPUExecutor") as MockOrchestrator:
                         # Set up the orchestrator mock
                         self.mock_orchestrator = MagicMock()
                         MockOrchestrator.return_value = self.mock_orchestrator

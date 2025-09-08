@@ -15,7 +15,7 @@ Complete API documentation for the Cosmos Workflow System.
 
 ### Overview
 
-The Cosmos Workflow System follows a **facade pattern** with a clean, layered architecture. **WorkflowOperations is the PRIMARY INTERFACE** - all external code, CLI commands, and UI interactions must go through this facade.
+The Cosmos Workflow System follows a **facade pattern** with a clean, layered architecture. **CosmosAPI is the PRIMARY INTERFACE** - all external code, CLI commands, and UI interactions must go through this facade.
 
 ### Architecture Layers
 
@@ -27,8 +27,8 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
                             │
                             ▼
 ┌═════════════════════════════════════════════════════════┐
-║          WorkflowOperations (MAIN FACADE)               ║
-║       (cosmos_workflow/api/workflow_operations.py)      ║
+║             CosmosAPI (MAIN FACADE)                    ║
+║       (cosmos_workflow/api/cosmos_api.py)               ║
 ║                                                          ║
 ║  THE PRIMARY INTERFACE - Use this for everything!       ║
 ║  • High-level operations matching user intentions       ║
@@ -39,10 +39,10 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
            ┌────────────────┴────────────────┐
            ▼                                 ▼
 ┌──────────────────────────┐    ┌────────────────────────┐
-│   WorkflowService        │    │  WorkflowOrchestrator  │
+│   DataRepository         │    │     GPUExecutor        │
 │   (INTERNAL - Data)      │    │  (INTERNAL - GPU Exec) │
-│ (services/workflow_      │    │ (workflows/workflow_   │
-│    service.py)           │    │    orchestrator.py)*   │
+│ (services/data_          │    │ (execution/gpu_        │
+│    repository.py)        │    │    executor.py)        │
 │                          │    │                        │
 │ • Database CRUD          │    │ • GPU execution        │
 │ • Data validation        │    │ • SSH/Docker ops       │
@@ -55,9 +55,8 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
 │   (SQLAlchemy)           │    │  (SSH, Docker)         │
 └──────────────────────────┘    └────────────────────────┘
 
-* Note: WorkflowOrchestrator name is confusing - it's just the GPU
-  execution component, not the main orchestrator. Will be renamed
-  to GPUExecutor in v2.0.
+* Note: Architecture has been updated with clearer names - GPUExecutor
+  handles GPU operations, DataRepository handles data persistence.
 ```
 
 ### Layer Responsibilities
@@ -70,11 +69,11 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
   - Handle user input validation
   - Format output (tables, progress bars, etc.)
 - **Rules**:
-  - ✅ ONLY uses `WorkflowOperations` API
+  - ✅ ONLY uses `CosmosAPI` facade
   - ❌ NEVER directly imports service, database, or orchestrator modules
   - ❌ NEVER contains business logic
 
-#### 2. WorkflowOperations API (`cosmos_workflow/api/workflow_operations.py`) - **MAIN FACADE**
+#### 2. CosmosAPI (`cosmos_workflow/api/cosmos_api.py`) - **MAIN FACADE**
 - **Purpose**: THE PRIMARY INTERFACE for the entire system
 - **Responsibilities**:
   - Provide the single point of entry for all operations
@@ -87,9 +86,9 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
   - ✅ The ONLY layer that imports both Service and Orchestrator
   - ✅ All high-level business logic lives here
   - ✅ Returns simple dictionaries (no ORM objects)
-  - ❌ NEVER bypass this to use WorkflowService or WorkflowOrchestrator directly
+  - ❌ NEVER bypass this to use DataRepository or GPUExecutor directly
 
-#### 3. WorkflowService (`cosmos_workflow/services/workflow_service.py`) - **INTERNAL COMPONENT**
+#### 3. DataRepository (`cosmos_workflow/services/data_repository.py`) - **INTERNAL COMPONENT**
 - **Purpose**: Internal data layer for database operations
 - **Responsibilities**:
   - CRUD operations for prompts and runs
@@ -97,12 +96,12 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
   - Database queries and updates
   - Transaction management
 - **Rules**:
-  - ⚠️ **INTERNAL ONLY - Do not use directly, use WorkflowOperations instead**
+  - ⚠️ **INTERNAL ONLY - Do not use directly, use CosmosAPI instead**
   - ✅ ONLY handles database operations
   - ❌ NO remote execution logic
   - ❌ NO file system operations (except validation)
 
-#### 4. WorkflowOrchestrator (`cosmos_workflow/workflows/workflow_orchestrator.py`) - **INTERNAL COMPONENT**
+#### 4. GPUExecutor (`cosmos_workflow/workflows/workflow_orchestrator.py`) - **INTERNAL COMPONENT**
 - **Purpose**: Internal GPU execution layer (confusing name - will be renamed to GPUExecutor in v2.0)
 - **Responsibilities**:
   - Execute inference on remote GPU
@@ -111,7 +110,7 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
   - Transfer files to/from remote systems
   - Stream logs and monitor execution
 - **Rules**:
-  - ⚠️ **INTERNAL ONLY - Do not use directly, use WorkflowOperations instead**
+  - ⚠️ **INTERNAL ONLY - Do not use directly, use CosmosAPI instead**
   - ⚠️ **NOT the main orchestrator despite its name - just GPU execution**
   - ✅ ONLY handles execution logic
   - ❌ NO database operations
@@ -119,7 +118,7 @@ The Cosmos Workflow System follows a **facade pattern** with a clean, layered ar
 
 ### Usage Examples
 
-#### Correct Usage - Through WorkflowOperations
+#### Correct Usage - Through CosmosAPI
 
 ```python
 from cosmos_workflow.api import CosmosAPI
@@ -218,7 +217,7 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 - Centralizes Docker command construction for maintainability
 - Required by project architecture as documented in CLAUDE.md
 
-### WorkflowOperations API Methods
+### CosmosAPI API Methods
 
 #### Core Operations
 - `create_prompt()` - Create a new prompt
@@ -250,8 +249,8 @@ The Cosmos Workflow System uses a clean database-first service layer architectur
 
 - **Database-First Design**: All data stored in SQLAlchemy database with no persistent JSON files
 - **Database IDs**: Commands work with database IDs (ps_xxxxx for prompts, rs_xxxxx for runs)
-- **Service Layer**: WorkflowService handles all business logic and data operations
-- **Execution Layer**: WorkflowOrchestrator handles ONLY GPU execution (inference, upscaling, AI enhancement)
+- **Service Layer**: DataRepository handles all business logic and data operations
+- **Execution Layer**: GPUExecutor handles ONLY GPU execution (inference, upscaling, AI enhancement)
 - **Temporary JSON**: NVIDIA-format JSON files created only temporarily for GPU script compatibility
 - **Transaction Safety**: Comprehensive error handling with automatic rollback
 - **Multi-Model Ready**: Extensible design supports current transfer model and future AI models
@@ -823,9 +822,9 @@ with gr.Tab("Generate"):
 
 ## Core Modules
 
-### WorkflowService
+### DataRepository
 
-The WorkflowService provides the complete business logic layer for managing prompts and runs in the database. This is the core service class that handles all data operations, validation, and transaction management.
+The DataRepository provides the complete business logic layer for managing prompts and runs in the database. This is the core service class that handles all data operations, validation, and transaction management.
 
 #### Query Methods
 
@@ -993,7 +992,7 @@ CREATE INDEX idx_runs_prompt_id ON runs(prompt_id);
 - Consider extracting frequently queried fields to dedicated columns
 - Use JSON_EXTRACT for complex queries
 
-### WorkflowService
+### DataRepository
 
 The service layer provides business logic for managing prompts and runs with transaction safety and comprehensive validation.
 
@@ -1088,7 +1087,7 @@ run = service.get_run("rs_wxyz5678")
 - Input length validation (max 10,000 chars for prompt_text)
 - Null byte and control character sanitization
 
-### WorkflowOperations
+### CosmosAPI
 Unified interface for all workflow operations, combining service and orchestrator functionality into high-level operations.
 
 ```python
@@ -1117,7 +1116,7 @@ batch_result = ops.batch_inference(
 )
 # Returns: {"output_mapping": {...}, "successful": 3, "failed": 0}
 
-# Create prompt (same as WorkflowService)
+# Create prompt (same as DataRepository)
 prompt = ops.create_prompt(
   prompt_text="A futuristic city",
   video_dir="inputs/videos/scene1",
@@ -1158,9 +1157,9 @@ prompt = ops.create_prompt(
 - **Intelligent Defaults**: Sensible defaults for weights, steps, guidance, etc.
 - **Internal Run Management**: Users work with prompt_ids, runs created automatically
 - **Backward Compatible**: Low-level methods remain available for advanced workflows
-- **Single Interface**: Combines WorkflowService and WorkflowOrchestrator capabilities
+- **Single Interface**: Combines DataRepository and GPUExecutor capabilities
 
-### WorkflowOrchestrator
+### GPUExecutor
 Simplified orchestrator handling ONLY GPU execution (no data persistence).
 
 ```python
@@ -1199,7 +1198,7 @@ enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
   - Converts database dictionaries to NVIDIA Cosmos format
   - Creates temporary JSON files for GPU scripts
   - Handles SSH connection, file upload, Docker execution, result download
-  - Returns execution results for WorkflowService to persist
+  - Returns execution results for DataRepository to persist
 
 - `execute_batch_runs(runs_and_prompts, batch_name=None)`: Execute multiple runs as a batch
   - Converts run/prompt pairs to JSONL format using `nvidia_format.to_cosmos_batch_inference_jsonl()`
@@ -1211,7 +1210,7 @@ enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
 
 - `run_prompt_upsampling(prompt_text)`: AI-powered prompt enhancement
   - Uses Pixtral vision-language model for prompt improvement
-  - Returns enhanced text for WorkflowService to create new prompt
+  - Returns enhanced text for DataRepository to create new prompt
 
 - `check_remote_status()`: Check remote GPU system health and container status
 
@@ -1219,7 +1218,7 @@ enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
 - **Pure Execution Layer**: No data persistence or business logic
 - **Stateless**: Takes input dictionaries, returns result dictionaries
 - **NVIDIA Compatible**: Creates temporary JSON in required format for GPU scripts
-- **Clean Separation**: Data operations handled entirely by WorkflowService
+- **Clean Separation**: Data operations handled entirely by DataRepository
 - **Error Handling**: Returns error status in result dictionary for service layer processing
 
 ### SSHManager

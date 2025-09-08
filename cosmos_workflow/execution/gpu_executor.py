@@ -4,7 +4,7 @@
 THIS IS NOT THE MAIN FACADE - This is an internal component that handles
 GPU-specific execution tasks (inference, upscaling, enhancement).
 
-For the main interface, use WorkflowOperations from cosmos_workflow.api
+For the main interface, use CosmosAPI from cosmos_workflow.api
 
 This component:
 - Manages SSH connections to GPU instances
@@ -12,7 +12,7 @@ This component:
 - Handles file transfers to/from remote systems
 - NO direct database access (takes dictionaries as input)
 
-Used internally by WorkflowOperations facade.
+Used internally by CosmosAPI facade.
 """
 
 import json
@@ -33,7 +33,7 @@ class GPUExecutor:
     """GPU execution component for Cosmos-Transfer1 workflows.
 
     NOT THE MAIN FACADE - This is an internal execution component.
-    Use WorkflowOperations from cosmos_workflow.api as the main interface.
+    Use CosmosAPI from cosmos_workflow.api as the main interface.
 
     This class handles GPU-specific operations only:
     - SSH connections and remote command execution
@@ -42,8 +42,8 @@ class GPUExecutor:
     - NVIDIA format conversions for GPU scripts
 
     Does NOT handle:
-    - Database operations (use WorkflowService)
-    - High-level workflow orchestration (use WorkflowOperations)
+    - Database operations (use DataRepository)
+    - High-level workflow orchestration (use CosmosAPI)
     """
 
     def __init__(self, config_file: str | None = None, service=None):
@@ -51,7 +51,7 @@ class GPUExecutor:
         self.ssh_manager: SSHManager | None = None
         self.file_transfer: FileTransferService | None = None
         self.docker_executor: DockerExecutor | None = None
-        self.service = service  # Optional WorkflowService for database updates
+        self.service = service  # Optional DataRepository for database updates
 
     def _initialize_services(self):
         """Initialize all workflow services."""
@@ -242,14 +242,12 @@ class GPUExecutor:
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
         batch_name: str | None = None,
-        **kwargs,
     ) -> dict[str, Any]:
         """Execute multiple runs as a batch on GPU infrastructure.
 
         Args:
             runs_and_prompts: List of (run_dict, prompt_dict) tuples
             batch_name: Optional batch name, generated if not provided
-            **kwargs: Additional options
 
         Returns:
             Dictionary with batch execution results
@@ -310,9 +308,7 @@ class GPUExecutor:
                 )
 
                 # Split outputs to individual run folders
-                output_mapping = self._split_batch_outputs(
-                    batch_name, runs_and_prompts, batch_result
-                )
+                output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
 
                 # Download all outputs
                 for run_id, output_info in output_mapping.items():
@@ -346,16 +342,14 @@ class GPUExecutor:
                 "started_at": start_time.isoformat(),
             }
 
+    @staticmethod
     def _split_batch_outputs(
-        self,
-        batch_name: str,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
         batch_result: dict[str, Any],
     ) -> dict[str, dict[str, Any]]:
         """Split batch output files to individual run folders.
 
         Args:
-            batch_name: Name of the batch
             runs_and_prompts: Original run/prompt pairs
             batch_result: Result from batch inference
 

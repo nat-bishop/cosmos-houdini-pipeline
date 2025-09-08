@@ -114,10 +114,10 @@ def create_mock_config_manager(temp_dir):
     return config_manager
 
 
-def create_mock_workflow_service():
-    """Standard workflow service mock for tests.
+def create_mock_data_repository():
+    """Standard data repository mock for tests.
 
-    Returns a mock workflow service with database operations
+    Returns a mock data repository with database operations
     stubbed out.
     """
     service = MagicMock()

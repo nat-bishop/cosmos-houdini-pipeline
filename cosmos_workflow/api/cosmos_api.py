@@ -254,8 +254,8 @@ class CosmosAPI:
             raise ValueError(error_msg)
         return prompt
 
+    @staticmethod
     def _build_execution_config(
-        self,
         weights: dict[str, float] | None = None,
         num_steps: int = 35,
         guidance: float = 7.0,

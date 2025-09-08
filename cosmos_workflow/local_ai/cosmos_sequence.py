@@ -347,7 +347,8 @@ class CosmosVideoConverter:
         finally:
             out.release()
 
-    def _validate_video_codec(self, video_path: Path, modality: str) -> None:
+    @staticmethod
+    def _validate_video_codec(video_path: Path, modality: str) -> None:
         """Validate that the video codec is browser-compatible.
 
         Args:
@@ -469,7 +470,8 @@ class CosmosVideoConverter:
 
         return metadata
 
-    def _generate_ai_description(self, color_frames: list[Path]) -> str:
+    @staticmethod
+    def _generate_ai_description(color_frames: list[Path]) -> str:
         """Generate AI description from color frames.
 
         Args:
@@ -511,7 +513,8 @@ class CosmosVideoConverter:
             logger.warning("Could not generate AI description: %s", e)
             return f"Sequence with {len(color_frames)} frames"
 
-    def _generate_smart_name(self, description: str, max_length: int = 20) -> str:
+    @staticmethod
+    def _generate_smart_name(description: str, max_length: int = 20) -> str:
         """Generate a short, meaningful name from an AI description.
 
         This is a wrapper around the shared smart naming utility.

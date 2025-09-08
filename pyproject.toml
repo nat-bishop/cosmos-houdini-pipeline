@@ -74,7 +74,7 @@ ignore = [
 
 # CLI and workflow modules legitimately use print for output
 "cosmos_workflow/cli/*" = ["T20"]  # CLI needs print statements
-"cosmos_workflow/workflows/*" = ["T20"]  # Workflows show progress
+"cosmos_workflow/execution/*" = ["T20"]  # Execution shows progress
 "cosmos_workflow/connection/ssh_manager.py" = ["T20"]  # SSH output streaming
 "cosmos_workflow/prompts/*" = ["T20"]  # Prompt creation feedback
 "cosmos_workflow/local_ai/*" = ["T20"]  # AI processing output

@@ -1,8 +1,7 @@
-"""Test batch execution functionality in WorkflowOrchestrator.
+"""Test batch execution functionality in GPUExecutor.
 
 Tests the orchestration of batch inference runs without using actual GPU resources.
-Uses fakes and mocks to verify behavior of batch processing.
-"""
+Uses fakes and mocks to verify behavior of batch processing."""
 
 import tempfile
 from pathlib import Path
@@ -12,13 +11,13 @@ from cosmos_workflow.execution.gpu_executor import GPUExecutor
 from tests.fixtures.fakes import FakeFileTransferService, FakeSSHManager
 
 
-class TestWorkflowOrchestratorBatchExecution:
-    """Test suite for batch execution in WorkflowOrchestrator."""
+class TestGPUExecutorBatchExecution:
+    """Test suite for batch execution in GPUExecutor."""
 
     def setup_method(self):
         """Set up test fixtures before each test method."""
         # Create orchestrator with test config
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.ConfigManager"):
+        with patch("cosmos_workflow.execution.gpu_executor.ConfigManager"):
             self.orchestrator = GPUExecutor()
 
         # Create fake SSH and file transfer
@@ -101,7 +100,7 @@ class TestWorkflowOrchestratorBatchExecution:
             }
 
             # Mock nvidia_format functions
-            with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+            with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
                 mock_nv.to_cosmos_batch_inference_jsonl.return_value = [
                     {"visual_input": "video1.mp4", "prompt": "First"},
                     {"visual_input": "video2.mp4", "prompt": "Second"},
@@ -134,7 +133,7 @@ class TestWorkflowOrchestratorBatchExecution:
 
     def test_execute_batch_runs_auto_generates_batch_name(self):
         """Test that batch name is auto-generated when not provided."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
 
@@ -156,7 +155,7 @@ class TestWorkflowOrchestratorBatchExecution:
 
     def test_execute_batch_runs_uploads_all_video_files(self):
         """Test that all referenced video files are uploaded."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
 
@@ -208,7 +207,7 @@ class TestWorkflowOrchestratorBatchExecution:
 
     def test_execute_batch_runs_handles_batch_failure(self):
         """Test handling of batch execution failure."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
 
@@ -230,7 +229,7 @@ class TestWorkflowOrchestratorBatchExecution:
 
     def test_execute_batch_runs_empty_batch(self):
         """Test handling of empty batch."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/empty.jsonl")
 
@@ -263,9 +262,7 @@ class TestWorkflowOrchestratorBatchExecution:
         ]
 
         # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(
-            "batch_test", runs_and_prompts, batch_result
-        )
+        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
 
         # Should match by run_id in filename
         assert mapping["rs_001"]["remote_path"] == "/outputs/batch/rs_001_output.mp4"
@@ -292,9 +289,7 @@ class TestWorkflowOrchestratorBatchExecution:
         ]
 
         # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(
-            "batch_test", runs_and_prompts, batch_result
-        )
+        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
 
         # Should match by index in filename
         assert mapping["rs_abc"]["remote_path"] == "/outputs/batch/video_000_output.mp4"
@@ -321,9 +316,7 @@ class TestWorkflowOrchestratorBatchExecution:
         ]
 
         # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(
-            "batch_test", runs_and_prompts, batch_result
-        )
+        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
 
         # Should fall back to sequential matching
         assert mapping["rs_aaa"]["remote_path"] == "/outputs/batch/output1.mp4"
@@ -350,9 +343,7 @@ class TestWorkflowOrchestratorBatchExecution:
         ]
 
         # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(
-            "batch_test", runs_and_prompts, batch_result
-        )
+        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
 
         # First two should be matched
         assert mapping["rs_001"]["status"] in ["found", "assumed"]
@@ -372,9 +363,7 @@ class TestWorkflowOrchestratorBatchExecution:
         ]
 
         # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(
-            "batch_test", runs_and_prompts, batch_result
-        )
+        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
 
         # All should be marked as missing
         assert mapping["rs_001"]["remote_path"] is None
@@ -408,7 +397,7 @@ class TestWorkflowOrchestratorBatchExecution:
                 },
             }
 
-            with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+            with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
                 mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
                 mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
 
@@ -461,7 +450,7 @@ class TestWorkflowOrchestratorBatchExecution:
             ),
         ]
 
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             batch_data = []
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = batch_data
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
@@ -480,7 +469,7 @@ class TestWorkflowOrchestratorBatchExecution:
 
     def test_execute_batch_runs_uploads_batch_script(self):
         """Test that batch_inference.sh script is uploaded if it exists."""
-        with patch("cosmos_workflow.workflows.workflow_orchestrator.nvidia_format") as mock_nv:
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             mock_nv.to_cosmos_batch_inference_jsonl.return_value = []
             mock_nv.write_batch_jsonl.return_value = Path("/tmp/batch.jsonl")
 

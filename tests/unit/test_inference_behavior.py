@@ -68,15 +68,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -102,15 +102,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -136,15 +136,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -170,15 +170,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -208,15 +208,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -253,15 +253,15 @@ class TestInferenceBehavior:
         )
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()
@@ -295,15 +295,15 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         with patch(
-            "cosmos_workflow.workflows.workflow_orchestrator.SSHManager",
+            "cosmos_workflow.execution.gpu_executor.SSHManager",
             return_value=mock_dependencies["ssh"],
         ):
             with patch(
-                "cosmos_workflow.workflows.workflow_orchestrator.FileTransferService",
+                "cosmos_workflow.execution.gpu_executor.FileTransferService",
                 return_value=mock_dependencies["transfer"],
             ):
                 with patch(
-                    "cosmos_workflow.workflows.workflow_orchestrator.DockerExecutor",
+                    "cosmos_workflow.execution.gpu_executor.DockerExecutor",
                     return_value=mock_dependencies["docker"],
                 ):
                     orchestrator = GPUExecutor()

@@ -29,28 +29,28 @@ pre-commit run --all-files
 
 ### Facade Pattern Design
 
-The Cosmos Workflow System uses a **facade pattern** with `WorkflowOperations` as the primary interface. Understanding this architecture is critical for development.
+The Cosmos Workflow System uses a **facade pattern** with `CosmosAPI` as the primary interface. Understanding this architecture is critical for development.
 
 ```
 ┌────────────────────────────────────────────────┐
 │          Your Code (CLI/UI/Scripts)           │
 │                     ↓                          │
-│         WorkflowOperations (FACADE)            │
+│         CosmosAPI (FACADE)            │
 │      cosmos_workflow/api/workflow_operations.py│
 │                     ↓                          │
 │        ┌──────────────┬──────────────┐        │
 │        │              │              │        │
-│  WorkflowService   WorkflowOrchestrator*      │
+│  DataRepository   GPUExecutor*      │
 │    (Database)        (GPU Execution)          │
 └────────────────────────────────────────────────┘
 
-* Despite its name, WorkflowOrchestrator is NOT the main orchestrator
+* Despite its name, GPUExecutor is NOT the main orchestrator
   It's the GPU execution component. Will be renamed to GPUExecutor in v2.0.
 ```
 
 ### Development Rules
 
-**✅ ALWAYS Use WorkflowOperations:**
+**✅ ALWAYS Use CosmosAPI:**
 
 ```python
 from cosmos_workflow.api import CosmosAPI
@@ -94,7 +94,7 @@ Follow these 6 gates for every feature:
 6. **Code Review** - Comprehensive review including security and maintainability
 
 **Current Testing Approach:**
-- **Service Layer Focus**: Test business logic through WorkflowService methods
+- **Service Layer Focus**: Test business logic through DataRepository methods
 - **Database Integration**: Test actual database operations with SQLAlchemy
 - **CLI Behavior**: Test command behavior, not implementation details
 - **Minimal Mocking**: Mock only external dependencies (SSH, Docker, file system)
@@ -126,7 +126,7 @@ pytest tests/unit/services/test_workflow_service.py -v
 
 **Test Architecture:**
 - **Database Tests**: 49 tests covering models, connections, validation
-- **Service Tests**: 64 tests covering WorkflowService business logic
+- **Service Tests**: 64 tests covering DataRepository business logic
 - **CLI Tests**: Integration tests for database-first command behavior
 - **Integration Tests**: End-to-end workflows including SSH and Docker execution
 
@@ -168,7 +168,7 @@ bandit -r cosmos_workflow/
 ```
 
 ### Code Conventions
-- **Service Layer**: Use `WorkflowService` for all data operations, not direct database access
+- **Service Layer**: Use `DataRepository` for all data operations, not direct database access
 - **Database-First**: Work with database IDs (ps_xxx, rs_xxx), not JSON files
 - **Wrappers**: Use project wrappers: `SSHManager()` not `paramiko.SSHClient()`
 - **Paths**: `Path(a) / b` not `os.path.join(a, b)`
@@ -197,7 +197,7 @@ python -c "import cosmos_workflow; print('✓ Package imported successfully')"
 python -c "from cosmos_workflow.database import init_database; init_database(); print('✓ Database initialized')"
 
 # Test service layer
-python -c "from cosmos_workflow.services import WorkflowService; print('✓ Service layer imported')"
+python -c "from cosmos_workflow.services import DataRepository; print('✓ Service layer imported')"
 ```
 
 **Test Failures:**

@@ -155,7 +155,8 @@ class FileTransferService:
         else:
             logger.info("No upscaled results found.")
 
-    def _create_manifest(self, directory: Path) -> None:
+    @staticmethod
+    def _create_manifest(directory: Path) -> None:
         """Create a manifest file listing all files in the directory.
 
         Args:

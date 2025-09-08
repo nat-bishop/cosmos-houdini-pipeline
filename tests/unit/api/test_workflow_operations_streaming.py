@@ -39,9 +39,9 @@ class TestStreamContainerLogs:
     @pytest.fixture
     def ops(self, mock_orchestrator):
         """Create WorkflowOperations with mocked orchestrator."""
-        with patch("cosmos_workflow.api.workflow_operations.init_database"):
-            with patch("cosmos_workflow.api.workflow_operations.WorkflowService"):
-                with patch("cosmos_workflow.api.workflow_operations.WorkflowOrchestrator"):
+        with patch("cosmos_workflow.api.cosmos_api.init_database"):
+            with patch("cosmos_workflow.api.cosmos_api.DataRepository"):
+                with patch("cosmos_workflow.api.cosmos_api.GPUExecutor"):
                     ops = CosmosAPI(MagicMock())
                     ops.orchestrator = mock_orchestrator
                     return ops

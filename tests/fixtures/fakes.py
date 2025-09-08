@@ -450,8 +450,8 @@ class FakeRemoteExecutor:
         self.existing_files.add(remote_path)
 
 
-class FakeWorkflowOrchestrator:
-    """Fake workflow orchestrator for integration testing.
+class FakeGPUExecutor:
+    """Fake GPU executor for integration testing.
 
     Simulates the complete workflow without real infrastructure.
     """

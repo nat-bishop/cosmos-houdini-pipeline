@@ -53,6 +53,20 @@ class GPUExecutor:
         self.docker_executor: DockerExecutor | None = None
         self.service = service  # Optional DataRepository for database updates
 
+    def _upload_video_inputs(self, prompt_dict: dict[str, Any], remote_base_dir: str) -> None:
+        """Upload video inputs from prompt dict to remote videos directory.
+
+        Args:
+            prompt_dict: Dictionary containing prompt data with inputs
+            remote_base_dir: Base remote directory path
+        """
+        inputs = prompt_dict.get("inputs", {})
+        for _input_type, input_path in inputs.items():
+            if input_path and Path(input_path).exists():
+                remote_videos_dir = f"{remote_base_dir}/inputs/videos"
+                # No need for explicit mkdir - upload_file handles directory creation
+                self.file_transfer.upload_file(Path(input_path), remote_videos_dir)
+
     def _initialize_services(self):
         """Initialize all workflow services."""
         if not self.ssh_manager:
@@ -112,27 +126,20 @@ class GPUExecutor:
                     # Upload prompt JSON
                     remote_config = self.config_manager.get_remote_config()
                     remote_prompts_dir = f"{remote_config.remote_dir}/inputs/prompts"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_prompts_dir}")
+                    # upload_file will create the directory automatically
                     self.file_transfer.upload_file(temp_path, remote_prompts_dir)
 
                     # Upload video files if they exist
-                    inputs = prompt_dict.get("inputs", {})
-                    for _input_type, input_path in inputs.items():
-                        if input_path and Path(input_path).exists():
-                            remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                            self.ssh_manager.execute_command_success(
-                                f"mkdir -p {remote_videos_dir}"
-                            )
-                            self.file_transfer.upload_file(Path(input_path), remote_videos_dir)
+                    self._upload_video_inputs(prompt_dict, remote_config.remote_dir)
 
                 # Upload scripts if they exist
                 scripts_dir = Path("scripts")
                 if scripts_dir.exists():
                     remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_scripts_dir}")
+                    # upload_file will create the directory automatically
                     for script in scripts_dir.glob("*.sh"):
                         self.file_transfer.upload_file(script, remote_scripts_dir)
-                    # Make scripts executable
+                    # Make scripts executable - this still needs SSH command
                     self.ssh_manager.execute_command_success(
                         f"chmod +x {remote_scripts_dir}/*.sh || true"
                     )
@@ -276,27 +283,20 @@ class GPUExecutor:
                     # Upload JSONL to remote
                     remote_config = self.config_manager.get_remote_config()
                     remote_batch_dir = f"{remote_config.remote_dir}/inputs/batches"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_batch_dir}")
+                    # upload_file will create the directory automatically
                     self.file_transfer.upload_file(temp_jsonl_path, remote_batch_dir)
 
                     # Upload all referenced video files
                     for _run_dict, prompt_dict in runs_and_prompts:
-                        inputs = prompt_dict.get("inputs", {})
-                        for _input_type, input_path in inputs.items():
-                            if input_path and Path(input_path).exists():
-                                remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                                self.ssh_manager.execute_command_success(
-                                    f"mkdir -p {remote_videos_dir}"
-                                )
-                                self.file_transfer.upload_file(Path(input_path), remote_videos_dir)
+                        self._upload_video_inputs(prompt_dict, remote_config.remote_dir)
 
                 # Upload batch_inference.sh script if it exists
                 batch_script = Path("scripts/batch_inference.sh")
                 if batch_script.exists():
                     remote_scripts_dir = f"{remote_config.remote_dir}/scripts"
-                    self.ssh_manager.execute_command_success(f"mkdir -p {remote_scripts_dir}")
+                    # upload_file will create the directory automatically
                     self.file_transfer.upload_file(batch_script, remote_scripts_dir)
-                    # Make script executable
+                    # Make script executable - this still needs SSH command
                     self.ssh_manager.execute_command_success(
                         f"chmod +x {remote_scripts_dir}/batch_inference.sh"
                     )
@@ -456,23 +456,19 @@ class GPUExecutor:
                 with self.ssh_manager:
                     remote_config = self.config_manager.get_remote_config()
 
-                    # Create directories using wrapper's remote executor
+                    # Upload batch file - upload_file will create directory automatically
                     remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
-                    self.docker_executor.remote_executor.create_directory(remote_inputs_dir)
-
-                    # Upload batch file
                     self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
 
                     # Upload video if provided
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                        self.docker_executor.remote_executor.create_directory(remote_videos_dir)
+                        # upload_file will create the directory automatically
                         logger.info("Uploading video for context: %s", video_path)
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
-                    # Create scripts directory and upload upsampler script
+                    # Upload upsampler script - upload_file will create directory automatically
                     scripts_dir = f"{remote_config.remote_dir}/scripts"
-                    self.docker_executor.remote_executor.create_directory(scripts_dir)
 
                     local_script = (
                         Path(__file__).parent.parent.parent / "scripts" / "prompt_upsampler.py"

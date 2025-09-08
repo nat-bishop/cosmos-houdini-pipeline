@@ -5,7 +5,6 @@ prompts and their execution runs. Supports multiple model types through
 flexible database schema.
 """
 
-import hashlib
 import uuid
 from typing import Any
 
@@ -95,8 +94,8 @@ class DataRepository:
         if parameters is None:
             raise ValueError("parameters cannot be None")
 
-        # Generate prompt ID based on content
-        prompt_id = self._generate_prompt_id(model_type, prompt_text, inputs, parameters)
+        # Generate prompt ID using UUID4
+        prompt_id = self._generate_prompt_id()
 
         # Create prompt in database
         with self.db.get_session() as session:
@@ -163,7 +162,7 @@ class DataRepository:
                 raise PromptNotFoundError(f"Prompt not found: {prompt_id}")
 
             # Generate run ID
-            run_id = self._generate_run_id(prompt_id, execution_config)
+            run_id = self._generate_run_id()
 
             # Create run
             run = Run(
@@ -251,52 +250,69 @@ class DataRepository:
             if not run:
                 return None
 
-            result = {
-                "id": run.id,
-                "prompt_id": run.prompt_id,
-                "model_type": run.model_type,
-                "status": run.status,
-                "execution_config": run.execution_config,
-                "outputs": run.outputs,
-                "metadata": run.run_metadata,
-                "created_at": run.created_at.isoformat(),
-                "updated_at": run.updated_at.isoformat(),
-            }
+            return self._run_to_dict(run)
 
-            # Add optional timestamps
-            if run.started_at:
-                result["started_at"] = run.started_at.isoformat()
-            if run.completed_at:
-                result["completed_at"] = run.completed_at.isoformat()
-
-            return result
-
-    @staticmethod
-    def _generate_prompt_id(
-        model_type: str, prompt_text: str, inputs: dict[str, Any], parameters: dict[str, Any]
-    ) -> str:
-        """Generate unique ID for a prompt.
+    def _run_to_dict(self, run: Run) -> dict[str, Any]:
+        """Convert Run model to dict with all fields.
 
         Args:
-            model_type: Type of AI model
-            prompt_text: The prompt text
-            inputs: Input data
-            parameters: Model-specific parameters
+            run: Run model instance
+
+        Returns:
+            Dictionary containing all run fields
+        """
+        result = {
+            "id": run.id,
+            "prompt_id": run.prompt_id,
+            "model_type": run.model_type,
+            "status": run.status,
+            "execution_config": run.execution_config,
+            "outputs": run.outputs,
+            "metadata": run.run_metadata,
+            "created_at": run.created_at.isoformat(),
+            "updated_at": run.updated_at.isoformat(),
+        }
+
+        # Add optional fields
+        if run.log_path:
+            result["log_path"] = run.log_path
+        if run.error_message:
+            result["error_message"] = run.error_message
+        if run.started_at:
+            result["started_at"] = run.started_at.isoformat()
+        if run.completed_at:
+            result["completed_at"] = run.completed_at.isoformat()
+
+        return result
+
+    def _prompt_to_dict(self, prompt: Prompt) -> dict[str, Any]:
+        """Convert Prompt model to dict.
+
+        Args:
+            prompt: Prompt model instance
+
+        Returns:
+            Dictionary containing prompt fields
+        """
+        return {
+            "id": prompt.id,
+            "model_type": prompt.model_type,
+            "prompt_text": prompt.prompt_text,
+            "inputs": prompt.inputs,
+            "parameters": prompt.parameters,
+            "created_at": prompt.created_at.isoformat(),
+        }
+
+    @staticmethod
+    def _generate_prompt_id() -> str:
+        """Generate unique ID for a prompt using UUID4.
 
         Returns:
             Unique ID string starting with 'ps_'
         """
-        # Create deterministic string representation including parameters
-        # This ensures enhanced prompts get different IDs even with same text
-        content = (
-            f"{model_type}|{prompt_text}|{sorted(inputs.items())}|{sorted(parameters.items())}"
-        )
-
-        # Generate hash
-        hash_obj = hashlib.sha256(content.encode("utf-8"))
-        hash_hex = hash_obj.hexdigest()[:20]  # Increased from 12 to reduce collision risk
-
-        return f"ps_{hash_hex}"
+        # Use UUID4 for guaranteed uniqueness
+        unique_id = str(uuid.uuid4()).replace("-", "")[:32]
+        return f"ps_{unique_id}"
 
     def update_run_status(self, run_id: str, status: str) -> dict[str, Any] | None:
         """Update the status of a run.
@@ -338,25 +354,7 @@ class DataRepository:
                 run.completed_at = datetime.now(timezone.utc)
 
             session.flush()  # Flush to ensure updated_at is set
-
-            result = {
-                "id": run.id,
-                "prompt_id": run.prompt_id,
-                "model_type": run.model_type,
-                "status": run.status,
-                "execution_config": run.execution_config,
-                "outputs": run.outputs,
-                "metadata": run.run_metadata,
-                "created_at": run.created_at.isoformat(),
-                "updated_at": run.updated_at.isoformat(),
-            }
-
-            # Add optional timestamps
-            if run.started_at:
-                result["started_at"] = run.started_at.isoformat()
-            if run.completed_at:
-                result["completed_at"] = run.completed_at.isoformat()
-
+            result = self._run_to_dict(run)
             session.commit()
             logger.info("Updated run %s status to %s", run_id, status)
             return result
@@ -417,29 +415,7 @@ class DataRepository:
                 setattr(run, key, value)
 
             session.flush()  # Flush to ensure updated_at is set
-
-            result = {
-                "id": run.id,
-                "prompt_id": run.prompt_id,
-                "model_type": run.model_type,
-                "status": run.status,
-                "execution_config": run.execution_config,
-                "outputs": run.outputs,
-                "metadata": run.run_metadata,
-                "created_at": run.created_at.isoformat(),
-                "updated_at": run.updated_at.isoformat(),
-            }
-
-            # Add optional fields
-            if run.log_path:
-                result["log_path"] = run.log_path
-            if run.error_message:
-                result["error_message"] = run.error_message
-            if run.started_at:
-                result["started_at"] = run.started_at.isoformat()
-            if run.completed_at:
-                result["completed_at"] = run.completed_at.isoformat()
-
+            result = self._run_to_dict(run)
             session.commit()
 
             # Log appropriately based on what was updated
@@ -467,12 +443,8 @@ class DataRepository:
         return self.update_run(run_id, error_message=error_message)
 
     @staticmethod
-    def _generate_run_id(prompt_id: str, execution_config: dict[str, Any]) -> str:
-        """Generate unique ID for a run.
-
-        Args:
-            prompt_id: The prompt ID
-            execution_config: Execution configuration
+    def _generate_run_id() -> str:
+        """Generate unique ID for a run using UUID4.
 
         Returns:
             Unique ID string starting with 'rs_'
@@ -864,7 +836,10 @@ class DataRepository:
         if active_runs:
             return {
                 "success": False,
-                "error": f"Cannot delete prompt with active runs (running/uploading). Found {len(active_runs)} active runs.",
+                "error": (
+                    f"Cannot delete prompt with active runs (running/uploading). "
+                    f"Found {len(active_runs)} active runs."
+                ),
             }
 
         # Collect information about what will be deleted

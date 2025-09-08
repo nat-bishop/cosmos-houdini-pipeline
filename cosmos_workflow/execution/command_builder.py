@@ -17,10 +17,16 @@ class DockerCommandBuilder:
         self.gpu_enabled = False
         self.options: list[str] = []
         self.command: str | None = None
+        self.container_name: str | None = None
 
     def with_gpu(self, enabled: bool = True) -> "DockerCommandBuilder":
         """Enable GPU support."""
         self.gpu_enabled = enabled
+        return self
+
+    def with_name(self, name: str) -> "DockerCommandBuilder":
+        """Set the container name."""
+        self.container_name = name
         return self
 
     def add_volume(self, host_path: str, container_path: str) -> "DockerCommandBuilder":
@@ -48,6 +54,10 @@ class DockerCommandBuilder:
         parts = ["sudo docker run", "--rm"]
 
         # Add standard options
+
+        # Add container name if specified
+        if self.container_name:
+            parts.append(f"--name {self.container_name}")
 
         # Add GPU support
         if self.gpu_enabled:

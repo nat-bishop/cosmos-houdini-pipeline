@@ -672,8 +672,8 @@ class GPUExecutor:
 
     # ========== Status and Container Management ==========
 
-    def get_gpu_status(self) -> dict[str, Any]:
-        """Get current GPU server status.
+    def check_remote_status(self) -> dict[str, Any]:
+        """Check remote GPU server status.
 
         Returns:
             Dictionary containing GPU status information including:

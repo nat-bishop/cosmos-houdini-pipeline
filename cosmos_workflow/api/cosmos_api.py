@@ -690,6 +690,47 @@ class CosmosAPI:
 
     # ========== System Operations ==========
 
+    def _generate_container_name(self, model_type: str, run_id: str) -> str:
+        """Generate container name for a run.
+
+        Args:
+            model_type: Type of model (transfer, upscale, enhance)
+            run_id: Run ID
+
+        Returns:
+            Container name in format: cosmos_{model_type}_{run_id[:8]}
+        """
+        # Remove 'run_' prefix if present and take first 8 chars
+        run_id_short = run_id.replace("run_", "")[:8]
+        return f"cosmos_{model_type}_{run_id_short}"
+
+    def get_active_operations(self) -> dict[str, Any]:
+        """Get the active GPU operation with its details.
+
+        Returns:
+            Dictionary containing:
+                - active_run: The running operation (if any)
+                - container: The active container (if any)
+        """
+        logger.info("Getting active GPU operation")
+
+        # Get any running run (should be at most one)
+        running_runs = self.service.list_runs(status="running")
+        active_run = running_runs[0] if running_runs else None
+
+        # Get the active container (should match the run)
+        self.orchestrator._initialize_services()
+        try:
+            with self.orchestrator.ssh_manager:
+                container = self.orchestrator.docker_executor.get_active_container()
+        except Exception as e:
+            logger.error("Failed to get container: %s", e)
+            container = None
+
+        # In normal operation, these should match
+        # We're just enriching the status display with run details
+        return {"active_run": active_run, "container": container}
+
     def check_status(self) -> dict[str, Any]:
         """Check remote GPU instance status.
 
@@ -698,10 +739,27 @@ class CosmosAPI:
                 - ssh_status: SSH connectivity status
                 - docker_status: Docker daemon status
                 - gpu_info: GPU information if available
-                - containers: Running containers info
+                - container: Running container info (if any)
+                - active_run: Details of the running operation (if any)
         """
         logger.info("Checking remote GPU status")
-        return self.orchestrator.check_remote_status()
+
+        # Get base status from orchestrator
+        status = self.orchestrator.check_remote_status()
+
+        # If Docker is running, add active operation details
+        if status.get("docker_status", {}).get("docker_running"):
+            ops = self.get_active_operations()
+            if ops["active_run"]:
+                status["active_run"] = {
+                    "id": ops["active_run"]["id"],
+                    "model_type": ops["active_run"]["model_type"],
+                    "prompt_id": ops["active_run"]["prompt_id"],
+                    "status": ops["active_run"]["status"],
+                    "started_at": ops["active_run"].get("started_at"),
+                }
+
+        return status
 
     def get_active_containers(self) -> list[dict[str, str]]:
         """Get list of active Docker containers.

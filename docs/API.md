@@ -236,7 +236,8 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 - `delete_run()` - Delete a run
 
 #### System Operations
-- `check_status()` - Check remote GPU status
+- `check_status()` - Check remote GPU status with active operation details (type, run ID, prompt)
+- `get_active_operations()` - Get detailed information about currently running operations
 - `stream_container_logs(container_id, callback=None)` - Stream logs from Docker container (stdout for CLI, callback for Gradio)
 - `verify_integrity()` - Verify database-filesystem integrity
 - `kill_containers()` - Kill all running Cosmos containers on GPU instance

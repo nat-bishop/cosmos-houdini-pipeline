@@ -253,6 +253,11 @@ class DockerExecutor:
 
             builder.set_command(cmd)
 
+            # Add container name for tracking (Phase 4)
+            if run_id:
+                container_name = f"cosmos_enhance_{run_id[:8]}"
+                builder.with_name(container_name)
+
             # Build the docker command
             command = builder.build()
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 4 Unified Status Tracking (2025-09-08)
+- **Enhanced Status Display for Active Operations**
+  - Added get_active_operations() method to CosmosAPI for unified operation tracking
+  - Enhanced check_status() to include active run details (type, run ID, prompt ID, start time)
+  - Status command now displays what's actually running instead of just container presence
+  - Shows operation type (INFERENCE, UPSCALE, ENHANCE) with run and prompt IDs
+  - Detects and warns about orphaned containers and zombie runs for better debugging
+
+- **Container Naming and Detection Improvements**
+  - Added _generate_container_name() method for consistent container naming patterns
+  - Container names now follow format: cosmos_{model_type}_{run_id[:8]} for easy identification
+  - Enhanced container detection to match containers with database runs
+  - Single-container system optimization with warnings for multiple containers
+  - Better debugging through clear container-to-run relationship tracking
+
+- **Unified GPU Operation Monitoring**
+  - Single source of truth for all GPU operations across inference, upscaling, and enhancement
+  - Consistent status reporting pattern for all operation types
+  - Detection of inconsistent states (containers without runs, runs without containers)
+  - Enhanced error reporting and user guidance based on actual system state
+
 ### Added - Phase 3 Upscaling Implementation (2025-09-08)
 - **Independent Upscaling Run System**
   - Added `upscale_run()` method to CosmosAPI that creates separate database runs with model_type="upscale"

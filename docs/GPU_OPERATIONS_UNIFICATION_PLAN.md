@@ -107,30 +107,36 @@ Use `execution_config` JSON to establish relationships:
 
 **Critical insight implemented**: Takes `run_id` as input (not `prompt_id`) since it operates on the output video of a specific inference run
 
-### Phase 4: Unified Status Tracking
+### Phase 4: Unified Status Tracking ✅ COMPLETED
 **Goal**: Single source of truth for GPU operations
 
-**Changes**:
-1. Query database for active runs (all types)
-2. Match runs to Docker containers via naming convention
-3. Provide unified status API
-4. Support filtering by model_type
+**What was done**:
+1. ✅ Added `get_active_operations()` method to CosmosAPI for unified operation tracking
+2. ✅ Enhanced `check_status()` to include active run details with operation type, run ID, and prompt
+3. ✅ Implemented `_generate_container_name()` for consistent container naming: `cosmos_{model_type}_{run_id[:8]}`
+4. ✅ Enhanced status command to display what's actually running instead of just container presence
+5. ✅ Added detection and warnings for orphaned containers and zombie runs
+6. ✅ Simplified tracking for single-container system with multiple container warnings
+7. ✅ Status now shows operation type (INFERENCE, UPSCALE, ENHANCE) with run and prompt IDs
+8. ✅ Better debugging through clear container-to-run relationship tracking
 
-**Implementation**:
+**Implementation Pattern**:
 ```python
 # Container naming convention
 container_name = f"cosmos_{model_type}_{run_id[:8]}"
 
-# Status check
-active_runs = service.get_runs_by_status("running")
-containers = docker_executor.get_containers()
-# Match by name pattern
+# Status includes active run details
+status = {
+    "active_run": {"id": "run_abc123", "model_type": "transfer", "prompt_id": "ps_xyz"},
+    "container": {"name": "cosmos_transfer_abc12345", "status": "Up 5 minutes"}
+}
 ```
 
-**Success criteria**:
-- `cosmos status` shows all GPU operations
-- Can identify which container belongs to which run
-- UI can display unified GPU activity
+**Success criteria achieved**:
+- ✅ `cosmos status` shows all GPU operations with detailed information
+- ✅ Can identify which container belongs to which run via naming convention
+- ✅ Detects inconsistent states (orphaned containers, zombie runs)
+- ✅ UI can display unified GPU activity with operation details
 
 ### Phase 5: CLI and UI Updates
 **Goal**: User-facing improvements

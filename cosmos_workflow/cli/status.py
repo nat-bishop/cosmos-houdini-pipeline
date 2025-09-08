@@ -61,17 +61,38 @@ def status(ctx, stream):
     else:
         status_data["GPU"] = "[yellow]Not detected[/yellow]"
 
+    # Active run information (Phase 4: show what's actually running)
+    active_run = status_info.get("active_run")
+    if active_run:
+        status_data["Active Operation"] = f"[green]{active_run['model_type'].upper()}[/green]"
+        status_data["  Run ID"] = active_run["id"][:8]  # Show first 8 chars
+        status_data["  Prompt"] = active_run["prompt_id"]
+        if active_run.get("started_at"):
+            status_data["  Started"] = active_run["started_at"]
+
     # Container information (now expecting single container)
     container = status_info.get("container")
     if container:
-        status_data["Running Container"] = f"[cyan]{container['name']}[/cyan]"
+        if not active_run:
+            # Container without run - shouldn't happen but report it
+            status_data["Running Container"] = f"[yellow]{container['name']} (orphaned)[/yellow]"
+            console.print(
+                "\n[yellow]Warning:[/yellow] Container running without active run in database"
+            )
+        else:
+            status_data["Running Container"] = f"[cyan]{container['name']}[/cyan]"
         status_data["  Status"] = container["status"]
         status_data["  Container ID"] = container["id_short"]
         # Show warning if multiple containers detected
         if "warning" in container:
             console.print(f"\n[yellow]Warning:[/yellow] {container['warning']}")
     else:
-        status_data["Running Container"] = "[yellow]None[/yellow]"
+        if active_run:
+            # Run without container - zombie run
+            status_data["Running Container"] = "[red]Missing![/red]"
+            console.print("\n[red]Error:[/red] Database shows active run but no container found")
+        else:
+            status_data["Running Container"] = "[yellow]None[/yellow]"
 
     # Display the table
     console.print("\n[bold cyan]Remote GPU Status[/bold cyan]")

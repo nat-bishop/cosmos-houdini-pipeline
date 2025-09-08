@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 from cosmos_workflow.api import CosmosAPI
 
 
-class TestActiveOperations:
-    """Test get_active_operations functionality."""
+class TestSimplifiedActiveOperations:
+    """Test get_active_operations functionality for single-container system."""
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_get_active_operations_basic(self, mock_executor, mock_repo, mock_db):
-        """Test basic get_active_operations functionality."""
+    def test_get_active_operations_with_run_and_container(self, mock_executor, mock_repo, mock_db):
+        """Test normal case: one run with matching container."""
         # Setup mocks
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
@@ -35,216 +35,126 @@ class TestActiveOperations:
         # Mock container from Docker
         container = {
             "id": "container_111aaa",
+            "id_short": "container_111",
             "name": "cosmos_transfer_abc123",
             "status": "Up 5 minutes",
         }
-        mock_executor_instance.get_containers.return_value = [container]
 
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute correctly
+        api.orchestrator.docker_executor = MagicMock()
+        api.orchestrator.docker_executor.get_active_container.return_value = container
 
         result = api.get_active_operations()
 
-        # Check structure
-        assert "active_runs" in result
-        assert "orphaned_containers" in result
-        assert "issues" in result
+        # Check structure - simplified for single container system
+        assert "active_run" in result
+        assert "container" in result
 
-        # Check matching worked
-        assert len(result["active_runs"]) == 1
-        assert result["active_runs"][0]["id"] == "run_abc123"
-        assert result["active_runs"][0]["container"] is not None
-        assert result["active_runs"][0]["container"]["id"] == "container_111aaa"
+        # Check the run details
+        assert result["active_run"]["id"] == "run_abc123"
+        assert result["active_run"]["model_type"] == "transfer"
+
+        # Container should be returned
+        assert result["container"] is not None
+        assert result["container"]["name"] == "cosmos_transfer_abc123"
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_get_active_operations_multiple_runs(self, mock_executor, mock_repo, mock_db):
-        """Test with multiple active operations."""
+    def test_get_active_operations_no_run_no_container(self, mock_executor, mock_repo, mock_db):
+        """Test idle state: no run, no container."""
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_executor_instance = MagicMock()
         mock_executor.return_value = mock_executor_instance
 
-        # Multiple active runs
-        active_runs = [
-            {
-                "id": "run_transfer",
-                "model_type": "transfer",
-                "status": "running",
-                "execution_config": {"container_id": "container_aaa"},
-                "prompt_id": "ps_12345",
-            },
-            {
-                "id": "run_upscale",
-                "model_type": "upscale",
-                "status": "running",
-                "execution_config": {"container_id": "container_bbb"},
-                "prompt_id": "ps_12345",
-            },
-            {
-                "id": "run_enhance",
-                "model_type": "enhance",
-                "status": "running",
-                "execution_config": {"container_id": "container_ccc"},
-                "prompt_id": "ps_67890",
-            },
-        ]
-        mock_repo_instance.list_runs.return_value = active_runs
-
-        # Matching containers
-        containers = [
-            {"id": "container_aaa111", "name": "cosmos_transfer_xxx"},
-            {"id": "container_bbb222", "name": "cosmos_upscale_yyy"},
-            {"id": "container_ccc333", "name": "cosmos_enhance_zzz"},
-        ]
-        mock_executor_instance.get_containers.return_value = containers
+        # No running runs
+        mock_repo_instance.list_runs.return_value = []
 
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute - no container
+        api.orchestrator.docker_executor = MagicMock()
+        api.orchestrator.docker_executor.get_active_container.return_value = None
 
         result = api.get_active_operations()
 
-        # All runs should be matched
-        assert len(result["active_runs"]) == 3
-        for run in result["active_runs"]:
-            assert run["container"] is not None
-
-        # No orphaned containers
-        assert len(result["orphaned_containers"]) == 0
+        # Should have None for both
+        assert result["active_run"] is None
+        assert result["container"] is None
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_get_active_operations_orphaned_containers(self, mock_executor, mock_repo, mock_db):
-        """Test detection of orphaned containers."""
+    def test_get_active_operations_run_without_container(self, mock_executor, mock_repo, mock_db):
+        """Test error case: run exists but no container (zombie run)."""
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_executor_instance = MagicMock()
         mock_executor.return_value = mock_executor_instance
 
-        # One active run
+        # Running run exists
         active_run = {
-            "id": "run_known",
+            "id": "run_zombie",
             "model_type": "transfer",
             "status": "running",
-            "execution_config": {"container_id": "container_known"},
-            "prompt_id": "ps_12345",
+            "execution_config": {"container_id": "container_gone"},
+            "prompt_id": "ps_11111",
         }
         mock_repo_instance.list_runs.return_value = [active_run]
 
-        # Multiple containers including orphans
-        containers = [
-            {"id": "container_known123", "name": "cosmos_transfer_known"},
-            {"id": "container_orphan1", "name": "manual_container"},
-            {"id": "container_orphan2", "name": "cosmos_old_run"},
-        ]
-        mock_executor_instance.get_containers.return_value = containers
-
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute - no container
+        api.orchestrator.docker_executor = MagicMock()
+        api.orchestrator.docker_executor.get_active_container.return_value = None
 
         result = api.get_active_operations()
 
-        # One matched run
-        assert len(result["active_runs"]) == 1
-        assert result["active_runs"][0]["container"] is not None
-
-        # Two orphaned containers
-        assert len(result["orphaned_containers"]) == 2
-        orphan_ids = [c["id"] for c in result["orphaned_containers"]]
-        assert "container_orphan1" in orphan_ids
-        assert "container_orphan2" in orphan_ids
+        # Run should be returned but container is None
+        assert result["active_run"] is not None
+        assert result["active_run"]["id"] == "run_zombie"
+        assert result["container"] is None
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_get_active_operations_zombie_runs(self, mock_executor, mock_repo, mock_db):
-        """Test detection of zombie runs (runs without containers)."""
+    def test_get_active_operations_container_without_run(self, mock_executor, mock_repo, mock_db):
+        """Test error case: container exists but no run (orphaned container)."""
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_executor_instance = MagicMock()
         mock_executor.return_value = mock_executor_instance
 
-        # Runs marked as running
-        zombie_runs = [
-            {
-                "id": "run_zombie1",
-                "model_type": "transfer",
-                "status": "running",
-                "execution_config": {"container_id": "container_gone1"},
-                "prompt_id": "ps_11111",
-            },
-            {
-                "id": "run_zombie2",
-                "model_type": "upscale",
-                "status": "running",
-                "execution_config": {"container_id": "container_gone2"},
-                "prompt_id": "ps_22222",
-            },
-        ]
-        mock_repo_instance.list_runs.return_value = zombie_runs
+        # No running runs
+        mock_repo_instance.list_runs.return_value = []
 
-        # No containers running
-        mock_executor_instance.get_containers.return_value = []
-
-        api = CosmosAPI()
-        api.service = mock_repo_instance
-        api.orchestrator = mock_executor_instance
-
-        result = api.get_active_operations()
-
-        # Runs should be returned but with no container
-        assert len(result["active_runs"]) == 2
-        for run in result["active_runs"]:
-            assert run["container"] is None
-
-        # Issues should be reported
-        assert len(result["issues"]) > 0
-        assert any(
-            "zombie" in issue.lower() or "no container" in issue.lower()
-            for issue in result["issues"]
-        )
-
-    @patch("cosmos_workflow.api.cosmos_api.init_database")
-    @patch("cosmos_workflow.api.cosmos_api.DataRepository")
-    @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_get_active_operations_no_container_id(self, mock_executor, mock_repo, mock_db):
-        """Test handling runs without container_id in execution_config."""
-        mock_repo_instance = MagicMock()
-        mock_repo.return_value = mock_repo_instance
-        mock_executor_instance = MagicMock()
-        mock_executor.return_value = mock_executor_instance
-
-        # Run without container_id (legacy run)
-        legacy_run = {
-            "id": "run_legacy",
-            "model_type": "transfer",
-            "status": "running",
-            "execution_config": {},  # No container_id
-            "prompt_id": "ps_legacy",
+        # But container exists
+        container = {
+            "id": "container_orphan",
+            "id_short": "container_or",
+            "name": "cosmos_transfer_orphan",
+            "status": "Up 10 minutes",
         }
-        mock_repo_instance.list_runs.return_value = [legacy_run]
-
-        # Container exists
-        container = {"id": "container_abc", "name": "cosmos_transfer_legacy"}
-        mock_executor_instance.get_containers.return_value = [container]
 
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute - container exists
+        api.orchestrator.docker_executor = MagicMock()
+        api.orchestrator.docker_executor.get_active_container.return_value = container
 
         result = api.get_active_operations()
 
-        # Legacy run should have no container matched
-        assert len(result["active_runs"]) == 1
-        assert result["active_runs"][0]["container"] is None
-
-        # Container becomes orphaned
-        assert len(result["orphaned_containers"]) == 1
+        # Container should be returned but run is None
+        assert result["active_run"] is None
+        assert result["container"] is not None
+        assert result["container"]["name"] == "cosmos_transfer_orphan"
 
 
 class TestEnhancedCheckStatus:
@@ -253,8 +163,8 @@ class TestEnhancedCheckStatus:
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_check_status_includes_active_operations(self, mock_executor, mock_repo, mock_db):
-        """Test that check_status includes active operations when Docker is running."""
+    def test_check_status_includes_active_run(self, mock_executor, mock_repo, mock_db):
+        """Test that check_status includes active run details when present."""
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
         mock_executor_instance = MagicMock()
@@ -273,18 +183,20 @@ class TestEnhancedCheckStatus:
             "id": "run_test",
             "model_type": "transfer",
             "status": "running",
-            "execution_config": {"container_id": "container_test"},
             "prompt_id": "ps_test",
+            "started_at": "2024-01-01T10:00:00Z",
         }
         mock_repo_instance.list_runs.return_value = [active_run]
 
         # Mock container
         container = {"id": "container_test123", "name": "cosmos_transfer_test"}
-        mock_executor_instance.get_containers.return_value = [container]
 
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute
+        api.orchestrator.docker_executor = MagicMock()
+        api.orchestrator.docker_executor.get_active_container.return_value = container
 
         result = api.check_status()
 
@@ -292,15 +204,15 @@ class TestEnhancedCheckStatus:
         assert result["ssh_status"] == "connected"
         assert result["docker_status"]["docker_running"] is True
 
-        # Should include active operations
-        assert "active_operations" in result
-        assert len(result["active_operations"]) == 1
-        assert result["active_operations"][0]["id"] == "run_test"
+        # Should include active run details
+        assert "active_run" in result
+        assert result["active_run"]["id"] == "run_test"
+        assert result["active_run"]["model_type"] == "transfer"
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")
     @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_check_status_no_operations_when_docker_down(self, mock_executor, mock_repo, mock_db):
+    def test_check_status_no_run_when_docker_down(self, mock_executor, mock_repo, mock_db):
         """Test that check_status doesn't query operations when Docker is down."""
         mock_repo_instance = MagicMock()
         mock_repo.return_value = mock_repo_instance
@@ -318,50 +230,15 @@ class TestEnhancedCheckStatus:
         api = CosmosAPI()
         api.service = mock_repo_instance
         api.orchestrator = mock_executor_instance
+        # Mock the nested docker_executor attribute
+        api.orchestrator.docker_executor = MagicMock()
 
         result = api.check_status()
 
-        # Should not include active operations
-        assert "active_operations" not in result
+        # Should not include active_run when Docker is down
+        assert "active_run" not in result
         # Should not have called list_runs (Docker is down)
         mock_repo_instance.list_runs.assert_not_called()
-
-    @patch("cosmos_workflow.api.cosmos_api.init_database")
-    @patch("cosmos_workflow.api.cosmos_api.DataRepository")
-    @patch("cosmos_workflow.api.cosmos_api.GPUExecutor")
-    def test_check_status_includes_issues(self, mock_executor, mock_repo, mock_db):
-        """Test that check_status includes issues when detected."""
-        mock_repo_instance = MagicMock()
-        mock_repo.return_value = mock_repo_instance
-        mock_executor_instance = MagicMock()
-        mock_executor.return_value = mock_executor_instance
-
-        # Mock base status
-        base_status = {"ssh_status": "connected", "docker_status": {"docker_running": True}}
-        mock_executor_instance.check_remote_status.return_value = base_status
-
-        # Mock zombie run (no matching container)
-        zombie_run = {
-            "id": "run_zombie",
-            "model_type": "transfer",
-            "status": "running",
-            "execution_config": {"container_id": "container_gone"},
-            "prompt_id": "ps_zombie",
-        }
-        mock_repo_instance.list_runs.return_value = [zombie_run]
-
-        # No containers
-        mock_executor_instance.get_containers.return_value = []
-
-        api = CosmosAPI()
-        api.service = mock_repo_instance
-        api.orchestrator = mock_executor_instance
-
-        result = api.check_status()
-
-        # Should include issues
-        assert "issues" in result
-        assert len(result["issues"]) > 0
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")

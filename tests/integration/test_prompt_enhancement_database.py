@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cosmos_workflow.api import CosmosAPI
+from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.services import DataRepository
 
@@ -31,7 +32,8 @@ class TestPromptEnhancementDatabaseIntegration:
     @pytest.fixture
     def repository(self, temp_db):
         """Create repository with temp database."""
-        return DataRepository(temp_db)
+        config = ConfigManager()
+        return DataRepository(temp_db, config)
 
     @pytest.fixture
     def mock_orchestrator(self):

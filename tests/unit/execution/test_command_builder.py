@@ -100,6 +100,46 @@ class TestDockerCommandBuilder:
         assert "nvidia/cuda:12.0" in command
         assert "python train.py" in command
 
+    def test_with_name(self):
+        """Test setting container name."""
+        builder = DockerCommandBuilder("test-image")
+        builder.with_name("cosmos_transfer_abc12345")
+
+        command = builder.build()
+
+        assert "--name cosmos_transfer_abc12345" in command
+
+    def test_with_name_returns_self(self):
+        """Test that with_name returns self for method chaining."""
+        builder = DockerCommandBuilder("test-image")
+
+        result = builder.with_name("test-container")
+
+        assert result is builder
+
+    def test_build_without_name(self):
+        """Test that build without name doesn't add --name flag."""
+        builder = DockerCommandBuilder("test-image")
+
+        command = builder.build()
+
+        assert "--name" not in command
+
+    def test_name_with_other_options(self):
+        """Test container name with other Docker options."""
+        builder = DockerCommandBuilder("test-image")
+        builder.with_gpu()
+        builder.with_name("cosmos_upscale_xyz789")
+        builder.add_volume("/data", "/data")
+
+        command = builder.build()
+
+        # Name should be present
+        assert "--name cosmos_upscale_xyz789" in command
+        # Other options should still work
+        assert "--gpus all" in command
+        assert "-v /data:/data" in command
+
     def test_build_logs_command(self):
         """Test building docker logs command."""
         # Test without follow flag

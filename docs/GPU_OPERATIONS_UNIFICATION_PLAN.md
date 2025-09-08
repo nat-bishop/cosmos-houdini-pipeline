@@ -77,14 +77,18 @@ Use `execution_config` JSON to establish relationships:
 
 **Key decision**: Kept streaming simple - only via `cosmos status --stream`, not during execution
 
-### Phase 2: Prompt Enhancement as Database Run
+### Phase 2: Prompt Enhancement as Database Run ✅ COMPLETED
 **Goal**: Make prompt enhancement a proper database run
 
-**Key changes needed**:
-1. Create database run with `model_type="enhance"`
-2. Use `run_id` instead of `operation_id`
-3. Convert from blocking to async execution for consistency
-4. Store enhanced text in `outputs` JSON field
+**What was done**:
+1. Created database runs with `model_type="enhance"`
+2. Replaced `operation_id` with proper `run_id` tracking
+3. Implemented async execution pattern (returns immediately with status)
+4. Enhanced text stored in `outputs` JSON field
+5. Added JSONHandler wrapper for all JSON operations (CLAUDE.md compliance)
+6. Added model_type validation to ensure only valid types are used
+7. Track actual execution duration instead of hardcoded values
+8. Full TDD implementation with comprehensive unit and integration tests
 
 **Input**: Takes `prompt_id` as input (operates on prompt text)
 

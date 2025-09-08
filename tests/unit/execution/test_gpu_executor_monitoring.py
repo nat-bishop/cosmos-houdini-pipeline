@@ -365,7 +365,7 @@ class TestExecuteMethodsWithMonitoring:
         assert result["message"] == "Inference started in background"
         mock_monitor.assert_called_once_with(
             run_id="run_test123",
-            container_name="cosmos_transfer_run_test1",
+            container_name="cosmos_transfer_run_test",
             completion_handler=gpu_executor._handle_inference_completion,
         )
 

@@ -1,8 +1,3 @@
-My name is NAT
-
-**Purpose**
-This file defines how Claude Code operates in this repository.
-It specifies TDD workflow, best practices, and safety practices.
 ---
 
 # **TDD Workflow**
@@ -39,10 +34,7 @@ Tests are the contract. Commit them unchanged.
   - overfit-verifier agent (to ensure generalization)
 
 ### **Gate 5 — Document**
-- Update [README.md](README.md)
-- Update [CHANGELOG.md](CHANGELOG.md)
-- Update [docs/](docs/)
-- Use `doc-drafter` for consistency.
+- Use `doc-drafter` agent to update documentation
 
 ### **Gate 6 — Review**
 - Run the following checks in parallel:
@@ -70,45 +62,9 @@ Tests are the contract. Commit them unchanged.
 
 ---
 
-## **Project Wrappers (MANDATORY)**
-
-All core operations must go through wrappers.
-**Never call raw libraries directly** (e.g., `paramiko`, `docker`, ad-hoc subprocess, or JSON validation).
-If functionality is missing, extend the wrapper instead of bypassing it.
-
-### **PRIMARY INTERFACE (Use This!)**
-
-```python
-from cosmos_workflow.api import CosmosAPI  # MAIN FACADE - USE THIS!
-
-# This is the ONLY interface you should use for workflow operations:
-ops = CosmosAPI()
-ops.create_prompt(...)  # Create prompts
-ops.quick_inference(...)  # Run inference
-ops.list_prompts(...)  # Query data
-# etc.
-```
-
-### **Low-Level Wrappers (For Internal Infrastructure Only)**
-These are used internally by CosmosAPI. Only use directly for infrastructure tasks:
-
-```python
-from cosmos_workflow.connection import SSHManager, RemoteCommandExecutor
-from cosmos_workflow.execution import DockerExecutor, DockerCommandBuilder, BashScriptBuilder
-from cosmos_workflow.config import ConfigManager
-from cosmos_workflow.transfer import FileTransferService
-from cosmos_workflow.utils import nvidia_format
-```
-
-### **DO NOT USE DIRECTLY (Internal Components)**
-```python
-# NEVER import these directly - they are internal:
-# ❌ from cosmos_workflow.services import DataRepository  # Internal data layer
-# ❌ from cosmos_workflow.database import DatabaseConnection  # Internal database
-# ❌ from cosmos_workflow.execution import GPUExecutor  # Internal GPU executor
-```
-
-### **Responsibilities & Enforcement**
+### **Responsibilities & Enforcement** (wrappers to use)
+**Always use the appropriate APIs/wrappers, never call raw libraries directly** (e.g., `paramiko`, `docker`, ad-hoc subprocess, or JSON validation).
+**'cosmos' CLI and gradio app should only use CosmosAPI, never the low level wrappers**
 
 * **CosmosAPI** — **PRIMARY INTERFACE for all workflow operations**
   Always use for prompts, runs, inference, queries. This is the main facade.
@@ -155,25 +111,26 @@ from cosmos_workflow.utils import nvidia_format
  - Docstrings: **Google-style** (`Args/Returns/Raises`)
  - Exceptions: **catch specific exceptions**; never bare `except:`
  - Encoding: **ASCII only** in code/logs; no emojis/unicode
- - Use our **wrappers** (SSHManager, DockerExecutor, ConfigManager, DataRepository); never raw libs
+ - Use our **wrappers**; never raw libs
 
 ---
 
 ## **Best Practices**
+ - You must follow the "Zen of Python" mindset
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
- - "**Zen of Python**" mindset (readability, explicitness, simplicity)
- - Avoid Over-Engineering
- - Batch independent read operations and validation checks
- - Focus on understanding the problem requirements and implementing the correct algorithm.
- - If the task is unreasonable or infeasible, or if any of the tests are incorrect, please tell me. The solution should be robust, maintainable, and extendable.
+ - Avoid Over-Engineering and overly complex solutions
+ - Write a high quality, general purpose solution.
+ - Focus on understanding the problem requirements and implementing the correct algorithm
+ - Try different methods if your first approach doesn't work
+ - For maximum efficiency, whenever you need to perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially.
 
 ---
 
 ## **Error Handling & Resilience**
 - Classify errors (validation, network, auth, execution)
-- Retries with backoff for transient ops
 - Fail with actionable error messages, no secrets in logs
+- Fail loudly rather than using fallbacks or failing silently
 
 ---
 
@@ -182,7 +139,8 @@ from cosmos_workflow.utils import nvidia_format
 - If you create any temporary new files, scripts, or helper files for iteration, clean up these files by removing them at the end of the task.
 - After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
 - Update [ROADMAP.md](ROADMAP.md) when completing a feature
-
+- Prefer running single tests, and not the whole test suite, for performance
+- Avoid technical debt; prefer to delete old code rather than maintain legacy solutions
 ---
 
 ## **Design & API surface**
@@ -202,18 +160,6 @@ Cosmos CLI:
 `cosmos list prompts`                   # List all prompts
 `cosmos status`                         # Check GPU status
 
----
+Use `cosmos --help` to understand CLI features.
 
-## **Acceptance Checklist**
-    ```
-    - [ ] Gates 1–6 satisfied
-    - [ ] Wrappers used exclusively (no raw libs)
-    - [ ] Best Practices followed
-    - [ ] No edits to tests from Gate 3
-    - [ ] ruff clean
-    - [ ] Coverage ≥ 80%
-    - [ ] Docs updated
-    - [ ] No secrets in code/logs/tests
-    - [ ] Temp files removed from .claude/workspace/
-    ```
 ---

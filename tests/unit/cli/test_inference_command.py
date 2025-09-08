@@ -47,30 +47,6 @@ class TestInferenceCommand:
         assert call_kwargs["prompt_id"] == "ps_test"  # Keyword arg prompt_id
 
     @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
-    def test_inference_no_upscale(self, mock_get_ops, runner):
-        """Test inference without upscaling."""
-        # Setup mock operations
-        mock_ops = MagicMock()
-        mock_get_ops.return_value = mock_ops
-
-        # Setup test data
-        mock_ops.quick_inference.return_value = {
-            "run_id": "rs_auto123",
-            "status": "success",
-            "output_path": "/output/test.mp4",
-        }
-
-        result = runner.invoke(cli, ["inference", "ps_test", "--no-upscale"])
-
-        assert result.exit_code == 0
-        assert "completed" in result.output.lower() or "success" in result.output.lower()
-
-        # Should call quick_inference with upscale=False
-        mock_ops.quick_inference.assert_called_once()
-        call_kwargs = mock_ops.quick_inference.call_args[1]
-        assert call_kwargs.get("upscale") is False
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_inference_dry_run(self, mock_get_ops, runner):
         """Test dry-run mode doesn't execute."""
         # Setup mock operations
@@ -117,7 +93,6 @@ class TestInferenceCommand:
                 "inference",
                 "ps_test",
                 "--dry-run",
-                "--no-upscale",
                 "--weights",
                 "0.3",
                 "0.3",
@@ -161,28 +136,6 @@ class TestInferenceCommand:
 
         assert result.exit_code != 0
         assert "invalid" in result.output.lower() or "error" in result.output.lower()
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
-    def test_inference_with_upscale_weight(self, mock_get_ops, runner):
-        """Test inference with custom upscale weight."""
-        # Setup mock operations
-        mock_ops = MagicMock()
-        mock_get_ops.return_value = mock_ops
-
-        mock_ops.quick_inference.return_value = {
-            "run_id": "rs_auto123",
-            "status": "success",
-            "output_path": "/output/test.mp4",
-        }
-
-        result = runner.invoke(cli, ["inference", "ps_test", "--upscale-weight", "0.7"])
-
-        assert result.exit_code == 0
-
-        # Should pass upscale_weight to quick_inference
-        mock_ops.quick_inference.assert_called_once()
-        call_kwargs = mock_ops.quick_inference.call_args[1]
-        assert call_kwargs.get("upscale_weight") == 0.7
 
     @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_inference_handles_orchestrator_error(self, mock_get_ops, runner):

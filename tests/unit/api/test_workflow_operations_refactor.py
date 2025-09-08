@@ -135,20 +135,13 @@ class TestQuickInferenceRefactored:
             "duration_seconds": 90,
         }
 
-        ops.quick_inference(
-            "ps_test123", num_steps=50, guidance=8.5, seed=42, upscale=True, upscale_weight=0.7
-        )
+        ops.quick_inference("ps_test123", num_steps=50, guidance=8.5, seed=42)
 
         # Verify additional params are passed
         call_args = mock_service.create_run.call_args
         assert call_args[1]["execution_config"]["num_steps"] == 50
         assert call_args[1]["execution_config"]["guidance"] == 8.5
         assert call_args[1]["execution_config"]["seed"] == 42
-
-        # Verify upscale params are passed to executor
-        exec_call_args = mock_orchestrator.execute_run.call_args
-        assert exec_call_args[1]["upscale"] is True
-        assert exec_call_args[1]["upscale_weight"] == 0.7
 
     def test_quick_inference_invalid_prompt_id(self, ops, mock_service):
         """Test quick_inference with invalid prompt_id."""

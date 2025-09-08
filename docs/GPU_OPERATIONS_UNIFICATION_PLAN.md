@@ -2,23 +2,33 @@
 
 ## Executive Summary
 
-Unify three GPU operations (inference, upscaling, prompt enhancement) as atomic database runs to provide consistent tracking, monitoring, and UI integration. This plan maintains backward compatibility while fixing architectural issues with upscaling.
+Unify three GPU operations (inference, upscaling, prompt enhancement) as atomic database runs to provide consistent tracking, monitoring, and UI integration. This plan maintains backward compatibility while fixing architectural issues and implementing non-blocking execution with proper database synchronization.
 
 ## Current State Analysis
 
-### Operation Types
+### Operation Types (After Phase 5)
 | Operation | Database Run | Execution | Status | Issues |
 |-----------|--------------|-----------|--------|--------|
-| **Inference** | ✅ Yes (model_type="transfer") | Async (background) | Working | None |
-| **Upscaling** | ❌ Shares inference run | Async (background) | Broken | No separate tracking, overwrites logs |
-| **Enhancement** | ❌ No (uses operation_id) | Sync (blocking) | Working | Not tracked in database |
+| **Inference** | ✅ Yes (model_type="transfer") | ✅ Async with monitoring | ✅ Working | None |
+| **Upscaling** | ✅ Yes (model_type="upscale") | ✅ Async with monitoring | ✅ Working | None |
+| **Enhancement** | ✅ Yes (model_type="enhance") | ✅ Async with monitoring | ✅ Working | None |
 
-### Problems to Solve
-1. **Upscaling lacks independent tracking** - shares run_id with inference
-2. **Enhancement not in database** - uses ad-hoc operation_id
-3. **Inconsistent patterns** - different approaches for similar operations
-4. **Log streaming confusion** - obsolete references to "seek-based position tracking"
-5. **UI can't show all GPU work** - no unified source of truth
+### Problems Solved (Phases 1-5)
+1. ✅ **Upscaling has independent tracking** - separate run_id and database entry
+2. ✅ **Enhancement tracked in database** - proper run with model_type="enhance"
+3. ✅ **Consistent patterns** - all operations follow same approach
+4. ✅ **Log streaming clarified** - removed obsolete references
+5. ✅ **UI can show all GPU work** - unified status tracking
+6. ✅ **Database synchronization** - runs automatically update when containers complete
+7. ✅ **No more orphaned containers** - monitoring ensures proper cleanup
+8. ✅ **Proper completion detection** - background threads track container lifecycle
+9. ✅ **Non-blocking execution** - all operations return immediately
+
+### Remaining Issues (Phase 6-7)
+1. **CLI improvements** - re-enable combined inference+upscaling workflow
+2. **UI enhancements** - run type badges, parent-child relationships
+3. **Legacy code cleanup** - unused methods and outdated comments still present
+4. **Remote log download** - download GPU logs for debugging
 
 ## Solution Architecture
 
@@ -119,6 +129,7 @@ Use `execution_config` JSON to establish relationships:
 6. ✅ Simplified tracking for single-container system with multiple container warnings
 7. ✅ Status now shows operation type (INFERENCE, UPSCALE, ENHANCE) with run and prompt IDs
 8. ✅ Better debugging through clear container-to-run relationship tracking
+9. ✅ Fixed container naming in bash scripts (inference.sh, upscale.sh) to include run_id
 
 **Implementation Pattern**:
 ```python
@@ -138,14 +149,51 @@ status = {
 - ✅ Detects inconsistent states (orphaned containers, zombie runs)
 - ✅ UI can display unified GPU activity with operation details
 
-### Phase 5: CLI and UI Updates
+### Phase 5: Background Monitoring and Non-Blocking Operations ✅ COMPLETED
+**Goal**: Non-blocking execution with background database synchronization
+
+**What was implemented**:
+
+**Container Monitoring System**:
+- Added `_get_container_status()` method to check Docker container status via `docker inspect`
+- Added `_monitor_container_completion()` to launch background monitoring threads
+- Added `_monitor_container_internal()` that runs in thread to poll container status every 5 seconds
+- Uses configurable timeout from config.toml (docker_execution = 3600 seconds)
+- Kills containers on timeout to prevent resource leaks
+
+**Completion Handlers**:
+- `_handle_inference_completion()` - downloads outputs and updates database when inference completes
+- `_handle_enhancement_completion()` - downloads enhanced text and updates database
+- `_handle_upscaling_completion()` - downloads 4K video and updates database
+- All handlers properly handle success (exit code 0), failure, and timeout (exit code -1)
+
+**Updated Execute Methods**:
+- `execute_run()`, `execute_enhancement_run()`, `execute_upscaling_run()` now:
+  - Detect "started" status from DockerExecutor
+  - Launch background monitoring thread immediately
+  - Return immediately with "started" status for non-blocking operation
+  - Let monitor handle completion, downloads, and database updates automatically
+
+**API Layer Integration**:
+- CosmosAPI now passes service to GPUExecutor for database updates
+- `quick_inference()`, `enhance_prompt()`, `upscale_run()` handle "started" status correctly
+- Return partial results immediately when operations start in background
+
+**Critical Issues Fixed**:
+- Database automatically updates when containers complete (no more orphaned "running" runs)
+- No more downloading outputs before they exist
+- Enhancement no longer polls for files inefficiently
+- Proper timeout handling with container cleanup
+- All operations are truly non-blocking with background synchronization
+
+### Phase 6: CLI and UI Updates
 **Goal**: User-facing improvements
 
 **CLI Changes**:
 1. Re-enable `--upscale` flag (creates two runs internally)
-2. Add `cosmos upscale <run_id>` for post-inference upscaling
-3. Add `cosmos enhance <prompt_id>` as standalone command
-4. Update `cosmos status` to show run types
+2. ✅ Add `cosmos upscale <run_id>` for post-inference upscaling
+3. ✅ Add `cosmos prompt-enhance <prompt_id>` as standalone command
+4. ✅ Update `cosmos status` to show run types
 
 **UI Changes**:
 1. Display run type badges/icons
@@ -157,6 +205,16 @@ status = {
 - All commands create proper database runs
 - UI clearly shows operation types
 - Related runs are visually connected
+
+### Phase 7: Legacy Code Removal
+**Goal**: Clean up obsolete and unused code
+
+**Identified for Removal**:
+1. `run_prompt_upsampling()` method in GPUExecutor (replaced by enhancement)
+2. Outdated comments referencing old streaming patterns
+3. Broken/unused code paths in various modules
+4. TODO comments that are no longer relevant
+5. Backward compatibility code that's no longer needed
 
 ## Testing Strategy
 
@@ -189,11 +247,20 @@ Each phase is independent and can be rolled back:
 
 ## Success Metrics
 
-1. **All GPU operations tracked in database** (measurable)
-2. **Each operation has independent logs** (verifiable)
-3. **UI shows all active GPU work** (observable)
-4. **No breaking changes to existing workflows** (testable)
-5. **Consistent patterns across codebase** (reviewable)
+### Completed ✅
+1. ✅ **All GPU operations tracked in database** - inference, upscaling, enhancement all create runs
+2. ✅ **Each operation has independent logs** - separate log files per run_id
+3. ✅ **UI shows all active GPU work** - unified status tracking implemented
+4. ✅ **No breaking changes to existing workflows** - backward compatible
+5. ✅ **Consistent patterns across codebase** - all operations follow same pattern
+6. ✅ **Database stays synchronized** - automatic updates via monitoring
+7. ✅ **Non-blocking execution** - operations return immediately
+8. ✅ **Proper resource cleanup** - containers killed on timeout
+
+### Remaining
+1. ⏳ **CLI combined workflows** - re-enable --upscale flag for single command
+2. ⏳ **UI relationship display** - show parent-child run connections
+3. ⏳ **Legacy code removal** - clean up unused methods
 
 ## Zen of Python Alignment
 
@@ -217,7 +284,7 @@ Each phase is independent and can be rolled back:
   - Ensures consistent directory structure across all operations
   - Makes it easy to find outputs for any run
 
-## Phase 6: Remote Log Download
+## Phase 8: Remote Log Download
 
 ### Goal
 Download remote GPU logs back to local machine for debugging and monitoring

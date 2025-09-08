@@ -65,7 +65,7 @@ class CosmosAPI:
 
         # Create service and orchestrator
         self.service = DataRepository(db, config)
-        self.orchestrator = GPUExecutor(config_manager=config)
+        self.orchestrator = GPUExecutor(config_manager=config, service=self.service)
 
         logger.info("CosmosAPI initialized")
 
@@ -206,6 +206,20 @@ class CosmosAPI:
             # Execute enhancement on GPU using new method
             result = self.orchestrator.execute_enhancement_run(run, original)
 
+            # Check if operation started in background
+            if result.get("status") == "started":
+                # Don't update prompt yet - monitor will handle it
+                logger.info("Enhancement run %s started in background", run["id"])
+                return {
+                    "run_id": run["id"],
+                    "status": "started",
+                    "message": result.get("message", "Enhancement started in background"),
+                    "enhanced_prompt_id": None,  # Will be created when complete
+                    "enhanced_text": None,
+                    "original_prompt_id": prompt_id,
+                }
+
+            # Legacy synchronous completion (shouldn't happen with new implementation)
             enhanced_text = result["enhanced_text"]
 
             # Handle prompt creation/update based on create_new flag
@@ -342,6 +356,17 @@ class CosmosAPI:
         try:
             result = self.orchestrator.execute_upscaling_run(upscale_run, parent_run, prompt)
 
+            # Check if operation started in background
+            if result.get("status") == "started":
+                # Don't update to completed yet - monitor will handle it
+                logger.info("Upscaling run %s started in background", upscale_run["id"])
+                return {
+                    "upscale_run_id": upscale_run["id"],
+                    "status": "started",
+                    "message": result.get("message", "Upscaling started in background"),
+                }
+
+            # Legacy synchronous completion (shouldn't happen with new implementation)
             self.service.update_run(upscale_run["id"], outputs=result)
             self.service.update_run_status(upscale_run["id"], "completed")
             logger.info("Upscaling run %s completed successfully", upscale_run["id"])
@@ -482,6 +507,17 @@ class CosmosAPI:
                 prompt,
             )
 
+            # Check if operation started in background
+            if result.get("status") == "started":
+                # Don't update to completed yet - monitor will handle it
+                logger.info("Run %s started in background", run["id"])
+                return {
+                    "run_id": run["id"],
+                    "status": "started",
+                    "message": result.get("message", "Operation started in background"),
+                }
+
+            # Legacy synchronous completion (shouldn't happen with new implementation)
             # Update run with results
             self.service.update_run(run["id"], outputs=result)
             self.service.update_run_status(run["id"], "completed")

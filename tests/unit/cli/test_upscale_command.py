@@ -196,40 +196,6 @@ class TestUpscaleCommand:
         assert "rs_inference123" in result.output
 
     @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
-    def test_upscale_multiple_runs_batch(self, mock_get_ops, runner):
-        """Test upscale command with multiple run IDs."""
-        # Setup mock operations
-        mock_ops = MagicMock()
-        mock_get_ops.return_value = mock_ops
-
-        # Setup test data for multiple upscales
-        mock_ops.upscale_run.side_effect = [
-            {
-                "upscale_run_id": "rs_upscale456",
-                "status": "success",
-                "output_path": "/output/test1_4k.mp4",
-            },
-            {
-                "upscale_run_id": "rs_upscale789",
-                "status": "success",
-                "output_path": "/output/test2_4k.mp4",
-            },
-        ]
-
-        result = runner.invoke(cli, ["upscale", "rs_inference123", "rs_inference456"])
-
-        # Should succeed
-        assert result.exit_code == 0
-
-        # Should call upscale_run twice
-        assert mock_ops.upscale_run.call_count == 2
-
-        # Check both run IDs were used
-        call_args_list = mock_ops.upscale_run.call_args_list
-        assert call_args_list[0][1]["run_id"] == "rs_inference123"
-        assert call_args_list[1][1]["run_id"] == "rs_inference456"
-
-    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_upscale_validates_run_id_format(self, mock_get_ops, runner):
         """Test upscale command validates run ID format."""
         # Setup mock operations

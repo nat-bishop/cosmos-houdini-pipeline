@@ -5,7 +5,9 @@ batch processing, and prompt upsampling using remote Docker containers.
 """
 
 import tempfile
+import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,13 +30,15 @@ class GPUExecutor:
     on remote GPU nodes.
     """
 
-    def __init__(self, config_manager: ConfigManager | None = None):
+    def __init__(self, config_manager: ConfigManager | None = None, service=None):
         """Initialize GPU executor.
 
         Args:
             config_manager: Configuration manager instance. If None, creates default.
+            service: Optional DataRepository service for database updates.
         """
         self.config_manager = config_manager or ConfigManager()
+        self.service = service  # For database updates in completion handlers
         self.ssh_manager = None
         self.file_transfer = None
         self.remote_executor = None
@@ -61,6 +65,285 @@ class GPUExecutor:
         )
 
         self._services_initialized = True
+
+    # ========== Container Monitoring ==========
+
+    def _get_container_status(self, container_name: str) -> dict[str, Any]:
+        """Get container status via docker inspect.
+
+        Args:
+            container_name: Name of the container to check
+
+        Returns:
+            Dictionary with status information:
+                - running: bool, whether container is running
+                - exit_code: int or None, container exit code
+                - status: str, container status string
+                - error: str, error message if any
+        """
+        try:
+            # Use existing SSH manager for the check
+            with self.ssh_manager:
+                cmd = f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
+                output = self.remote_executor.execute_command(cmd)
+                state = self.json_handler.parse_json(output)
+
+                return {
+                    "running": state.get("Running", False),
+                    "exit_code": state.get("ExitCode"),
+                    "status": state.get("Status", "unknown"),
+                    "error": state.get("Error", ""),
+                }
+        except Exception as e:
+            # Container might not exist or other error
+            logger.debug("Failed to get container status for %s: %s", container_name, e)
+            return {"running": False, "exit_code": None, "status": "not_found", "error": str(e)}
+
+    def _monitor_container_completion(
+        self,
+        run_id: str,
+        container_name: str,
+        completion_handler: Callable[[str, int, str], None],
+        timeout_seconds: int | None = None,
+    ) -> None:
+        """Monitor container completion in background thread.
+
+        Args:
+            run_id: Database run ID
+            container_name: Docker container name to monitor
+            completion_handler: Callback function(run_id, exit_code, container_name)
+            timeout_seconds: Max time to wait (uses config if None)
+        """
+        if timeout_seconds is None:
+            timeout_seconds = self.config_manager.get_timeouts()["docker_execution"]
+
+        # Launch monitoring in background thread
+        thread = threading.Thread(
+            target=self._monitor_container_internal,
+            args=(run_id, container_name, completion_handler, timeout_seconds),
+            daemon=True,
+        )
+        thread.start()
+        logger.info("Started background monitoring for container %s", container_name)
+
+    def _monitor_container_internal(
+        self,
+        run_id: str,
+        container_name: str,
+        completion_handler: Callable[[str, int, str], None],
+        timeout_seconds: int,
+    ) -> None:
+        """Internal monitoring function that runs in background thread.
+
+        Args:
+            run_id: Database run ID
+            container_name: Docker container name
+            completion_handler: Callback for completion
+            timeout_seconds: Timeout in seconds
+        """
+        elapsed = 0
+        interval = 5  # Check every 5 seconds
+
+        logger.info(
+            "Monitoring container %s for run %s (timeout: %ds)",
+            container_name,
+            run_id,
+            timeout_seconds,
+        )
+
+        try:
+            while elapsed < timeout_seconds:
+                status = self._get_container_status(container_name)
+
+                if not status["running"]:
+                    # Container stopped
+                    exit_code = status.get("exit_code", -1)
+                    logger.info("Container %s stopped with exit code %d", container_name, exit_code)
+                    completion_handler(run_id, exit_code, container_name)
+                    return
+
+                time.sleep(interval)
+                elapsed += interval
+
+                if elapsed % 30 == 0:  # Log progress every 30 seconds
+                    logger.debug(
+                        "Container %s still running after %d seconds", container_name, elapsed
+                    )
+
+            # Timeout reached
+            logger.error("Container %s timed out after %d seconds", container_name, timeout_seconds)
+            self.kill_container(container_name)
+            completion_handler(run_id, -1, container_name)  # -1 indicates timeout
+
+        except Exception as e:
+            logger.error("Monitor failed for container %s: %s", container_name, e)
+            completion_handler(run_id, -1, container_name)  # -1 for error
+
+    # ========== Completion Handlers ==========
+
+    def _handle_inference_completion(self, run_id: str, exit_code: int, container_name: str):
+        """Handle inference container completion.
+
+        Args:
+            run_id: Database run ID
+            exit_code: Container exit code (0=success, -1=timeout/error, other=failed)
+            container_name: Container name for logging
+        """
+        logger.info("Handling inference completion for run %s (exit code: %d)", run_id, exit_code)
+
+        if exit_code == 0:
+            # Success - try to download outputs
+            run_dir = Path("outputs") / f"run_{run_id}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                output_path = self._download_outputs(run_id, run_dir, upscaled=False)
+                if output_path.exists():
+                    # Update database with success
+                    if self.service:
+                        self.service.update_run(
+                            run_id,
+                            outputs={
+                                "output_path": str(output_path),
+                                "completed_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        self.service.update_run_status(run_id, "completed")
+                    logger.info("Inference run %s completed successfully", run_id)
+                else:
+                    # Output not found despite container success
+                    if self.service:
+                        self.service.update_run_status(run_id, "failed")
+                        self.service.update_run(
+                            run_id, error_message="Output file not found after completion"
+                        )
+                    logger.error("Output file not found for run %s", run_id)
+            except Exception as e:
+                logger.error("Failed to download outputs for run %s: %s", run_id, e)
+                if self.service:
+                    self.service.update_run_status(run_id, "failed")
+                    self.service.update_run(run_id, error_message=f"Download failed: {e}")
+        else:
+            # Container failed or timed out
+            if self.service:
+                self.service.update_run_status(run_id, "failed")
+                if exit_code == -1:
+                    error_msg = "Container timed out or monitoring error"
+                else:
+                    error_msg = f"Container failed with exit code {exit_code}"
+                self.service.update_run(run_id, error_message=error_msg)
+            logger.error("Inference run %s failed with exit code %d", run_id, exit_code)
+
+    def _handle_enhancement_completion(self, run_id: str, exit_code: int, container_name: str):
+        """Handle enhancement container completion.
+
+        Args:
+            run_id: Database run ID
+            exit_code: Container exit code
+            container_name: Container name for logging
+        """
+        logger.info("Handling enhancement completion for run %s (exit code: %d)", run_id, exit_code)
+
+        if exit_code == 0:
+            # Download and parse results
+            remote_config = self.config_manager.get_remote_config()
+            remote_results = f"{remote_config.remote_dir}/outputs/run_{run_id}/batch_results.json"
+
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+
+                try:
+                    self.file_transfer.download_file(remote_results, str(tmp_path))
+                    results = self.json_handler.read_json(tmp_path)
+                finally:
+                    # Always clean up temp file
+                    tmp_path.unlink(missing_ok=True)
+
+                if results and len(results) > 0:
+                    enhanced_text = results[0].get("upsampled_prompt", "")
+                    if self.service:
+                        self.service.update_run(
+                            run_id,
+                            outputs={
+                                "enhanced_text": enhanced_text,
+                                "completed_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        self.service.update_run_status(run_id, "completed")
+                    logger.info("Enhancement run %s completed successfully", run_id)
+                else:
+                    if self.service:
+                        self.service.update_run_status(run_id, "failed")
+                        self.service.update_run(
+                            run_id, error_message="No enhancement results found"
+                        )
+                    logger.error("No enhancement results for run %s", run_id)
+
+            except Exception as e:
+                logger.error("Failed to process enhancement results for run %s: %s", run_id, e)
+                if self.service:
+                    self.service.update_run_status(run_id, "failed")
+                    self.service.update_run(run_id, error_message=f"Results processing failed: {e}")
+        else:
+            # Enhancement failed
+            if self.service:
+                self.service.update_run_status(run_id, "failed")
+                if exit_code == -1:
+                    error_msg = "Enhancement timed out or monitoring error"
+                else:
+                    error_msg = f"Enhancement failed with exit code {exit_code}"
+                self.service.update_run(run_id, error_message=error_msg)
+            logger.error("Enhancement run %s failed with exit code %d", run_id, exit_code)
+
+    def _handle_upscaling_completion(self, run_id: str, exit_code: int, container_name: str):
+        """Handle upscaling container completion.
+
+        Args:
+            run_id: Database run ID
+            exit_code: Container exit code
+            container_name: Container name for logging
+        """
+        logger.info("Handling upscaling completion for run %s (exit code: %d)", run_id, exit_code)
+
+        if exit_code == 0:
+            # Success - download 4K output
+            run_dir = Path("outputs") / f"run_{run_id}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                output_path = self._download_outputs(run_id, run_dir, upscaled=True)
+                if output_path.exists():
+                    if self.service:
+                        self.service.update_run(
+                            run_id,
+                            outputs={
+                                "output_path": str(output_path),
+                                "completed_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        self.service.update_run_status(run_id, "completed")
+                    logger.info("Upscaling run %s completed successfully", run_id)
+                else:
+                    if self.service:
+                        self.service.update_run_status(run_id, "failed")
+                        self.service.update_run(run_id, error_message="4K output file not found")
+                    logger.error("4K output not found for run %s", run_id)
+            except Exception as e:
+                logger.error("Failed to download 4K output for run %s: %s", run_id, e)
+                if self.service:
+                    self.service.update_run_status(run_id, "failed")
+                    self.service.update_run(run_id, error_message=f"Download failed: {e}")
+        else:
+            # Upscaling failed
+            if self.service:
+                self.service.update_run_status(run_id, "failed")
+                if exit_code == -1:
+                    error_msg = "Upscaling timed out or monitoring error"
+                else:
+                    error_msg = f"Upscaling failed with exit code {exit_code}"
+                self.service.update_run(run_id, error_message=error_msg)
+            logger.error("Upscaling run %s failed with exit code %d", run_id, exit_code)
 
     # ========== Single Run Execution ==========
 
@@ -148,6 +431,24 @@ class GPUExecutor:
                         f"Inference failed: {inference_result.get('error', 'Unknown error')}"
                     )
 
+                elif inference_result["status"] == "started":
+                    # Container started successfully, monitor in background
+                    container_name = f"cosmos_transfer_{run_id[:8]}"
+                    self._monitor_container_completion(
+                        run_id=run_id,
+                        container_name=container_name,
+                        completion_handler=self._handle_inference_completion,
+                    )
+
+                    # Return immediately with partial results
+                    return {
+                        "status": "started",
+                        "message": "Inference started in background",
+                        "run_id": run_id,
+                        "log_path": str(run_dir / "logs" / "inference.log"),
+                    }
+
+                # Should not reach here with current implementation, but handle legacy behavior
                 # Download outputs
                 output_path = self._download_outputs(run_id, run_dir, upscaled=False)
 
@@ -404,11 +705,7 @@ class GPUExecutor:
             prompt: Prompt dictionary with prompt_text and inputs
 
         Returns:
-            Dictionary containing:
-                - enhanced_text: The enhanced prompt text
-                - original_prompt_id: The source prompt ID
-                - duration_seconds: Execution time
-                - log_path: Path to enhancement log
+            Dictionary containing status and run information
 
         Raises:
             RuntimeError: If enhancement fails
@@ -430,42 +727,92 @@ class GPUExecutor:
         logs_dir = run_dir / "logs"
         logs_dir.mkdir(exist_ok=True)
 
-        # Use the internal method with run_id
-        start_time = time.time()
-        try:
-            enhanced_text = self._run_prompt_upsampling_internal(
-                run_id=run_id,
-                prompt_text=prompt_text,
-                model=model,
-                video_path=video_path,
-            )
-
-            # Calculate actual duration
-            duration_seconds = time.time() - start_time
-
-            # Store results in run directory
-            results_file = run_dir / "enhancement_results.json"
-            results = {
-                "enhanced_text": enhanced_text,
-                "original_prompt_id": prompt["id"],
-                "model": model,
-                "duration_seconds": duration_seconds,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+        # Prepare batch data for the upsampler script
+        batch_data = [
+            {
+                "name": "prompt",
+                "prompt": prompt_text,
+                "video_path": video_path or "",
             }
-            self.json_handler.write_json(results, results_file)
+        ]
 
-            # Return in format expected by database
-            return {
-                "enhanced_text": enhanced_text,
-                "original_prompt_id": prompt["id"],
-                "duration_seconds": duration_seconds,
-                "log_path": str(logs_dir / "enhancement.log"),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
+        # Create batch file
+        batch_filename = f"enhance_{run_id}.json"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_batch_path = Path(temp_dir) / batch_filename
+            self.json_handler.write_json(batch_data, local_batch_path)
 
-        except Exception as e:
-            logger.error("Enhancement run %s failed: %s", run_id, e)
-            raise RuntimeError(f"Enhancement failed: {e}") from e
+            try:
+                with self.ssh_manager:
+                    remote_config = self.config_manager.get_remote_config()
+
+                    # Clean old run directories
+                    logger.info("Cleaning up old run directories...")
+                    cleanup_cmd = (
+                        f"rm -rf {remote_config.remote_dir}/outputs/run_* 2>/dev/null || true"
+                    )
+                    self.remote_executor.execute_command(cleanup_cmd)
+
+                    # Upload batch file
+                    remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
+                    self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
+
+                    # Upload video if provided
+                    if video_path and Path(video_path).exists():
+                        remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
+                        logger.info("Uploading video for context: %s", video_path)
+                        self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
+
+                    # Upload upsampler script
+                    scripts_dir = f"{remote_config.remote_dir}/scripts"
+                    local_script = (
+                        Path(__file__).parent.parent.parent / "scripts" / "prompt_upsampler.py"
+                    )
+                    if not local_script.exists():
+                        raise FileNotFoundError(f"Upsampler script not found at {local_script}")
+                    self.file_transfer.upload_file(local_script, scripts_dir)
+
+                    # Execute prompt enhancement via DockerExecutor
+                    logger.info("Starting prompt enhancement on GPU...")
+                    enhancement_result = self.docker_executor.run_prompt_enhancement(
+                        batch_filename=batch_filename,
+                        run_id=run_id,
+                        offload=True,  # Memory efficient
+                        checkpoint_dir="/workspace/checkpoints",
+                    )
+
+                    if enhancement_result["status"] == "failed":
+                        raise RuntimeError(
+                            f"Prompt enhancement failed: {enhancement_result.get('error', 'Unknown error')}"
+                        )
+
+                    elif enhancement_result["status"] == "started":
+                        # Container started successfully, monitor in background
+                        container_name = f"cosmos_enhance_{run_id[:8]}"
+                        self._monitor_container_completion(
+                            run_id=run_id,
+                            container_name=container_name,
+                            completion_handler=self._handle_enhancement_completion,
+                        )
+
+                        # Return immediately with partial results
+                        return {
+                            "status": "started",
+                            "message": "Enhancement started in background",
+                            "run_id": run_id,
+                            "log_path": str(logs_dir / "enhancement.log"),
+                        }
+
+                    # Should not reach here with current implementation
+                    return {
+                        "status": "unknown",
+                        "message": "Unexpected enhancement status",
+                        "run_id": run_id,
+                    }
+
+            except Exception as e:
+                logger.error("Enhancement run %s failed: %s", run_id, e)
+                raise RuntimeError(f"Enhancement failed: {e}") from e
 
     def run_prompt_upsampling(
         self,
@@ -688,8 +1035,27 @@ class GPUExecutor:
                 if result["status"] == "failed":
                     raise RuntimeError(f"Upscaling failed: {result.get('error', 'Unknown error')}")
 
+                elif result["status"] == "started":
+                    # Container started successfully, monitor in background
+                    container_name = f"cosmos_upscale_{run_id[:8]}"
+                    self._monitor_container_completion(
+                        run_id=run_id,
+                        container_name=container_name,
+                        completion_handler=self._handle_upscaling_completion,
+                    )
+
+                    # Return immediately with partial results
+                    return {
+                        "status": "started",
+                        "message": "Upscaling started in background",
+                        "run_id": run_id,
+                        "parent_run_id": parent_run["id"],
+                        "log_path": (logs_dir / "upscaling.log").as_posix(),
+                    }
+
+                # Should not reach here with current implementation, but handle legacy behavior
                 # Download upscaled output
-                output_path = self._download_outputs(run_id, run_dir, upscale=True)
+                output_path = self._download_outputs(run_id, run_dir, upscaled=True)
 
                 return {
                     "output_path": output_path.as_posix()

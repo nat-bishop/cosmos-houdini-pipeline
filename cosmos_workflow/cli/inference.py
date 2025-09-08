@@ -51,14 +51,6 @@ from .helpers import (
     help="Canny edge threshold (default: medium)",
 )
 @click.option(
-    "--upscale/--no-upscale",
-    default=False,
-    help="Enable/disable 4K upscaling after inference (default: --no-upscale)",
-)
-@click.option(
-    "--upscale-weight", default=0.5, help="Control weight for upscaling (0.0-1.0) (default: 0.5)"
-)
-@click.option(
     "--batch-name",
     default=None,
     help="Custom name for batch processing (auto-generated if not provided)",
@@ -82,24 +74,23 @@ def inference(
     sigma_max,
     blur_strength,
     canny_threshold,
-    upscale,
-    upscale_weight,
     batch_name,
     dry_run,
 ):
     r"""Run Cosmos Transfer inference on one or more prompts.
 
     Accepts prompt IDs directly and creates runs automatically during execution.
-    Supports both single and batch inference with optional 4K upscaling.
+    Supports both single and batch inference.
 
     \b
     Examples:
       cosmos inference ps_abc123                           # Single prompt
       cosmos inference ps_abc123 ps_def456                 # Multiple prompts
       cosmos inference ps_abc123 --weights 0.3 0.3 0.2 0.2 # Custom weights
-      cosmos inference ps_abc123 --no-upscale              # Inference only
       cosmos inference --prompts-file prompts.txt          # From file
       cosmos inference ps_abc123 --dry-run                 # Preview only
+
+    For 4K upscaling, use: cosmos upscale <run_id>
     """
     ctx_obj: CLIContext = ctx.obj
     ops = ctx_obj.get_operations()
@@ -141,12 +132,7 @@ def inference(
                 "Would upload": "Prompt data and video files to remote GPU",
             }
 
-            if upscale:
-                dry_run_data["Would execute"] = "Inference + 4K upscaling"
-                dry_run_data["Upscale weight"] = str(upscale_weight)
-            else:
-                dry_run_data["Would execute"] = "Inference only (no upscaling)"
-
+            dry_run_data["Would execute"] = "Inference"
             dry_run_data["Would download"] = "Generated video results"
         else:
             # Batch dry run
@@ -181,11 +167,8 @@ def inference(
     # Execute inference
     if len(all_prompts) == 1:
         # Single prompt inference
-        with create_progress_context(
-            f"[cyan]Running {'inference + upscaling' if upscale else 'inference'}..."
-        ) as progress:
-            workflow_desc = "inference + upscaling" if upscale else "inference"
-            task = progress.add_task(f"[cyan]Running {workflow_desc}...", total=None)
+        with create_progress_context("[cyan]Running inference...") as progress:
+            task = progress.add_task("[cyan]Running inference...", total=None)
 
             # Use quick_inference for single prompt
             result = ops.quick_inference(
@@ -198,8 +181,6 @@ def inference(
                 sigma_max=sigma_max,
                 blur_strength=blur_strength,
                 canny_threshold=canny_threshold,
-                upscale=upscale,
-                upscale_weight=upscale_weight,
             )
 
             progress.update(task, completed=True)
@@ -211,7 +192,7 @@ def inference(
             "Status": "Started in background",
         }
 
-        display_success(f"{workflow_desc.capitalize()} started successfully!", results_data)
+        display_success("Inference started successfully!", results_data)
 
         # Show monitoring instructions
         console.print("\n[cyan]Monitor progress with:[/cyan]")
@@ -243,8 +224,6 @@ def inference(
                 sigma_max=sigma_max,
                 blur_strength=blur_strength,
                 canny_threshold=canny_threshold,
-                upscale=upscale,
-                upscale_weight=upscale_weight,
                 batch_name=batch_name,
             )
 

@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 5 Background Monitoring and Non-Blocking Operations (2025-09-08)
+- **Complete Container Monitoring System**
+  - Added `_get_container_status()` method to check Docker container status via `docker inspect`
+  - Added `_monitor_container_completion()` to launch background monitoring threads
+  - Added `_monitor_container_internal()` that runs in thread to poll container status every 5 seconds
+  - Uses configurable timeout from config.toml (docker_execution = 3600 seconds) with automatic container cleanup
+  - Monitors container state changes and handles completion, failure, and timeout scenarios
+
+- **Automated Completion Handlers**
+  - `_handle_inference_completion()` - downloads outputs and updates database when inference completes
+  - `_handle_enhancement_completion()` - downloads enhanced text and updates database when enhancement finishes
+  - `_handle_upscaling_completion()` - downloads 4K video and updates database when upscaling completes
+  - All handlers properly distinguish success (exit code 0), failure (non-zero exit), and timeout (exit code -1)
+  - Automatic database status updates eliminate orphaned "running" runs
+
+- **Non-Blocking Execution Pattern**
+  - Updated `execute_run()`, `execute_enhancement_run()`, `execute_upscaling_run()` for true non-blocking operation
+  - Operations detect "started" status from DockerExecutor and return immediately
+  - Background monitoring threads handle all completion tasks without blocking user workflows
+  - CosmosAPI integration updated to pass service for database updates during background processing
+
+### Fixed - Phase 5 Critical Issues (2025-09-08)
+- **Database Synchronization**
+  - Fixed runs staying "running" forever after containers complete
+  - Database now automatically updates to "completed" or "failed" status when containers finish
+  - Eliminated orphaned containers and zombie runs through proper monitoring
+
+- **Enhancement File Contamination**
+  - Fixed enhancement polling shared directories and finding old files
+  - Enhancement now uses run-specific directories and proper completion detection
+  - Replaced inefficient file polling with direct container monitoring
+
+- **Output Download Timing**
+  - Fixed downloading outputs before they exist
+  - Outputs now download only after successful container completion
+  - Proper error handling when containers fail before producing outputs
+
+- **Container Resource Management**
+  - Added timeout handling with automatic container cleanup
+  - Prevents resource leaks from long-running or stuck containers
+  - Proper container lifecycle management with monitoring threads
+
 ### Added - Phase 4 Unified Status Tracking (2025-09-08)
 - **Enhanced Status Display for Active Operations**
   - Added get_active_operations() method to CosmosAPI for unified operation tracking

@@ -4,7 +4,6 @@ This module handles all GPU-related operations including inference,
 batch processing, and prompt upsampling using remote Docker containers.
 """
 
-import json
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -16,6 +15,7 @@ from cosmos_workflow.connection import SSHManager
 from cosmos_workflow.execution.command_builder import RemoteCommandExecutor
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.transfer.file_transfer import FileTransferService
+from cosmos_workflow.utils.json_handler import JSONHandler
 from cosmos_workflow.utils.logging import logger
 
 
@@ -40,6 +40,7 @@ class GPUExecutor:
         self.remote_executor = None
         self.docker_executor = None
         self._services_initialized = False
+        self.json_handler = JSONHandler()
 
     def _initialize_services(self):
         """Initialize all required services for GPU execution.
@@ -112,8 +113,7 @@ class GPUExecutor:
         ]
 
         batch_file = inputs_dir / "batch.json"
-        with open(batch_file, "w") as f:
-            json.dump(batch_data, f, indent=2)
+        self.json_handler.write_json(batch_data, batch_file)
 
         # Execute on GPU using DockerExecutor
         try:
@@ -261,8 +261,7 @@ class GPUExecutor:
 
         # Create batch file
         batch_file = batch_dir / "batch.json"
-        with open(batch_file, "w") as f:
-            json.dump(batch_data, f, indent=2)
+        self.json_handler.write_json(batch_data, batch_file)
 
         # Execute batch on GPU
         try:
@@ -448,8 +447,7 @@ class GPUExecutor:
                 "duration_seconds": duration_seconds,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            with open(results_file, "w") as f:
-                json.dump(results, f, indent=2)
+            self.json_handler.write_json(results, results_file)
 
             # Return in format expected by database
             return {
@@ -533,8 +531,7 @@ class GPUExecutor:
         # Use temporary directory for batch file
         with tempfile.TemporaryDirectory() as temp_dir:
             local_batch_path = Path(temp_dir) / batch_filename
-            with open(local_batch_path, "w") as f:
-                json.dump(batch_data, f, indent=2)
+            self.json_handler.write_json(batch_data, local_batch_path)
 
             try:
                 with self.ssh_manager:
@@ -613,8 +610,7 @@ class GPUExecutor:
                         return prompt_text
 
                     # Parse results
-                    with open(local_results_path) as f:
-                        results = json.load(f)
+                    results = self.json_handler.read_json(local_results_path)
 
                     if results and len(results) > 0:
                         enhanced_text = results[0].get("upsampled_prompt", prompt_text)

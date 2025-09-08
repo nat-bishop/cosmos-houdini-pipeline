@@ -167,6 +167,12 @@ class DataRepository:
             # Generate run ID
             run_id = self._generate_run_id()
 
+            # Validate provided model_type if specified
+            if model_type is not None and model_type not in SUPPORTED_MODEL_TYPES:
+                raise ValueError(
+                    f"Invalid model_type '{model_type}'. Must be one of: {SUPPORTED_MODEL_TYPES}"
+                )
+
             # Use provided model_type or default to prompt's model_type
             run_model_type = model_type if model_type is not None else prompt.model_type
 

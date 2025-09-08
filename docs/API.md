@@ -221,7 +221,7 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 
 #### Core Operations
 - `create_prompt()` - Create a new prompt
-- `enhance_prompt()` - Enhance prompt with AI
+- `enhance_prompt()` - Enhance prompt with AI (creates database run with model_type="enhance")
 - `quick_inference()` - Run inference on a prompt (creates run internally)
 - `batch_inference()` - Run inference on multiple prompts
 - `create_and_run()` - Create prompt and run inference in one call
@@ -383,7 +383,7 @@ cosmos inference ps_abc123 ps_def456 ps_ghi789 --dry-run
 | 10 runs    | 50 minutes     | 28 minutes | 44%          |
 
 ### prompt-enhance
-Enhance prompts using Pixtral AI model with database tracking.
+Enhance prompts using Pixtral AI model with complete database run tracking.
 
 ```bash
 cosmos prompt-enhance PROMPT_IDS... [OPTIONS]
@@ -396,21 +396,27 @@ cosmos prompt-enhance PROMPT_IDS... [OPTIONS]
 - `--resolution`: Max resolution for preprocessing (e.g., 480)
 - `--dry-run`: Preview without calling AI API
 
-**Database-First AI Enhancement:**
-- Works with prompt IDs from database, not JSON files
-- Creates new enhanced prompts in database with KeyBERT-generated smart names
-- Creates enhancement runs in database to track Pixtral AI processing
-- Links enhanced prompts to original prompts for traceability
-- Full lifecycle tracking: pending → running → completed with enhanced results
-- All AI operations treated as trackable runs in the system
+**Phase 2 Enhancement Run System:**
+- Creates proper database runs with model_type="enhance" for full tracking
+- Run directories created as `outputs/run_{run_id}/` with logs and results
+- Complete status lifecycle: pending → running → completed/failed
+- Enhancement results stored in database outputs field with metadata
+- Support for both create_new and overwrite modes with validation
+- Links enhanced prompts to original prompts for complete traceability
+- All enhancement operations treated as trackable database runs
 
-**Example:**
+**Examples:**
 ```bash
 cosmos prompt-enhance ps_a1b2c3
-# Returns: Created enhanced prompt ps_g7h8i9 and enhancement run rs_j4k5l6
+# Returns: {
+#   "run_id": "rs_enhance123",
+#   "enhanced_prompt_id": "ps_g7h8i9",
+#   "enhanced_text": "Enhanced prompt text with better details",
+#   "status": "success"
+# }
 
 cosmos prompt-enhance ps_a1b2c3 ps_d4e5f6 ps_m7n8o9 --resolution 480
-# Enhances multiple prompts, creates multiple enhanced prompts and runs
+# Enhances multiple prompts, creates enhancement runs for each
 
 cosmos prompt-enhance ps_a1b2c3 --dry-run
 # Preview enhancement without calling AI API or creating database entries
@@ -1044,17 +1050,18 @@ run = service.get_run("rs_wxyz5678")
 **Methods:**
 
 - `create_prompt(model_type, prompt_text, inputs, parameters)`: Create AI model prompts
-  - Validates model_type against supported types: "transfer", "reason", "predict"
+  - Validates model_type against supported types: "transfer", "reason", "predict", "enhance", "upscale"
   - Enforces maximum prompt_text length of 10,000 characters
   - Sanitizes input text by removing null bytes and control characters
   - Validates required fields and JSON structure
   - Returns dictionary optimized for CLI display
   - Generates deterministic IDs based on content hash
 
-- `create_run(prompt_id, execution_config, metadata=None, initial_status="pending")`: Create execution runs
+- `create_run(prompt_id, execution_config, metadata=None, initial_status="pending", model_type=None)`: Create execution runs
   - Links to existing prompts with foreign key validation
   - Raises PromptNotFoundError if prompt doesn't exist
   - Configurable initial status for workflow control (default: "pending")
+  - Optional model_type override for specialized runs (e.g., "enhance", "upscale")
   - Generates unique IDs using UUID4 to prevent collisions
   - Flexible execution configuration via JSON
   - Optional metadata for user tracking and priority
@@ -1160,7 +1167,7 @@ prompt = ops.create_prompt(
 - **Single Interface**: Combines DataRepository and GPUExecutor capabilities
 
 ### GPUExecutor
-Simplified orchestrator handling ONLY GPU execution (no data persistence).
+Simplified orchestrator handling ONLY GPU execution (no data persistence). Now includes prompt enhancement runs.
 
 ```python
 from cosmos_workflow.execution.gpu_executor import GPUExecutor
@@ -1208,9 +1215,16 @@ enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
   - Downloads all outputs and organizes them locally
   - Returns batch execution summary with output mapping
 
-- `run_prompt_upsampling(prompt_text)`: AI-powered prompt enhancement
+- `execute_enhancement_run(run, prompt)`: Execute prompt enhancement as database run (Phase 2)
+  - Creates proper run directories with logs and results storage
+  - Handles run_id parameter for consistent directory structure
+  - Returns enhancement results in database format with metadata
+  - Full integration with database run tracking system
+
+- `run_prompt_upsampling(prompt_text)`: Legacy AI-powered prompt enhancement
   - Uses Pixtral vision-language model for prompt improvement
-  - Returns enhanced text for DataRepository to create new prompt
+  - Maintained for backward compatibility
+  - Internally creates temporary run_id for new implementation
 
 - `check_remote_status()`: Check remote GPU system health and container status
 
@@ -1382,10 +1396,19 @@ The system uses a database-first architecture built on SQLAlchemy with no persis
 ### Architecture Overview
 
 **Core Principles:**
-- **Multi-Model Support**: Single schema supports different AI models (transfer, reason, predict, future models)
+- **Multi-Model Support**: Single schema supports different AI models (transfer, reason, predict, enhance, upscale)
 - **Flexible JSON Storage**: Model-specific data stored in JSON columns for easy extensibility
 - **Security First**: Path traversal protection, input validation, and transaction safety
 - **Real-Time Tracking**: Granular progress monitoring through all execution stages
+
+**Supported Model Types (Phase 2 Update):**
+- `transfer`: NVIDIA Cosmos Transfer video generation model (core functionality)
+- `enhance`: Prompt enhancement using vision-language models (Phase 2 implementation)
+- `upscale`: Video upscaling operations (planned Phase 3)
+- `reason`: Future reasoning model support
+- `predict`: Future prediction model support
+
+The "enhance" and "upscale" types enable specialized AI operations with full database run tracking while maintaining compatibility with existing prompt models.
 
 ### Prompt Model
 Stores AI prompts with flexible schema supporting any model type.

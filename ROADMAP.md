@@ -179,15 +179,15 @@ The `--stream` flag represents a cross-cutting concern that violates separation 
   - Implementation: Add `_ensure_log_downloaded()` method and call in finally blocks
   - Test with intentional failures to verify log preservation
 
-### Prompt Enhancement Tracking
-- [ ] **Make prompt-enhance operations trackable**
-  - Currently prompt-enhance creates an operation_id but no database run
-  - Users cannot monitor enhancement progress in real-time
-  - Option 1: Create "enhance" run type (may cause conceptual confusion - runs produce videos, not text)
-  - Option 2: Create lightweight operations table for non-video operations
-  - Option 3: Extend runs table to support text outputs for enhance operations
-  - Recommended: Option 2 - cleaner separation of concerns
-  - Note: Log streaming now available via `cosmos status --stream` for active containers
+### Prompt Enhancement Tracking ✅ COMPLETED 2025-09-08
+- [x] **Make prompt-enhance operations trackable**
+  - ✅ Implemented Option 3: Extended runs table to support text outputs for enhancement operations
+  - ✅ Created "enhance" run type with model_type="enhance" for full database tracking
+  - ✅ Enhancement operations now create proper database runs with status lifecycle tracking
+  - ✅ Run directories created as `outputs/run_{run_id}/` with logs and results storage
+  - ✅ Users can now monitor enhancement progress in real-time through database
+  - ✅ Added support for both create_new and overwrite modes with validation
+  - ✅ Complete integration with existing run tracking and status systems
 
 ### Remote Environment Setup
 - [ ] **Build Docker image on remote instance**

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 2 Prompt Enhancement Database Runs (2025-09-08)
+- **Complete Enhancement Run Tracking System**
+  - `enhance_prompt()` method now creates database runs with model_type="enhance" for proper tracking
+  - Enhancement operations stored in database outputs field with enhanced text, duration, and metadata
+  - Run directories created as `outputs/run_{run_id}/` for consistent organization
+  - Status tracking through complete lifecycle: pending → running → completed/failed
+  - Support for both create_new and overwrite modes with validation against existing runs
+  - Added "enhance" and "upscale" to SUPPORTED_MODEL_TYPES for extensible AI model support
+
+- **New GPUExecutor Enhancement Method**
+  - `execute_enhancement_run()` method provides run-tracked enhancement execution
+  - Creates proper run directory structure with logs and results storage
+  - Handles run_id parameter for directory creation and result tracking
+  - Enhanced backward compatibility with legacy `run_prompt_upsampling()` method
+  - Maintains existing enhancement functionality while adding database integration
+
+- **Enhanced DataRepository Run Creation**
+  - `create_run()` method accepts optional model_type parameter for override functionality
+  - Enables "enhance" runs on "transfer" prompts with proper model type tracking
+  - Supports specialized run types (enhance, upscale) while maintaining prompt model compatibility
+  - Proper validation and error handling for model type combinations
+
 ### Fixed - Wrapper Pattern Compliance (2025-09-07)
 - **Eliminated Docker Command String Violations**
   - Added new static methods to DockerCommandBuilder: build_logs_command(), build_info_command(), build_images_command(), build_kill_command()

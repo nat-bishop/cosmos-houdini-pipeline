@@ -252,7 +252,7 @@ class TestWorkflowServiceEnhancementSupport:
         """Test creating a prompt with enhancement model type."""
         # Create an enhancement prompt
         result = service.create_prompt(
-            model_type="enhancement",
+            model_type="enhance",
             prompt_text="enhance this prompt",
             inputs={"original_prompt_id": "ps_original_123"},
             parameters={"model": "pixtral", "temperature": 0.7},
@@ -260,7 +260,7 @@ class TestWorkflowServiceEnhancementSupport:
 
         # Verify it was created successfully
         assert result is not None
-        assert result["model_type"] == "enhancement"
+        assert result["model_type"] == "enhance"
         assert result["prompt_text"] == "enhance this prompt"
         assert result["inputs"]["original_prompt_id"] == "ps_original_123"
         assert result["parameters"]["model"] == "pixtral"
@@ -270,13 +270,13 @@ class TestWorkflowServiceEnhancementSupport:
         # Verify we can retrieve it
         prompt = service.get_prompt(result["id"])
         assert prompt is not None
-        assert prompt["model_type"] == "enhancement"
+        assert prompt["model_type"] == "enhance"
 
     def test_create_run_with_enhancement_type(self, service):
         """Test creating a run with enhancement model type."""
         # First create an enhancement prompt
         prompt = service.create_prompt(
-            model_type="enhancement",
+            model_type="enhance",
             prompt_text="enhance this",
             inputs={"original_prompt_id": "ps_test"},
             parameters={"model": "pixtral"},
@@ -285,27 +285,27 @@ class TestWorkflowServiceEnhancementSupport:
         # Create a run for the enhancement prompt
         result = service.create_run(
             prompt_id=prompt["id"],
-            execution_config={"model": "pixtral", "type": "enhancement"},
+            execution_config={"model": "pixtral", "type": "enhance"},
             metadata={"source": "test"},
         )
 
         # Verify the run was created with correct model type
         assert result is not None
-        assert result["model_type"] == "enhancement"
-        assert result["execution_config"]["type"] == "enhancement"
+        assert result["model_type"] == "enhance"
+        assert result["execution_config"]["type"] == "enhance"
         assert "id" in result
         assert result["id"].startswith("rs_")
 
         # Verify we can retrieve it
         run = service.get_run(result["id"])
         assert run is not None
-        assert run["model_type"] == "enhancement"
+        assert run["model_type"] == "enhance"
 
     def test_enhancement_run_workflow(self, service):
         """Test complete enhancement workflow with status updates."""
         # Create enhancement prompt
         prompt = service.create_prompt(
-            model_type="enhancement",
+            model_type="enhance",
             prompt_text="enhance",
             inputs={"original_prompt_id": "ps_orig"},
             parameters={"model": "pixtral"},

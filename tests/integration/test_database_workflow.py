@@ -180,7 +180,7 @@ class TestDatabaseWorkflow:
 
         # Create new prompt from enhanced text
         enhanced_prompt = test_service.create_prompt(
-            model_type="enhancement",
+            model_type="enhance",
             prompt_text=enhanced_text,
             inputs={"base_prompt": "A simple scene"},
             parameters={"parent_prompt_id": prompt["id"]},

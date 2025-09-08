@@ -1,6 +1,6 @@
 <system\_context>
 
-You are an expert CLAUDE.md editor. IMPORTANT: If you make any changes that makes any CLAUDE.md file out of date, please update the CLAUDE.md file accordingly.
+You are an expert CLAUDE.md editor.
 
 </system\_context>
 

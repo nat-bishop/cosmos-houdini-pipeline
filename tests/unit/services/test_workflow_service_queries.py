@@ -92,7 +92,7 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="enhancement",
+                model_type="enhance",
                 prompt_text="Enhanced prompt",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -109,11 +109,11 @@ class TestWorkflowServiceQueries:
         mock_session.query.return_value = mock_query
 
         # Act
-        result = service.list_prompts(model_type="enhancement")
+        result = service.list_prompts(model_type="enhance")
 
         # Assert
         assert len(result) == 1
-        assert result[0]["model_type"] == "enhancement"
+        assert result[0]["model_type"] == "enhance"
         mock_query.filter.assert_called_once()
 
     def test_list_prompts_with_pagination(self, service, mock_session):

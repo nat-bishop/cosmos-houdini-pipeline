@@ -15,12 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows operation type (INFERENCE, UPSCALE, ENHANCE) with run and prompt IDs
   - Detects and warns about orphaned containers and zombie runs for better debugging
 
-- **Container Naming and Detection Improvements**
-  - Added _generate_container_name() method for consistent container naming patterns
-  - Container names now follow format: cosmos_{model_type}_{run_id[:8]} for easy identification
-  - Enhanced container detection to match containers with database runs
-  - Single-container system optimization with warnings for multiple containers
-  - Better debugging through clear container-to-run relationship tracking
+- **Container Naming Implementation (Simplified Approach)**
+  - All Docker containers now receive descriptive names at creation time
+  - Container names follow format: cosmos_{model_type}_{run_id[:8]} for easy identification
+  - Inference containers: `cosmos_transfer_{run_id[:8]}`
+  - Upscaling containers: `cosmos_upscale_{run_id[:8]}`
+  - Enhancement containers: `cosmos_enhance_{run_id[:8]}`
+  - Batch containers: `cosmos_batch_{batch_name[:8]}`
+  - Names are set once at container creation, retrieved via get_active_container()
+  - No complex tracking needed - Docker is the single source of truth for container names
 
 - **Unified GPU Operation Monitoring**
   - Single source of truth for all GPU operations across inference, upscaling, and enhancement

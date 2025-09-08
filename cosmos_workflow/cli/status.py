@@ -58,6 +58,18 @@ def status(ctx, stream):
         gpu_memory = gpu_info.get("memory_total", "Unknown")
         status_data["GPU"] = f"{gpu_name} ({gpu_memory})"
         status_data["CUDA Version"] = gpu_info.get("cuda_version", "Unknown")
+
+        # Add GPU utilization metrics if available
+        gpu_util = gpu_info.get("gpu_utilization")
+        if gpu_util:
+            status_data["GPU Usage"] = gpu_util
+
+        # Add memory usage details if available
+        mem_used = gpu_info.get("memory_used")
+        mem_total = gpu_info.get("memory_total")
+        mem_util = gpu_info.get("memory_utilization")
+        if mem_used and mem_total and mem_util:
+            status_data["Memory Usage"] = f"{mem_used} / {mem_total} ({mem_util})"
     else:
         status_data["GPU"] = "[yellow]Not detected[/yellow]"
 

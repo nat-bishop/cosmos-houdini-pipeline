@@ -26,14 +26,14 @@ class SSHManager:
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             logger.info(
-                "Connecting to %s:%d", self.ssh_options["hostname"], self.ssh_options["port"]
+                "Connecting to {}:{}", self.ssh_options["hostname"], self.ssh_options["port"]
             )
             self.ssh_client.connect(**self.ssh_options)
 
             logger.info("SSH connection established successfully")
 
         except Exception as e:
-            logger.error("Failed to establish SSH connection: %s", e)
+            logger.error("Failed to establish SSH connection: {}", e)
             raise ConnectionError(f"SSH connection failed: {e}") from e
 
     def disconnect(self) -> None:

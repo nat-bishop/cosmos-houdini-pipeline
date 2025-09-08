@@ -52,7 +52,7 @@ class GPUExecutor:
             return
 
         # Initialize SSH and related services
-        self.ssh_manager = SSHManager(self.config_manager)
+        self.ssh_manager = SSHManager(self.config_manager.get_ssh_options())
         remote_config = self.config_manager.get_remote_config()
         self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
         self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
@@ -117,6 +117,12 @@ class GPUExecutor:
             with self.ssh_manager:
                 # Upload batch and any video files
                 remote_config = self.config_manager.get_remote_config()
+
+                # Clean all old run directories before starting
+                logger.info("Cleaning up old run directories...")
+                cleanup_cmd = f"rm -rf {remote_config.remote_dir}/outputs/run_* 2>/dev/null || true"
+                self.remote_executor.execute_command(cleanup_cmd)
+
                 remote_run_dir = f"{remote_config.remote_dir}/runs/{run_id}"
 
                 # Upload batch file
@@ -130,10 +136,11 @@ class GPUExecutor:
                     )
 
                 # Run inference
+                # Create a prompt file path for DockerExecutor (it expects Path)
+                prompt_file = Path(f"{run_id}.json")  # Just a name, not used inside
                 inference_result = self.docker_executor.run_inference(
-                    batch_filename=batch_file.name,
+                    prompt_file=prompt_file,
                     run_id=run_id,
-                    execution_config=execution_config,
                 )
 
                 if inference_result["status"] == "failed":
@@ -166,7 +173,7 @@ class GPUExecutor:
         Args:
             run_id: The run ID
             local_run_dir: Local directory for this run
-            upscaled: Whether to download upscaled version
+            upscaled: Whether this is an upscale operation (affects output filename)
 
         Returns:
             Path to the downloaded output file
@@ -174,24 +181,39 @@ class GPUExecutor:
         remote_config = self.config_manager.get_remote_config()
         outputs_dir = local_run_dir / "outputs"
         outputs_dir.mkdir(exist_ok=True)
+        logs_dir = local_run_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
 
-        # Determine which file to download
+        # All runs use the same directory structure now
+        remote_output_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
+
+        # Determine output filename based on operation type
         if upscaled:
-            remote_file = f"{remote_config.remote_dir}/outputs/{run_id}_upscaled/output_4k.mp4"
+            remote_file = f"{remote_output_dir}/output_4k.mp4"
             local_file = outputs_dir / "output_4k.mp4"
         else:
-            remote_file = f"{remote_config.remote_dir}/outputs/{run_id}/output.mp4"
+            remote_file = f"{remote_output_dir}/output.mp4"
             local_file = outputs_dir / "output.mp4"
 
-        # Download the file
+        # Download the output file
         try:
             self.file_transfer.download_file(remote_file, str(local_file))
             logger.info("Downloaded output to %s", local_file)
-            return local_file
         except Exception as e:
             logger.error("Failed to download output: %s", e)
-            # Return path even if download failed (for status tracking)
-            return local_file
+
+        # Also download the log file
+        remote_log = f"{remote_output_dir}/run.log"
+        local_log = logs_dir / "remote_run.log"
+        try:
+            self.file_transfer.download_file(remote_log, str(local_log))
+            logger.info("Downloaded remote log to %s", local_log)
+        except FileNotFoundError:
+            logger.warning("Remote log not found: %s", remote_log)
+        except Exception as e:
+            logger.error("Failed to download log: %s", e)
+
+        return local_file
 
     # ========== Batch Execution ==========
 
@@ -265,12 +287,10 @@ class GPUExecutor:
                             Path(video_path), f"{remote_batch_dir}/inputs/videos"
                         )
 
-                # Run batch inference using first run's execution config
-                execution_config = runs_and_prompts[0][0]["execution_config"]
+                # Run batch inference
                 batch_result = self.docker_executor.run_batch_inference(
-                    batch_filename=batch_file.name,
                     batch_name=batch_name,
-                    execution_config=execution_config,
+                    batch_jsonl_file=batch_file.name,
                 )
 
                 if batch_result["status"] == "failed":
@@ -522,6 +542,13 @@ class GPUExecutor:
                 with self.ssh_manager:
                     remote_config = self.config_manager.get_remote_config()
 
+                    # Clean all old run directories before starting
+                    logger.info("Cleaning up old run directories...")
+                    cleanup_cmd = (
+                        f"rm -rf {remote_config.remote_dir}/outputs/run_* 2>/dev/null || true"
+                    )
+                    self.remote_executor.execute_command(cleanup_cmd)
+
                     # Upload batch file - upload_file will create directory automatically
                     remote_inputs_dir = f"{remote_config.remote_dir}/inputs"
                     self.file_transfer.upload_file(local_batch_path, remote_inputs_dir)
@@ -564,7 +591,7 @@ class GPUExecutor:
 
                     # Since it's now non-blocking, we need to wait for completion
                     # For now, we'll poll for the results file (Phase 2 will improve this)
-                    remote_outputs_dir = f"{remote_config.remote_dir}/outputs"
+                    remote_outputs_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
                     remote_results_file = f"{remote_outputs_dir}/batch_results.json"
                     local_results_path = Path(temp_dir) / "results.json"
 
@@ -641,6 +668,12 @@ class GPUExecutor:
 
         try:
             with self.ssh_manager:
+                # Clean all old run directories before starting
+                remote_config = self.config_manager.get_remote_config()
+                logger.info("Cleaning up old run directories...")
+                cleanup_cmd = f"rm -rf {remote_config.remote_dir}/outputs/run_* 2>/dev/null || true"
+                self.remote_executor.execute_command(cleanup_cmd)
+
                 # Get prompt file name from parameters
                 prompt_name = prompt["parameters"].get("name", "unnamed")
                 prompt_file = Path(f"inputs/{prompt_name}.json")
@@ -688,21 +721,25 @@ class GPUExecutor:
         try:
             with self.ssh_manager:
                 # Get NVIDIA SMI output
-                nvidia_status = self.docker_executor.get_gpu_status()
+                nvidia_status = self.docker_executor.get_gpu_info()
 
-                # Get running containers
-                containers = self.docker_executor.get_containers()
+                # Get Docker status
+                docker_status = self.docker_executor.get_docker_status()
+
+                # Get active container
+                container = self.docker_executor.get_active_container()
 
                 return {
                     "gpu_info": nvidia_status,
-                    "containers": containers,
-                    "status": "connected",
+                    "docker_status": docker_status,
+                    "container": container,
+                    "ssh_status": "connected",
                 }
 
         except Exception as e:
-            logger.error("Failed to get GPU status: %s", e)
+            logger.error("Failed to get GPU status: {}", e)
             return {
-                "status": "error",
+                "ssh_status": "error",
                 "error": str(e),
             }
 

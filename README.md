@@ -175,6 +175,49 @@ cosmos ui
 # Opens browser at http://localhost:7860
 ```
 
+### UI Features
+
+The Gradio interface provides a comprehensive workflow management system with five main tabs:
+
+#### Generate Tab
+![Generate Tab](docs/images/generate-tab.png)
+- **Two-step workflow**: Create prompts and run inference separately
+- **Video upload**: Drag-and-drop support for color and depth video pairs
+- **Segmentation upload**: Optional segmentation video for enhanced control
+- **Real-time preview**: Uploaded videos displayed inline
+- **Inference settings**: Adjustable visual, depth, edge, and segmentation weights
+- **Advanced options**: Run ID customization, status monitoring, and configuration presets
+
+#### Prompts Tab
+![Prompts Tab](docs/images/prompts-tab.png)
+- **Prompt management**: View all created prompts with metadata
+- **Search and filter**: Find prompts by text, ID, or creation date
+- **Batch operations**: Select multiple prompts for bulk inference
+- **Quick actions**: Direct inference launch from the prompt list
+- **Details view**: Full prompt information including associated videos and run history
+
+#### Runs Tab
+![Runs Tab](docs/images/runs-tab.png)
+- **Run monitoring**: Track all inference runs with status indicators
+- **Live updates**: Auto-refreshing status for running jobs
+- **Output access**: Direct download links for completed generations
+- **Run details**: View full parameters, timing, and logs for each run
+
+#### Gallery Tab
+![Gallery Tab](docs/images/gallery-tab.png)
+- **Visual browser**: Preview all generated videos in a grid layout
+- **Video player**: Full-screen playback with controls
+- **Auto-refresh**: New completions appear automatically
+- **Download options**: Save individual or batch download outputs
+- **Metadata display**: View prompt text and generation parameters
+
+#### Status Tab
+![Status Tab](docs/images/status-tab.png)
+- **GPU monitoring**: Real-time GPU status and availability
+- **Container tracking**: View running Docker containers
+- **Resource usage**: Monitor GPU memory and utilization
+- **Auto-refresh**: Updates every 5 seconds when jobs are running
+
 Features include real-time log streaming, batch management, GPU monitoring, and gallery view for completed generations.
 
 ## ⚙️ Technical Stack

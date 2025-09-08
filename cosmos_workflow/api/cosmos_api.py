@@ -676,6 +676,17 @@ class CosmosAPI:
         """
         return self.service.delete_run(run_id)
 
+    def preview_run_deletion(self, run_id: str) -> dict[str, Any]:
+        """Preview what will be deleted if a run is removed.
+
+        Args:
+            run_id: The run ID to preview deletion for
+
+        Returns:
+            Dictionary with run info and directories to delete
+        """
+        return self.service.preview_run_deletion(run_id)
+
     def search_prompts(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
         """Search prompts by text.
 
@@ -724,7 +735,7 @@ class CosmosAPI:
             with self.orchestrator.ssh_manager:
                 container = self.orchestrator.docker_executor.get_active_container()
         except Exception as e:
-            logger.error("Failed to get container: %s", e)
+            logger.error("Failed to get container: {}", e)
             container = None
 
         # In normal operation, these should match

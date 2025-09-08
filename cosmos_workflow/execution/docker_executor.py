@@ -56,8 +56,8 @@ class DockerExecutor:
         run_logger.info("Starting inference for prompt: %s", prompt_name)
         run_logger.debug("GPU config: num_gpu=%d, devices=%s", num_gpu, cuda_devices)
 
-        # Create output directory on remote
-        remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}"
+        # Create output directory on remote using run_id
+        remote_output_dir = f"{self.remote_dir}/outputs/run_{run_id}"
         self.remote_executor.create_directory(remote_output_dir)
 
         # Setup local log path
@@ -65,7 +65,7 @@ class DockerExecutor:
 
         try:
             # Log path for reference
-            remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}/run.log"
+            remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
             run_logger.info("Remote log path: %s", remote_log_path)
 
             # Execute inference using bash script
@@ -73,7 +73,7 @@ class DockerExecutor:
             run_logger.info("Use 'cosmos status --stream' to monitor progress")
             run_logger.info("Launching inference in background...")
 
-            self._run_inference_script(prompt_name, num_gpu, cuda_devices)
+            self._run_inference_script(prompt_name, run_id, num_gpu, cuda_devices)
 
             run_logger.info("Inference started successfully for %s", prompt_name)
             run_logger.info("The process is now running in the background on the GPU")
@@ -126,20 +126,24 @@ class DockerExecutor:
         local_log_path = get_log_path("upscaling", f"{prompt_name}_upscaled", run_id)
 
         try:
-            # Check if input video exists
-            input_video_path = f"{self.remote_dir}/outputs/{prompt_name}/output.mp4"
+            # Check if input video exists from parent run
+            # Extract parent_run_id from prompt_name (format: run_XXXXX)
+            parent_run_id = (
+                prompt_name.replace("run_", "") if prompt_name.startswith("run_") else prompt_name
+            )
+            input_video_path = f"{self.remote_dir}/outputs/run_{parent_run_id}/output.mp4"
             if not self.remote_executor.file_exists(input_video_path):
                 raise FileNotFoundError(f"Input video not found: {input_video_path}")
 
-            # Create upscaled output directory
-            remote_output_dir = f"{self.remote_dir}/outputs/{prompt_name}_upscaled"
+            # Create output directory using run_id (same pattern as inference)
+            remote_output_dir = f"{self.remote_dir}/outputs/run_{run_id}"
             self.remote_executor.create_directory(remote_output_dir)
 
             # Create upscaler spec
             self._create_upscaler_spec(prompt_name, control_weight)
 
             # Log path for reference
-            remote_log_path = f"{self.remote_dir}/outputs/{prompt_name}_upscaled/run.log"
+            remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
             run_logger.info("Remote log path: %s", remote_log_path)
 
             # Execute upscaling using bash script
@@ -147,7 +151,7 @@ class DockerExecutor:
             run_logger.info("Use 'cosmos status --stream' to monitor progress")
             run_logger.info("Launching upscaling in background...")
 
-            self._run_upscaling_script(prompt_name, control_weight, num_gpu, cuda_devices)
+            self._run_upscaling_script(prompt_name, run_id, control_weight, num_gpu, cuda_devices)
 
             run_logger.info("Upscaling started successfully for %s", prompt_name)
             run_logger.info("The process is now running in the background on the GPU")
@@ -203,10 +207,10 @@ class DockerExecutor:
         # Setup container log path (inside container, like inference.sh does)
         container_log_path = None
         if run_id:
-            # Use /workspace path inside container (gets mounted from remote_dir)
-            container_log_path = f"/workspace/logs/enhancement_{run_id}/run.log"
-            # Ensure log directory exists on remote
-            self.remote_executor.create_directory(f"{self.remote_dir}/logs/enhancement_{run_id}")
+            # Use consistent path structure: outputs/run_{run_id}/run.log
+            container_log_path = f"/workspace/outputs/run_{run_id}/run.log"
+            # Ensure output directory exists on remote
+            self.remote_executor.create_directory(f"{self.remote_dir}/outputs/run_{run_id}")
 
         try:
             # Verify script exists on remote
@@ -239,7 +243,7 @@ class DockerExecutor:
             cmd = (
                 f"python /workspace/scripts/prompt_upsampler.py "
                 f"--batch /workspace/inputs/{batch_filename} "
-                f"--output-dir /workspace/outputs "
+                f"--output-dir /workspace/outputs/run_{run_id} "
                 f"--checkpoint-dir {checkpoint_dir}"
             )
             if offload_flag:
@@ -253,7 +257,7 @@ class DockerExecutor:
 
             builder.set_command(cmd)
 
-            # Add container name for tracking (Phase 4)
+            # Add container name for tracking (consistent with other operations)
             if run_id:
                 container_name = f"cosmos_enhance_{run_id[:8]}"
                 builder.with_name(container_name)
@@ -289,7 +293,9 @@ class DockerExecutor:
                 "log_path": str(local_log_path) if local_log_path else None,
             }
 
-    def _run_inference_script(self, prompt_name: str, num_gpu: int, cuda_devices: str) -> None:
+    def _run_inference_script(
+        self, prompt_name: str, run_id: str, num_gpu: int, cuda_devices: str
+    ) -> None:
         """Run inference using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
@@ -297,6 +303,11 @@ class DockerExecutor:
         builder.add_option("--shm-size=8g")
         builder.add_volume(self.remote_dir, "/workspace")
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+
+        # Add container name for tracking
+        container_name = f"cosmos_transfer_{run_id[:8]}"
+        builder.with_name(container_name)
+
         builder.set_command(
             f'bash -lc "/workspace/bashscripts/inference.sh {prompt_name} {num_gpu} {cuda_devices}"'
         )
@@ -310,7 +321,7 @@ class DockerExecutor:
         logger.info("Inference started in background")
 
     def _run_upscaling_script(
-        self, prompt_name: str, control_weight: float, num_gpu: int, cuda_devices: str
+        self, prompt_name: str, run_id: str, control_weight: float, num_gpu: int, cuda_devices: str
     ) -> None:
         """Run upscaling using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
@@ -319,6 +330,11 @@ class DockerExecutor:
         builder.add_option("--shm-size=8g")
         builder.add_volume(self.remote_dir, "/workspace")
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
+
+        # Add container name for tracking
+        container_name = f"cosmos_upscale_{run_id[:8]}"
+        builder.with_name(container_name)
+
         builder.set_command(
             f'bash -lc "/workspace/bashscripts/upscale.sh {prompt_name} {control_weight} {num_gpu} {cuda_devices}"'
         )
@@ -454,7 +470,8 @@ class DockerExecutor:
         try:
             # Query GPU info using nvidia-smi
             cmd = (
-                "nvidia-smi --query-gpu=name,memory.total,driver_version "
+                "nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,"
+                "utilization.gpu,utilization.memory,driver_version "
                 "--format=csv,noheader,nounits"
             )
             output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
@@ -462,13 +479,17 @@ class DockerExecutor:
             if not output or not output.strip():
                 return None
 
-            # Parse CSV output (e.g., "Tesla T4, 15360, 525.60.13")
+            # Parse CSV output (e.g., "Tesla T4, 15360, 469, 14891, 0, 3, 525.60.13")
             parts = [p.strip() for p in output.strip().split(",")]
-            if len(parts) >= 3:
+            if len(parts) >= 7:
                 gpu_info = {
                     "name": parts[0],
                     "memory_total": f"{parts[1]} MB",
-                    "driver_version": parts[2],
+                    "memory_used": f"{parts[2]} MB",
+                    "memory_free": f"{parts[3]} MB",
+                    "gpu_utilization": f"{parts[4]}%",
+                    "memory_utilization": f"{parts[5]}%",
+                    "driver_version": parts[6],
                 }
 
                 # Try to get CUDA version
@@ -620,6 +641,10 @@ class DockerExecutor:
             cmd = f'({cmd}) 2>&1 | tee {remote_log_path}; echo "[COSMOS_COMPLETE]" >> {remote_log_path}'
 
         builder.set_command(f'bash -lc "{cmd}"')
+
+        # Add container name for tracking
+        container_name = f"cosmos_batch_{batch_name[:8]}"
+        builder.with_name(container_name)
 
         # Run the command in background
         command = builder.build()

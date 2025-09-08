@@ -29,16 +29,6 @@ from cosmos_workflow.services import DataRepository
 from cosmos_workflow.utils.logging import logger
 from cosmos_workflow.utils.smart_naming import generate_smart_name
 
-# Default negative prompt for video generation
-DEFAULT_NEGATIVE_PROMPT = (
-    "The video captures a game playing, with bad crappy graphics and "
-    "cartoonish frames. It represents a recording of old outdated games. "
-    "The lighting looks very fake. The textures are very raw and basic. "
-    "The geometries are very primitive. The images are very pixelated and "
-    "of poor CG quality. There are many subtitles in the footage. "
-    "Overall, the video is unrealistic at all."
-)
-
 
 class CosmosAPI:
     """Main facade for the Cosmos Workflow System.
@@ -132,10 +122,12 @@ class CosmosAPI:
             name = generate_smart_name(prompt_text, max_length=30)
             logger.debug("Generated name: %s", name)
 
-        # Build parameters
+        # Build parameters (get default negative prompt from config if not provided)
+        generation_config = self.config.get_config_section("generation")
+        default_negative = generation_config.get("negative_prompt", "")
         parameters = {
             "name": name,
-            "negative_prompt": negative_prompt or DEFAULT_NEGATIVE_PROMPT,
+            "negative_prompt": negative_prompt or default_negative,
         }
 
         # Create prompt using service
@@ -442,63 +434,6 @@ class CosmosAPI:
         return execution_config
 
     # ========== Composite Operations (What users actually want) ==========
-
-    def create_and_run(
-        self,
-        prompt_text: str,
-        video_dir: Path | str,
-        name: str | None = None,
-        negative_prompt: str | None = None,
-        weights: dict[str, float] | None = None,
-        num_steps: int = 35,
-        guidance: float = 7.0,
-        upscale: bool = False,
-        upscale_weight: float = 0.5,
-        **kwargs,
-    ) -> dict[str, Any]:
-        """Create a prompt and immediately run inference - the most common use case.
-
-        Args:
-            prompt_text: The prompt text
-            video_dir: Directory containing video files
-            name: Optional name for the prompt
-            negative_prompt: Optional negative prompt
-            weights: Control weights
-            num_steps: Number of inference steps
-            guidance: Guidance scale
-            upscale: Whether to run 4K upscaling
-            upscale_weight: Weight for upscaling
-            **kwargs: Additional parameters
-
-        Returns:
-            Dictionary containing:
-                - prompt_id: Created prompt ID
-                - run_id: Created run ID
-                - output_path: Path to generated video
-                - duration_seconds: Execution time
-        """
-        logger.info("Create and run workflow for: %s", prompt_text[:50])
-
-        # Create prompt
-        prompt = self.create_prompt(
-            prompt_text=prompt_text,
-            video_dir=video_dir,
-            name=name,
-            negative_prompt=negative_prompt,
-        )
-
-        # Use quick_inference to handle run creation and execution
-        result = self.quick_inference(
-            prompt_id=prompt["id"],
-            weights=weights,
-            num_steps=num_steps,
-            guidance=guidance,
-            upscale=upscale,
-            upscale_weight=upscale_weight,
-            **kwargs,
-        )
-
-        return result
 
     def quick_inference(
         self,

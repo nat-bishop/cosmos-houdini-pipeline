@@ -29,28 +29,6 @@ class FileTransferService:
     # Public API
     # ------------------------------------------------------------------ #
 
-    def upload_prompt_and_videos(self, prompt_file: Path, video_dirs: list[Path]) -> None:
-        """Upload prompt file and video directories via SFTP.
-
-        DEPRECATED: This method is no longer used. The orchestrator now handles
-        format conversion and uses upload_file() directly.
-        """
-        logger.warning("upload_prompt_and_videos is deprecated and will be removed")
-
-        if not prompt_file.exists():
-            raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
-
-        remote_prompts_dir = f"{self.remote_dir}/inputs/prompts"
-        remote_videos_dir = f"{self.remote_dir}/inputs/videos"
-
-        # Upload prompt file as-is
-        self.upload_file(prompt_file, remote_prompts_dir)
-
-        # Upload video directories
-        for vd in video_dirs:
-            if vd.exists():
-                self.upload_directory(vd, f"{remote_videos_dir}/{vd.name}")
-
     def upload_file(self, local_path: Path | str, remote_dir: str) -> bool:
         """Upload a single file to a remote directory via SFTP."""
         local_path = Path(local_path) if isinstance(local_path, str) else local_path

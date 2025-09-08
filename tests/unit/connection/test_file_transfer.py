@@ -5,7 +5,6 @@ This module tests the file transfer functionality that handles
 uploading and downloading files between local and remote systems via rsync.
 """
 
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -46,123 +45,13 @@ class TestFileTransferService:
         """Clean up test fixtures after each test method."""
         import shutil
 
-        if self.temp_dir and os.path.exists(self.temp_dir):
+        if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
     def test_init_with_valid_parameters(self):
         """Test FileTransferService initialization with valid parameters."""
         assert self.file_transfer.ssh_manager == self.mock_ssh_manager
         assert self.file_transfer.remote_dir == self.remote_dir
-
-    def test_upload_prompt_and_videos_creates_remote_directories(self):
-        """Test that upload_prompt_and_videos creates necessary remote directories."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        # Mock successful file uploads
-        with patch.object(self.file_transfer, "_sftp_upload_file"):
-            with patch.object(self.file_transfer, "_sftp_upload_dir"):
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Upload files
-                self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                # Check that directories were created (first call should be mkdir)
-                mkdir_calls = [
-                    call
-                    for call in self.mock_ssh_manager.execute_command_success.call_args_list
-                    if "mkdir -p" in str(call)
-                ]
-                assert len(mkdir_calls) >= 1
-
-    def test_upload_prompt_and_videos_uploads_prompt_file(self):
-        """Test that upload_prompt_and_videos uploads the prompt file."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        # Mock successful file uploads
-        with patch.object(self.file_transfer, "_sftp_upload_file") as mock_sftp_upload_file:
-            with patch.object(self.file_transfer, "_sftp_upload_dir"):
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Upload files
-                self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                # Check that prompt file was uploaded - should be called with prompt_file and remote_prompts_dir
-                mock_sftp_upload_file.assert_any_call(
-                    prompt_file, f"{self.remote_dir}/inputs/prompts/test_prompt.json"
-                )
-
-    def test_upload_prompt_and_videos_uploads_video_directories(self):
-        """Test that upload_prompt_and_videos uploads video directories."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        # Mock successful file uploads
-        with patch.object(self.file_transfer, "_sftp_upload_file"):
-            with patch.object(self.file_transfer, "_sftp_upload_dir") as mock_sftp_upload_dir:
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Upload files
-                self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                # Check that video directory was uploaded
-                mock_sftp_upload_dir.assert_any_call(
-                    video_dir, f"{self.remote_dir}/inputs/videos/test_videos"
-                )
-
-    def test_upload_prompt_and_videos_deprecated(self):
-        """Test that deprecated upload_prompt_and_videos method still works."""
-        # Mock successful directory creation
-        self.mock_ssh_manager.execute_command_success.return_value = None
-
-        # Create mock scripts directory in temp directory
-        scripts_dir = Path(self.temp_dir) / "scripts"
-        scripts_dir.mkdir()
-        (scripts_dir / "test_script.sh").write_text("#!/bin/bash\necho 'test'")
-
-        with patch.object(self.file_transfer, "_sftp_upload_file"):
-            with patch.object(self.file_transfer, "_sftp_upload_dir"):
-                # Create test prompt file
-                prompt_file = Path(self.temp_dir) / "test_prompt.json"
-                prompt_file.write_text('{"test": "data"}')
-
-                # Create test video directory
-                video_dir = Path(self.temp_dir) / "test_videos"
-                video_dir.mkdir()
-
-                # Call the deprecated method and verify it logs a warning
-                from cosmos_workflow.utils.logging import logger
-
-                with patch.object(logger, "warning") as mock_log:
-                    self.file_transfer.upload_prompt_and_videos(prompt_file, [video_dir])
-
-                # Check that deprecation warning was logged
-                mock_log.assert_called_once_with(
-                    "upload_prompt_and_videos is deprecated and will be removed"
-                )
-
-    # Removed test for bash scripts functionality - deprecated feature
-
-    # Removed test for making scripts executable - deprecated feature
 
     def test_upload_file_uses_sftp_for_single_files(self):
         """Test that upload_file uses SFTP for single file uploads."""

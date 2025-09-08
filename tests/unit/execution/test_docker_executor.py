@@ -5,7 +5,6 @@ This module tests the Docker execution functionality that handles
 running Docker commands on remote instances for Cosmos-Transfer1 workflows.
 """
 
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -44,7 +43,7 @@ class TestDockerExecutor:
         """Clean up test fixtures after each test method."""
         import shutil
 
-        if self.temp_dir and os.path.exists(self.temp_dir):
+        if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
     def test_init_with_valid_parameters(self):

@@ -442,23 +442,6 @@ class DataRepository:
                 logger.info("Updated run %s", run_id)
             return result
 
-    # Simplified: These methods now just call update_run with the appropriate fields
-    def update_run_with_log(self, run_id: str, log_path: str) -> dict[str, Any] | None:
-        """Update run with log path.
-
-        DEPRECATED: Use update_run(run_id, log_path=log_path) instead.
-        Kept for backward compatibility.
-        """
-        return self.update_run(run_id, log_path=str(log_path))
-
-    def update_run_error(self, run_id: str, error_message: str) -> dict[str, Any] | None:
-        """Update run with error message and set status to failed.
-
-        DEPRECATED: Use update_run(run_id, error_message=error_message) instead.
-        Kept for backward compatibility.
-        """
-        return self.update_run(run_id, error_message=error_message)
-
     @staticmethod
     def _generate_run_id() -> str:
         """Generate unique ID for a run using UUID4.

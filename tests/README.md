@@ -39,7 +39,7 @@ See `tests/fixtures/fakes.py` for test doubles:
 - `FakeSSHManager` - SSH connection simulation
 - `FakeDockerExecutor` - Docker operation simulation
 - `FakeFileTransferService` - File transfer simulation
-- `FakeGPUExecutor` - GPU execution simulation
+- `FakeRemoteExecutor` - Remote command execution simulation
 
 ## Running Specific Tests
 ```bash

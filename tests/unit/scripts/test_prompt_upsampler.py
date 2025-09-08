@@ -2,7 +2,6 @@
 """Unit tests for prompt_upsampler.py to ensure batch upsampling produces unique results."""
 
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -30,7 +29,7 @@ class TestBatchUpsamplingUniqueness(unittest.TestCase):
         """Clean up test fixtures."""
         import shutil
 
-        if os.path.exists(self.temp_dir):
+        if Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
     def test_batch_processing_produces_unique_results(self):
@@ -114,7 +113,7 @@ class TestUpsamplerModeSelection(unittest.TestCase):
         """Clean up test fixtures."""
         import shutil
 
-        if os.path.exists(self.temp_dir):
+        if Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
     def test_batch_size_determines_offload_mode(self):

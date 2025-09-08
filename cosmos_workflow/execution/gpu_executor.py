@@ -142,7 +142,7 @@ class GPUExecutor:
                     )
 
                 # Download outputs
-                output_path = self._download_outputs(run_id, run_dir, upscale=False)
+                output_path = self._download_outputs(run_id, run_dir, upscaled=False)
 
                 return {
                     "output_path": str(output_path),

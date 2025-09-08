@@ -160,7 +160,7 @@ class TestDatabaseWorkflow:
         """Test the prompt enhancement workflow."""
         # Create base prompt
         prompt = test_service.create_prompt(
-            model_type="enhancement",
+            model_type="enhance",
             prompt_text="A simple scene",
             inputs={"base_prompt": "A simple scene"},
             parameters={},

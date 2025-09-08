@@ -32,6 +32,11 @@ of poor CG quality. There are many subtitles in the footage. \
 Overall, the video is unrealistic at all.\
 """
 
+# ===== Execution Timeouts (in seconds) =====
+[timeouts]
+docker_execution = 3600  # 1 hour for Docker runs
+stream_logs = 86400  # 24 hours for log streaming
+
 # ===== Gradio UI Configuration =====
 [ui]
 port = 7860  # Default Gradio port

@@ -23,43 +23,31 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded globals for KeyBERT
-_kw_model = None
-_keybert_available = None
 
-
+@lru_cache(maxsize=1)
 def _get_keybert_model():
-    """Lazy-load KeyBERT model on first use."""
-    global _kw_model, _keybert_available
+    """Lazy-load KeyBERT model on first use.
 
-    if _keybert_available is False:
-        # Already tried and failed
-        raise ImportError(
+    Uses lru_cache to ensure single initialization and thread-safety.
+    The cache ensures the model is only loaded once and reused.
+    """
+    try:
+        from keybert import KeyBERT
+        from sentence_transformers import SentenceTransformer
+
+        # Use a small, fast model as recommended
+        MODEL_NAME = "all-MiniLM-L6-v2"
+        sentence_model = SentenceTransformer(MODEL_NAME)
+        kw_model = KeyBERT(model=sentence_model)
+        logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
+        return kw_model
+    except ImportError as e:
+        error_msg = (
             "KeyBERT is required for smart naming functionality. "
             "Please install it with: pip install keybert sentence-transformers"
         )
-
-    if _kw_model is None:
-        try:
-            from keybert import KeyBERT
-            from sentence_transformers import SentenceTransformer
-
-            # Use a small, fast model as recommended
-            MODEL_NAME = "all-MiniLM-L6-v2"
-            sentence_model = SentenceTransformer(MODEL_NAME)
-            _kw_model = KeyBERT(model=sentence_model)
-            _keybert_available = True
-            logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
-        except ImportError as e:
-            _keybert_available = False
-            error_msg = (
-                "KeyBERT is required for smart naming functionality. "
-                "Please install it with: pip install keybert sentence-transformers"
-            )
-            logger.error(error_msg)
-            raise ImportError(error_msg) from e
-
-    return _kw_model
+        logger.error(error_msg)
+        raise ImportError(error_msg) from e
 
 
 # Common English stop words

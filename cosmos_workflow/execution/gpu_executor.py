@@ -57,7 +57,7 @@ class GPUExecutor:
         self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
         self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
         self.docker_executor = DockerExecutor(
-            self.remote_executor, self.config_manager, self.file_transfer
+            self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
         )
 
         self._services_initialized = True
@@ -68,16 +68,12 @@ class GPUExecutor:
         self,
         run: dict[str, Any],
         prompt: dict[str, Any],
-        upscale: bool = False,
-        upscale_weight: float = 0.5,
     ) -> dict[str, Any]:
         """Execute a single run on the GPU.
 
         Args:
             run: Run dictionary containing id, execution_config, etc.
             prompt: Prompt dictionary containing prompt_text, inputs, etc.
-            upscale: Whether to run 4K upscaling after inference
-            upscale_weight: Control weight for upscaling (0-1)
 
         Returns:
             Dictionary containing execution results with output_path, duration, etc.
@@ -145,20 +141,8 @@ class GPUExecutor:
                         f"Inference failed: {inference_result.get('error', 'Unknown error')}"
                     )
 
-                # Handle upscaling if requested
-                if upscale:
-                    logger.info("Running 4K upscaling for run %s", run_id)
-                    upscale_result = self.docker_executor.run_upscaling(
-                        run_id=run_id,
-                        control_weight=upscale_weight,
-                    )
-
-                    if upscale_result["status"] == "failed":
-                        logger.warning("Upscaling failed: %s", upscale_result.get("error"))
-                        # Continue with regular output even if upscale fails
-
                 # Download outputs
-                output_path = self._download_outputs(run_id, run_dir, upscale)
+                output_path = self._download_outputs(run_id, run_dir, upscale=False)
 
                 return {
                     "output_path": str(output_path),
@@ -625,6 +609,66 @@ class GPUExecutor:
                 logger.error("Prompt upsampling failed: %s", e)
                 # Return original prompt on failure rather than raising
                 return prompt_text
+
+    def execute_upscaling_run(
+        self,
+        upscale_run: dict[str, Any],
+        parent_run: dict[str, Any],
+        prompt: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute upscaling as an independent database run.
+
+        Args:
+            upscale_run: The upscaling run with id and execution_config
+            parent_run: The completed inference run to upscale
+            prompt: The original prompt for context
+
+        Returns:
+            Dictionary with upscaled output and metadata
+        """
+        self._initialize_services()
+
+        run_id = upscale_run["id"]
+        control_weight = upscale_run["execution_config"]["control_weight"]
+
+        # Create run directory
+        run_dir = Path("outputs") / f"run_{run_id}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        logs_dir = run_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+
+        logger.info("Executing upscaling run %s for parent %s", run_id, parent_run["id"])
+
+        try:
+            with self.ssh_manager:
+                # Get prompt file name from parameters
+                prompt_name = prompt["parameters"].get("name", "unnamed")
+                prompt_file = Path(f"inputs/{prompt_name}.json")
+
+                # Run upscaling with its own run_id
+                result = self.docker_executor.run_upscaling(
+                    prompt_file=prompt_file,
+                    run_id=run_id,
+                    control_weight=control_weight,
+                )
+
+                if result["status"] == "failed":
+                    raise RuntimeError(f"Upscaling failed: {result.get('error', 'Unknown error')}")
+
+                # Download upscaled output
+                output_path = self._download_outputs(run_id, run_dir, upscale=True)
+
+                return {
+                    "output_path": output_path.as_posix()
+                    if isinstance(output_path, Path)
+                    else str(output_path),
+                    "parent_run_id": parent_run["id"],
+                    "duration_seconds": result.get("duration_seconds", 0),
+                    "log_path": (logs_dir / "upscaling.log").as_posix(),
+                }
+        except Exception as e:
+            logger.error("Upscaling run %s failed: %s", run_id, e)
+            raise RuntimeError(f"Upscaling failed: {e}") from e
 
     # ========== Status and Container Management ==========
 

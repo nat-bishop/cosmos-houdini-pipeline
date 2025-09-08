@@ -59,7 +59,7 @@ ssh_key = "~/.ssh/your-key.pem"
 remote_dir = "/path/to/cosmos-transfer1"
 ```
 
-### Basic Usage (2-Step Workflow)
+### Basic Usage (2-Step Workflow with Optional Upscaling)
 ```bash
 # Step 1: Create a prompt (returns database ID)
 cosmos create prompt "A futuristic city at sunset" inputs/videos/scene1
@@ -67,7 +67,11 @@ cosmos create prompt "A futuristic city at sunset" inputs/videos/scene1
 
 # Step 2: Run inference (creates run internally and executes on GPU)
 cosmos inference ps_a1b2c3d4
-# Output saved to: outputs/run_rs_x9y8z7w6/result.mp4
+# Output saved to: outputs/run_rs_x9y8z7w6/output.mp4
+
+# Step 3 (Optional): Upscale the result to 4K
+cosmos upscale rs_x9y8z7w6
+# Upscaled output: outputs/run_rs_upscale789/output.mp4
 
 # Or process multiple prompts together for better performance
 cosmos inference ps_001 ps_002 ps_003 --batch-name "my_batch"
@@ -89,7 +93,8 @@ cosmos status
 - `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
 
 ### GPU Execution
-- `cosmos inference ps_xxxxx [ps_xxx2 ...] [--upscale/--no-upscale]` - Execute inference on prompts (creates runs internally)
+- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally)
+- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run)
 - `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs

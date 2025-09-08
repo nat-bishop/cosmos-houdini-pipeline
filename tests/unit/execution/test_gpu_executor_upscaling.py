@@ -204,7 +204,7 @@ class TestGPUExecutorUpscaling:
                         mock_download.assert_called_once_with(
                             "rs_upscale456",
                             Path("outputs/run_rs_upscale456"),
-                            True,  # upscale=True
+                            upscale=True,
                         )
 
                         assert result["output_path"] == "outputs/run_rs_upscale456/output_4k.mp4"

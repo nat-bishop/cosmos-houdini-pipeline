@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 3 Upscaling Implementation (2025-09-08)
+- **Independent Upscaling Run System**
+  - Added `upscale_run()` method to CosmosAPI that creates separate database runs with model_type="upscale"
+  - Independent upscaling execution tracking with complete status lifecycle: pending → running → completed/failed
+  - New CLI command "cosmos upscale <run_id>" for upscaling completed inference runs
+  - Upscaling creates separate run directories as `outputs/run_{run_id}/` for proper organization
+  - Complete separation from inference operations following "One GPU Operation = One Database Run" principle
+  - Links upscaling runs to parent inference runs via execution_config["parent_run_id"] for traceability
+
+- **Enhanced GPU Execution Layer**
+  - Added `execute_upscaling_run()` method to GPUExecutor for independent upscaling execution
+  - Fixed DockerExecutor constructor mismatch in GPUExecutor initialization
+  - Proper run directory creation and output organization for upscaling operations
+  - Independent log files and status tracking separate from inference processes
+  - Support for configurable control weights (0.0-1.0 range) with 0.5 default
+
+- **Breaking Changes - Upscaling Architecture**
+  - Removed upscaling parameters from `execute_run()` and `quick_inference()` methods
+  - Upscaling now requires separate run creation and execution for better tracking
+  - Previous combined inference+upscaling workflow replaced with two-step process
+  - Database schema unchanged - leverages existing Run model with specialized model_type
+
+### Fixed - Phase 3 Implementation (2025-09-08)
+- **GPU Executor Constructor Issues**
+  - Fixed DockerExecutor constructor mismatch preventing proper initialization
+  - Resolved parameter passing issues in GPUExecutor instantiation
+  - Proper service initialization and configuration management
+
 ### Added - Phase 2 Prompt Enhancement Database Runs (2025-09-08)
 - **Complete Enhancement Run Tracking System**
   - `enhance_prompt()` method now creates database runs with model_type="enhance" for proper tracking

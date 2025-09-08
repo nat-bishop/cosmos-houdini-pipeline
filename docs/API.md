@@ -302,11 +302,11 @@ cosmos inference PROMPT_ID [PROMPT_ID2 ...] [OPTIONS]
 - `--weights`: Control weights (4 values: vis edge depth segmentation)
 - `--num-steps`: Number of inference steps (default: 35)
 - `--guidance-scale`: CFG guidance scale (default: 8.0)
-- `--upscale/--no-upscale`: Enable/disable 4K upscaling (default: enabled)
-- `--upscale-weight`: Control weight for upscaling (0.0-1.0, default: 0.5)
 - `--batch-name`: Name for batch when running multiple prompts
 - `--prompts-file`: File containing prompt IDs (one per line)
 - `--dry-run`: Preview without executing
+
+**Note:** Upscaling is now a separate operation. Use `cosmos upscale <run_id>` after inference completes.
 
 **2-Step Workflow:**
 - Works directly with prompt IDs - creates runs internally
@@ -317,14 +317,17 @@ cosmos inference PROMPT_ID [PROMPT_ID2 ...] [OPTIONS]
 
 **Example:**
 ```bash
-# Single prompt inference
-cosmos inference ps_a1b2c3                    # Inference + upscaling
-cosmos inference ps_a1b2c3 --no-upscale       # Inference only
+# Single prompt inference (upscaling now separate)
+cosmos inference ps_a1b2c3                    # Inference only
 cosmos inference ps_a1b2c3 --weights 0.3 0.3 0.2 0.2
 
 # Batch inference for multiple prompts
 cosmos inference ps_001 ps_002 ps_003 --batch-name "my_batch"
 cosmos inference --prompts-file prompt_list.txt
+
+# Two-step workflow: inference + upscaling
+cosmos inference ps_a1b2c3                    # First: inference
+cosmos upscale rs_xyz789                       # Then: upscale the result
 ```
 
 **Note:** Batch inference is now integrated into the main `inference` command. Simply provide multiple prompt IDs to run them as a batch.
@@ -643,6 +646,61 @@ cosmos ui                    # Launch on localhost:7860
 cosmos ui --port 8080        # Launch on custom port
 cosmos ui --share            # Create public share link
 ```
+
+### upscale
+Upscale the output of a completed inference run to 4K resolution.
+
+```bash
+cosmos upscale RUN_ID [--weight 0.5] [--dry-run]
+```
+
+**Arguments:**
+- `RUN_ID`: Run ID of completed inference run to upscale (rs_xxxxx format)
+
+**Options:**
+- `--weight, -w`: Control weight for upscaling (0.0-1.0, default: 0.5)
+- `--dry-run`: Preview the upscaling operation without executing
+
+**Phase 3 Independent Upscaling System:**
+- Creates separate database run with model_type="upscale" for complete tracking independence
+- Links to parent inference run via execution_config["parent_run_id"] for traceability
+- Independent status lifecycle: pending → running → completed/failed
+- Creates dedicated run directory as `outputs/run_{upscale_run_id}/` with separate logs
+- Follows "One GPU Operation = One Database Run" architecture principle
+- Completely separate from inference operations - no shared parameters or execution context
+
+**Examples:**
+```bash
+# Basic upscaling with default settings
+cosmos upscale rs_abc123
+# Returns: Created upscaling run rs_upscale_xyz789
+
+# Custom control weight
+cosmos upscale rs_abc123 --weight 0.7
+
+# Preview mode (no execution)
+cosmos upscale rs_abc123 --dry-run
+
+# Monitor progress
+cosmos status --stream
+
+# Check upscaling run details
+cosmos show run rs_upscale_xyz789
+```
+
+**Complete Upscaling Workflow:**
+1. **Validation**: Checks parent run exists and status is "completed"
+2. **Run Creation**: Creates new database run with model_type="upscale" and unique run_id
+3. **GPU Execution**: Uploads upscaling spec, executes 4K upscaling on GPU cluster
+4. **Output Download**: Downloads upscaled video to dedicated run directory
+5. **Status Update**: Updates database with completion status and output paths
+6. **Independent Tracking**: Complete separation from parent inference run
+
+**Technical Requirements:**
+- Parent inference run must have status "completed" with valid output video
+- Control weight range: 0.0-1.0 (validates before execution)
+- GPU cluster must have sufficient memory for 4K upscaling operations
+- Separate Docker container execution independent of inference processes
 
 ## Log Visualization
 
@@ -1108,11 +1166,16 @@ result = ops.quick_inference(
   prompt_id="ps_abc123",
   weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
   num_steps=35,
-  guidance=7.0,
-  upscale=True,
-  upscale_weight=0.5
+  guidance=7.0
 )
 # Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
+
+# Separate upscaling operation
+upscale_result = ops.upscale_run(
+  run_id="rs_xyz789",
+  control_weight=0.5
+)
+# Returns: {"upscale_run_id": "rs_upscale_abc", "status": "success", "output_path": "/outputs/run_rs_upscale_abc/"}
 
 # Batch inference method - accepts list of prompt_ids
 batch_result = ops.batch_inference(
@@ -1135,8 +1198,9 @@ prompt = ops.create_prompt(
 **Primary Methods (What Most Users Should Use):**
 - `quick_inference(prompt_id, weights=None, **kwargs)`: Main inference method
   - Accepts prompt_id directly, creates run internally
-  - Supports all execution parameters (num_steps, guidance, seed, upscale, etc.)
+  - Supports all execution parameters (num_steps, guidance, seed, etc.)
   - Returns execution results with run_id for tracking
+  - Note: Upscaling parameters removed - use separate `upscale_run()` method
 
 - `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
   - Accepts list of prompt_ids, creates runs internally for each
@@ -1148,9 +1212,10 @@ prompt = ops.create_prompt(
   - For workflows that need control over run creation timing
   - Returns run dictionary with generated ID
 
-- `execute_run(run_id, upscale=False, upscale_weight=0.5)`: Explicit run execution
+- `execute_run(run_id)`: Explicit run execution
   - For workflows that need control over execution timing
   - Returns execution results
+  - Note: Upscaling parameters removed - use separate `upscale_run()` method
 
 **Convenience Methods:**
 - `create_and_run(prompt_text, video_dir, **kwargs)`: Complete workflow in one call
@@ -1177,11 +1242,16 @@ orchestrator = GPUExecutor()
 # Execute a run from database data
 result = orchestrator.execute_run(
   run_dict={"id": "rs_abc123", "execution_config": {"weights": [0.3, 0.4, 0.2, 0.1]}},
-  prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}},
-  upscale=True,
-  upscale_weight=0.5
+  prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}}
 )
 # Returns: {"status": "completed", "output_path": "/outputs/result.mp4", "duration": 362.1}
+
+# Separate upscaling execution
+upscale_result = orchestrator.execute_upscaling_run(
+  upscale_run={"id": "rs_upscale_123", "execution_config": {"parent_run_id": "rs_abc123", "control_weight": 0.5}},
+  prompt_dict={"id": "ps_def456", "prompt_text": "A futuristic city", "inputs": {"video": "/path/to/video"}}
+)
+# Returns: {"status": "completed", "output_path": "/outputs/run_rs_upscale_123/output.mp4", "duration": 180.5}
 
 # Execute multiple runs as a batch
 batch_result = orchestrator.execute_batch_runs(
@@ -1201,11 +1271,19 @@ enhanced_text = orchestrator.run_prompt_upsampling("A simple city scene")
 ```
 
 **Core Methods:**
-- `execute_run(run_dict, prompt_dict, upscale=True, upscale_weight=0.5)`: Execute complete GPU workflow
+- `execute_run(run_dict, prompt_dict)`: Execute inference GPU workflow
   - Converts database dictionaries to NVIDIA Cosmos format
   - Creates temporary JSON files for GPU scripts
   - Handles SSH connection, file upload, Docker execution, result download
   - Returns execution results for DataRepository to persist
+  - Note: Upscaling removed - now handled by separate `execute_upscaling_run()` method
+
+- `execute_upscaling_run(upscale_run, prompt_dict)`: Execute upscaling GPU workflow (Phase 3)
+  - Takes upscale run with parent_run_id and control_weight in execution_config
+  - Creates minimal upscaling specification for GPU execution
+  - Independent execution with separate run directory and logs
+  - Downloads upscaled output to dedicated run directory
+  - Returns upscaling results for database persistence
 
 - `execute_batch_runs(runs_and_prompts, batch_name=None)`: Execute multiple runs as a batch
   - Converts run/prompt pairs to JSONL format using `nvidia_format.to_cosmos_batch_inference_jsonl()`

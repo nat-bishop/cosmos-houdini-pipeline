@@ -92,15 +92,20 @@ Use `execution_config` JSON to establish relationships:
 
 **Input**: Takes `prompt_id` as input (operates on prompt text)
 
-### Phase 3: Fix Upscaling as Separate Run
+### Phase 3: Fix Upscaling as Separate Run ✅ COMPLETED
 **Goal**: Make upscaling an independent database run
 
-**Key changes needed**:
-1. Create separate run with `model_type="upscale"`
-2. Link to parent inference run via `execution_config["parent_run_id"]`
-3. Independent status tracking and logs
+**What was done**:
+1. ✅ Created `upscale_run()` method in CosmosAPI that creates separate runs with `model_type="upscale"`
+2. ✅ Added `execute_upscaling_run()` method to GPUExecutor for independent upscaling execution
+3. ✅ Created new CLI command "cosmos upscale <run_id>" for post-inference upscaling
+4. ✅ Fixed DockerExecutor constructor mismatch in GPUExecutor
+5. ✅ Removed upscaling parameters from execute_run and quick_inference methods
+6. ✅ Independent status tracking and logs for each upscaling operation
+7. ✅ Links to parent inference run via `execution_config["parent_run_id"]` for traceability
+8. ✅ Complete "One GPU Operation = One Database Run" implementation
 
-**Critical insight**: Takes `run_id` as input (not `prompt_id`) since it operates on the output video of a specific inference run
+**Critical insight implemented**: Takes `run_id` as input (not `prompt_id`) since it operates on the output video of a specific inference run
 
 ### Phase 4: Unified Status Tracking
 **Goal**: Single source of truth for GPU operations

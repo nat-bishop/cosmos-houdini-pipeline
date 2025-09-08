@@ -14,6 +14,7 @@ from .search import search_command
 from .show import show_command
 from .status import status
 from .ui import ui
+from .upscale import upscale
 from .verify import verify
 
 
@@ -56,6 +57,7 @@ cli.add_command(search_command)
 cli.add_command(show_command)
 cli.add_command(status)
 cli.add_command(ui)
+cli.add_command(upscale)
 cli.add_command(verify)
 
 

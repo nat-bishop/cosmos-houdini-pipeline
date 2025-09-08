@@ -75,7 +75,7 @@ class CosmosAPI:
 
         # Create service and orchestrator
         self.service = DataRepository(db, config)
-        self.orchestrator = GPUExecutor(service=self.service)
+        self.orchestrator = GPUExecutor(config_manager=config)
 
         logger.info("CosmosAPI initialized")
 
@@ -287,6 +287,87 @@ class CosmosAPI:
                 "error": str(e),
             }
 
+    def upscale_run(
+        self,
+        run_id: str,
+        control_weight: float = 0.5,
+    ) -> dict[str, Any]:
+        """Upscale the output of a completed inference run.
+
+        Creates a new database run with model_type="upscale" that operates
+        on the output video from the specified inference run.
+
+        Args:
+            run_id: The inference run ID whose output to upscale
+            control_weight: Control weight for upscaling (0.0-1.0)
+
+        Returns:
+            Dictionary containing:
+                - upscale_run_id: The new upscaling run ID
+                - status: "success" or "failed"
+                - output_path: Path to upscaled video (if successful)
+
+        Raises:
+            ValueError: If run not found, not completed, or invalid control weight
+        """
+        logger.info("Upscaling run %s with control weight %s", run_id, control_weight)
+
+        # Validate control weight
+        if not 0.0 <= control_weight <= 1.0:
+            raise ValueError(f"Control weight must be between 0.0 and 1.0, got {control_weight}")
+
+        # Get the parent run
+        parent_run = self.service.get_run(run_id)
+        if not parent_run:
+            raise ValueError(f"Run not found: {run_id}")
+
+        if parent_run["status"] != "completed":
+            raise ValueError(f"Run {run_id} must be completed before upscaling")
+
+        # Get the prompt for context
+        prompt = self.service.get_prompt(parent_run["prompt_id"])
+        if not prompt:
+            raise ValueError(f"Prompt not found for run: {run_id}")
+
+        # Create execution config for upscaling
+        execution_config = {
+            "parent_run_id": run_id,
+            "control_weight": control_weight,
+            "input_video": parent_run["outputs"].get("output_path"),
+        }
+
+        # Create new run with model_type="upscale"
+        upscale_run = self.service.create_run(
+            prompt_id=parent_run["prompt_id"],
+            model_type="upscale",
+            execution_config=execution_config,
+        )
+        logger.info("Created upscaling run %s for parent run %s", upscale_run["id"], run_id)
+
+        # Update status and execute
+        self.service.update_run_status(upscale_run["id"], "running")
+
+        try:
+            result = self.orchestrator.execute_upscaling_run(upscale_run, parent_run, prompt)
+
+            self.service.update_run(upscale_run["id"], outputs=result)
+            self.service.update_run_status(upscale_run["id"], "completed")
+            logger.info("Upscaling run %s completed successfully", upscale_run["id"])
+
+            return {
+                "upscale_run_id": upscale_run["id"],
+                "status": "success",
+                "output_path": result["output_path"],
+            }
+        except Exception as e:
+            logger.exception("Upscaling run %s failed", upscale_run["id"])
+            self.service.update_run_status(upscale_run["id"], "failed")
+            return {
+                "upscale_run_id": upscale_run["id"],
+                "status": "failed",
+                "error": str(e),
+            }
+
     # ========== Internal Helper Methods ==========
 
     def _validate_prompt(self, prompt_id: str) -> dict[str, Any]:
@@ -433,8 +514,7 @@ class CosmosAPI:
         Args:
             prompt_id: ID of prompt to run
             weights: Control weights (optional, defaults to balanced)
-            **kwargs: Additional execution parameters (num_steps, guidance, seed,
-                     upscale, upscale_weight, etc.)
+            **kwargs: Additional execution parameters (num_steps, guidance, seed, etc.)
 
         Returns:
             Dictionary containing execution results with run_id for tracking
@@ -446,10 +526,6 @@ class CosmosAPI:
 
         # Validate prompt exists
         prompt = self._validate_prompt(prompt_id)
-
-        # Extract upscale params if present (not part of execution config)
-        upscale = kwargs.pop("upscale", False)
-        upscale_weight = kwargs.pop("upscale_weight", 0.5)
 
         # Build execution config
         execution_config = self._build_execution_config(weights=weights, **kwargs)
@@ -469,8 +545,6 @@ class CosmosAPI:
             result = self.orchestrator.execute_run(
                 run,
                 prompt,
-                upscale=upscale,
-                upscale_weight=upscale_weight,
             )
 
             # Update run with results

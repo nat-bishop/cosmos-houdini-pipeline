@@ -427,6 +427,7 @@ class GPUExecutor:
         logs_dir.mkdir(exist_ok=True)
 
         # Use the internal method with run_id
+        start_time = time.time()
         try:
             enhanced_text = self._run_prompt_upsampling_internal(
                 run_id=run_id,
@@ -435,12 +436,16 @@ class GPUExecutor:
                 video_path=video_path,
             )
 
+            # Calculate actual duration
+            duration_seconds = time.time() - start_time
+
             # Store results in run directory
             results_file = run_dir / "enhancement_results.json"
             results = {
                 "enhanced_text": enhanced_text,
                 "original_prompt_id": prompt["id"],
                 "model": model,
+                "duration_seconds": duration_seconds,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             with open(results_file, "w") as f:
@@ -450,7 +455,7 @@ class GPUExecutor:
             return {
                 "enhanced_text": enhanced_text,
                 "original_prompt_id": prompt["id"],
-                "duration_seconds": 30.0,  # TODO: Track actual duration
+                "duration_seconds": duration_seconds,
                 "log_path": str(logs_dir / "enhancement.log"),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }

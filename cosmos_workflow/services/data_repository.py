@@ -17,7 +17,7 @@ from cosmos_workflow.database.models import Prompt, Run
 from cosmos_workflow.utils.logging import logger
 
 # Supported AI model types
-SUPPORTED_MODEL_TYPES = {"transfer", "reason", "predict", "enhancement"}
+SUPPORTED_MODEL_TYPES = {"transfer", "reason", "predict", "enhance", "upscale"}
 MAX_PROMPT_LENGTH = 10000
 
 

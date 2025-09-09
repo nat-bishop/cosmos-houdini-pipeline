@@ -198,8 +198,9 @@ class CosmosAPI:
             all_runs = preview.get("runs", [])
 
             # Check which runs would block overwriting
-            # ALL runs that use GPU resources should block (including enhancement)
-            blocking_runs = all_runs  # All runs block for safety
+            # Only non-enhancement runs should block (transfer/upscale use GPU resources)
+            # Enhancement runs are just metadata operations and shouldn't block
+            blocking_runs = [r for r in all_runs if r.get("model_type") != "enhance"]
 
             if blocking_runs and not force_overwrite:
                 # Provide detailed error message about what would be deleted

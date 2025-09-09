@@ -61,7 +61,7 @@ class DockerExecutor:
         self.remote_executor.create_directory(remote_output_dir)
 
         # Setup local log path
-        local_log_path = get_log_path("inference", prompt_name, run_id)
+        local_log_path = get_log_path("inference", f"run_{run_id}", run_id)
 
         try:
             # Log path for reference
@@ -123,7 +123,7 @@ class DockerExecutor:
         run_logger.info("Running upscaling for %s with weight %s", prompt_name, control_weight)
 
         # Setup local log path
-        local_log_path = get_log_path("upscaling", f"{prompt_name}_upscaled", run_id)
+        local_log_path = get_log_path("upscaling", f"run_{run_id}", run_id)
 
         try:
             # Check if input video exists from parent run
@@ -197,7 +197,7 @@ class DockerExecutor:
             run_logger = get_run_logger(
                 run_id, f"prompt_enhancement_{batch_filename.split('.')[0]}"
             )
-            local_log_path = get_log_path("enhancement", f"prompt_enhancement_{run_id}", run_id)
+            local_log_path = get_log_path("enhancement", f"run_{run_id}", run_id)
         else:
             run_logger = logger
             local_log_path = None

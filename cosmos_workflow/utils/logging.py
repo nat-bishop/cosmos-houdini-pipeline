@@ -91,7 +91,7 @@ def get_run_logger(run_id: str, prompt_name: str) -> "logger":
     Returns:
         Logger instance configured for this run
     """
-    log_dir = Path(f"outputs/{prompt_name}/logs")
+    log_dir = Path(f"outputs/run_{run_id}/logs")
     log_file = log_dir / f"orchestration_{run_id}.log"
 
     # Create a bound logger with run context

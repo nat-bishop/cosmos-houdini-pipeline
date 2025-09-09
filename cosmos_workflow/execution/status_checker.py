@@ -60,13 +60,8 @@ class StatusChecker:
         Returns:
             Tuple of (exit_code, stdout, stderr)
         """
-        try:
-            # execute_command returns stdout on success
-            stdout = self.remote_executor.execute_command(command)
-            return (0, stdout, "")
-        except RuntimeError as e:
-            # On failure, execute_command raises RuntimeError
-            return (1, "", str(e))
+        # Use ssh_manager directly with stream_output=False to avoid console output
+        return self.ssh_manager.execute_command(command, stream_output=False)
 
     def parse_completion_marker(self, log_content: str) -> int | None:
         """Parse completion marker from log content.
@@ -77,10 +72,15 @@ class StatusChecker:
         Returns:
             Exit code if found, None otherwise
         """
-        pattern = r"\[COSMOS_COMPLETE\]\s+exit_code=(\d+)"
-        match = re.search(pattern, log_content)
-        if match:
-            return int(match.group(1))
+        # Check for simple completion marker first
+        if "[COSMOS_COMPLETE]" in log_content:
+            # Look for exit code if provided
+            pattern = r"\[COSMOS_COMPLETE\]\s+exit_code=(\d+)"
+            match = re.search(pattern, log_content)
+            if match:
+                return int(match.group(1))
+            # Default to success if marker present without exit code
+            return 0
         return None
 
     def check_container_status(self, container_name: str) -> dict[str, Any]:
@@ -94,11 +94,8 @@ class StatusChecker:
         """
         command = f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
 
-        # Ensure remote_executor has execute method for tests
-        if not hasattr(self.remote_executor, "execute"):
-            self.remote_executor.execute = self.remote_executor.execute_command
-
-        exit_code, stdout, stderr = self.remote_executor.execute(command)
+        # Use ssh_manager directly with stream_output=False to avoid console output
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(command, stream_output=False)
 
         if exit_code != 0:
             # Container not found
@@ -128,11 +125,8 @@ class StatusChecker:
         log_path = f"{remote_config.remote_dir}/outputs/run_{run_id}/run.log"
         command = f"cat {log_path} 2>/dev/null || echo ''"
 
-        # Ensure remote_executor has execute method for tests
-        if not hasattr(self.remote_executor, "execute"):
-            self.remote_executor.execute = self.remote_executor.execute_command
-
-        exit_code, stdout, stderr = self.remote_executor.execute(command)
+        # Use ssh_manager directly with stream_output=False to avoid console output
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(command, stream_output=False)
 
         if exit_code == 0 and stdout:
             return self.parse_completion_marker(stdout)
@@ -236,7 +230,12 @@ class StatusChecker:
 
         try:
             # Check container status - use truncated ID to match existing codebase pattern
-            container_name = f"cosmos_transfer_{run_id[:8]}"
+            # Handle both transfer and enhance container types
+            model_type = run_data.get("model_type", "transfer")
+            if model_type == "enhance":
+                container_name = f"cosmos_enhance_{run_id[:8]}"
+            else:
+                container_name = f"cosmos_transfer_{run_id[:8]}"
             container_status = self.check_container_status(container_name)
 
             if container_status["running"]:
@@ -245,19 +244,25 @@ class StatusChecker:
 
             # Container stopped, check exit code from logs
             exit_code = self.check_run_completion(run_id)
+            logger.info("Checked completion for %s, exit_code=%s", run_id, exit_code)
 
             if exit_code is None:
                 # No completion marker yet, might still be writing
+                logger.info("No completion marker found for %s", run_id)
                 return run_data
 
             # Determine final status based on exit code
             if exit_code == 0:
                 new_status = "completed"
                 # Download outputs
+                logger.info("Downloading outputs for %s", run_id)
                 outputs = self.download_outputs(run_data)
                 if outputs:
+                    logger.info("Downloaded outputs for %s: %s", run_id, outputs.keys())
                     run_data["outputs"] = outputs
                     data_service.update_run(run_id, outputs=outputs)
+                else:
+                    logger.warning("Failed to download outputs for %s", run_id)
             else:
                 new_status = "failed"
                 run_data["error_message"] = f"Container exited with code {exit_code}"

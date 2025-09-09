@@ -54,8 +54,10 @@ class TestDeletePromptCommand:
         assert "Test prompt" in result.output
         assert "2 run(s)" in result.output
         assert "Successfully deleted" in result.output
-        mock_operations.preview_prompt_deletion.assert_called_once_with(prompt_id)
-        mock_operations.delete_prompt.assert_called_once_with(prompt_id)
+        mock_operations.preview_prompt_deletion.assert_called_once_with(
+            prompt_id, keep_outputs=True
+        )
+        mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=True)
         mock_confirm.assert_called_once()
 
     @patch("cosmos_workflow.cli.delete.get_operations")
@@ -80,7 +82,9 @@ class TestDeletePromptCommand:
         # Assert
         assert result.exit_code == 0
         assert "Deletion cancelled" in result.output
-        mock_operations.preview_prompt_deletion.assert_called_once_with(prompt_id)
+        mock_operations.preview_prompt_deletion.assert_called_once_with(
+            prompt_id, keep_outputs=True
+        )
         mock_operations.delete_prompt.assert_not_called()
 
     @patch("cosmos_workflow.cli.delete.get_operations")
@@ -105,8 +109,10 @@ class TestDeletePromptCommand:
         # Assert
         assert result.exit_code == 0
         assert "Successfully deleted" in result.output
-        mock_operations.preview_prompt_deletion.assert_called_once_with(prompt_id)
-        mock_operations.delete_prompt.assert_called_once_with(prompt_id)
+        mock_operations.preview_prompt_deletion.assert_called_once_with(
+            prompt_id, keep_outputs=True
+        )
+        mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=True)
 
     @patch("cosmos_workflow.cli.delete.get_operations")
     def test_delete_prompt_not_found(self, mock_get_operations, runner, mock_operations):
@@ -134,7 +140,7 @@ class TestDeletePromptCommand:
     def test_delete_prompt_with_active_runs(
         self, mock_confirm, mock_get_operations, runner, mock_operations
     ):
-        """Test that deletion fails if prompt has active runs."""
+        """Test that deletion shows warning for active runs but proceeds."""
         # Arrange
         prompt_id = "ps_test123"
         mock_operations.preview_prompt_deletion.return_value = {
@@ -143,8 +149,12 @@ class TestDeletePromptCommand:
             "directories_to_delete": ["outputs/run_rs_001"],
         }
         mock_operations.delete_prompt.return_value = {
-            "success": False,
-            "error": "Cannot delete prompt with active runs",
+            "success": True,
+            "deleted": {
+                "prompt_id": prompt_id,
+                "run_ids": ["rs_001"],
+                "directories": ["outputs/run_rs_001"],
+            },
         }
         mock_get_operations.return_value = mock_operations
         mock_confirm.return_value = True
@@ -153,9 +163,10 @@ class TestDeletePromptCommand:
         result = runner.invoke(delete_group, ["prompt", prompt_id])
 
         # Assert
-        assert result.exit_code == 1
-        assert "Error: Cannot delete prompt with active runs" in result.output
-        mock_operations.delete_prompt.assert_called_once_with(prompt_id)
+        assert result.exit_code == 0
+        assert "WARNING: 1 ACTIVE RUNS WILL BE DELETED!" in result.output
+        assert "Successfully deleted" in result.output
+        mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=True)
 
 
 class TestDeleteRunCommand:
@@ -198,8 +209,8 @@ class TestDeleteRunCommand:
         assert "Preview of deletion" in result.output
         assert run_id in result.output
         assert "Successfully deleted" in result.output
-        mock_operations.preview_run_deletion.assert_called_once_with(run_id)
-        mock_operations.delete_run.assert_called_once_with(run_id)
+        mock_operations.preview_run_deletion.assert_called_once_with(run_id, keep_outputs=True)
+        mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=True)
         mock_confirm.assert_called_once()
 
     @patch("cosmos_workflow.cli.delete.get_operations")
@@ -221,7 +232,7 @@ class TestDeleteRunCommand:
         # Assert
         assert result.exit_code == 0
         assert "Deletion cancelled" in result.output
-        mock_operations.preview_run_deletion.assert_called_once_with(run_id)
+        mock_operations.preview_run_deletion.assert_called_once_with(run_id, keep_outputs=True)
         mock_operations.delete_run.assert_not_called()
 
     @patch("cosmos_workflow.cli.delete.get_operations")
@@ -245,8 +256,8 @@ class TestDeleteRunCommand:
         # Assert
         assert result.exit_code == 0
         assert "Successfully deleted" in result.output
-        mock_operations.preview_run_deletion.assert_called_once_with(run_id)
-        mock_operations.delete_run.assert_called_once_with(run_id)
+        mock_operations.preview_run_deletion.assert_called_once_with(run_id, keep_outputs=True)
+        mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=True)
 
     @patch("cosmos_workflow.cli.delete.get_operations")
     def test_delete_run_not_found(self, mock_get_operations, runner, mock_operations):
@@ -273,7 +284,7 @@ class TestDeleteRunCommand:
     def test_delete_run_with_active_status(
         self, mock_confirm, mock_get_operations, runner, mock_operations
     ):
-        """Test that deletion fails if run is active."""
+        """Test that deletion shows warning for active run but proceeds."""
         # Arrange
         run_id = "rs_test123"
         mock_operations.preview_run_deletion.return_value = {
@@ -281,8 +292,8 @@ class TestDeleteRunCommand:
             "directory_to_delete": "outputs/run_rs_test123",
         }
         mock_operations.delete_run.return_value = {
-            "success": False,
-            "error": "Cannot delete run with status 'running'",
+            "success": True,
+            "deleted": {"run_id": run_id, "directory": "outputs/run_rs_test123"},
         }
         mock_get_operations.return_value = mock_operations
         mock_confirm.return_value = True
@@ -291,9 +302,10 @@ class TestDeleteRunCommand:
         result = runner.invoke(delete_group, ["run", run_id])
 
         # Assert
-        assert result.exit_code == 1
-        assert "Error: Cannot delete run with status 'running'" in result.output
-        mock_operations.delete_run.assert_called_once_with(run_id)
+        assert result.exit_code == 0
+        assert "WARNING: THIS RUN IS CURRENTLY ACTIVE!" in result.output
+        assert "Successfully deleted" in result.output
+        mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=True)
 
     @patch("cosmos_workflow.cli.delete.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
@@ -661,6 +673,7 @@ class TestEnhancedFilePreview:
         mock_operations.preview_run_deletion.return_value = {
             "run": {"id": run_id, "status": "completed", "prompt_id": "ps_001"},
             "directory_to_delete": "outputs/run_rs_test123",
+            "keep_outputs": False,
             "files": {
                 "video": {
                     "count": 3,
@@ -691,7 +704,7 @@ class TestEnhancedFilePreview:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id, "--delete-outputs"])
 
         # Assert
         assert result.exit_code == 0
@@ -713,6 +726,7 @@ class TestEnhancedFilePreview:
             "prompt": {"id": prompt_id, "prompt_text": "Test prompt"},
             "runs": [{"id": "rs_001"}, {"id": "rs_002"}],
             "directories_to_delete": ["outputs/run_rs_001", "outputs/run_rs_002"],
+            "keep_outputs": False,
             "files_summary": {
                 "total_files": 10,
                 "total_size": "2.5 GB",
@@ -734,7 +748,7 @@ class TestEnhancedFilePreview:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id, "--delete-outputs"])
 
         # Assert
         assert result.exit_code == 0

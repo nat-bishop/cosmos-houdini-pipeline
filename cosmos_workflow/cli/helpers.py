@@ -229,6 +229,12 @@ def format_duration(seconds: float) -> str:
 
     Returns:
         Human-readable duration (e.g., "1.5m", "2.3h").
+
+    Note:
+        # TODO(Claude): This function has a different output format than
+        # the format_duration() in workflow_utils.py (returns "1.5h" decimal
+        # format vs "1h 0m 0s" detailed format). They should be consolidated
+        # once the appropriate format is determined for each use case.
     """
     if seconds < 60:
         return f"{seconds:.1f}s"

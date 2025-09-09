@@ -102,8 +102,10 @@ cosmos status
 
 ### System Management
 - `cosmos verify [--fix]` - Verify database-filesystem integrity
-- `cosmos delete prompt ps_xxxxx` - Delete a prompt and its runs
-- `cosmos delete run rs_xxxxx` - Delete a specific run
+- `cosmos delete prompt ps_xxxxx [--delete-outputs] [--force]` - Delete a prompt and its runs
+- `cosmos delete run rs_xxxxx [--delete-outputs] [--force]` - Delete a specific run
+- `cosmos delete prompt --all [--delete-outputs] [--force]` - Delete all prompts and runs
+- `cosmos delete run --all [--delete-outputs] [--force]` - Delete all runs
 - `cosmos ui` - Launch Gradio web interface
 
 For shell completion setup, see [docs/SHELL_COMPLETION.md](docs/SHELL_COMPLETION.md)
@@ -162,7 +164,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instruct
 - **Database-First Architecture** - SQLAlchemy models with transaction safety
 - **Remote GPU Orchestration** - SSH-based Docker execution on GPU clusters
 - **Batch Processing** - Efficient multi-prompt inference with JSONL support
-- **Real-Time Monitoring** - Live log streaming and progress tracking
+- **Lazy Status Monitoring** - Automatic container status updates through lazy evaluation
 - **Gradio Web UI** - Interactive interface with advanced log visualization
 - **AI Enhancement** - Prompt optimization using Pixtral model
 - **Production Ready** - 450+ tests, 80%+ coverage, comprehensive error handling

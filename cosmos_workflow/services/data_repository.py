@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.database.models import Prompt, Run
+from cosmos_workflow.execution.status_checker import StatusChecker
 from cosmos_workflow.utils.logging import logger
 
 # Supported AI model types
@@ -34,23 +35,39 @@ class DataRepository:
     with transaction safety and proper error handling.
     """
 
-    def __init__(self, db_connection: DatabaseConnection, config_manager: ConfigManager):
+    def __init__(self, db_connection: DatabaseConnection, config_manager: ConfigManager = None):
         """Initialize the workflow service.
 
         Args:
             db_connection: Database connection instance
-            config_manager: Configuration manager instance
+            config_manager: Configuration manager instance (optional for backward compatibility)
 
         Raises:
-            ValueError: If db_connection or config_manager is None
+            ValueError: If db_connection is None
         """
         if db_connection is None:
             raise ValueError("db_connection cannot be None")
-        if config_manager is None:
-            raise ValueError("config_manager cannot be None")
 
         self.db = db_connection
         self.config = config_manager
+        self.status_checker: StatusChecker | None = None
+
+    def initialize_status_checker(self, ssh_manager, file_transfer_service):
+        """Initialize the StatusChecker for lazy status synchronization.
+
+        Args:
+            ssh_manager: SSHManager instance for SSH connections
+            file_transfer_service: FileTransferService for file downloads
+        """
+        if self.config is None:
+            raise ValueError("config_manager must be set before initializing status checker")
+
+        self.status_checker = StatusChecker(
+            ssh_manager=ssh_manager,
+            config_manager=self.config,
+            file_transfer_service=file_transfer_service,
+        )
+        logger.info("StatusChecker initialized for lazy sync")
 
     def create_prompt(
         self,
@@ -267,7 +284,16 @@ class DataRepository:
             if not run:
                 return None
 
-            return self._run_to_dict(run)
+            run_dict = self._run_to_dict(run)
+
+            # Trigger lazy sync if status checker is available and run is running
+            if self.status_checker and run_dict.get("status") == "running":
+                try:
+                    run_dict = self.status_checker.sync_run_status(run_dict, self)
+                except Exception as e:
+                    logger.warning("Failed to sync run status for %s: %s", run_id, e)
+
+            return run_dict
 
     def _run_to_dict(self, run: Run) -> dict[str, Any]:
         """Convert Run model to dict with all fields.
@@ -560,6 +586,16 @@ class DataRepository:
                         "started_at": run.started_at.isoformat() if run.started_at else None,
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
                     }
+
+                    # Trigger lazy sync if status checker is available and run is running
+                    if self.status_checker and run_dict.get("status") == "running":
+                        try:
+                            run_dict = self.status_checker.sync_run_status(run_dict, self)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to sync run status for %s: %s", run_dict["id"], e
+                            )
+
                     result.append(run_dict)
 
                 return result
@@ -728,17 +764,20 @@ class DataRepository:
             logger.error("Error getting prompt with runs: %s", e)
             return None
 
-    def preview_prompt_deletion(self, prompt_id: str) -> dict[str, Any]:
+    def preview_prompt_deletion(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Preview what would be deleted if a prompt is removed.
 
         Args:
             prompt_id: The prompt ID to preview deletion for
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary containing:
             - prompt: Prompt details or None if not found
             - runs: List of runs that would be deleted
             - directories_to_delete: List of output directories that would be removed
+            - keep_outputs: Whether outputs will be kept
+            - files_summary: Summary of files to be deleted (if not keeping outputs)
             - error: Error message if prompt not found
         """
         logger.debug("Previewing deletion for prompt_id=%s", prompt_id)
@@ -747,6 +786,7 @@ class DataRepository:
             "prompt": None,
             "runs": [],
             "directories_to_delete": [],
+            "keep_outputs": keep_outputs,
         }
 
         # Get prompt with runs
@@ -766,23 +806,57 @@ class DataRepository:
         result["runs"] = prompt_data.get("runs", [])
 
         # Determine directories that would be deleted
-        outputs_dir = self.config.get_local_config().outputs_dir
-        for run in result["runs"]:
-            run_dir = outputs_dir / f"run_{run['id']}"
-            result["directories_to_delete"].append(str(run_dir))
+        if not keep_outputs:
+            outputs_dir = self.config.get_local_config().outputs_dir
+            total_files = 0
+            total_size = 0
+            files_by_type = {}
+
+            for run in result["runs"]:
+                run_dir = outputs_dir / f"run_{run['id']}"
+                result["directories_to_delete"].append(str(run_dir))
+
+                # Collect file statistics
+                if run_dir.exists():
+                    for file_path in run_dir.rglob("*"):
+                        if file_path.is_file():
+                            total_files += 1
+                            size = file_path.stat().st_size
+                            total_size += size
+                            ext = file_path.suffix.lower().lstrip(".") or "other"
+                            if ext not in files_by_type:
+                                files_by_type[ext] = {"count": 0, "size": 0}
+                            files_by_type[ext]["count"] += 1
+                            files_by_type[ext]["size"] += size
+
+            # Add file summary
+            if total_files > 0:
+                result["files_summary"] = {
+                    "total_files": total_files,
+                    "total_size": self._format_size(total_size),
+                    "by_type": {
+                        ext: {"count": info["count"], "size": self._format_size(info["size"])}
+                        for ext, info in files_by_type.items()
+                    },
+                }
 
         return result
 
-    def preview_run_deletion(self, run_id: str) -> dict[str, Any]:
+    def preview_run_deletion(self, run_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Preview what would be deleted if a run is removed.
 
         Args:
             run_id: The run ID to preview deletion for
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary containing:
             - run: Run details or None if not found
             - directory_to_delete: Output directory that would be removed
+            - keep_outputs: Whether outputs will be kept
+            - files: Detailed file information (if not keeping outputs)
+            - total_files: Total number of files
+            - total_size: Total size of files
             - error: Error message if run not found
         """
         logger.debug("Previewing deletion for run_id=%s", run_id)
@@ -790,6 +864,7 @@ class DataRepository:
         result = {
             "run": None,
             "directory_to_delete": None,
+            "keep_outputs": keep_outputs,
         }
 
         # Get run details
@@ -802,16 +877,90 @@ class DataRepository:
         result["run"] = run_data
 
         # Determine directory that would be deleted
-        outputs_dir = self.config.get_local_config().outputs_dir
-        result["directory_to_delete"] = str(outputs_dir / f"run_{run_id}")
+        if not keep_outputs:
+            outputs_dir = self.config.get_local_config().outputs_dir
+            run_dir = outputs_dir / f"run_{run_id}"
+            result["directory_to_delete"] = str(run_dir)
+
+            # Collect detailed file information
+            if run_dir.exists():
+                files_by_type = {}
+                total_files = 0
+                total_size = 0
+
+                for file_path in run_dir.rglob("*"):
+                    if file_path.is_file():
+                        total_files += 1
+                        size = file_path.stat().st_size
+                        total_size += size
+
+                        ext = file_path.suffix.lower().lstrip(".") or "other"
+                        if ext == "mp4":
+                            ext = "video"
+                        elif ext in ["jpg", "jpeg", "png", "gif"]:
+                            ext = "image"
+                        elif ext == "json":
+                            ext = "json"
+
+                        if ext not in files_by_type:
+                            files_by_type[ext] = {"count": 0, "total_size": "0 B", "files": []}
+
+                        files_by_type[ext]["count"] += 1
+                        files_by_type[ext]["files"].append(
+                            {"name": file_path.name, "size": self._format_size(size)}
+                        )
+
+                # Update totals for each type
+                for ext, info in files_by_type.items():
+                    type_size = sum(
+                        file_path.stat().st_size
+                        for file_path in run_dir.rglob("*")
+                        if file_path.is_file() and self._get_file_type(file_path) == ext
+                    )
+                    info["total_size"] = self._format_size(type_size)
+                    # Sort files by size (largest first)
+                    info["files"].sort(key=lambda x: self._parse_size(x["size"]), reverse=True)
+
+                result["files"] = files_by_type
+                result["total_files"] = total_files
+                result["total_size"] = self._format_size(total_size)
 
         return result
 
-    def delete_prompt(self, prompt_id: str) -> dict[str, Any]:
+    def _get_file_type(self, file_path) -> str:
+        """Get file type category from path."""
+        ext = file_path.suffix.lower().lstrip(".") or "other"
+        if ext == "mp4":
+            return "video"
+        elif ext in ["jpg", "jpeg", "png", "gif"]:
+            return "image"
+        elif ext == "json":
+            return "json"
+        return ext
+
+    def _format_size(self, size_bytes: int) -> str:
+        """Format size in bytes to human readable string."""
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
+
+    def _parse_size(self, size_str: str) -> float:
+        """Parse size string back to bytes for sorting."""
+        parts = size_str.split()
+        if len(parts) != 2:
+            return 0
+        value, unit = parts
+        units = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
+        return float(value) * units.get(unit, 1)
+
+    def delete_prompt(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a prompt and all associated runs.
 
         Args:
             prompt_id: The prompt ID to delete
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary containing:
@@ -829,18 +978,16 @@ class DataRepository:
                 "error": "Prompt not found",
             }
 
-        # Check for running or uploading runs
+        # Check for running or uploading runs and log warning
         active_runs = [
             run for run in prompt_data.get("runs", []) if run["status"] in ("running", "uploading")
         ]
         if active_runs:
-            return {
-                "success": False,
-                "error": (
-                    f"Cannot delete prompt with active runs (running/uploading). "
-                    f"Found {len(active_runs)} active runs."
-                ),
-            }
+            logger.warning(
+                "Deleting prompt %s with %d active runs (running/uploading). Proceeding anyway.",
+                prompt_id,
+                len(active_runs),
+            )
 
         # Collect information about what will be deleted
         deleted_info = {
@@ -849,19 +996,20 @@ class DataRepository:
             "directories": [],
         }
 
-        # Delete output directories
-        import shutil
+        # Delete output directories if requested
+        if not keep_outputs:
+            import shutil
 
-        outputs_dir = self.config.get_local_config().outputs_dir
-        for run in prompt_data.get("runs", []):
-            run_dir = outputs_dir / f"run_{run['id']}"
-            deleted_info["directories"].append(str(run_dir))
-            if run_dir.exists():
-                try:
-                    shutil.rmtree(run_dir)
-                    logger.info("Deleted directory: %s", run_dir)
-                except Exception as e:
-                    logger.warning("Failed to delete directory %s: %s", run_dir, e)
+            outputs_dir = self.config.get_local_config().outputs_dir
+            for run in prompt_data.get("runs", []):
+                run_dir = outputs_dir / f"run_{run['id']}"
+                deleted_info["directories"].append(str(run_dir))
+                if run_dir.exists():
+                    try:
+                        shutil.rmtree(run_dir)
+                        logger.info("Deleted directory: %s", run_dir)
+                    except Exception as e:
+                        logger.warning("Failed to delete directory %s: %s", run_dir, e)
 
         # Delete from database (cascade will delete runs)
         try:
@@ -887,11 +1035,12 @@ class DataRepository:
             "deleted": deleted_info,
         }
 
-    def delete_run(self, run_id: str) -> dict[str, Any]:
+    def delete_run(self, run_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a run and its output directory.
 
         Args:
             run_id: The run ID to delete
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary containing:
@@ -910,12 +1059,13 @@ class DataRepository:
                 "error": "Run not found",
             }
 
-        # Check for running or uploading status
+        # Warn about running or uploading status but proceed
         if run_data["status"] in ("running", "uploading"):
-            return {
-                "success": False,
-                "error": f"Cannot delete run with status '{run_data['status']}'. Wait for completion or cancel first.",
-            }
+            logger.warning(
+                "Deleting run %s with active status '%s'. Proceeding anyway.",
+                run_id,
+                run_data["status"],
+            )
 
         # Collect information about what will be deleted
         deleted_info = {
@@ -924,23 +1074,24 @@ class DataRepository:
         }
         warnings = []
 
-        # Delete output directory
-        import shutil
+        # Delete output directory if requested
+        if not keep_outputs:
+            import shutil
 
-        outputs_dir = self.config.get_local_config().outputs_dir
-        run_dir = outputs_dir / f"run_{run_id}"
-        deleted_info["directory"] = str(run_dir)
+            outputs_dir = self.config.get_local_config().outputs_dir
+            run_dir = outputs_dir / f"run_{run_id}"
+            deleted_info["directory"] = str(run_dir)
 
-        if run_dir.exists():
-            try:
-                shutil.rmtree(run_dir)
-                logger.info("Deleted directory: %s", run_dir)
-            except PermissionError as e:
-                warnings.append(f"Could not delete directory due to permission error: {e!s}")
-                logger.warning("Permission error deleting directory %s: %s", run_dir, e)
-            except Exception as e:
-                warnings.append(f"Failed to delete directory: {e!s}")
-                logger.warning("Failed to delete directory %s: %s", run_dir, e)
+            if run_dir.exists():
+                try:
+                    shutil.rmtree(run_dir)
+                    logger.info("Deleted directory: %s", run_dir)
+                except PermissionError as e:
+                    warnings.append(f"Could not delete directory due to permission error: {e!s}")
+                    logger.warning("Permission error deleting directory %s: %s", run_dir, e)
+                except Exception as e:
+                    warnings.append(f"Failed to delete directory: {e!s}")
+                    logger.warning("Failed to delete directory %s: %s", run_dir, e)
 
         # Delete from database
         try:
@@ -965,3 +1116,196 @@ class DataRepository:
             result["warnings"] = warnings
 
         return result
+
+    def preview_all_runs_deletion(self) -> dict[str, Any]:
+        """Preview deletion of all runs.
+
+        Returns:
+            Dictionary with all runs and summary information
+        """
+        logger.debug("Previewing deletion of all runs")
+
+        runs = self.list_runs(limit=1000)  # Get all runs
+
+        if not runs:
+            return {
+                "runs": [],
+                "total_count": 0,
+                "error": "No runs found",
+            }
+
+        # Calculate total output size and count active runs
+        outputs_dir = self.config.get_local_config().outputs_dir
+        total_size = 0
+        directories = []
+        active_runs = [r for r in runs if r.get("status") in ("running", "uploading")]
+
+        for run in runs:
+            run_dir = outputs_dir / f"run_{run['id']}"
+            if run_dir.exists():
+                directories.append(str(run_dir))
+                for file_path in run_dir.rglob("*"):
+                    if file_path.is_file():
+                        total_size += file_path.stat().st_size
+
+        return {
+            "runs": runs,
+            "total_count": len(runs),
+            "total_active_runs": len(active_runs),
+            "total_size": self._format_size(total_size),
+            "directories_to_delete": directories,
+        }
+
+    def delete_all_runs(self, keep_outputs: bool = True) -> dict[str, Any]:
+        """Delete all runs.
+
+        Args:
+            keep_outputs: Whether to keep output files (default: True)
+
+        Returns:
+            Dictionary with deletion results
+        """
+        logger.info("Deleting all runs, keep_outputs=%s", keep_outputs)
+
+        runs = self.list_runs(limit=1000)
+
+        if not runs:
+            return {
+                "success": True,
+                "deleted": {
+                    "run_ids": [],
+                    "directories": [],
+                },
+            }
+
+        # Check for active runs and warn
+        active_runs = [r for r in runs if r["status"] in ("running", "uploading")]
+        if active_runs:
+            logger.warning(
+                "Deleting %d active runs (running/uploading). Proceeding anyway.", len(active_runs)
+            )
+
+        deleted_info = {
+            "run_ids": [],
+            "directories": [],
+        }
+
+        # Delete each run
+        for run in runs:
+            result = self.delete_run(run["id"], keep_outputs)
+            if result["success"]:
+                deleted_info["run_ids"].append(run["id"])
+                if result["deleted"].get("directory"):
+                    deleted_info["directories"].append(result["deleted"]["directory"])
+
+        return {
+            "success": True,
+            "deleted": deleted_info,
+        }
+
+    def preview_all_prompts_deletion(self) -> dict[str, Any]:
+        """Preview deletion of all prompts.
+
+        Returns:
+            Dictionary with all prompts and summary information
+        """
+        logger.debug("Previewing deletion of all prompts")
+
+        prompts = self.list_prompts(limit=1000)
+
+        if not prompts:
+            return {
+                "prompts": [],
+                "total_prompt_count": 0,
+                "total_run_count": 0,
+                "error": "No prompts found",
+            }
+
+        # Count total runs, active runs, and calculate size
+        total_runs = 0
+        total_active_runs = 0
+        total_size = 0
+        outputs_dir = self.config.get_local_config().outputs_dir
+
+        for prompt in prompts:
+            runs = self.list_runs(prompt_id=prompt["id"])
+            total_runs += len(runs)
+
+            # Count active runs
+            active_runs = [r for r in runs if r.get("status") in ("running", "uploading")]
+            total_active_runs += len(active_runs)
+
+            for run in runs:
+                run_dir = outputs_dir / f"run_{run['id']}"
+                if run_dir.exists():
+                    for file_path in run_dir.rglob("*"):
+                        if file_path.is_file():
+                            total_size += file_path.stat().st_size
+
+        return {
+            "prompts": prompts,
+            "total_prompt_count": len(prompts),
+            "total_run_count": total_runs,
+            "total_active_runs": total_active_runs,
+            "total_size": self._format_size(total_size),
+        }
+
+    def delete_all_prompts(self, keep_outputs: bool = True) -> dict[str, Any]:
+        """Delete all prompts and their runs.
+
+        Args:
+            keep_outputs: Whether to keep output files (default: True)
+
+        Returns:
+            Dictionary with deletion results
+        """
+        logger.info("Deleting all prompts, keep_outputs=%s", keep_outputs)
+
+        prompts = self.list_prompts(limit=1000)
+
+        if not prompts:
+            return {
+                "success": True,
+                "deleted": {
+                    "prompt_ids": [],
+                    "run_ids": [],
+                    "directories": [],
+                },
+            }
+
+        # Check for active runs across all prompts and warn
+        total_active = 0
+        for prompt in prompts:
+            runs = self.list_runs(prompt_id=prompt["id"])
+            active_runs = [r for r in runs if r["status"] in ("running", "uploading")]
+            if active_runs:
+                total_active += len(active_runs)
+                logger.warning(
+                    "Prompt %s has %d active runs. Will delete anyway.",
+                    prompt["id"],
+                    len(active_runs),
+                )
+
+        if total_active > 0:
+            logger.warning(
+                "Deleting prompts with %d total active runs. Proceeding anyway.", total_active
+            )
+
+        deleted_info = {
+            "prompt_ids": [],
+            "run_ids": [],
+            "directories": [],
+        }
+
+        # Delete each prompt
+        for prompt in prompts:
+            result = self.delete_prompt(prompt["id"], keep_outputs)
+            if result["success"]:
+                deleted_info["prompt_ids"].append(prompt["id"])
+                deleted_info["run_ids"].extend(result["deleted"]["run_ids"])
+                deleted_info["directories"].extend(result["deleted"]["directories"])
+
+        return {
+            "success": True,
+            "deleted": deleted_info,
+        }

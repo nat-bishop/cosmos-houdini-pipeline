@@ -232,8 +232,14 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 - `get_prompt()` - Get prompt details
 - `get_run()` - Get run details
 - `search_prompts()` - Search prompts by text
-- `delete_prompt()` - Delete a prompt
-- `delete_run()` - Delete a run
+- `delete_prompt(prompt_id, keep_outputs=True)` - Delete a prompt and its runs
+- `delete_run(run_id, keep_outputs=True)` - Delete a specific run
+- `preview_prompt_deletion(prompt_id, keep_outputs=True)` - Preview prompt deletion
+- `preview_run_deletion(run_id, keep_outputs=True)` - Preview run deletion
+- `delete_all_prompts(keep_outputs=True)` - Delete all prompts and runs
+- `delete_all_runs(keep_outputs=True)` - Delete all runs
+- `preview_all_prompts_deletion()` - Preview bulk prompt deletion
+- `preview_all_runs_deletion()` - Preview bulk run deletion
 
 #### System Operations
 - `check_status()` - Check remote GPU status with active operation details (type, run ID, prompt)
@@ -594,11 +600,13 @@ cosmos kill --force    # Kills immediately without confirmation
 **Warning:** This command will immediately terminate all running inference and upscaling jobs. Logs may be incomplete for terminated jobs.
 
 ### delete
-Delete prompts or runs from the database.
+Delete prompts or runs from the database with enhanced safety and bulk operations.
 
 ```bash
 cosmos delete prompt PS_ID [OPTIONS]
+cosmos delete prompt --all [OPTIONS]
 cosmos delete run RS_ID [OPTIONS]
+cosmos delete run --all [OPTIONS]
 ```
 
 **Arguments:**
@@ -607,12 +615,50 @@ cosmos delete run RS_ID [OPTIONS]
 
 **Options:**
 - `--force`: Skip confirmation prompt
+- `--all`: Delete all prompts or all runs (cannot be combined with ID)
+- `--delete-outputs`: Delete output files (default: keep outputs for safety)
+
+**Default Behavior - Output File Safety:**
+- Output files are **kept by default** to protect valuable generated content
+- Use `--delete-outputs` flag explicitly to remove output files
+- Preview shows file counts, types, and sizes before deletion
+
+**Bulk Operations:**
+- `--all` flag enables bulk deletion of all prompts or all runs
+- Special confirmation required: type "DELETE ALL" to proceed
+- Preview shows total counts and sample items before bulk deletion
+- Cannot combine `--all` with specific prompt/run IDs
+
+**Enhanced File Preview:**
+- Shows detailed file information including types and sizes
+- File type breakdown: "3 mp4 files (45.2 MB), 2 json files (1.3 KB)"
+- Sample file listings with individual sizes
+- Clear indication of what will be kept vs deleted
 
 **Examples:**
 ```bash
-cosmos delete prompt ps_abc123    # Delete prompt and all its runs
-cosmos delete run rs_xyz789       # Delete a specific run
+# Safe deletion (keeps output files by default)
+cosmos delete prompt ps_abc123
+cosmos delete run rs_xyz789
+
+# Explicit output file deletion
+cosmos delete prompt ps_abc123 --delete-outputs
+cosmos delete run rs_xyz789 --delete-outputs --force
+
+# Bulk operations with special confirmation
+cosmos delete prompt --all                    # Keeps outputs, requires confirmation
+cosmos delete run --all --delete-outputs      # Deletes outputs, requires "DELETE ALL"
+cosmos delete prompt --all --force            # Skips confirmation but still keeps outputs
+
+# View detailed preview before deciding
+cosmos delete prompt ps_abc123                # Shows file details before confirmation
 ```
+
+**Safety Features:**
+- Default behavior preserves generated outputs (videos, images, etc.)
+- Rich preview showing file counts, types, and total sizes
+- Special confirmation for bulk operations prevents accidental deletion
+- Clear distinction between database records and output files in preview
 
 ### verify
 Verify database-filesystem integrity.
@@ -884,6 +930,206 @@ with gr.Tab("Generate"):
 
     gr.Timer(fn=update_logs, outputs=[log_display], active=True)
 ```
+
+## StatusChecker - Lazy Container Monitoring
+
+The StatusChecker provides reliable container status monitoring using a lazy evaluation approach that eliminates the problems with background threads dying when CLI commands exit.
+
+### Overview
+
+The StatusChecker replaces the previous async background monitoring system with a lazy evaluation pattern:
+
+- **Lazy Evaluation**: Status checks occur only when users query run data via get_run() or list_runs()
+- **Container Exit Markers**: Reads [COSMOS_COMPLETE] markers from container logs to determine final status
+- **Automatic Downloads**: Downloads output files when containers complete successfully
+- **Model Support**: Handles all supported model types (inference, enhancement, upscaling) appropriately
+
+### Key Features
+
+**Lazy Sync Integration**
+```python
+from cosmos_workflow.api import CosmosAPI
+
+# StatusChecker is automatically initialized and used transparently
+ops = CosmosAPI()
+
+# These operations trigger lazy sync for "running" containers
+run_data = ops.get_run("rs_abc123")  # StatusChecker automatically checks container
+runs = ops.list_runs()  # StatusChecker syncs all running containers
+```
+
+**Exit Marker Detection**
+```python
+from cosmos_workflow.execution.status_checker import StatusChecker
+
+# StatusChecker reads completion markers from container logs
+# Shell scripts write markers like: [COSMOS_COMPLETE] exit_code=0
+checker = StatusChecker(ssh_manager, config_manager, file_transfer)
+
+# Parse completion markers
+exit_code = checker.parse_completion_marker(log_content)
+# Returns: 0 for success, 1+ for failure, None if not complete
+```
+
+**Automatic Output Downloads**
+```python
+# When containers complete, StatusChecker automatically downloads outputs:
+# - inference: output.mp4 → outputs/run_rs_abc123/outputs/output.mp4
+# - enhancement: batch_results.json with enhanced text
+# - upscaling: output_4k.mp4 for upscaled videos
+
+outputs = checker.download_outputs(run_data)
+# Returns: {"output_path": "/path/to/file", "completed_at": "2024-01-01T12:00:00Z"}
+```
+
+### Architecture Benefits
+
+**Solves CLI Exit Problem**
+- Previous background monitoring threads would die when CLI commands exited
+- Lazy evaluation only activates when users actually query run status
+- No background thread lifecycle management required
+- More reliable than async approaches that depend on process lifetime
+
+**Container Exit Detection**
+```bash
+# Shell scripts (inference.sh, upscale.sh, batch_inference.sh) write completion markers:
+echo "[COSMOS_COMPLETE] exit_code=${EXIT_CODE}" >> "${OUTPUT_DIR}/run.log"
+```
+
+**Integration Points**
+- StatusChecker initialized in DataRepository for automatic lazy sync
+- CosmosAPI automatically initializes StatusChecker when dependencies available
+- No changes required to CLI commands or user-facing APIs
+- Maintains facade pattern integrity while adding monitoring capabilities
+
+### Methods
+
+```python
+class StatusChecker:
+    def parse_completion_marker(self, log_content: str) -> Optional[int]:
+        """Parse [COSMOS_COMPLETE] marker from log content.
+
+        Args:
+            log_content: Container log file content
+
+        Returns:
+            Exit code if found, None if container still running
+        """
+
+    def check_container_status(self, container_name: str) -> Dict[str, Any]:
+        """Check Docker container status via docker inspect.
+
+        Args:
+            container_name: Name of container (e.g., cosmos_transfer_abc12345)
+
+        Returns:
+            Dict with running status and exit code
+        """
+
+    def check_run_completion(self, run_id: str) -> Optional[int]:
+        """Check if run completed by reading log file for completion marker.
+
+        Args:
+            run_id: Run ID to check
+
+        Returns:
+            Exit code if completed, None if still running
+        """
+
+    def download_outputs(self, run_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Download output files for completed run.
+
+        Args:
+            run_data: Run data with id and model_type
+
+        Returns:
+            Dict with output paths and completion timestamp
+        """
+
+    def sync_run_status(self, run_data: Dict[str, Any], data_service: Any) -> Dict[str, Any]:
+        """Sync status of running container and download outputs if complete.
+
+        This is the main method called by DataRepository for lazy sync.
+
+        Args:
+            run_data: Dictionary with run information
+            data_service: DataRepository service for updating status
+
+        Returns:
+            Updated run data dictionary
+        """
+```
+
+### Usage Examples
+
+**Transparent Integration**
+```python
+# StatusChecker works transparently through existing APIs
+ops = CosmosAPI()
+
+# Start inference
+result = ops.quick_inference("ps_abc123")
+run_id = result["run_id"]  # e.g., "rs_xyz789"
+
+# Later: Check status (triggers lazy sync if container completed)
+run_data = ops.get_run(run_id)
+if run_data["status"] == "completed":
+    print(f"Output: {run_data['outputs']['output_path']}")
+```
+
+**Manual StatusChecker Usage (Advanced)**
+```python
+from cosmos_workflow.execution.status_checker import StatusChecker
+from cosmos_workflow.connection import SSHManager
+from cosmos_workflow.config import ConfigManager
+from cosmos_workflow.transfer import FileTransferService
+
+# Initialize components (normally done automatically)
+ssh_manager = SSHManager(ssh_options)
+config_manager = ConfigManager()
+file_transfer = FileTransferService(ssh_manager, remote_dir)
+
+# Create StatusChecker
+checker = StatusChecker(ssh_manager, config_manager, file_transfer)
+
+# Check specific run
+run_data = {"id": "rs_abc123", "model_type": "inference", "status": "running"}
+data_service = DataRepository()
+
+# Sync status (downloads outputs if complete)
+updated_run = checker.sync_run_status(run_data, data_service)
+print(f"Status: {updated_run['status']}")
+```
+
+### Design Philosophy
+
+**Lazy Evaluation vs Background Monitoring**
+
+Previous Approach (Background Threads):
+- Launched background threads to monitor containers
+- Threads would die when CLI commands exited
+- Complex lifecycle management and error handling
+- Race conditions between threads and database updates
+
+Current Approach (Lazy Evaluation):
+- Check status only when users query run data
+- No background processes to manage
+- More predictable and reliable
+- Eliminates CLI exit dependencies
+
+**When Status Checks Occur**
+
+StatusChecker activates during:
+- `CosmosAPI.get_run(run_id)` - Single run queries
+- `CosmosAPI.list_runs()` - Bulk run queries
+- Any DataRepository method that returns run data
+
+StatusChecker does NOT activate during:
+- Run creation or initial execution
+- Background processes (there are none)
+- Periodic polling or scheduled checks
+
+This lazy approach ensures monitoring happens exactly when needed without unnecessary overhead or reliability issues.
 
 ## Core Modules
 
@@ -1194,6 +1440,34 @@ prompt = ops.create_prompt(
   name="futuristic_city"
 )
 # Returns: {"id": "ps_abc123", ...}
+
+# Enhanced deletion operations with output file safety
+# Safe deletion (keeps output files by default)
+deletion_preview = ops.preview_prompt_deletion("ps_abc123", keep_outputs=True)
+print(f"Will delete {len(deletion_preview['runs'])} runs")
+print(f"Output files: {deletion_preview['files_summary']['total_files']} files ({deletion_preview['files_summary']['total_size']})")
+
+result = ops.delete_prompt("ps_abc123", keep_outputs=True)
+# Returns: {"success": True, "deleted": {"prompt_id": "ps_abc123", "run_ids": [...], "directories": []}}
+
+# Delete with output files removed
+result = ops.delete_prompt("ps_abc123", keep_outputs=False)
+# Returns: {"success": True, "deleted": {"prompt_id": "ps_abc123", "run_ids": [...], "directories": ["outputs/run_rs_xyz789"]}}
+
+# Bulk deletion operations
+bulk_preview = ops.preview_all_prompts_deletion()
+print(f"Total prompts: {bulk_preview['total_prompt_count']}, Total runs: {bulk_preview['total_run_count']}")
+
+result = ops.delete_all_prompts(keep_outputs=True)
+# Returns: {"success": True, "deleted": {"prompt_ids": [...], "run_ids": [...], "directories": []}}
+
+# Run-specific operations
+run_preview = ops.preview_run_deletion("rs_xyz789", keep_outputs=False)
+result = ops.delete_run("rs_xyz789", keep_outputs=False)
+
+# Bulk run deletion
+all_runs_preview = ops.preview_all_runs_deletion()
+result = ops.delete_all_runs(keep_outputs=True)
 ```
 
 **Primary Methods (What Most Users Should Use):**
@@ -1478,7 +1752,7 @@ The system uses a database-first architecture built on SQLAlchemy with no persis
 - **Multi-Model Support**: Single schema supports different AI models (transfer, reason, predict, enhance, upscale)
 - **Flexible JSON Storage**: Model-specific data stored in JSON columns for easy extensibility
 - **Security First**: Path traversal protection, input validation, and transaction safety
-- **Real-Time Tracking**: Granular progress monitoring through all execution stages
+- **Lazy Status Monitoring**: StatusChecker provides on-demand container status updates through lazy evaluation
 
 **Supported Model Types (Phase 2 Update):**
 - `transfer`: NVIDIA Cosmos Transfer video generation model (core functionality)

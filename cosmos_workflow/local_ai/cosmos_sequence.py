@@ -234,7 +234,8 @@ class CosmosVideoConverter:
             # Generate description first to derive name
             if "color" in sequence_info.modalities:
                 description = self._generate_ai_description(sequence_info.modalities["color"])
-                name = self._generate_smart_name(description)
+                name = generate_smart_name(description)
+                logger.info("Generated smart name: '%s' from description: '%s'", name, description)
             else:
                 name = "sequence"
         elif name is None:
@@ -411,7 +412,8 @@ class CosmosVideoConverter:
                 and description
                 and description != f"Sequence with {sequence_info.frame_count} frames"
             ):
-                name = self._generate_smart_name(description)
+                name = generate_smart_name(description)
+                logger.info("Generated smart name: '%s' from description: '%s'", name, description)
             else:
                 name = "sequence"
 
@@ -512,20 +514,3 @@ class CosmosVideoConverter:
         except Exception as e:
             logger.warning("Could not generate AI description: %s", e)
             return f"Sequence with {len(color_frames)} frames"
-
-    @staticmethod
-    def _generate_smart_name(description: str, max_length: int = 20) -> str:
-        """Generate a short, meaningful name from an AI description.
-
-        This is a wrapper around the shared smart naming utility.
-
-        Args:
-            description: AI-generated description
-            max_length: Maximum length for the name (default 20)
-
-        Returns:
-            Smart name derived from description
-        """
-        name = generate_smart_name(description, max_length)
-        logger.info("Generated smart name: '%s' from description: '%s'", name, description)
-        return name

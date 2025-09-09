@@ -16,7 +16,7 @@ _base_logger.remove()
 
 
 def init_logger(
-    level: str = None,
+    level: str | None = None,
     log_file: Path | None = None,
     rotation: str = "100 MB",
     retention: str = "7 days",

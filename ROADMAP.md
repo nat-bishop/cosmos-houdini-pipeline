@@ -2,12 +2,39 @@
 
 ## 🔥 Priority 1: Critical Fixes
 
-### Refactor RemoteCommandExecutor Usage
-- [ ] Replace deprecated `execute_command()` calls with specialized methods
-- [ ] Migrate 4 cleanup calls to use `cleanup_run_directories()`
-- [ ] Migrate container inspect call to use `inspect_container()`
-- [ ] Remove deprecated `execute_command()` method once migration complete
-- [ ] Add more specialized methods as patterns emerge (e.g., `get_container_logs()`)
+### Complete Abstraction Layer Migration
+**Issue:** Multiple files bypass abstraction layers, calling SSH/Docker commands directly instead of using RemoteCommandExecutor/DockerCommandBuilder
+
+**Export Missing Classes:**
+- [ ] Add RemoteCommandExecutor to cosmos_workflow/execution/__init__.py exports
+
+**Fix Direct SSH Usage - cosmos_workflow/api/cosmos_api.py:**
+- [ ] Line 868: Replace ssh_manager.execute_command with RemoteCommandExecutor
+- [ ] Line 894: Replace ssh_manager.execute_command for Docker logs streaming
+
+**Fix Direct SSH Usage - cosmos_workflow/transfer/file_transfer.py:**
+- [ ] Line 248: Replace direct mkdir -p with RemoteCommandExecutor.create_directory() loop
+
+**Fix Direct SSH Usage - cosmos_workflow/execution/docker_executor.py:**
+- [ ] Lines 277, 320, 347, 654: Background Docker runs (preserve timeout=5 pattern)
+- [ ] Lines 372, 377: Docker info/images commands
+- [ ] Lines 415, 477, 497, 522, 546, 564: Various Docker commands
+- [ ] Lines 662, 703: File listing and log streaming
+
+**Fix Direct SSH Usage - cosmos_workflow/execution/gpu_executor.py:**
+- [ ] Line 87: Replace manual docker inspect with RemoteCommandExecutor.inspect_container()
+- [ ] Lines 406, 752, 895, 1021: Replace rm -rf with RemoteCommandExecutor.cleanup_run_directories()
+- [ ] Replace deprecated execute_command() calls with specialized methods
+
+**Extend DockerCommandBuilder:**
+- [ ] Add build_ps_command() for docker ps with filters/formatting
+- [ ] Add build_exec_command() for docker exec operations
+- [ ] Document which Docker commands need builder methods vs RemoteCommandExecutor
+
+**Special Handling Required:**
+- [ ] Document streaming pattern for Docker logs (preserve stream_output parameter)
+- [ ] Document background execution pattern (timeout=5 for fire-and-forget)
+- [ ] Ensure all timeout and stream_output parameters are preserved
 
 ### Log Recovery on Failure
 - [ ] Add `_ensure_log_downloaded()` method to DockerExecutor
@@ -29,6 +56,28 @@
 - [ ] Implement thread tracking
 
 ## 🚀 Priority 2: Performance & Reliability
+
+### Simplify Container Status Monitoring
+**Consideration:** Running inference.sh/prompt-enhance.sh/etc. scripts from the local machine instead of inside Docker containers could simplify the status checking system
+
+**Current Issues with Container-Based Execution:**
+- Complex polling logic to check container status
+- Difficult to determine if process inside container has actually started
+- Need to parse docker inspect output for state information
+- Hard to distinguish between container running and actual work being done
+
+**Potential Benefits of Local Script Execution:**
+- [ ] Direct process control and status monitoring
+- [ ] Simpler error handling and recovery
+- [ ] Easier to implement timeouts and cancellation
+- [ ] Could use standard process monitoring tools
+- [ ] Would eliminate need for container polling
+
+**Investigation Tasks:**
+- [ ] Analyze if scripts have dependencies that require container environment
+- [ ] Determine if GPU access can be managed from local scripts
+- [ ] Evaluate security implications of running scripts locally
+- [ ] Consider hybrid approach: local orchestration with containerized GPU operations
 
 ### Batch Processing Implementation
 - [ ] Create `cosmos batch` command
@@ -64,9 +113,37 @@
 - [ ] Update all modules to use consistent exceptions
 - [ ] Add retry logic for transient errors
 
+### Test Architecture Refactoring
+**Issue:** Tests currently mock implementation details (exact SSH commands) instead of abstraction boundaries
+
+**Problems with Current Approach:**
+- Tests break when implementation changes (e.g., changing mkdir flags)
+- Tests document HOW instead of WHAT (implementation vs behavior)
+- Excessive mock setup for simple operations
+- White-box testing when black-box would be more maintainable
+
+**Refactoring Tasks:**
+- [ ] Unit tests should mock at RemoteCommandExecutor/DockerExecutor level
+- [ ] Integration tests should mock at SSHManager level or use real SSH
+- [ ] Remove assertions on exact shell commands (e.g., "mkdir -p /path")
+- [ ] Replace with behavior assertions (e.g., create_directory was called)
+- [ ] Document testing strategy in developer guide
+
+**Example Migration:**
+```python
+# Bad (current): Testing implementation
+mock_ssh.execute_command_success.assert_called_with("mkdir -p /dir")
+
+# Good (target): Testing behavior
+mock_remote_executor.create_directory.assert_called_with("/dir")
+```
+
 ### Architecture Validation Tests
 - [ ] Create `tests/test_architecture.py`
 - [ ] Check for direct library imports (paramiko, docker)
+- [ ] Check for direct ssh_manager.execute_command usage
+- [ ] Validate all remote commands use RemoteCommandExecutor
+- [ ] Ensure DockerCommandBuilder is used for Docker commands
 - [ ] Validate wrapper usage
 - [ ] Add to CI pipeline
 

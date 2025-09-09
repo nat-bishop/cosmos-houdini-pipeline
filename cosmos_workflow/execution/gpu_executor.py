@@ -5,9 +5,7 @@ batch processing, and prompt upsampling using remote Docker containers.
 """
 
 import tempfile
-import threading
 import time
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,228 +67,12 @@ class GPUExecutor:
 
     # ========== Format Conversion Helpers ==========
 
-    # ========== Container Monitoring ==========
+    # ========== Container Monitoring (REMOVED) ==========
+    # Background monitoring has been replaced by lazy sync via StatusChecker
+    # StatusChecker checks container status and downloads outputs when get_run() is called
+    # All monitoring functions have been removed in favor of lazy evaluation
 
-    def _monitor_container_completion(
-        self,
-        run_id: str,
-        container_name: str,
-        completion_handler: Callable[[str, int, str], None],
-        timeout_seconds: int | None = None,
-    ) -> None:
-        """Monitor container completion in background thread.
-
-        Args:
-            run_id: Database run ID
-            container_name: Docker container name to monitor
-            completion_handler: Callback function(run_id, exit_code, container_name)
-            timeout_seconds: Max time to wait (uses config if None)
-        """
-        if timeout_seconds is None:
-            try:
-                timeouts = self.config_manager.get_timeouts()
-                logger.debug("Got timeouts: %s (type: %s)", timeouts, type(timeouts))
-                timeout_seconds = timeouts["docker_execution"]
-            except Exception as e:
-                logger.error("Failed to get timeouts: %s", e)
-                timeout_seconds = 3600  # Default fallback
-
-        # Launch monitoring in background thread
-        thread = threading.Thread(
-            target=self._monitor_container_internal,
-            args=(run_id, container_name, completion_handler, timeout_seconds),
-            daemon=True,
-        )
-        thread.start()
-        logger.info("Started background monitoring for container %s", container_name)
-
-    def _monitor_container_internal(
-        self,
-        run_id: str,
-        container_name: str,
-        completion_handler: Callable[[str, int, str], None],
-        timeout_seconds: int,
-    ) -> None:
-        """Internal monitoring function that runs in background thread.
-
-        Simple, self-contained monitoring that checks Docker exit codes:
-        - Exit code 0 = Success
-        - Exit code non-zero = Failure
-        - Timeout or error = -1
-
-        Args:
-            run_id: Database run ID
-            container_name: Docker container name
-            completion_handler: Callback for completion
-            timeout_seconds: Timeout in seconds
-        """
-        import json
-        import traceback
-
-        import paramiko
-
-        elapsed = 0
-        interval = 5  # Check every 5 seconds
-
-        logger.info(
-            "Monitoring container %s for run %s (timeout: %ds)",
-            container_name,
-            run_id,
-            timeout_seconds,
-        )
-
-        # Log thread information for debugging
-        import threading
-
-        logger.info(
-            "Monitor thread started: %s (daemon: %s)",
-            threading.current_thread().name,
-            threading.current_thread().daemon,
-        )
-
-        # Create a dedicated SSH connection for this monitoring thread
-        ssh = None
-
-        try:
-            # Simple paramiko connection - no wrappers needed
-            logger.debug("Creating SSH connection for monitoring thread")
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-            try:
-                ssh_options = self.config_manager.get_ssh_options()
-                logger.debug(
-                    "SSH options retrieved: host=%s, user=%s",
-                    ssh_options.get("hostname"),
-                    ssh_options.get("username"),
-                )
-            except Exception as e:
-                logger.error("Failed to get SSH options: %s\n%s", e, traceback.format_exc())
-                raise
-
-            # Add timeout to prevent hanging
-            ssh_options["timeout"] = 30  # 30 second timeout for connection
-            ssh_options["banner_timeout"] = 30
-
-            logger.debug("Connecting SSH with timeout=%d", ssh_options.get("timeout", 30))
-            ssh.connect(**ssh_options)
-            logger.info("SSH connected successfully in monitoring thread")
-            logger.debug("SSH connection established for monitoring")
-
-            while elapsed < timeout_seconds:
-                # Simple docker inspect to get container state
-                logger.debug("Checking container %s status (elapsed: %ds)", container_name, elapsed)
-
-                # First check if container exists
-                check_cmd = (
-                    f"sudo docker ps -a --format '{{{{.Names}}}}' | grep -w {container_name}"
-                )
-                stdin, stdout, stderr = ssh.exec_command(check_cmd)
-                container_exists = stdout.read().decode().strip()
-
-                if not container_exists:
-                    logger.warning("Container %s not found in docker ps -a output", container_name)
-
-                # Try to inspect anyway
-                inspect_cmd = f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
-                logger.debug("Running: %s", inspect_cmd)
-                stdin, stdout, stderr = ssh.exec_command(inspect_cmd)
-
-                output = stdout.read().decode().strip()
-                error_output = stderr.read().decode().strip()
-
-                if error_output:
-                    logger.warning("Docker inspect stderr: %s", error_output)
-
-                logger.debug("Container %s inspect output: %s", container_name, output[:500])
-
-                if not output or "No such object" in error_output:
-                    # Container doesn't exist anymore
-                    logger.info(
-                        "Container %s no longer exists (output: %s, error: %s)",
-                        container_name,
-                        output,
-                        error_output,
-                    )
-                    logger.info("Calling completion handler for missing container")
-                    try:
-                        completion_handler(run_id, -1, container_name)
-                    except Exception as handler_error:
-                        logger.error(
-                            "Completion handler failed: %s\n%s",
-                            handler_error,
-                            traceback.format_exc(),
-                        )
-                    return
-
-                try:
-                    state = json.loads(output)
-                    running = state.get("Running", False)
-                    logger.debug(
-                        "Container %s state: Running=%s, Full state=%s",
-                        container_name,
-                        running,
-                        state,
-                    )
-
-                    if not running:
-                        # Container stopped - check exit code
-                        exit_code = state.get("ExitCode", -1)
-                        logger.info(
-                            "Container %s stopped with exit code %d", container_name, exit_code
-                        )
-
-                        # Exit code 0 = success, non-zero = failure
-                        logger.info(
-                            "Calling completion handler for %s with exit code %d", run_id, exit_code
-                        )
-                        try:
-                            completion_handler(run_id, exit_code, container_name)
-                        except Exception as handler_error:
-                            logger.error(
-                                "Completion handler failed: %s\n%s",
-                                handler_error,
-                                traceback.format_exc(),
-                            )
-                        return
-
-                except json.JSONDecodeError as e:
-                    logger.error("Failed to parse container state: %s, raw output: %s", e, output)
-                    # Continue monitoring
-                except Exception as e:
-                    logger.error(
-                        "Unexpected error checking container state: %s\n%s",
-                        e,
-                        traceback.format_exc(),
-                    )
-
-                time.sleep(interval)
-                elapsed += interval
-
-                if elapsed % 30 == 0:  # Log progress every 30 seconds
-                    logger.info(
-                        "Container %s still running after %d seconds", container_name, elapsed
-                    )
-
-            # Timeout reached
-            logger.error("Container %s timed out after %d seconds", container_name, timeout_seconds)
-
-            # Try to stop the container
-            stdin, stdout, stderr = ssh.exec_command(f"sudo docker stop {container_name}")
-            stdout.read()  # Wait for completion
-
-            completion_handler(run_id, -1, container_name)  # -1 indicates timeout
-
-        except Exception as e:
-            logger.error("Monitor failed for container %s: %s", container_name, e)
-            completion_handler(run_id, -1, container_name)  # -1 for error
-        finally:
-            # Clean up SSH connection
-            if ssh:
-                try:
-                    ssh.close()
-                except Exception:
-                    pass
+    # ========== Single Run Execution ==========
 
     # ========== Thread-Safe Download Helper ==========
 
@@ -325,7 +107,7 @@ class GPUExecutor:
 
         try:
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
             ssh.connect(**self.config_manager.get_ssh_options())
 
             try:
@@ -550,8 +332,6 @@ class GPUExecutor:
                 self.service.update_run(run_id, error_message=error_msg)
             logger.error("Upscaling run %s failed with exit code %d", run_id, exit_code)
 
-    # ========== Single Run Execution ==========
-
     def execute_run(
         self,
         run: dict[str, Any],
@@ -646,13 +426,11 @@ class GPUExecutor:
                     )
 
                 elif inference_result["status"] == "started":
-                    # Container started successfully, monitor in background
+                    # Container started successfully
                     container_name = f"cosmos_transfer_{run_id[:8]}"
-                    self._monitor_container_completion(
-                        run_id=run_id,
-                        container_name=container_name,
-                        completion_handler=self._handle_inference_completion,
-                    )
+                    # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
+                    # StatusChecker will check container status and download outputs when get_run() is called
+                    logger.info("Container %s started for run %s", container_name, run_id)
 
                     # Return immediately with partial results
                     return {
@@ -997,12 +775,12 @@ class GPUExecutor:
                         )
 
                     elif enhancement_result["status"] == "started":
-                        # Container started successfully, monitor in background
+                        # Container started successfully
                         container_name = f"cosmos_enhance_{run_id[:8]}"
-                        self._monitor_container_completion(
-                            run_id=run_id,
-                            container_name=container_name,
-                            completion_handler=self._handle_enhancement_completion,
+                        # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
+                        # StatusChecker will check container status and download outputs when get_run() is called
+                        logger.info(
+                            "Container %s started for enhancement run %s", container_name, run_id
                         )
 
                         # Return immediately with partial results
@@ -1258,13 +1036,10 @@ class GPUExecutor:
                     raise RuntimeError(f"Upscaling failed: {result.get('error', 'Unknown error')}")
 
                 elif result["status"] == "started":
-                    # Container started successfully, monitor in background
+                    # Container started successfully
                     container_name = f"cosmos_upscale_{run_id[:8]}"
-                    self._monitor_container_completion(
-                        run_id=run_id,
-                        container_name=container_name,
-                        completion_handler=self._handle_upscaling_completion,
-                    )
+                    # StatusChecker will handle lazy sync when get_run() is called
+                    logger.info("Container %s started for upscaling run %s", container_name, run_id)
 
                     # Return immediately with partial results
                     return {

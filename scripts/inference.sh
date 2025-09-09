@@ -37,3 +37,8 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \
   2>&1 | tee "${OUTPUT_DIR}/run.log"
+
+# Capture exit code and write completion marker
+EXIT_CODE="${PIPESTATUS[0]}"
+echo "[COSMOS_COMPLETE] exit_code=${EXIT_CODE}" >> "${OUTPUT_DIR}/run.log"
+exit ${EXIT_CODE}

@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - StatusChecker Feature for Lazy Container Monitoring (2025-09-09)
+- **Complete StatusChecker Implementation**
+  - New StatusChecker class in cosmos_workflow/execution/status_checker.py for lazy container monitoring
+  - Replaces broken async background monitoring with reliable lazy evaluation approach
+  - Checks container status only when run data is queried via get_run() or list_runs()
+  - Parses [COSMOS_COMPLETE] exit markers from container logs to determine final status
+  - Automatically downloads outputs when containers complete successfully
+  - Supports all model types: inference, enhancement, upscaling with appropriate file handling
+
+- **Lazy Sync Integration with DataRepository**
+  - StatusChecker initialized in DataRepository for automatic status synchronization
+  - Lazy sync triggered when get_run() or list_runs() is called on running containers
+  - Caching system prevents redundant checks on already-completed runs
+  - Database status automatically updated from "running" to "completed"/"failed"
+  - Seamless integration preserves existing API while adding background completion detection
+
+- **Enhanced Shell Script Exit Markers**
+  - Updated inference.sh, upscale.sh, and batch_inference.sh to write [COSMOS_COMPLETE] markers
+  - Exit markers include actual exit codes: [COSMOS_COMPLETE] exit_code=0/1
+  - Reliable completion detection independent of container status
+  - Marker parsing supports multi-line logs and various output formats
+
+- **CosmosAPI StatusChecker Initialization**
+  - StatusChecker automatically initialized in CosmosAPI when dependencies available
+  - Seamless integration with existing facade pattern architecture
+  - No changes required to CLI commands or user workflows
+  - Background monitoring functionality restored without performance impact
+
+- **Comprehensive Test Coverage**
+  - Complete test suite for StatusChecker class functionality
+  - DataRepository lazy sync integration tests
+  - Container status checking and log parsing tests
+  - Output downloading tests for all supported model types
+  - Edge case handling for missing containers, failed downloads, and malformed logs
+
+### Fixed - Background Monitoring System (2025-09-09)
+- **Resolved CLI Exit Termination Issue**
+  - Fixed problem where background monitoring threads died when CLI commands exited
+  - Replaced unreliable async background threads with lazy evaluation approach
+  - StatusChecker only activates when run data is actively queried by users
+  - Eliminates orphaned "running" runs that never update to completion status
+
+- **Container Status Synchronization**
+  - Fixed runs staying "running" forever after containers complete
+  - Automatic status updates based on actual container completion markers
+  - Proper handling of container failures with error message capture
+  - Reliable exit code detection from log files instead of container inspection
+
+- **Output Download Reliability**
+  - Fixed race conditions where outputs were downloaded before generation completed
+  - Downloads now trigger only after confirmed container completion
+  - Model-specific output handling for inference (output.mp4), enhancement (batch_results.json), upscaling (output_4k.mp4)
+  - Proper error handling when expected output files are missing
+
+### Architecture - Lazy Evaluation Monitoring Pattern (2025-09-09)
+- **Design Philosophy Shift**
+  - Moved from "push" (background threads) to "pull" (lazy evaluation) monitoring pattern
+  - StatusChecker activates only when users query run status through get_run() or list_runs()
+  - Eliminates background thread lifecycle management and CLI exit dependencies
+  - More reliable and predictable than async monitoring approaches
+
+- **Integration Points**
+  - StatusChecker initialized in both DataRepository and CosmosAPI for comprehensive coverage
+  - Seamless integration with existing database operations and query methods
+  - No changes to CLI commands or user-facing APIs required
+  - Maintains facade pattern integrity while adding monitoring capabilities
+
+
+### Added - Enhanced Delete Command (2025-09-09)
+- **Output File Preservation by Default**
+  - `--keep-outputs` flag: Default behavior now keeps output files during deletion
+  - `--delete-outputs` flag: Explicit flag required to remove output files
+  - Safer deletion workflow protects valuable generated content by default
+
+- **Bulk Deletion Operations**
+  - `--all` flag for `cosmos delete prompt` to delete all prompts at once
+  - `--all` flag for `cosmos delete run` to delete all runs at once
+  - Special confirmation prompt ("DELETE ALL") required for bulk operations
+  - Preview shows counts and sample items before bulk deletion
+
+- **Enhanced File Preview System**
+  - Detailed file information including file types, counts, and total sizes
+  - File type breakdown (e.g., "3 mp4 files (45.2 MB), 2 json files (1.3 KB)")
+  - Smart file sampling shows up to 3 files per type with individual sizes
+  - Total file count and size summary for informed deletion decisions
+
+- **Improved Delete Preview Display**
+  - Rich formatted output with colored panels and status indicators
+  - File size formatting in human-readable units (KB, MB, GB)
+  - Sample file listings with "... and X more" indicators
+  - Clear distinction between files being kept vs deleted
+
 ### Added - Phase 5 Background Monitoring and Non-Blocking Operations (2025-09-08)
 - **Complete Container Monitoring System**
   - Added `_get_container_status()` method to check Docker container status via `docker inspect`

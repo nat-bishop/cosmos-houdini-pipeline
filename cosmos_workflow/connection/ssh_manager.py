@@ -23,7 +23,7 @@ class SSHManager:
         """Establish SSH connection to remote instance."""
         try:
             self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
             logger.info(
                 "Connecting to {}:{}", self.ssh_options["hostname"], self.ssh_options["port"]

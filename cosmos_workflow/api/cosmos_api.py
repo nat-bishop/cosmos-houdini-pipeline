@@ -67,7 +67,28 @@ class CosmosAPI:
         self.service = DataRepository(db, config)
         self.orchestrator = GPUExecutor(config_manager=config, service=self.service)
 
+        # Initialize StatusChecker for lazy sync if GPU executor has services
+        self._initialize_status_checker()
+
         logger.info("CosmosAPI initialized")
+
+    def _initialize_status_checker(self):
+        """Initialize StatusChecker for lazy sync if dependencies are available."""
+        try:
+            # Only initialize if GPUExecutor has initialized its services
+            if (
+                hasattr(self.orchestrator, "_services_initialized")
+                and self.orchestrator._services_initialized
+                and self.orchestrator.ssh_manager
+                and self.orchestrator.file_transfer
+            ):
+                self.service.initialize_status_checker(
+                    self.orchestrator.ssh_manager, self.orchestrator.file_transfer
+                )
+                logger.info("StatusChecker initialized for lazy sync")
+        except Exception as e:
+            # StatusChecker is optional - system works without it
+            logger.debug("StatusChecker not initialized: %s", e)
 
     # ========== Prompt Operations ==========
 
@@ -668,60 +689,92 @@ class CosmosAPI:
         prompt["runs"] = runs
         return prompt
 
-    def preview_prompt_deletion(self, prompt_id: str) -> dict[str, Any]:
+    def preview_prompt_deletion(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Preview what will be deleted if a prompt is removed.
 
         Args:
             prompt_id: The prompt ID to preview deletion for
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary with prompt info, associated runs, and warnings
         """
-        prompt = self.service.get_prompt(prompt_id)
-        if not prompt:
-            return {"error": f"Prompt not found: {prompt_id}"}
+        result = self.service.preview_prompt_deletion(prompt_id, keep_outputs)
+        return result
 
-        runs = self.service.list_runs(prompt_id=prompt_id, limit=100)
-
-        return {
-            "prompt": prompt,
-            "runs": runs,
-            "run_count": len(runs),
-            "warnings": [],
-        }
-
-    def delete_prompt(self, prompt_id: str) -> dict[str, Any]:
+    def delete_prompt(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a prompt and its associated runs.
 
         Args:
             prompt_id: The prompt ID to delete
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary with deletion results
         """
-        return self.service.delete_prompt(prompt_id)
+        return self.service.delete_prompt(prompt_id, keep_outputs)
 
-    def delete_run(self, run_id: str) -> dict[str, Any]:
+    def delete_run(self, run_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a run.
 
         Args:
             run_id: The run ID to delete
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary with deletion results
         """
-        return self.service.delete_run(run_id)
+        return self.service.delete_run(run_id, keep_outputs)
 
-    def preview_run_deletion(self, run_id: str) -> dict[str, Any]:
+    def preview_run_deletion(self, run_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Preview what will be deleted if a run is removed.
 
         Args:
             run_id: The run ID to preview deletion for
+            keep_outputs: Whether to keep output files (default: True)
 
         Returns:
             Dictionary with run info and directories to delete
         """
-        return self.service.preview_run_deletion(run_id)
+        return self.service.preview_run_deletion(run_id, keep_outputs)
+
+    def preview_all_runs_deletion(self) -> dict[str, Any]:
+        """Preview deletion of all runs.
+
+        Returns:
+            Dictionary with all runs and summary information
+        """
+        return self.service.preview_all_runs_deletion()
+
+    def delete_all_runs(self, keep_outputs: bool = True) -> dict[str, Any]:
+        """Delete all runs.
+
+        Args:
+            keep_outputs: Whether to keep output files (default: True)
+
+        Returns:
+            Dictionary with deletion results
+        """
+        return self.service.delete_all_runs(keep_outputs)
+
+    def preview_all_prompts_deletion(self) -> dict[str, Any]:
+        """Preview deletion of all prompts.
+
+        Returns:
+            Dictionary with all prompts and summary information
+        """
+        return self.service.preview_all_prompts_deletion()
+
+    def delete_all_prompts(self, keep_outputs: bool = True) -> dict[str, Any]:
+        """Delete all prompts and their runs.
+
+        Args:
+            keep_outputs: Whether to keep output files (default: True)
+
+        Returns:
+            Dictionary with deletion results
+        """
+        return self.service.delete_all_prompts(keep_outputs)
 
     def search_prompts(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
         """Search prompts by text.

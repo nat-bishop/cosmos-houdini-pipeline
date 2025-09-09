@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from cosmos_workflow.local_ai.cosmos_sequence import CosmosVideoConverter
+from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 
 class TestSmartNameGeneration:
@@ -19,8 +20,6 @@ class TestSmartNameGeneration:
 
     def test_generate_smart_name_basic(self):
         """Test basic smart name generation."""
-        converter = CosmosVideoConverter()
-
         # Test various descriptions
         test_cases = [
             (
@@ -34,7 +33,7 @@ class TestSmartNameGeneration:
         ]
 
         for description, possible_words in test_cases:
-            name = converter._generate_smart_name(description)
+            name = generate_smart_name(description)
             # Check that at least some key words are present
             name_words = name.split("_")
             matched = sum(1 for word in possible_words if word in name_words)
@@ -44,33 +43,27 @@ class TestSmartNameGeneration:
 
     def test_generate_smart_name_max_length(self):
         """Test name truncation at max length."""
-        converter = CosmosVideoConverter()
-
         # Long description
         description = (
             "a very complex industrial machinery with multiple moving parts and hydraulic systems"
         )
-        name = converter._generate_smart_name(description, max_length=15)
+        name = generate_smart_name(description, max_length=15)
 
         assert len(name) <= 15, f"Name '{name}' exceeds max length of 15"
         assert name, "Name should not be empty"
 
     def test_generate_smart_name_stop_words_removal(self):
         """Test that common stop words are removed."""
-        converter = CosmosVideoConverter()
-
         description = "the a an in on at with for of very and or but"
-        name = converter._generate_smart_name(description)
+        name = generate_smart_name(description)
 
         # Should fallback to "sequence" or similar since all are stop words
         assert name, "Name should not be empty even with all stop words"
 
     def test_generate_smart_name_special_characters(self):
         """Test handling of special characters."""
-        converter = CosmosVideoConverter()
-
         description = "a scene with #hashtags and @mentions & symbols!"
-        name = converter._generate_smart_name(description)
+        name = generate_smart_name(description)
 
         # Name should only contain alphanumeric and underscores
         assert all(c.isalnum() or c == "_" for c in name), (
@@ -79,18 +72,14 @@ class TestSmartNameGeneration:
 
     def test_generate_smart_name_empty_description(self):
         """Test handling of empty description."""
-        converter = CosmosVideoConverter()
-
-        name = converter._generate_smart_name("")
+        name = generate_smart_name("")
         assert name == "sequence", "Empty description should default to 'sequence'"
 
     def test_generate_smart_name_priority_words(self):
         """Test that words with priority suffixes are preferred."""
-        converter = CosmosVideoConverter()
-
         # Words ending in -ing, -tion, etc. should get priority
         description = "a cat jumping over the wooden fence during sunset"
-        name = converter._generate_smart_name(description)
+        name = generate_smart_name(description)
 
         # "jumping" should be prioritized due to -ing suffix
         assert "jumping" in name or "jump" in name, f"Expected 'jumping' or 'jump' in name '{name}'"
@@ -138,7 +127,8 @@ class TestIntegratedAIWorkflow:
 
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.imread")
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.VideoWriter")
-    def test_generate_metadata_with_ai(self, mock_video_writer, mock_imread):
+    @patch("cosmos_workflow.local_ai.cosmos_sequence.generate_smart_name")
+    def test_generate_metadata_with_ai(self, mock_smart_name, mock_video_writer, mock_imread):
         """Test metadata generation with AI description and naming."""
         from cosmos_workflow.local_ai.cosmos_sequence import CosmosSequenceInfo
 
@@ -152,6 +142,9 @@ class TestIntegratedAIWorkflow:
         mock_writer = Mock()
         mock_video_writer.return_value = mock_writer
         mock_writer.isOpened.return_value = True
+
+        # Mock smart name generation
+        mock_smart_name.return_value = "futuristic_city"
 
         # Create test sequence info
         sequence_info = CosmosSequenceInfo(
@@ -183,9 +176,8 @@ class TestIntegratedAIWorkflow:
                 )
 
             assert metadata.description == "a futuristic city skyline"
-            # Name generation can vary based on algorithm priorities
-            # Just verify it's derived from the description
-            assert "city" in metadata.name or "futuristic" in metadata.name
+            # Verify mocked name was used
+            assert metadata.name == "futuristic_city"
             assert metadata.frame_count == 2
             assert metadata.video_path == str(output_dir / "color.mp4")
 
@@ -276,7 +268,10 @@ class TestDirectoryNaming:
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.imread")
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.VideoWriter")
     @patch("cosmos_workflow.local_ai.cosmos_sequence.datetime")
-    def test_directory_naming_format(self, mock_datetime, mock_video_writer, mock_imread):
+    @patch("cosmos_workflow.utils.smart_naming.generate_smart_name")
+    def test_directory_naming_format(
+        self, mock_smart_name, mock_datetime, mock_video_writer, mock_imread
+    ):
         """Test that directory follows {name}_{timestamp} format."""
         import re
 
@@ -288,6 +283,9 @@ class TestDirectoryNaming:
         mock_now = Mock()
         mock_now.strftime.return_value = "20250830_143025"
         mock_datetime.now.return_value = mock_now
+
+        # Mock smart name generation
+        mock_smart_name.return_value = "test_scene"
 
         # Mock frame and video writer
         mock_imread.return_value = np.zeros((100, 100, 3), dtype=np.uint8)

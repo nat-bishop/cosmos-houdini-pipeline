@@ -16,20 +16,14 @@ class TestDataRepositoryLazySync:
         # Arrange
         mock_db = MagicMock()
         mock_config = MagicMock()
-        mock_ssh_manager = MagicMock()
-        mock_file_transfer = MagicMock()
 
         # Act
         repo = DataRepository(mock_db, mock_config)
-        repo.initialize_status_checker(mock_ssh_manager, mock_file_transfer)
+        repo.initialize_status_checker()
 
         # Assert
         assert repo.status_checker is not None
-        mock_checker_class.assert_called_once_with(
-            ssh_manager=mock_ssh_manager,
-            config_manager=mock_config,
-            file_transfer_service=mock_file_transfer,
-        )
+        mock_checker_class.assert_called_once_with(config_manager=mock_config)
 
     def test_get_run_triggers_sync_for_running_status(self):
         """Test that get_run triggers status sync for running runs."""
@@ -208,6 +202,7 @@ class TestDataRepositoryLazySync:
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
         mock_query.all.return_value = mock_runs
 
         # Mock status checker syncing run2 to completed
@@ -256,14 +251,17 @@ class TestDataRepositoryLazySync:
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
         mock_query.all.return_value = mock_runs
 
-        # Mock status checker behavior
-        mock_status_checker.sync_run_status.return_value = {
-            "id": "run2",
-            "status": "completed",
-            "outputs": {"output_path": "outputs/run2/output.mp4"},
-        }
+        # Mock status checker behavior - properly mutate the run_data
+        def sync_side_effect(run_data, service):
+            if run_data["id"] == "run2":
+                run_data["status"] = "completed"
+                run_data["outputs"] = {"output_path": "outputs/run2/output.mp4"}
+            return run_data
+
+        mock_status_checker.sync_run_status.side_effect = sync_side_effect
 
         # Act
         results = repo.list_runs(status="running")
@@ -295,6 +293,7 @@ class TestDataRepositoryLazySync:
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
         mock_query.all.return_value = mock_runs
 
         # Mock status checker throwing error for first run

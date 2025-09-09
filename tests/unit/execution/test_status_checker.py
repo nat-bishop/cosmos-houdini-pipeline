@@ -13,26 +13,22 @@ class TestStatusChecker:
     def test_init_with_dependencies(self):
         """Test StatusChecker initialization with required dependencies."""
         # Arrange
-        mock_ssh_manager = MagicMock()
         mock_config_manager = MagicMock()
-        mock_file_transfer = MagicMock()
 
         # Act
-        checker = StatusChecker(
-            ssh_manager=mock_ssh_manager,
-            config_manager=mock_config_manager,
-            file_transfer_service=mock_file_transfer,
-        )
+        checker = StatusChecker(mock_config_manager)
 
         # Assert
-        assert checker.ssh_manager == mock_ssh_manager
         assert checker.config_manager == mock_config_manager
-        assert checker.file_transfer == mock_file_transfer
+        assert checker.ssh_manager is None  # Services created on demand
+        assert checker.file_transfer is None
+        assert checker.remote_executor is None
+        assert checker._completed_cache == set()
 
     def test_parse_completion_marker_with_exit_code(self):
         """Test parsing [COSMOS_COMPLETE] marker with exit code."""
         # Arrange
-        checker = StatusChecker(MagicMock(), MagicMock(), MagicMock())
+        checker = StatusChecker(MagicMock())
         log_content = """
         Processing frame 1...
         Processing frame 2...
@@ -48,7 +44,7 @@ class TestStatusChecker:
     def test_parse_completion_marker_with_failure(self):
         """Test parsing completion marker with non-zero exit code."""
         # Arrange
-        checker = StatusChecker(MagicMock(), MagicMock(), MagicMock())
+        checker = StatusChecker(MagicMock())
         log_content = """
         Error: Something went wrong
         [COSMOS_COMPLETE] exit_code=1
@@ -63,7 +59,7 @@ class TestStatusChecker:
     def test_parse_completion_marker_not_found(self):
         """Test parsing when completion marker is not present."""
         # Arrange
-        checker = StatusChecker(MagicMock(), MagicMock(), MagicMock())
+        checker = StatusChecker(MagicMock())
         log_content = "Still running... no completion marker"
 
         # Act
@@ -75,33 +71,38 @@ class TestStatusChecker:
     def test_check_container_status_running(self):
         """Test checking status of a running container."""
         # Arrange
-        mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
+        mock_config = MagicMock()
+        checker = StatusChecker(mock_config)
 
-        # Mock docker inspect showing container is running
-        mock_remote_executor.execute.return_value = (0, '{"Running": true, "ExitCode": null}', "")
+        # Create mock SSH manager
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (
+            0,
+            '{"Running": true, "ExitCode": null}',
+            "",
+        )
+        checker.ssh_manager = mock_ssh_manager
 
         # Act
         status = checker.check_container_status("cosmos_transfer_test123")
 
         # Assert
         assert status == {"running": True, "exit_code": None}
-        mock_remote_executor.execute.assert_called_once_with(
-            "sudo docker inspect cosmos_transfer_test123 --format '{{json .State}}'"
+        mock_ssh_manager.execute_command.assert_called_once_with(
+            "sudo docker inspect cosmos_transfer_test123 --format '{{json .State}}'",
+            stream_output=False,
         )
 
     def test_check_container_status_completed(self):
         """Test checking status of a completed container."""
         # Arrange
-        mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
+        mock_config = MagicMock()
+        checker = StatusChecker(mock_config)
 
-        # Mock docker inspect showing container stopped with exit code 0
-        mock_remote_executor.execute.return_value = (0, '{"Running": false, "ExitCode": 0}', "")
+        # Create mock SSH manager
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (0, '{"Running": false, "ExitCode": 0}', "")
+        checker.ssh_manager = mock_ssh_manager
 
         # Act
         status = checker.check_container_status("cosmos_transfer_test123")
@@ -112,13 +113,13 @@ class TestStatusChecker:
     def test_check_container_status_failed(self):
         """Test checking status of a failed container."""
         # Arrange
-        mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
+        mock_config = MagicMock()
+        checker = StatusChecker(mock_config)
 
-        # Mock docker inspect showing container failed
-        mock_remote_executor.execute.return_value = (0, '{"Running": false, "ExitCode": 1}', "")
+        # Create mock SSH manager
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (0, '{"Running": false, "ExitCode": 1}', "")
+        checker.ssh_manager = mock_ssh_manager
 
         # Act
         status = checker.check_container_status("cosmos_transfer_failed")
@@ -129,17 +130,17 @@ class TestStatusChecker:
     def test_check_container_status_not_found(self):
         """Test checking status when container doesn't exist."""
         # Arrange
-        mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
+        mock_config = MagicMock()
+        checker = StatusChecker(mock_config)
 
-        # Mock docker inspect error
-        mock_remote_executor.execute.return_value = (
+        # Create mock SSH manager
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (
             1,
             "",
             "Error: No such object: cosmos_transfer_missing",
         )
+        checker.ssh_manager = mock_ssh_manager
 
         # Act
         status = checker.check_container_status("cosmos_transfer_missing")
@@ -150,45 +151,53 @@ class TestStatusChecker:
     def test_check_run_completion_from_logs(self):
         """Test checking run completion by reading container logs."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
-        mock_remote_executor = MagicMock()
 
-        checker = StatusChecker(mock_ssh, mock_config, MagicMock())
-        checker.remote_executor = mock_remote_executor
+        checker = StatusChecker(mock_config)
 
-        # Mock reading log file with completion marker
-        mock_remote_executor.execute.return_value = (
+        # Create mock SSH manager
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (
             0,
             "Processing...\n[COSMOS_COMPLETE] exit_code=0\n",
             "",
         )
+        checker.ssh_manager = mock_ssh_manager
 
         # Act
         exit_code = checker.check_run_completion("run_test123")
 
         # Assert
         assert exit_code == 0
-        mock_remote_executor.execute.assert_called_with(
-            "cat /workspace/outputs/run_run_test123/run.log 2>/dev/null || echo ''"
+        mock_ssh_manager.execute_command.assert_called_with(
+            "cat /workspace/outputs/run_run_test123/run.log 2>/dev/null || echo ''",
+            stream_output=False,
         )
 
     def test_download_outputs_for_inference(self):
         """Test downloading output files for completed inference run."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
+
+        checker = StatusChecker(mock_config)
+
+        # Create mock SSH manager and file transfer
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (0, "output.mp4", "")  # ls output
+        checker.ssh_manager = mock_ssh_manager
+
         mock_file_transfer = MagicMock()
         mock_file_transfer.download_file.return_value = True
-
-        checker = StatusChecker(mock_ssh, mock_config, mock_file_transfer)
+        checker.file_transfer = mock_file_transfer
 
         run_data = {"id": "run_test123", "model_type": "inference"}
 
-        # Act
-        outputs = checker.download_outputs(run_data)
+        # Mock Path.exists() for output.mp4
+        with patch("pathlib.Path.exists", return_value=True):
+            # Act
+            outputs = checker.download_outputs(run_data)
 
         # Assert
         assert outputs is not None
@@ -204,21 +213,30 @@ class TestStatusChecker:
     def test_download_outputs_for_enhancement(self):
         """Test downloading output files for completed enhancement run."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
+
+        checker = StatusChecker(mock_config)
+
+        # Create mock SSH manager and file transfer
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (0, "batch_results.json", "")  # ls output
+        checker.ssh_manager = mock_ssh_manager
+
         mock_file_transfer = MagicMock()
         mock_file_transfer.download_file.return_value = True
+        checker.file_transfer = mock_file_transfer
+
         mock_json_handler = MagicMock()
         mock_json_handler.read_json.return_value = [{"upsampled_prompt": "Enhanced text"}]
-
-        checker = StatusChecker(mock_ssh, mock_config, mock_file_transfer)
         checker.json_handler = mock_json_handler
 
         run_data = {"id": "run_enhance123", "model_type": "enhancement"}
 
-        # Act
-        outputs = checker.download_outputs(run_data)
+        # Mock Path.exists() for batch_results.json
+        with patch("pathlib.Path.exists", return_value=True):
+            # Act
+            outputs = checker.download_outputs(run_data)
 
         # Assert
         assert outputs is not None
@@ -230,18 +248,26 @@ class TestStatusChecker:
     def test_download_outputs_for_upscaling(self):
         """Test downloading output files for completed upscaling run."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
+
+        checker = StatusChecker(mock_config)
+
+        # Create mock SSH manager and file transfer
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.return_value = (0, "output_4k.mp4", "")  # ls output
+        checker.ssh_manager = mock_ssh_manager
+
         mock_file_transfer = MagicMock()
         mock_file_transfer.download_file.return_value = True
-
-        checker = StatusChecker(mock_ssh, mock_config, mock_file_transfer)
+        checker.file_transfer = mock_file_transfer
 
         run_data = {"id": "run_upscale123", "model_type": "upscaling"}
 
-        # Act
-        outputs = checker.download_outputs(run_data)
+        # Mock Path.exists() for output_4k.mp4
+        with patch("pathlib.Path.exists", return_value=True):
+            # Act
+            outputs = checker.download_outputs(run_data)
 
         # Assert
         assert outputs is not None
@@ -253,13 +279,18 @@ class TestStatusChecker:
     def test_download_outputs_handles_failure(self):
         """Test handling download failures gracefully."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
-        mock_file_transfer = MagicMock()
-        mock_file_transfer.download_file.side_effect = Exception("Connection failed")
 
-        checker = StatusChecker(mock_ssh, mock_config, mock_file_transfer)
+        checker = StatusChecker(mock_config)
+
+        # Create mock SSH manager and file transfer that fail
+        mock_ssh_manager = MagicMock()
+        mock_ssh_manager.execute_command.side_effect = Exception("Connection failed")
+        checker.ssh_manager = mock_ssh_manager
+
+        mock_file_transfer = MagicMock()
+        checker.file_transfer = mock_file_transfer
 
         run_data = {"id": "run_test123", "model_type": "inference"}
 
@@ -269,19 +300,26 @@ class TestStatusChecker:
         # Assert
         assert outputs is None
 
-    def test_sync_run_status_when_still_running(self):
+    @patch("cosmos_workflow.execution.status_checker.SSHManager")
+    @patch("cosmos_workflow.execution.status_checker.FileTransferService")
+    @patch("cosmos_workflow.execution.status_checker.RemoteCommandExecutor")
+    def test_sync_run_status_when_still_running(
+        self, mock_executor_class, mock_transfer_class, mock_ssh_class
+    ):
         """Test syncing status when container is still running."""
         # Arrange
+        mock_config = MagicMock()
+        mock_config.get_ssh_options.return_value = {}
+        mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
+
+        checker = StatusChecker(mock_config)
+
+        # Mock SSH manager and services
         mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
+        mock_ssh_class.return_value = mock_ssh
+        mock_ssh.execute_command.return_value = (0, '{"Running": true, "ExitCode": null}', "")
+
         mock_service = MagicMock()
-
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
-
-        # Container still running
-        mock_remote_executor.execute.return_value = (0, '{"Running": true, "ExitCode": null}', "")
-
         run_data = {"id": "run_test123", "status": "running", "model_type": "inference"}
 
         # Act
@@ -290,27 +328,41 @@ class TestStatusChecker:
         # Assert
         assert updated_run["status"] == "running"
         mock_service.update_run_status.assert_not_called()
+        mock_ssh.close.assert_called_once()  # Ensure cleanup
 
-    def test_sync_run_status_when_completed_successfully(self):
+    @patch("cosmos_workflow.execution.status_checker.SSHManager")
+    @patch("cosmos_workflow.execution.status_checker.FileTransferService")
+    @patch("cosmos_workflow.execution.status_checker.RemoteCommandExecutor")
+    @patch("pathlib.Path.exists")
+    def test_sync_run_status_when_completed_successfully(
+        self, mock_path_exists, mock_executor_class, mock_transfer_class, mock_ssh_class
+    ):
         """Test syncing status when container completed successfully."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
+        mock_config.get_ssh_options.return_value = {}
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
-        mock_file_transfer = MagicMock()
-        mock_file_transfer.download_file.return_value = True
-        mock_remote_executor = MagicMock()
-        mock_service = MagicMock()
 
-        checker = StatusChecker(mock_ssh, mock_config, mock_file_transfer)
-        checker.remote_executor = mock_remote_executor
+        checker = StatusChecker(mock_config)
 
-        # Container completed successfully
-        mock_remote_executor.execute.side_effect = [
+        # Mock SSH manager
+        mock_ssh = MagicMock()
+        mock_ssh_class.return_value = mock_ssh
+        mock_ssh.execute_command.side_effect = [
             (0, '{"Running": false, "ExitCode": 0}', ""),  # docker inspect
             (0, "[COSMOS_COMPLETE] exit_code=0", ""),  # cat log file
+            (0, "output.mp4", ""),  # ls output files
         ]
 
+        # Mock file transfer
+        mock_transfer = MagicMock()
+        mock_transfer_class.return_value = mock_transfer
+        mock_transfer.download_file.return_value = True
+
+        # Mock path exists for output file
+        mock_path_exists.return_value = True
+
+        mock_service = MagicMock()
         run_data = {"id": "run_test123", "status": "running", "model_type": "inference"}
 
         # Act
@@ -324,26 +376,32 @@ class TestStatusChecker:
         mock_service.update_run.assert_called_once_with(
             "run_test123", outputs=updated_run["outputs"]
         )
-        mock_file_transfer.download_file.assert_called_once()
+        mock_transfer.download_file.assert_called_once()
+        mock_ssh.close.assert_called_once()  # Ensure cleanup
 
-    def test_sync_run_status_when_failed(self):
+    @patch("cosmos_workflow.execution.status_checker.SSHManager")
+    @patch("cosmos_workflow.execution.status_checker.FileTransferService")
+    @patch("cosmos_workflow.execution.status_checker.RemoteCommandExecutor")
+    def test_sync_run_status_when_failed(
+        self, mock_executor_class, mock_transfer_class, mock_ssh_class
+    ):
         """Test syncing status when container failed."""
         # Arrange
-        mock_ssh = MagicMock()
         mock_config = MagicMock()
+        mock_config.get_ssh_options.return_value = {}
         mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
-        mock_remote_executor = MagicMock()
-        mock_service = MagicMock()
 
-        checker = StatusChecker(mock_ssh, mock_config, MagicMock())
-        checker.remote_executor = mock_remote_executor
+        checker = StatusChecker(mock_config)
 
-        # Container failed
-        mock_remote_executor.execute.side_effect = [
+        # Mock SSH manager
+        mock_ssh = MagicMock()
+        mock_ssh_class.return_value = mock_ssh
+        mock_ssh.execute_command.side_effect = [
             (0, '{"Running": false, "ExitCode": 1}', ""),  # docker inspect
             (0, "[COSMOS_COMPLETE] exit_code=1", ""),  # cat log file
         ]
 
+        mock_service = MagicMock()
         run_data = {"id": "run_test123", "status": "running", "model_type": "inference"}
 
         # Act
@@ -351,34 +409,57 @@ class TestStatusChecker:
 
         # Assert
         assert updated_run["status"] == "failed"
+        assert "error_message" in updated_run
+        assert "Container exited with code 1" in updated_run["error_message"]
         mock_service.update_run_status.assert_called_once_with("run_test123", "failed")
-        mock_service.update_run.assert_called_once()
+        mock_service.update_run.assert_called_once_with(
+            "run_test123", error_message=updated_run["error_message"]
+        )
+        mock_ssh.close.assert_called_once()  # Ensure cleanup
 
-    def test_sync_run_status_caching(self):
+    @patch("cosmos_workflow.execution.status_checker.SSHManager")
+    @patch("cosmos_workflow.execution.status_checker.FileTransferService")
+    @patch("cosmos_workflow.execution.status_checker.RemoteCommandExecutor")
+    def test_sync_run_status_caching(
+        self, mock_executor_class, mock_transfer_class, mock_ssh_class
+    ):
         """Test that status checks are cached to avoid repeated SSH calls."""
         # Arrange
+        mock_config = MagicMock()
+        mock_config.get_ssh_options.return_value = {}
+        mock_config.get_remote_config.return_value = MagicMock(remote_dir="/workspace")
+
+        checker = StatusChecker(mock_config)
+
+        # Mock SSH manager
         mock_ssh = MagicMock()
-        mock_remote_executor = MagicMock()
-        mock_service = MagicMock()
-
-        checker = StatusChecker(mock_ssh, MagicMock(), MagicMock())
-        checker.remote_executor = mock_remote_executor
-
-        # Container completed
-        mock_remote_executor.execute.side_effect = [
-            (0, '{"Running": false, "ExitCode": 0}', ""),  # First check
-            (0, "[COSMOS_COMPLETE] exit_code=0", ""),  # Log check
+        mock_ssh_class.return_value = mock_ssh
+        mock_ssh.execute_command.side_effect = [
+            (0, '{"Running": false, "ExitCode": 0}', ""),  # First docker inspect
+            (0, "[COSMOS_COMPLETE] exit_code=0", ""),  # First log check
+            (0, "output.mp4", ""),  # ls output files
         ]
 
+        # Mock file transfer
+        mock_transfer = MagicMock()
+        mock_transfer_class.return_value = mock_transfer
+        mock_transfer.download_file.return_value = True
+
+        mock_service = MagicMock()
         run_data = {"id": "run_test123", "status": "running", "model_type": "inference"}
 
         # Act - check twice
         updated_run1 = checker.sync_run_status(run_data, mock_service)
-        updated_run2 = checker.sync_run_status(run_data, mock_service)
+        # Second call should be cached
+        updated_run2 = checker.sync_run_status(
+            {"id": "run_test123", "status": "running", "model_type": "inference"}, mock_service
+        )
 
         # Assert - should only check once due to caching
-        assert updated_run1 == updated_run2
-        assert mock_remote_executor.execute.call_count == 2  # docker inspect + log read
+        assert updated_run1["id"] == updated_run2["id"]
+        assert updated_run1["status"] == "completed"  # First call completes it
+        assert updated_run2["status"] == "running"  # Second call returns original since cached
+        assert mock_ssh.execute_command.call_count == 3  # docker inspect + log read + ls
         mock_service.update_run_status.assert_called_once()  # Only updated once
 
 
@@ -476,9 +557,12 @@ class TestDataRepositoryIntegration:
         mock_db.get_session.return_value.__enter__.return_value = mock_session
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
-        mock_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = (
-            mock_runs
-        )
+        # Setup query chain to return itself until .all() is called
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
+        mock_query.all.return_value = mock_runs
 
         # Mock status sync
         def sync_side_effect(run_data, service):

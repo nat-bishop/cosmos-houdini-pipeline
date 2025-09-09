@@ -1168,6 +1168,42 @@ details = service.get_prompt_with_runs("ps_abc123")
 # Returns: Prompt dictionary with "runs" list containing all runs
 ```
 
+#### Enhancement Query Methods
+
+These methods provide specialized queries for enhancement metadata and lineage tracking:
+
+```python
+# Get enhancement details for a prompt
+details = service.get_enhancement_details("ps_abc123")
+# Returns: Dictionary with enhancement metadata or None if not enhanced
+# {
+#     "enhanced_text": str,
+#     "enhancement_model": str,
+#     "enhanced_at": str,
+#     "original_prompt_id": str,
+#     "enhanced_prompt_id": str,
+#     "duration_seconds": float
+# }
+
+# Get the original prompt that was enhanced
+original = service.get_original_prompt("ps_enhanced_xyz")
+# Returns: Original prompt dictionary or None if not found/not enhanced
+
+# List all enhanced prompts
+enhanced_prompts = service.list_enhanced_prompts(limit=100)
+# Returns: List of prompts where parameters->enhanced is true
+
+# Get enhancement history for a prompt
+history = service.get_enhancement_history("ps_abc123")
+# Returns: List of all enhancement runs (as original or result)
+```
+
+**Key Features:**
+- **Backward Compatible**: Works with both old (metadata in prompt) and new (metadata in run) structures
+- **Efficient Queries**: Uses indexed boolean flag for fast filtering
+- **Lineage Tracking**: Can trace enhancement relationships across generations
+- **No Duplication**: Enhancement details stored once in run outputs
+
 #### Core Methods
 
 ```python

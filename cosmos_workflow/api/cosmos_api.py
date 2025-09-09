@@ -161,6 +161,7 @@ class CosmosAPI:
         prompt_id: str,
         create_new: bool = True,
         enhancement_model: str = "pixtral",
+        force_overwrite: bool = False,
     ) -> dict[str, Any]:
         """Enhance an existing prompt using AI with database run tracking.
 
@@ -171,6 +172,7 @@ class CosmosAPI:
             prompt_id: ID of prompt to enhance
             create_new: If True, creates new enhanced prompt. If False, updates existing.
             enhancement_model: Model to use for enhancement (default: "pixtral")
+            force_overwrite: If True, delete existing runs when overwriting (default: False)
 
         Returns:
             Dictionary containing:
@@ -180,7 +182,7 @@ class CosmosAPI:
                 - status: "success" or "failed"
 
         Raises:
-            ValueError: If prompt not found
+            ValueError: If prompt not found or has existing runs without force_overwrite
         """
         logger.info("Enhancing prompt %s with model %s", prompt_id, enhancement_model)
 
@@ -189,13 +191,41 @@ class CosmosAPI:
         if not original:
             raise ValueError(f"Prompt not found: {prompt_id}")
 
-        # Check if we can overwrite
+        # Check if we can overwrite - require explicit force for safety
         if not create_new:
-            runs = self.service.list_runs(prompt_id=prompt_id, limit=1)
-            if runs:
+            # Get deletion preview to see what would be affected
+            preview = self.preview_prompt_deletion(prompt_id, keep_outputs=True)
+            all_runs = preview.get("runs", [])
+
+            # Check which runs would block overwriting
+            # ALL runs that use GPU resources should block (including enhancement)
+            blocking_runs = all_runs  # All runs block for safety
+
+            if blocking_runs and not force_overwrite:
+                # Provide detailed error message about what would be deleted
+                run_summary = f"{len(blocking_runs)} run(s)"
+                active_runs = [r for r in blocking_runs if r.get("status") == "running"]
+                if active_runs:
+                    run_summary += f" (including {len(active_runs)} ACTIVE)"
+
                 raise ValueError(
-                    f"Cannot overwrite prompt {prompt_id} - has {len(runs)} associated runs"
+                    f"Cannot overwrite prompt {prompt_id} - has {run_summary}. "
+                    f"Call preview_prompt_deletion('{prompt_id}') to see details, "
+                    f"then use force_overwrite=True to delete them and proceed."
                 )
+
+            if blocking_runs and force_overwrite:
+                # Log warning about what will be deleted
+                logger.warning(
+                    "Force overwriting prompt %s - deleting %d associated runs",
+                    prompt_id,
+                    len(blocking_runs),
+                )
+
+                # Delete all blocking runs before overwriting
+                for run in blocking_runs:
+                    logger.info("Deleting run %s before prompt overwrite", run["id"])
+                    self.service.delete_run(run["id"], keep_outputs=True)
 
         # Build execution config for enhancement
         execution_config = {
@@ -249,9 +279,6 @@ class CosmosAPI:
                         **original["parameters"],
                         "name": f"{name}_enhanced",
                         "enhanced": True,
-                        "parent_prompt_id": prompt_id,
-                        "enhancement_model": enhancement_model,
-                        "enhanced_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
                 logger.info("Created enhanced prompt: %s", enhanced["id"])
@@ -264,18 +291,18 @@ class CosmosAPI:
                     parameters={
                         **original["parameters"],
                         "enhanced": True,
-                        "enhancement_model": enhancement_model,
-                        "enhanced_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
                 logger.info("Updated prompt %s with enhanced text", prompt_id)
                 enhanced_prompt_id = prompt_id
 
-            # Update run with outputs
+            # Update run with outputs (including enhancement metadata)
             outputs = {
                 "enhanced_text": enhanced_text,
                 "original_prompt_id": prompt_id,
                 "enhanced_prompt_id": enhanced_prompt_id,
+                "enhancement_model": enhancement_model,
+                "enhanced_at": datetime.now(timezone.utc).isoformat(),
                 "duration_seconds": result.get("duration_seconds", 0),
                 "timestamp": result.get("timestamp"),
             }
@@ -699,6 +726,9 @@ class CosmosAPI:
     def delete_prompt(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a prompt and its associated runs.
 
+        NOTE: Consider pairing with preview_prompt_deletion() to show user what will
+        be deleted before calling this method.
+
         Args:
             prompt_id: The prompt ID to delete
             keep_outputs: Whether to keep output files (default: True)
@@ -710,6 +740,9 @@ class CosmosAPI:
 
     def delete_run(self, run_id: str, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete a run.
+
+        NOTE: Consider pairing with preview_run_deletion() to show user what will
+        be deleted before calling this method.
 
         Args:
             run_id: The run ID to delete
@@ -743,6 +776,9 @@ class CosmosAPI:
     def delete_all_runs(self, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete all runs.
 
+        NOTE: Consider pairing with preview_all_runs_deletion() to show user what will
+        be deleted before calling this method.
+
         Args:
             keep_outputs: Whether to keep output files (default: True)
 
@@ -761,6 +797,9 @@ class CosmosAPI:
 
     def delete_all_prompts(self, keep_outputs: bool = True) -> dict[str, Any]:
         """Delete all prompts and their runs.
+
+        NOTE: Consider pairing with preview_all_prompts_deletion() to show user what will
+        be deleted before calling this method.
 
         Args:
             keep_outputs: Whether to keep output files (default: True)

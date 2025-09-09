@@ -1303,3 +1303,205 @@ class DataRepository:
             "success": True,
             "deleted": deleted_info,
         }
+
+    def get_enhancement_details(self, prompt_id: str) -> dict[str, Any] | None:
+        """Get the latest enhancement details for a prompt from its runs.
+
+        Retrieves enhancement information from the most recent enhancement run,
+        supporting both old (metadata in prompt) and new (metadata in run) structures.
+
+        Args:
+            prompt_id: The prompt ID to get enhancement details for
+
+        Returns:
+            Dictionary with enhancement details or None if not enhanced:
+            {
+                "enhanced_text": str,
+                "enhancement_model": str,
+                "enhanced_at": str,
+                "original_prompt_id": str,
+                "enhanced_prompt_id": str,
+                "duration_seconds": float
+            }
+        """
+        if not prompt_id:
+            return None
+
+        with self.db.get_session() as session:
+            # First check if prompt exists and is enhanced
+            prompt = session.query(Prompt).filter_by(id=prompt_id).first()
+            if not prompt:
+                return None
+
+            # Check if prompt is marked as enhanced
+            if not prompt.parameters or not prompt.parameters.get("enhanced"):
+                return None
+
+            # Find the most recent enhancement run for this prompt
+            # Could be either as original_prompt_id or enhanced_prompt_id in outputs
+            from sqlalchemy import func
+
+            enhancement_run = (
+                session.query(Run)
+                .filter(
+                    Run.model_type == "enhance",
+                    Run.status == "completed",
+                    (func.json_extract(Run.outputs, "$.original_prompt_id") == prompt_id)
+                    | (func.json_extract(Run.outputs, "$.enhanced_prompt_id") == prompt_id),
+                )
+                .order_by(Run.created_at.desc())
+                .first()
+            )
+
+            if not enhancement_run:
+                # Fallback to old structure - check prompt parameters
+                if prompt.parameters.get("enhancement_model"):
+                    return {
+                        "enhanced_text": prompt.prompt_text,
+                        "enhancement_model": prompt.parameters.get("enhancement_model"),
+                        "enhanced_at": prompt.parameters.get("enhanced_at"),
+                        "original_prompt_id": prompt.parameters.get("parent_prompt_id", prompt_id),
+                        "enhanced_prompt_id": prompt_id,
+                        "duration_seconds": None,
+                    }
+                return None
+
+            # Extract details from run outputs
+            outputs = enhancement_run.outputs or {}
+            return {
+                "enhanced_text": outputs.get("enhanced_text"),
+                "enhancement_model": (
+                    outputs.get("enhancement_model")
+                    or enhancement_run.execution_config.get("model")
+                ),
+                "enhanced_at": (
+                    outputs.get("enhanced_at")
+                    or outputs.get("timestamp")
+                    or enhancement_run.created_at.isoformat()
+                ),
+                "original_prompt_id": outputs.get("original_prompt_id"),
+                "enhanced_prompt_id": outputs.get("enhanced_prompt_id"),
+                "duration_seconds": outputs.get("duration_seconds"),
+            }
+
+    def get_original_prompt(self, enhanced_prompt_id: str) -> dict[str, Any] | None:
+        """Get the original prompt that was enhanced to create this prompt.
+
+        Finds the original prompt by looking at enhancement runs where this
+        prompt is the enhanced result.
+
+        Args:
+            enhanced_prompt_id: The enhanced prompt ID
+
+        Returns:
+            Original prompt data or None if not found/not enhanced
+        """
+        if not enhanced_prompt_id:
+            return None
+
+        with self.db.get_session() as session:
+            # Find enhancement run where this is the enhanced prompt
+            from sqlalchemy import func
+
+            enhancement_run = (
+                session.query(Run)
+                .filter(
+                    Run.model_type == "enhance",
+                    func.json_extract(Run.outputs, "$.enhanced_prompt_id") == enhanced_prompt_id,
+                )
+                .first()
+            )
+
+            if enhancement_run and enhancement_run.outputs:
+                original_id = enhancement_run.outputs.get("original_prompt_id")
+                if original_id and original_id != enhanced_prompt_id:
+                    # This was a create_new enhancement
+                    return self.get_prompt(original_id)
+
+            # Fallback to old structure - check for parent_prompt_id
+            prompt = session.query(Prompt).filter_by(id=enhanced_prompt_id).first()
+            if prompt and prompt.parameters:
+                parent_id = prompt.parameters.get("parent_prompt_id")
+                if parent_id:
+                    return self.get_prompt(parent_id)
+
+            return None
+
+    def list_enhanced_prompts(self, limit: int = 100) -> list[dict[str, Any]]:
+        """List all prompts where parameters->enhanced is true.
+
+        Efficiently queries for enhanced prompts using the boolean flag,
+        avoiding expensive JOINs.
+
+        Args:
+            limit: Maximum number of prompts to return
+
+        Returns:
+            List of enhanced prompt dictionaries
+        """
+        with self.db.get_session() as session:
+            from sqlalchemy import func
+
+            enhanced_prompts = (
+                session.query(Prompt)
+                .filter(func.json_extract(Prompt.parameters, "$.enhanced"))
+                .order_by(Prompt.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+
+            return [
+                {
+                    "id": p.id,
+                    "model_type": p.model_type,
+                    "prompt_text": p.prompt_text,
+                    "inputs": p.inputs,
+                    "parameters": p.parameters,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                }
+                for p in enhanced_prompts
+            ]
+
+    def get_enhancement_history(self, prompt_id: str) -> list[dict[str, Any]]:
+        """Get all enhancement runs for a prompt (as original or enhanced).
+
+        Returns all enhancement runs where this prompt was either the source
+        or the result of enhancement, ordered by creation time.
+
+        Args:
+            prompt_id: The prompt ID to get history for
+
+        Returns:
+            List of enhancement run dictionaries with outputs
+        """
+        if not prompt_id:
+            return []
+
+        with self.db.get_session() as session:
+            from sqlalchemy import func
+
+            enhancement_runs = (
+                session.query(Run)
+                .filter(
+                    Run.model_type == "enhance",
+                    (func.json_extract(Run.outputs, "$.original_prompt_id") == prompt_id)
+                    | (func.json_extract(Run.outputs, "$.enhanced_prompt_id") == prompt_id)
+                    | (Run.prompt_id == prompt_id),
+                )
+                .order_by(Run.created_at.desc())
+                .all()
+            )
+
+            return [
+                {
+                    "id": r.id,
+                    "prompt_id": r.prompt_id,
+                    "model_type": r.model_type,
+                    "status": r.status,
+                    "outputs": r.outputs,
+                    "execution_config": r.execution_config,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                }
+                for r in enhancement_runs
+            ]

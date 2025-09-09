@@ -31,10 +31,13 @@ class TestWorkflowServiceInit:
             DataRepository(None, config_manager)
 
     def test_init_with_none_config(self):
-        """Test that initializing with None config raises error."""
+        """Test that initializing with None config is allowed."""
         db_connection = DatabaseConnection(":memory:")
-        with pytest.raises(ValueError, match="config_manager cannot be None"):
-            DataRepository(db_connection, None)
+        db_connection.create_tables()
+        # DataRepository now allows None config_manager
+        service = DataRepository(db_connection, None)
+        assert service.db == db_connection
+        assert service.config is None
 
 
 class TestWorkflowServiceCreatePrompt:

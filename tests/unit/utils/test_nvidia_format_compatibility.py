@@ -5,6 +5,7 @@ the exact format expected by NVIDIA Cosmos Transfer scripts.
 """
 
 import json
+from pathlib import Path
 
 from cosmos_workflow.utils import nvidia_format
 
@@ -46,7 +47,8 @@ def test_inference_format_matches_nvidia_requirements():
     assert result["negative_prompt"] == "bad quality, low resolution"
 
     assert "input_video_path" in result
-    assert result["input_video_path"] == "inputs/videos/test/color.mp4"
+    # Path should have runs/ prefix with run_id
+    assert result["input_video_path"] == "runs/rs_test123/inputs/videos/color.mp4"
 
     # Verify control weight structure matches NVIDIA format
     # Each control type should be its own object with control_weight field
@@ -65,14 +67,14 @@ def test_inference_format_matches_nvidia_requirements():
     assert "control_weight" in result["depth"]
     assert result["depth"]["control_weight"] == 0.25
     assert "input_control" in result["depth"]
-    assert result["depth"]["input_control"] == "inputs/videos/test/depth.mp4"
+    assert result["depth"]["input_control"] == "runs/rs_test123/inputs/videos/depth.mp4"
 
     assert "seg" in result
     assert isinstance(result["seg"], dict)
     assert "control_weight" in result["seg"]
     assert result["seg"]["control_weight"] == 0.25
     assert "input_control" in result["seg"]
-    assert result["seg"]["input_control"] == "inputs/videos/test/segmentation.mp4"
+    assert result["seg"]["input_control"] == "runs/rs_test123/inputs/videos/segmentation.mp4"
 
     # Verify additional parameters
     assert result["num_steps"] == 35
@@ -126,7 +128,11 @@ def test_format_matches_nvidia_documentation_example():
             assert result[key]["control_weight"] == expected_structure[key]["control_weight"]
             if "input_control" in expected_structure[key]:
                 assert "input_control" in result[key]
-                assert result[key]["input_control"] == expected_structure[key]["input_control"]
+                # Path should have runs/ prefix (no run_id since it's empty in this test)
+                assert (
+                    result[key]["input_control"]
+                    == f"runs//inputs/videos/{Path(expected_structure[key]['input_control']).name}"
+                )
 
 
 def test_handles_missing_fields_gracefully():
@@ -142,7 +148,8 @@ def test_handles_missing_fields_gracefully():
 
     # Should have defaults
     assert result["prompt"] == "Test prompt"
-    assert result["negative_prompt"] == ""
+    # Default negative prompt is provided when missing
+    assert result["negative_prompt"] == "low quality, blurry, distorted"
     assert result["input_video_path"] == ""
 
     # Control weights should default to 0.25

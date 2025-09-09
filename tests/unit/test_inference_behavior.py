@@ -81,9 +81,8 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
                     # Verify SSH connection was established
@@ -115,9 +114,8 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
                     # Verify files were uploaded
@@ -149,9 +147,8 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
                     # Verify Docker inference was run
@@ -183,18 +180,19 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     result = orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
-                    # Verify results were downloaded
-                    assert mock_dependencies["transfer"].download_results.called, (
-                        "Should download results from GPU"
+                    # With lazy sync, downloads don't happen immediately
+                    # Container starts and runs in background
+                    # Results are downloaded later by StatusChecker when needed
+                    assert result["status"] == "started", (
+                        "Should start container for background execution"
                     )
 
-                    # Verify output path is returned
-                    assert "output_path" in result, "Should return path to downloaded results"
+                    # Verify run_id is returned for tracking
+                    assert "run_id" in result, "Should return run_id for tracking"
 
     @pytest.mark.skip(reason="Upscaling is temporarily disabled - see ROADMAP.md")
     def test_inference_with_upscaling_runs_both_steps(
@@ -221,10 +219,8 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=True,
-                        upscale_weight=0.7,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
                     # Verify both steps were executed
@@ -246,11 +242,10 @@ class TestInferenceBehavior:
         from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
         # Make Docker fail
-        mock_dependencies["docker"].run_inference.return_value = (
-            1,
-            "",
-            "GPU out of memory",
-        )
+        mock_dependencies["docker"].run_inference.return_value = {
+            "status": "failed",
+            "error": "GPU out of memory",
+        }
 
         with patch(
             "cosmos_workflow.execution.gpu_executor.SSHManager",
@@ -266,15 +261,12 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
 
-                    # Should not raise an exception
-                    result = orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
-                    )
-
-                    # Should return some result even on failure
-                    assert result is not None, "Should return result even on failure"
+                    # Should raise RuntimeError on failure
+                    with pytest.raises(RuntimeError, match="Inference failed"):
+                        orchestrator.execute_run(
+                            run=sample_run_dict,
+                            prompt=sample_prompt_dict,
+                        )
 
     def test_inference_respects_execution_config(
         self, mock_dependencies, sample_prompt_dict, sample_run_dict
@@ -308,9 +300,8 @@ class TestInferenceBehavior:
                 ):
                     orchestrator = GPUExecutor()
                     orchestrator.execute_run(
-                        run_dict=sample_run_dict,
-                        prompt_dict=sample_prompt_dict,
-                        upscale=False,
+                        run=sample_run_dict,
+                        prompt=sample_prompt_dict,
                     )
 
                     # The behavior we care about is that Docker was called

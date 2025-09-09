@@ -21,7 +21,8 @@ class TestGPUExecutorBatchExecution:
             self.orchestrator = GPUExecutor()
 
         # Create fake SSH and file transfer
-        self.fake_ssh = FakeSSHManager(connected=True)
+        self.fake_ssh = FakeSSHManager()
+        self.fake_ssh.is_connected = True  # Set connected state after creation
         self.fake_file_transfer = FakeFileTransferService(self.fake_ssh)
 
         # Mock docker executor

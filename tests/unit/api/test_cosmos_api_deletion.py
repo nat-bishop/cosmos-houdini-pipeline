@@ -66,7 +66,7 @@ class TestCosmosAPIDeletionMethods:
         result = api.preview_run_deletion("rs_test123")
 
         # Verify delegation
-        mock_service.preview_run_deletion.assert_called_once_with("rs_test123")
+        mock_service.preview_run_deletion.assert_called_once_with("rs_test123", True)
         assert result == expected_preview
 
     def test_preview_run_deletion_with_nonexistent_run(self, api, mock_service):
@@ -83,7 +83,7 @@ class TestCosmosAPIDeletionMethods:
         result = api.preview_run_deletion("rs_nonexistent")
 
         # Verify delegation and response
-        mock_service.preview_run_deletion.assert_called_once_with("rs_nonexistent")
+        mock_service.preview_run_deletion.assert_called_once_with("rs_nonexistent", True)
         assert result == expected_preview
         assert result["error"] == "Run not found"
 
@@ -104,7 +104,7 @@ class TestCosmosAPIDeletionMethods:
         result = api.preview_run_deletion("rs_active123")
 
         # Verify delegation
-        mock_service.preview_run_deletion.assert_called_once_with("rs_active123")
+        mock_service.preview_run_deletion.assert_called_once_with("rs_active123", True)
         assert result == expected_preview
         assert result["run"]["status"] == "running"
 
@@ -124,52 +124,53 @@ class TestCosmosAPIDeletionMethods:
         result = api.delete_run("rs_test123")
 
         # Verify delegation
-        mock_service.delete_run.assert_called_once_with("rs_test123")
+        mock_service.delete_run.assert_called_once_with("rs_test123", True)
         assert result == expected_result
 
     def test_preview_prompt_deletion_returns_prompt_and_runs(self, api, mock_service):
         """Test that preview_prompt_deletion returns prompt info and associated runs."""
-        # Setup mock prompt
-        mock_prompt = {
-            "id": "ps_test123",
-            "prompt_text": "Test prompt",
+        # Setup mock response from service
+        expected_preview = {
+            "prompt": {
+                "id": "ps_test123",
+                "prompt_text": "Test prompt",
+            },
+            "runs": [
+                {"id": "rs_001", "status": "completed"},
+                {"id": "rs_002", "status": "failed"},
+            ],
+            "run_count": 2,
+            "warnings": [],
         }
-        mock_service.get_prompt.return_value = mock_prompt
-
-        # Setup mock runs
-        mock_runs = [
-            {"id": "rs_001", "status": "completed"},
-            {"id": "rs_002", "status": "failed"},
-        ]
-        mock_service.list_runs.return_value = mock_runs
+        mock_service.preview_prompt_deletion.return_value = expected_preview
 
         # Call the method
         result = api.preview_prompt_deletion("ps_test123")
 
-        # Verify it calls the right service methods
-        mock_service.get_prompt.assert_called_once_with("ps_test123")
-        mock_service.list_runs.assert_called_once_with(prompt_id="ps_test123", limit=100)
+        # Verify delegation
+        mock_service.preview_prompt_deletion.assert_called_once_with("ps_test123", True)
 
-        # Verify the result structure
-        assert result["prompt"] == mock_prompt
-        assert result["runs"] == mock_runs
+        # Verify the result
+        assert result == expected_preview
         assert result["run_count"] == 2
-        assert "warnings" in result
 
     def test_preview_prompt_deletion_with_nonexistent_prompt(self, api, mock_service):
         """Test preview_prompt_deletion with non-existent prompt."""
-        # Setup mock for non-existent prompt
-        mock_service.get_prompt.return_value = None
+        # Setup mock response for non-existent prompt
+        expected_preview = {
+            "prompt": None,
+            "runs": [],
+            "error": "Prompt not found",
+        }
+        mock_service.preview_prompt_deletion.return_value = expected_preview
 
         # Call the method
         result = api.preview_prompt_deletion("ps_nonexistent")
 
-        # Verify it returns an error
-        assert "error" in result
-        assert "Prompt not found" in result["error"]
-        mock_service.get_prompt.assert_called_once_with("ps_nonexistent")
-        # Should not call list_runs if prompt doesn't exist
-        mock_service.list_runs.assert_not_called()
+        # Verify delegation and response
+        mock_service.preview_prompt_deletion.assert_called_once_with("ps_nonexistent", True)
+        assert result == expected_preview
+        assert result["error"] == "Prompt not found"
 
     def test_delete_prompt_delegates_to_service(self, api, mock_service):
         """Test that delete_prompt delegates to DataRepository."""
@@ -191,7 +192,7 @@ class TestCosmosAPIDeletionMethods:
         result = api.delete_prompt("ps_test123")
 
         # Verify delegation
-        mock_service.delete_prompt.assert_called_once_with("ps_test123")
+        mock_service.delete_prompt.assert_called_once_with("ps_test123", True)
         assert result == expected_result
 
 
@@ -264,8 +265,8 @@ class TestCosmosAPIDeletionIntegration:
         assert result["deleted"]["run_id"] == run_id
 
         # Verify both methods were called
-        mock_service.preview_run_deletion.assert_called_once_with(run_id)
-        mock_service.delete_run.assert_called_once_with(run_id)
+        mock_service.preview_run_deletion.assert_called_once_with(run_id, True)
+        mock_service.delete_run.assert_called_once_with(run_id, True)
 
     def test_preview_shows_warnings_for_active_runs(self, api, mock_service):
         """Test that preview correctly identifies active runs that shouldn't be deleted."""
@@ -286,4 +287,4 @@ class TestCosmosAPIDeletionIntegration:
         # Verify warning is present
         assert "warnings" in preview
         assert preview["run"]["status"] == "running"
-        mock_service.preview_run_deletion.assert_called_once_with("rs_active")
+        mock_service.preview_run_deletion.assert_called_once_with("rs_active", True)

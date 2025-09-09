@@ -26,8 +26,26 @@ class TestPromptEnhancementDatabaseIntegration:
         db.create_tables()
         yield db
 
-        # Cleanup
-        Path(db_path).unlink(missing_ok=True)
+        # Cleanup - properly close database before deleting file
+        try:
+            # Close all sessions
+            db.close_all_sessions()
+            # Dispose of the engine to release all connections
+            if hasattr(db, "engine"):
+                db.engine.dispose()
+        except Exception:
+            pass  # Ignore errors during cleanup
+
+        # Small delay for Windows file locking
+        import time
+
+        time.sleep(0.1)
+
+        # Now try to delete the file
+        try:
+            Path(db_path).unlink(missing_ok=True)
+        except PermissionError:
+            pass  # Ignore permission errors on Windows
 
     @pytest.fixture
     def repository(self, temp_db):
@@ -150,9 +168,11 @@ class TestPromptEnhancementDatabaseIntegration:
         enhanced = repository.get_prompt(result["enhanced_prompt_id"])
         assert enhanced is not None
         assert enhanced["prompt_text"] == result["enhanced_text"]
-        assert enhanced["parameters"]["parent_prompt_id"] == original["id"]
+        # With new structure, only enhanced flag is in prompt
         assert enhanced["parameters"]["enhanced"] is True
-        assert enhanced["parameters"]["enhancement_model"] == "pixtral"
+        # Details are in run outputs
+        assert "parent_prompt_id" not in enhanced["parameters"]
+        assert "enhancement_model" not in enhanced["parameters"]
 
         # Verify run was created for enhancement
         assert "run_id" in result
@@ -217,15 +237,16 @@ class TestPromptEnhancementDatabaseIntegration:
         )
 
         # Run enhancement multiple times with different models
+        # Use create_new=True to create separate enhancement runs
         result1 = api.enhance_prompt(
             prompt_id=prompt["id"],
-            create_new=False,
+            create_new=True,  # Creates new prompt, not overwriting
             enhancement_model="pixtral",
         )
 
         result2 = api.enhance_prompt(
             prompt_id=prompt["id"],
-            create_new=False,
+            create_new=True,  # Creates another new prompt
             enhancement_model="gpt-4",  # Different model
         )
 
@@ -260,3 +281,147 @@ class TestPromptEnhancementDatabaseIntegration:
         # Verify run_id format (should start with rs_)
         assert result["run_id"].startswith("rs_")
         assert len(result["run_id"]) > 3  # Has actual ID after prefix
+
+    def test_overwrite_safety_check(self, api, repository):
+        """Test that overwriting with existing runs requires force_overwrite."""
+        # Create prompt
+        prompt = repository.create_prompt(
+            model_type="transfer",
+            prompt_text="Original text",
+            inputs={},
+            parameters={},
+        )
+
+        # Create a run for this prompt
+        run = repository.create_run(
+            prompt_id=prompt["id"],
+            model_type="transfer",
+            execution_config={},
+        )
+
+        # Try to overwrite without force - should fail
+        with pytest.raises(ValueError) as exc:
+            api.enhance_prompt(
+                prompt_id=prompt["id"],
+                create_new=False,
+                enhancement_model="pixtral",
+                force_overwrite=False,  # Should fail
+            )
+
+        assert "Cannot overwrite prompt" in str(exc.value)
+        assert "force_overwrite=True" in str(exc.value)
+        assert "1 run(s)" in str(exc.value)
+
+        # Now try with force_overwrite=True - should succeed
+        result = api.enhance_prompt(
+            prompt_id=prompt["id"],
+            create_new=False,
+            enhancement_model="pixtral",
+            force_overwrite=True,  # Should work
+        )
+
+        assert result["status"] == "success"
+
+        # Original run should be deleted
+        deleted_run = repository.get_run(run["id"])
+        assert deleted_run is None
+
+    def test_create_new_preserves_original_prompt(self, api, repository):
+        """Test that create_new=True leaves original prompt completely unchanged."""
+        # Create original prompt with specific data
+        original = repository.create_prompt(
+            model_type="transfer",
+            prompt_text="Original creative prompt",
+            inputs={"video_path": "/path/to/video.mp4"},
+            parameters={"name": "test_scene", "cfg_scale": 7.5},
+        )
+        original_id = original["id"]
+
+        # Store original state for comparison
+        original_text = original["prompt_text"]
+        original_inputs = original["inputs"].copy()
+        original_params = original["parameters"].copy()
+
+        # Enhance with create_new=True
+        result = api.enhance_prompt(
+            prompt_id=original_id,
+            create_new=True,  # Should create new prompt
+            enhancement_model="pixtral",
+        )
+
+        assert result["status"] == "success"
+        new_prompt_id = result["enhanced_prompt_id"]
+
+        # Verify new prompt was created
+        assert new_prompt_id != original_id
+
+        # Verify original prompt is COMPLETELY unchanged
+        original_check = repository.get_prompt(original_id)
+        assert original_check["prompt_text"] == original_text
+        assert original_check["inputs"] == original_inputs
+        assert original_check["parameters"] == original_params
+        assert "enhanced" not in original_check["parameters"]
+        # With new structure, these should never be in original prompt
+        assert "enhancement_model" not in original_check["parameters"]
+        assert "parent_prompt_id" not in original_check["parameters"]
+        assert "enhanced_at" not in original_check["parameters"]
+
+        # Verify new prompt has minimal metadata (just enhanced flag)
+        new_prompt = repository.get_prompt(new_prompt_id)
+        assert new_prompt["prompt_text"] != original_text  # Enhanced text
+        assert new_prompt["parameters"]["enhanced"] is True
+        # With new structure, these details are in run outputs, not prompt
+        assert "parent_prompt_id" not in new_prompt["parameters"]
+        assert "enhancement_model" not in new_prompt["parameters"]
+        assert "enhanced_at" not in new_prompt["parameters"]
+
+        # Verify enhancement details are in run outputs
+        run = repository.get_run(result["run_id"])
+        assert run["outputs"]["original_prompt_id"] == original_id
+        assert run["outputs"]["enhanced_prompt_id"] == new_prompt_id
+        assert run["outputs"]["enhancement_model"] == "pixtral"
+        assert "enhanced_at" in run["outputs"]
+
+    def test_overwrite_updates_enhancement_metadata(self, api, repository):
+        """Test that overwrite properly updates enhancement metadata."""
+        # Create original prompt
+        original = repository.create_prompt(
+            model_type="transfer",
+            prompt_text="Original text",
+            inputs={"video_path": "/path/to/video.mp4"},
+            parameters={"name": "test_scene"},
+        )
+        prompt_id = original["id"]
+
+        # First enhancement
+        result1 = api.enhance_prompt(
+            prompt_id=prompt_id,
+            create_new=False,
+            enhancement_model="pixtral",
+            force_overwrite=False,  # No runs yet
+        )
+
+        # Check first enhancement metadata (now in run outputs)
+        updated1 = repository.get_prompt(prompt_id)
+        assert updated1["parameters"]["enhanced"] is True
+        # Enhancement details should be in run, not prompt
+        run1 = repository.get_run(result1["run_id"])
+        assert run1["outputs"]["enhancement_model"] == "pixtral"
+        first_enhanced_at = run1["outputs"]["enhanced_at"]
+
+        # Second enhancement (different model)
+        result2 = api.enhance_prompt(
+            prompt_id=prompt_id,
+            create_new=False,
+            enhancement_model="gpt-4",
+            force_overwrite=True,  # Required now due to enhancement run
+        )
+
+        # Check second enhancement metadata (should be in new run)
+        updated2 = repository.get_prompt(prompt_id)
+        assert updated2["parameters"]["enhanced"] is True
+        # Enhancement details should be in new run
+        run2 = repository.get_run(result2["run_id"])
+        assert run2["outputs"]["enhancement_model"] == "gpt-4"
+        second_enhanced_at = run2["outputs"]["enhanced_at"]
+        assert second_enhanced_at != first_enhanced_at  # Different timestamp

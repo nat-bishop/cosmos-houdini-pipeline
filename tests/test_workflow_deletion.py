@@ -67,8 +67,8 @@ class TestPromptDeletion:
         run1 = workflow_service.create_run(prompt_id, **sample_run_data)
         run2 = workflow_service.create_run(prompt_id, **sample_run_data)
 
-        # Preview deletion
-        preview = workflow_service.preview_prompt_deletion(prompt_id)
+        # Preview deletion with output removal
+        preview = workflow_service.preview_prompt_deletion(prompt_id, keep_outputs=False)
 
         # Check preview contains correct information
         assert preview["prompt"]["id"] == prompt_id
@@ -79,7 +79,7 @@ class TestPromptDeletion:
 
     def test_preview_prompt_deletion_nonexistent_prompt(self, workflow_service):
         """Test preview with non-existent prompt ID."""
-        preview = workflow_service.preview_prompt_deletion("ps_nonexistent")
+        preview = workflow_service.preview_prompt_deletion("ps_nonexistent", keep_outputs=False)
 
         assert preview["error"] == "Prompt not found"
         assert preview["prompt"] is None
@@ -130,8 +130,8 @@ class TestPromptDeletion:
         # Get the actual outputs directory from config
         outputs_dir = workflow_service.config.get_local_config().outputs_dir
 
-        # Delete prompt
-        result = workflow_service.delete_prompt(prompt_id)
+        # Delete prompt with outputs
+        result = workflow_service.delete_prompt(prompt_id, keep_outputs=False)
 
         # Verify directories were attempted to be removed
         # Note: Using actual outputs directory from config
@@ -148,10 +148,10 @@ class TestPromptDeletion:
         assert result["success"] is False
         assert result["error"] == "Prompt not found"
 
-    def test_delete_prompt_with_running_run_fails(
+    def test_delete_prompt_with_running_run_succeeds_with_warning(
         self, workflow_service, sample_prompt_data, sample_run_data
     ):
-        """Test that deleting prompt with running run fails by default."""
+        """Test that deleting prompt with running run succeeds but logs warning."""
         # Create prompt and running run
         prompt = workflow_service.create_prompt(**sample_prompt_data)
         prompt_id = prompt["id"]
@@ -159,15 +159,16 @@ class TestPromptDeletion:
         run = workflow_service.create_run(prompt_id, **sample_run_data)
         workflow_service.update_run_status(run["id"], "running")
 
-        # Attempt deletion
-        result = workflow_service.delete_prompt(prompt_id)
+        # Attempt deletion with outputs - now succeeds with warning
+        result = workflow_service.delete_prompt(prompt_id, keep_outputs=False)
 
-        assert result["success"] is False
-        assert "running" in result["error"].lower()
+        # Now it succeeds despite running run
+        assert result["success"] is True
+        assert result["deleted"]["prompt_id"] == prompt_id
 
-        # Verify nothing was deleted
-        assert workflow_service.get_prompt(prompt_id) is not None
-        assert workflow_service.get_run(run["id"]) is not None
+        # Verify everything was deleted despite running status
+        assert workflow_service.get_prompt(prompt_id) is None
+        assert workflow_service.get_run(run["id"]) is None
 
 
 class TestRunDeletion:
@@ -182,8 +183,8 @@ class TestRunDeletion:
         run = workflow_service.create_run(prompt["id"], **sample_run_data)
         run_id = run["id"]
 
-        # Preview deletion
-        preview = workflow_service.preview_run_deletion(run_id)
+        # Preview deletion with output removal
+        preview = workflow_service.preview_run_deletion(run_id, keep_outputs=False)
 
         # Check preview contains correct information
         assert preview["run"]["id"] == run_id
@@ -212,8 +213,8 @@ class TestRunDeletion:
         run = workflow_service.create_run(prompt_id, **sample_run_data)
         run_id = run["id"]
 
-        # Delete run
-        result = workflow_service.delete_run(run_id)
+        # Delete run with outputs
+        result = workflow_service.delete_run(run_id, keep_outputs=False)
 
         # Verify deletion
         assert result["success"] is True
@@ -239,8 +240,8 @@ class TestRunDeletion:
         # Get the actual outputs directory from config
         outputs_dir = workflow_service.config.get_local_config().outputs_dir
 
-        # Delete run
-        result = workflow_service.delete_run(run_id)
+        # Delete run with outputs
+        result = workflow_service.delete_run(run_id, keep_outputs=False)
 
         # Verify directory was removed
         assert result["deleted"]["directory"] == str(outputs_dir / f"run_{run_id}")
@@ -252,23 +253,24 @@ class TestRunDeletion:
         assert result["success"] is False
         assert result["error"] == "Run not found"
 
-    def test_delete_run_with_running_status_fails(
+    def test_delete_run_with_running_status_succeeds_with_warning(
         self, workflow_service, sample_prompt_data, sample_run_data
     ):
-        """Test that deleting running run fails by default."""
+        """Test that deleting running run succeeds but logs warning."""
         # Create prompt and run
         prompt = workflow_service.create_prompt(**sample_prompt_data)
         run = workflow_service.create_run(prompt["id"], **sample_run_data)
         workflow_service.update_run_status(run["id"], "running")
 
-        # Attempt deletion
-        result = workflow_service.delete_run(run["id"])
+        # Attempt deletion - now succeeds with warning
+        result = workflow_service.delete_run(run["id"], keep_outputs=False)
 
-        assert result["success"] is False
-        assert "running" in result["error"].lower()
+        # Now it succeeds despite running status
+        assert result["success"] is True
+        assert result["deleted"]["run_id"] == run["id"]
 
-        # Verify run still exists
-        assert workflow_service.get_run(run["id"]) is not None
+        # Verify run was deleted despite running status
+        assert workflow_service.get_run(run["id"]) is None
 
     def test_delete_multiple_runs_independently(
         self, workflow_service, sample_prompt_data, sample_run_data
@@ -318,7 +320,7 @@ class TestDeletionEdgeCases:
         run = workflow_service.create_run(prompt["id"], **sample_run_data)
 
         # Delete run (directory doesn't exist)
-        result = workflow_service.delete_run(run["id"])
+        result = workflow_service.delete_run(run["id"], keep_outputs=False)
 
         # Should succeed even if directory doesn't exist
         assert result["success"] is True
@@ -342,8 +344,8 @@ class TestDeletionEdgeCases:
         # Mock permission error
         mock_rmtree.side_effect = PermissionError("Access denied")
 
-        # Delete run
-        result = workflow_service.delete_run(run_id)
+        # Delete run with outputs
+        result = workflow_service.delete_run(run_id, keep_outputs=False)
 
         # Database deletion should succeed, but note directory error
         assert result["success"] is True

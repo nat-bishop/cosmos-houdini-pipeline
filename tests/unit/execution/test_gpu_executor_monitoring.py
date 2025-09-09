@@ -2,7 +2,15 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from cosmos_workflow.execution.gpu_executor import GPUExecutor
+
+# Skip all tests in this module - monitoring functionality was removed
+# in favor of lazy sync via StatusChecker
+pytestmark = pytest.mark.skip(
+    reason="Container monitoring removed - replaced with lazy sync via StatusChecker"
+)
 
 
 class TestThreadSafeDownload:

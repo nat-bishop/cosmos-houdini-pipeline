@@ -64,13 +64,13 @@ class TestDockerExecutor:
                 self.test_prompt_file, run_id="test_run_001", num_gpu=2, cuda_devices="0,1"
             )
 
-            # Check that output directory was created
+            # Check that output directory was created with run_id
             self.mock_ssh_manager.execute_command_success.assert_any_call(
-                f"mkdir -p {self.remote_dir}/outputs/test_prompt"
+                f"mkdir -p {self.remote_dir}/outputs/run_test_run_001"
             )
 
-            # Check that inference script was called
-            mock_run_script.assert_called_once_with("test_prompt", 2, "0,1")
+            # Check that inference script was called with run_id
+            mock_run_script.assert_called_once_with("test_prompt", "test_run_001", 2, "0,1")
 
             # Check that result is a dict with expected keys
             assert isinstance(result, dict)
@@ -89,8 +89,8 @@ class TestDockerExecutor:
                 self.test_prompt_file, run_id="test_run_002", num_gpu=4, cuda_devices="0,1,2,3"
             )
 
-            # Check that script was called with correct parameters
-            mock_run_script.assert_called_once_with("test_prompt", 4, "0,1,2,3")
+            # Check that script was called with correct parameters including run_id
+            mock_run_script.assert_called_once_with("test_prompt", "test_run_002", 4, "0,1,2,3")
 
             # Check that result is a dict with expected keys
             assert isinstance(result, dict)
@@ -107,8 +107,8 @@ class TestDockerExecutor:
                 self.test_prompt_file, run_id="test_run_123", num_gpu=1, cuda_devices="0"
             )
 
-            # Check that inference script was called
-            mock_run_script.assert_called_once_with("test_prompt", 1, "0")
+            # Check that inference script was called with run_id
+            mock_run_script.assert_called_once_with("test_prompt", "test_run_123", 1, "0")
 
             # Check that result contains log path with run_id
             assert "test_run_123" in result["log_path"]
@@ -150,9 +150,9 @@ class TestDockerExecutor:
                     # Check result is dict
                     assert isinstance(result, dict)
 
-                    # Check that upscaled output directory was created
+                    # Check that upscaled output directory was created with run_id
                     self.mock_ssh_manager.execute_command_success.assert_any_call(
-                        f"mkdir -p {self.remote_dir}/outputs/test_prompt_upscaled"
+                        f"mkdir -p {self.remote_dir}/outputs/run_test_run_004"
                     )
 
     def test_run_upscaling_calls_upscaling_script_with_correct_parameters(self):
@@ -176,16 +176,18 @@ class TestDockerExecutor:
                     # Check result is dict
                     assert isinstance(result, dict)
 
-                    # Check that script was called with correct parameters
-                    mock_run_script.assert_called_once_with("test_prompt", 0.8, 3, "0,1,2")
+                    # Check that script was called with correct parameters including run_id
+                    mock_run_script.assert_called_once_with(
+                        "test_prompt", "test_run_005", 0.8, 3, "0,1,2"
+                    )
 
     def test_run_inference_script_executes_docker_command(self):
         """Test that _run_inference_script executes the correct Docker command in background."""
         # Mock successful command execution
         self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
-        # Run inference script
-        self.docker_executor._run_inference_script("test_prompt", 2, "0,1")
+        # Run inference script with run_id
+        self.docker_executor._run_inference_script("test_prompt", "test_run_006", 2, "0,1")
 
         # Check that Docker command was executed in background
         self.mock_ssh_manager.execute_command.assert_called_once()
@@ -206,7 +208,7 @@ class TestDockerExecutor:
         assert f"-v {self.remote_dir}:/workspace" in cmd
         assert "-w /workspace" in cmd
         assert self.docker_image in cmd
-        assert "/workspace/bashscripts/inference.sh test_prompt 2 0,1" in cmd
+        assert "/workspace/bashscripts/inference.sh test_run_006 2 0,1" in cmd
         assert call_args[1]["timeout"] == 5  # Quick timeout for background
 
     def test_run_upscaling_script_executes_docker_command(self):
@@ -214,8 +216,8 @@ class TestDockerExecutor:
         # Mock successful command execution
         self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
-        # Run upscaling script
-        self.docker_executor._run_upscaling_script("test_prompt", 0.6, 2, "0,1")
+        # Run upscaling script with run_id
+        self.docker_executor._run_upscaling_script("test_prompt", "test_run_007", 0.6, 2, "0,1")
 
         # Check that Docker command was executed in background
         self.mock_ssh_manager.execute_command.assert_called_once()
@@ -236,7 +238,7 @@ class TestDockerExecutor:
         assert f"-v {self.remote_dir}:/workspace" in cmd
         assert "-w /workspace" in cmd
         assert self.docker_image in cmd
-        assert "/workspace/bashscripts/upscale.sh test_prompt 0.6 2 0,1" in cmd
+        assert "/workspace/bashscripts/upscale.sh test_run_007 0.6 2 0,1" in cmd
         assert call_args[1]["timeout"] == 5  # Quick timeout for background
 
     def test_create_upscaler_spec_creates_correct_spec_file(self):

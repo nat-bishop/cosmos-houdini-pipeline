@@ -110,36 +110,6 @@ def to_cosmos_inference_json(
     return cosmos_json
 
 
-def to_cosmos_upscale_json(
-    prompt_dict: dict[str, Any], run_dict: dict[str, Any], upscale_weight: float = 0.5
-) -> dict[str, Any]:
-    """Convert database dicts to NVIDIA Cosmos upscale format.
-
-    TODO: Upscaling should be implemented as a separate GPU run with its own database entry.
-    The upscale process requires:
-    1. The output video from initial inference as input
-    2. A minimal controlnet spec with just input_video_path and upscale control weight
-    3. Its own dedicated run in the database to track the upscaling process
-
-    For now, this function is disabled. See ROADMAP.md for implementation plan.
-
-    Args:
-        prompt_dict: Prompt data from database
-        run_dict: Run data from database
-        upscale_weight: Weight for upscaling (0.0-1.0)
-
-    Returns:
-        Dictionary in NVIDIA Cosmos format for upscale.sh
-
-    Raises:
-        NotImplementedError: Upscaling needs to be reimplemented as separate run
-    """
-    raise NotImplementedError(
-        "Upscaling is temporarily disabled. It needs to be implemented as a separate "
-        "GPU run with its own database entry. See ROADMAP.md for details."
-    )
-
-
 def write_cosmos_json(cosmos_data: dict[str, Any], output_path: str | Path) -> Path:
     """Write Cosmos format data to a JSON file.
 

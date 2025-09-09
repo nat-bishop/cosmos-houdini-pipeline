@@ -89,51 +89,6 @@ def test_inference_format_matches_nvidia_requirements():
     assert json_str  # Should not raise
 
 
-def test_upscale_format_matches_nvidia_requirements():
-    """Test that upscale JSON matches NVIDIA's expected format."""
-    # Create sample database dicts
-    prompt_dict = {
-        "id": "ps_test",
-        "prompt_text": "A beautiful landscape",
-        "negative_prompt": "",
-        "inputs": {
-            "video": "outputs/test_run/output.mp4",
-            "depth": "inputs/videos/test/depth.mp4",
-            "seg": "inputs/videos/test/segmentation.mp4",
-        },
-        "parameters": {},
-    }
-
-    run_dict = {
-        "id": "rs_upscale_test",
-        "execution_config": {"weights": {"vis": 0.3, "edge": 0.2, "depth": 0.3, "seg": 0.2}},
-    }
-
-    # Convert for upscaling
-    result = nvidia_format.to_cosmos_upscale_json(prompt_dict, run_dict, upscale_weight=0.7)
-
-    # Should have all the same fields as inference
-    assert "prompt" in result
-    assert "input_video_path" in result
-    assert "vis" in result
-    assert "edge" in result
-    assert "depth" in result
-    assert "seg" in result
-
-    # Plus upscale-specific fields
-    assert "upscale" in result
-    assert isinstance(result["upscale"], dict)
-    assert "control_weight" in result["upscale"]
-    assert result["upscale"]["control_weight"] == 0.7
-
-    # Upscaling uses fewer steps
-    assert result["num_steps"] == 10
-
-    # Verify JSON is serializable
-    json_str = json.dumps(result, indent=2)
-    assert json_str
-
-
 def test_format_matches_nvidia_documentation_example():
     """Test against the exact example from NVIDIA documentation."""
     # This is the expected format from NVIDIA docs

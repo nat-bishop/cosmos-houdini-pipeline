@@ -4,8 +4,6 @@
 from .workflow_utils import (
     ensure_path_exists,
     format_duration,
-    log_workflow_event,
-    validate_gpu_configuration,
 )
 
 
@@ -34,6 +32,4 @@ __all__ = [
     "calculate_tokens",
     "ensure_path_exists",
     "format_duration",
-    "log_workflow_event",
-    "validate_gpu_configuration",
 ]

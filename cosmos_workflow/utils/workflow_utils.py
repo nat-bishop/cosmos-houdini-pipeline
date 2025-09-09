@@ -7,7 +7,6 @@ Provides reusable functions for workflow orchestration.
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -97,83 +96,3 @@ def format_duration(seconds: float) -> str:
         return f"{minutes}m {seconds}s"
     else:
         return f"{seconds}s"
-
-
-def log_workflow_event(
-    event_type: str, workflow_name: str, metadata: dict[str, Any], log_dir: Path = Path("notes")
-) -> None:
-    """Log a workflow event to the run history.
-
-    Args:
-        event_type: Type of event (e.g., "SUCCESS", "FAILED", "STARTED")
-        workflow_name: Name of the workflow
-        metadata: Additional metadata to log
-        log_dir: Directory for log files
-    """
-    ensure_path_exists(log_dir)
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-    log_entry = f"{timestamp} | {event_type} | workflow={workflow_name}"
-
-    for key, value in metadata.items():
-        log_entry += f" | {key}={value}"
-
-    log_entry += "\n"
-
-    run_history_file = log_dir / "run_history.log"
-    with open(run_history_file, "a") as f:
-        f.write(log_entry)
-
-    logger.info("Logged %s event to {run_history_file}", event_type)
-
-
-def convert_local_path_to_remote_video(local_path: str, run_id: str) -> str:
-    """Convert local video path to remote container path.
-
-    Args:
-        local_path: Local path like "inputs\\videos\\city_scene\\color.mp4"
-        run_id: Run ID for organizing remote files
-
-    Returns:
-        Path relative to remote_dir like "runs/rs_xxx/inputs/videos/color.mp4"
-        (This will be accessible as /workspace/runs/... in the container)
-    """
-    # Convert backslashes to forward slashes
-    path_str = local_path.replace("\\", "/")
-
-    # Extract just the filename from the path
-    filename = Path(path_str).name
-
-    # Return path relative to remote_dir (which is mounted as /workspace in container)
-    return f"runs/{run_id}/inputs/videos/{filename}"
-
-
-def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
-    """Validate GPU configuration parameters.
-
-    Args:
-        num_gpu: Number of GPUs to use.
-        cuda_devices: Comma-separated CUDA device IDs.
-
-    Returns:
-        True if configuration is valid, False otherwise.
-    """
-    if num_gpu <= 0:
-        logger.error("Invalid num_gpu: %s", num_gpu)
-        return False
-
-    device_list = cuda_devices.split(",")
-    if len(device_list) != num_gpu:
-        logger.error("num_gpu (%s) doesn't match device count ({len(device_list)})", num_gpu)
-        return False
-
-    try:
-        device_ids = [int(d.strip()) for d in device_list]
-        if any(d < 0 for d in device_ids):
-            logger.error("Invalid CUDA device ID in: %s", cuda_devices)
-            return False
-    except ValueError:
-        logger.error("Invalid CUDA device string: %s", cuda_devices)
-        return False
-
-    return True

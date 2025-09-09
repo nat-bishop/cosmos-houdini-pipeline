@@ -6,9 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from cosmos_workflow.cli.completions import (
     complete_directories,
-    complete_prompt_specs,
     complete_video_dirs,
-    complete_video_files,
     normalize_path,
 )
 
@@ -31,111 +29,6 @@ class TestNormalizePath:
     def test_normalize_empty(self):
         """Test empty string is handled."""
         assert normalize_path("") == ""
-
-
-class TestCompletePromptSpecs:
-    """Test prompt spec completion."""
-
-    def test_no_prompts_dir(self):
-        """Test returns empty list when prompts dir doesn't exist."""
-        with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-            mock_dir = MagicMock()
-            mock_dir.exists.return_value = False
-            mock_path.return_value = mock_dir
-
-            result = complete_prompt_specs(None, None, "")
-            assert result == []
-
-    def test_complete_all_specs(self, monkeypatch):
-        """Test returns all JSON files when no filter."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test structure
-            prompts_dir = Path(tmpdir) / "inputs" / "prompts"
-            prompts_dir.mkdir(parents=True)
-
-            (prompts_dir / "test1.json").touch()
-            (prompts_dir / "test2.json").touch()
-            (prompts_dir / "other.txt").touch()  # Should be ignored
-
-            # Replace Path constructor to return our test directory
-            def mock_path(path_str):
-                if "prompts" in str(path_str):
-                    return prompts_dir
-                return Path(path_str)
-
-            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
-
-            result = complete_prompt_specs(None, None, "")
-            # Should return only JSON files
-            assert len([r for r in result if r.endswith(".json")]) == 2
-
-    def test_complete_filtered_specs(self, monkeypatch):
-        """Test returns filtered JSON files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            prompts_dir = Path(tmpdir) / "inputs" / "prompts"
-            prompts_dir.mkdir(parents=True)
-
-            (prompts_dir / "test1.json").touch()
-            (prompts_dir / "test2.json").touch()
-            (prompts_dir / "other.json").touch()
-
-            # Replace Path constructor to return our test directory
-            def mock_path(path_str):
-                if "prompts" in str(path_str):
-                    return prompts_dir
-                return Path(path_str)
-
-            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
-
-            # The actual paths will be like "inputs/prompts/test1.json"
-            # So we test with empty string to get all, then verify content
-            result = complete_prompt_specs(None, None, "")
-            # Should return all 3 JSON files
-            assert len(result) == 3  # test1.json, test2.json, other.json
-            # Check that test files are included
-            test_files = [r for r in result if "test" in r]
-            assert len(test_files) == 2
-
-
-class TestCompleteVideoFiles:
-    """Test video file completion."""
-
-    def test_no_videos_dir(self):
-        """Test returns empty list when videos dir doesn't exist."""
-        with patch("cosmos_workflow.cli.completions.Path") as mock_path:
-            mock_dir = MagicMock()
-            mock_dir.exists.return_value = False
-            mock_path.return_value = mock_dir
-
-            result = complete_video_files(None, None, "")
-            assert result == []
-
-    def test_complete_color_videos(self, monkeypatch):
-        """Test returns only color.mp4 files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            videos_dir = Path(tmpdir) / "inputs" / "videos"
-            scene1_dir = videos_dir / "scene1"
-            scene2_dir = videos_dir / "scene2"
-
-            scene1_dir.mkdir(parents=True)
-            scene2_dir.mkdir(parents=True)
-
-            (scene1_dir / "color.mp4").touch()
-            (scene1_dir / "depth.mp4").touch()  # Should be ignored
-            (scene2_dir / "color.mp4").touch()
-
-            # Replace Path constructor to return our test directory
-            def mock_path(path_str):
-                if "videos" in str(path_str):
-                    return videos_dir
-                return Path(path_str)
-
-            monkeypatch.setattr("cosmos_workflow.cli.completions.Path", mock_path)
-
-            result = complete_video_files(None, None, "")
-            # Should return only color.mp4 files
-            assert len(result) == 2
-            assert all("color.mp4" in r for r in result)
 
 
 class TestCompleteVideoDirs:

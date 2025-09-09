@@ -67,8 +67,17 @@ def init_logger(
     return _base_logger
 
 
-# Initialize default logger for import
-logger = init_logger()
+# Initialize default logger for import with file output
+# Create logs directory structure
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+
+# Main application log with rotation
+logger = init_logger(
+    log_file=log_dir / "cosmos_workflow.log",
+    rotation="10 MB",  # Smaller files for easier reading
+    retention="30 days",  # Keep longer for debugging
+)
 
 
 # Convenience function for run-specific loggers

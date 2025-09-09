@@ -87,7 +87,13 @@ class GPUExecutor:
             timeout_seconds: Max time to wait (uses config if None)
         """
         if timeout_seconds is None:
-            timeout_seconds = self.config_manager.get_timeouts()["docker_execution"]
+            try:
+                timeouts = self.config_manager.get_timeouts()
+                logger.debug("Got timeouts: %s (type: %s)", timeouts, type(timeouts))
+                timeout_seconds = timeouts["docker_execution"]
+            except Exception as e:
+                logger.error("Failed to get timeouts: %s", e)
+                timeout_seconds = 3600  # Default fallback
 
         # Launch monitoring in background thread
         thread = threading.Thread(
@@ -119,6 +125,7 @@ class GPUExecutor:
             timeout_seconds: Timeout in seconds
         """
         import json
+        import traceback
 
         import paramiko
 
@@ -132,33 +139,99 @@ class GPUExecutor:
             timeout_seconds,
         )
 
+        # Log thread information for debugging
+        import threading
+
+        logger.info(
+            "Monitor thread started: %s (daemon: %s)",
+            threading.current_thread().name,
+            threading.current_thread().daemon,
+        )
+
         # Create a dedicated SSH connection for this monitoring thread
         ssh = None
 
         try:
             # Simple paramiko connection - no wrappers needed
+            logger.debug("Creating SSH connection for monitoring thread")
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh_options = self.config_manager.get_ssh_options()
+
+            try:
+                ssh_options = self.config_manager.get_ssh_options()
+                logger.debug(
+                    "SSH options retrieved: host=%s, user=%s",
+                    ssh_options.get("hostname"),
+                    ssh_options.get("username"),
+                )
+            except Exception as e:
+                logger.error("Failed to get SSH options: %s\n%s", e, traceback.format_exc())
+                raise
+
+            # Add timeout to prevent hanging
+            ssh_options["timeout"] = 30  # 30 second timeout for connection
+            ssh_options["banner_timeout"] = 30
+
+            logger.debug("Connecting SSH with timeout=%d", ssh_options.get("timeout", 30))
             ssh.connect(**ssh_options)
+            logger.info("SSH connected successfully in monitoring thread")
+            logger.debug("SSH connection established for monitoring")
 
             while elapsed < timeout_seconds:
                 # Simple docker inspect to get container state
-                stdin, stdout, stderr = ssh.exec_command(
-                    f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
+                logger.debug("Checking container %s status (elapsed: %ds)", container_name, elapsed)
+
+                # First check if container exists
+                check_cmd = (
+                    f"sudo docker ps -a --format '{{{{.Names}}}}' | grep -w {container_name}"
                 )
+                stdin, stdout, stderr = ssh.exec_command(check_cmd)
+                container_exists = stdout.read().decode().strip()
+
+                if not container_exists:
+                    logger.warning("Container %s not found in docker ps -a output", container_name)
+
+                # Try to inspect anyway
+                inspect_cmd = f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
+                logger.debug("Running: %s", inspect_cmd)
+                stdin, stdout, stderr = ssh.exec_command(inspect_cmd)
 
                 output = stdout.read().decode().strip()
+                error_output = stderr.read().decode().strip()
 
-                if not output:
+                if error_output:
+                    logger.warning("Docker inspect stderr: %s", error_output)
+
+                logger.debug("Container %s inspect output: %s", container_name, output[:500])
+
+                if not output or "No such object" in error_output:
                     # Container doesn't exist anymore
-                    logger.info("Container %s no longer exists", container_name)
-                    completion_handler(run_id, -1, container_name)
+                    logger.info(
+                        "Container %s no longer exists (output: %s, error: %s)",
+                        container_name,
+                        output,
+                        error_output,
+                    )
+                    logger.info("Calling completion handler for missing container")
+                    try:
+                        completion_handler(run_id, -1, container_name)
+                    except Exception as handler_error:
+                        logger.error(
+                            "Completion handler failed: %s\n%s",
+                            handler_error,
+                            traceback.format_exc(),
+                        )
                     return
 
                 try:
                     state = json.loads(output)
                     running = state.get("Running", False)
+                    logger.debug(
+                        "Container %s state: Running=%s, Full state=%s",
+                        container_name,
+                        running,
+                        state,
+                    )
 
                     if not running:
                         # Container stopped - check exit code
@@ -168,18 +241,34 @@ class GPUExecutor:
                         )
 
                         # Exit code 0 = success, non-zero = failure
-                        completion_handler(run_id, exit_code, container_name)
+                        logger.info(
+                            "Calling completion handler for %s with exit code %d", run_id, exit_code
+                        )
+                        try:
+                            completion_handler(run_id, exit_code, container_name)
+                        except Exception as handler_error:
+                            logger.error(
+                                "Completion handler failed: %s\n%s",
+                                handler_error,
+                                traceback.format_exc(),
+                            )
                         return
 
                 except json.JSONDecodeError as e:
-                    logger.error("Failed to parse container state: %s", e)
+                    logger.error("Failed to parse container state: %s, raw output: %s", e, output)
                     # Continue monitoring
+                except Exception as e:
+                    logger.error(
+                        "Unexpected error checking container state: %s\n%s",
+                        e,
+                        traceback.format_exc(),
+                    )
 
                 time.sleep(interval)
                 elapsed += interval
 
                 if elapsed % 30 == 0:  # Log progress every 30 seconds
-                    logger.debug(
+                    logger.info(
                         "Container %s still running after %d seconds", container_name, elapsed
                     )
 
@@ -270,53 +359,76 @@ class GPUExecutor:
         """
         logger.info("Handling inference completion for run %s (exit code: %d)", run_id, exit_code)
 
-        if exit_code == 0:
-            # Success - try to download outputs
-            run_dir = Path("outputs") / f"run_{run_id}"
-            run_dir.mkdir(parents=True, exist_ok=True)
+        # Debug logging for service availability
+        if self.service is None:
+            logger.error(
+                "ERROR: self.service is None in completion handler! Cannot update database."
+            )
+        else:
+            logger.info("self.service is available: %s", type(self.service))
 
-            # Output paths
-            outputs_dir = run_dir / "outputs"
-            outputs_dir.mkdir(exist_ok=True)
-            local_output = outputs_dir / "output.mp4"
+        try:
+            if exit_code == 0:
+                # Success - try to download outputs
+                run_dir = Path("outputs") / f"run_{run_id}"
+                run_dir.mkdir(parents=True, exist_ok=True)
 
-            # Get remote config
-            remote_config = self.config_manager.get_remote_config()
-            remote_output = f"{remote_config.remote_dir}/outputs/run_{run_id}/output.mp4"
+                # Output paths
+                outputs_dir = run_dir / "outputs"
+                outputs_dir.mkdir(exist_ok=True)
+                local_output = outputs_dir / "output.mp4"
 
-            # Download using thread-safe helper
-            if self._thread_safe_download(remote_output, local_output):
-                logger.info("Downloaded output file for run %s", run_id)
+                # Get remote config - add explicit error handling
+                try:
+                    logger.debug("Getting remote config for run %s", run_id)
+                    remote_config = self.config_manager.get_remote_config()
+                    remote_output = f"{remote_config.remote_dir}/outputs/run_{run_id}/output.mp4"
+                except Exception as e:
+                    logger.error("Failed to get remote config: %s (type: %s)", e, type(e).__name__)
+                    logger.error("config_manager type: %s", type(self.config_manager))
+                    if self.service:
+                        self.service.update_run_status(run_id, "failed")
+                        self.service.update_run(run_id, error_message=f"Configuration error: {e}")
+                    return
 
-                # Update database with success
-                if self.service:
-                    self.service.update_run(
-                        run_id,
-                        outputs={
-                            "output_path": str(local_output),
-                            "completed_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
-                    self.service.update_run_status(run_id, "completed")
-                logger.info("Inference run %s completed successfully", run_id)
+                # Download using thread-safe helper
+                if self._thread_safe_download(remote_output, local_output):
+                    logger.info("Downloaded output file for run %s", run_id)
+
+                    # Update database with success
+                    if self.service:
+                        self.service.update_run(
+                            run_id,
+                            outputs={
+                                "output_path": str(local_output),
+                                "completed_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        self.service.update_run_status(run_id, "completed")
+                    logger.info("Inference run %s completed successfully", run_id)
+                else:
+                    # Output not found or download failed
+                    if self.service:
+                        self.service.update_run_status(run_id, "failed")
+                        self.service.update_run(
+                            run_id, error_message="Output file not found after completion"
+                        )
+                    logger.error("Output file not found for run %s", run_id)
             else:
-                # Output not found or download failed
+                # Container failed or timed out
                 if self.service:
                     self.service.update_run_status(run_id, "failed")
-                    self.service.update_run(
-                        run_id, error_message="Output file not found after completion"
-                    )
-                logger.error("Output file not found for run %s", run_id)
-        else:
-            # Container failed or timed out
+                    if exit_code == -1:
+                        error_msg = "Container timed out or monitoring error"
+                    else:
+                        error_msg = f"Container failed with exit code {exit_code}"
+                    self.service.update_run(run_id, error_message=error_msg)
+                logger.error("Inference run %s failed with exit code %d", run_id, exit_code)
+        except Exception as e:
+            logger.error("Error in completion handler for run %s: %s", run_id, e)
             if self.service:
                 self.service.update_run_status(run_id, "failed")
-                if exit_code == -1:
-                    error_msg = "Container timed out or monitoring error"
-                else:
-                    error_msg = f"Container failed with exit code {exit_code}"
-                self.service.update_run(run_id, error_message=error_msg)
-            logger.error("Inference run %s failed with exit code %d", run_id, exit_code)
+                self.service.update_run(run_id, error_message=f"Completion handler error: {e}")
 
     def _handle_enhancement_completion(self, run_id: str, exit_code: int, container_name: str):
         """Handle enhancement container completion.

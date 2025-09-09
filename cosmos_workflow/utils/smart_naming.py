@@ -297,36 +297,3 @@ def generate_smart_name(text: str, max_length: int = 20) -> str:
     # If we get here, no keywords were extracted
     logger.warning("No keywords extracted from text: %s", text[:100])
     return "sequence"
-
-
-def sanitize_name(name: str) -> str:
-    """Sanitize a name to be filesystem-friendly.
-
-    Args:
-        name: Input name to sanitize
-
-    Returns:
-        Sanitized name safe for filesystem use
-    """
-    # Handle None input
-    if name is None:
-        raise AttributeError("Cannot sanitize None")
-
-    # Replace spaces with underscores
-    name = name.replace(" ", "_")
-
-    # Remove or replace special characters
-    name = re.sub(r"[^a-zA-Z0-9_-]", "", name)
-
-    # Convert to lowercase
-    name = name.lower()
-
-    # Limit length
-    if len(name) > 50:
-        name = name[:50]
-
-    # Ensure non-empty
-    if not name:
-        name = "unnamed"
-
-    return name

@@ -128,3 +128,5 @@ Cosmos CLI:
 Use `cosmos --help` to understand CLI features.
 
 ---
+## **Bash Scripts**
+- ssh to remote instance for manual testing/inspection: /scripts/ssh_lambda.ssh

@@ -3,17 +3,14 @@
 Test workflow utilities module.
 """
 
-from pathlib import Path
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
 from cosmos_workflow.utils.workflow_utils import (
     ensure_directory,
     ensure_path_exists,
     format_duration,
     get_log_path,
-    log_workflow_event,
     sanitize_remote_path,
-    validate_gpu_configuration,
 )
 
 
@@ -62,39 +59,6 @@ class TestUtilityFunctions:
         assert format_duration(3600) == "1h 0m 0s"
         assert format_duration(3665) == "1h 1m 5s"
         assert format_duration(7325) == "2h 2m 5s"
-
-    @patch("cosmos_workflow.utils.workflow_utils.ensure_path_exists")
-    def test_log_workflow_event(self, mock_ensure_path):
-        """Test log_workflow_event function."""
-        mock_file = mock_open()
-        with patch("builtins.open", mock_file):
-            log_workflow_event(
-                "SUCCESS",
-                "test_workflow",
-                {"duration": "10s", "status": "completed"},
-                Path("test_logs"),
-            )
-
-        mock_ensure_path.assert_called_once_with(Path("test_logs"))
-        mock_file.assert_called_once_with(Path("test_logs") / "run_history.log", "a")
-
-        # Check that something was written
-        handle = mock_file()
-        handle.write.assert_called()
-
-    def test_validate_gpu_configuration_valid(self):
-        """Test validate_gpu_configuration with valid config."""
-        assert validate_gpu_configuration(1, "0") is True
-        assert validate_gpu_configuration(2, "0,1") is True
-        assert validate_gpu_configuration(4, "0,1,2,3") is True
-
-    def test_validate_gpu_configuration_invalid(self):
-        """Test validate_gpu_configuration with invalid config."""
-        assert validate_gpu_configuration(0, "0") is False  # Invalid num_gpu
-        assert validate_gpu_configuration(-1, "0") is False  # Negative num_gpu
-        assert validate_gpu_configuration(2, "0") is False  # Mismatch count
-        assert validate_gpu_configuration(1, "abc") is False  # Non-numeric device
-        assert validate_gpu_configuration(1, "-1") is False  # Negative device ID
 
     def test_ensure_directory(self, tmp_path):
         """Test ensure_directory creates directory."""

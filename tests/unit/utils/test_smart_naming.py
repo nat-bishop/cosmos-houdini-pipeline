@@ -5,7 +5,7 @@ Tests all functions, edge cases, and error conditions.
 
 import pytest
 
-from cosmos_workflow.utils.smart_naming import generate_smart_name, sanitize_name
+from cosmos_workflow.utils.smart_naming import generate_smart_name
 
 
 class TestGenerateSmartName:
@@ -140,90 +140,6 @@ class TestGenerateSmartName:
             assert result.replace("_", "").isalnum() or result == "sequence"
 
 
-class TestSanitizeName:
-    """Test the sanitize_name function comprehensively."""
-
-    def test_basic_sanitization(self):
-        """Test basic name sanitization."""
-        assert sanitize_name("hello world") == "hello_world"
-        assert sanitize_name("Test-Name") == "test-name"
-
-    def test_special_characters_removed(self):
-        """Test that special characters are removed."""
-        assert sanitize_name("hello@world#") == "helloworld"
-        assert sanitize_name("test$money%") == "testmoney"
-        assert sanitize_name("foo&bar*baz") == "foobarbaz"
-
-    def test_spaces_to_underscores(self):
-        """Test that spaces become underscores."""
-        assert sanitize_name("multiple word name") == "multiple_word_name"
-        assert sanitize_name("  spaces  everywhere  ") == "__spaces__everywhere__"
-
-    def test_lowercase_conversion(self):
-        """Test conversion to lowercase."""
-        assert sanitize_name("UPPERCASE") == "uppercase"
-        assert sanitize_name("MiXeD CaSe") == "mixed_case"
-
-    def test_length_limit(self):
-        """Test that names are limited to 50 characters."""
-        long_name = "a" * 100
-        result = sanitize_name(long_name)
-        assert len(result) == 50
-
-    def test_empty_string_fallback(self):
-        """Test that empty strings get default name."""
-        assert sanitize_name("") == "unnamed"
-        assert sanitize_name("@#$%") == "unnamed"  # All special chars removed
-
-    def test_alphanumeric_preserved(self):
-        """Test that alphanumeric characters are preserved."""
-        assert sanitize_name("abc123XYZ") == "abc123xyz"
-        assert sanitize_name("test_123-name") == "test_123-name"
-
-    def test_unicode_characters(self):
-        """Test handling of unicode characters."""
-        # Unicode should be removed as they're not alphanumeric
-        assert sanitize_name("café") == "caf"
-        assert sanitize_name("emoji😀test") == "emojitest"
-
-    def test_consecutive_special_chars(self):
-        """Test multiple consecutive special characters."""
-        assert sanitize_name("hello!!!world???") == "helloworld"
-        assert sanitize_name("test---name") == "test---name"  # Hyphens preserved
-
-    def test_leading_trailing_special(self):
-        """Test leading and trailing special characters."""
-        assert sanitize_name("###test###") == "test"
-        assert sanitize_name("___name___") == "___name___"  # Underscores preserved
-
-    def test_mixed_input(self):
-        """Test complex mixed input."""
-        input_text = "  Hello-World_123!@#$%  Test  "
-        result = sanitize_name(input_text)
-        # Check that it's lowercased and special chars removed
-        assert "hello" in result.lower()
-        assert "world" in result.lower()
-        assert "test" in result.lower()
-        assert "123" in result
-        assert "@" not in result
-        assert "#" not in result
-        assert "$" not in result
-        assert "%" not in result
-
-    def test_real_world_names(self):
-        """Test with real-world style names."""
-        names = [
-            ("My Cool Project!", "my_cool_project"),
-            ("test@email.com", "testemailcom"),
-            ("2023-11-30_backup", "2023-11-30_backup"),
-            ("file (copy).txt", "file_copytxt"),
-            ("C:\\path\\to\\file", "cpathtofile"),
-        ]
-
-        for input_name, expected in names:
-            assert sanitize_name(input_name) == expected
-
-
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
@@ -232,25 +148,16 @@ class TestEdgeCases:
         with pytest.raises(AttributeError):
             generate_smart_name(None)
 
-        with pytest.raises(AttributeError):
-            sanitize_name(None)
-
     def test_non_string_input(self):
         """Test handling of non-string input."""
         # Numbers
         result = generate_smart_name(str(12345))
         assert result == "sequence"  # No meaningful words
 
-        # Should work with string conversion
-        assert sanitize_name(str(123)) == "123"
-
     def test_only_punctuation(self):
         """Test input with only punctuation."""
         result = generate_smart_name("!@#$%^&*()")
         assert result == "sequence"  # Fallback
-
-        result = sanitize_name("!@#$%^&*()")
-        assert result == "unnamed"  # Fallback
 
     def test_very_long_single_word(self):
         """Test very long single word."""

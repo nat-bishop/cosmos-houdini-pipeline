@@ -8,42 +8,6 @@ def normalize_path(path_str):
     return str(path_str).replace("\\", "/")
 
 
-def complete_prompt_specs(_ctx, _param, incomplete):
-    """Autocomplete for PromptSpec JSON files."""
-    prompts_dir = Path("inputs/prompts")
-    if not prompts_dir.exists():
-        return []
-
-    # Normalize incomplete path for comparison
-    incomplete_norm = normalize_path(incomplete) if incomplete else ""
-
-    # Match files starting with incomplete text
-    results = []
-    for json_file in prompts_dir.rglob("*.json"):
-        if json_file.is_file():
-            relative_path = normalize_path(json_file)
-            if not incomplete_norm or relative_path.startswith(incomplete_norm):
-                results.append(relative_path)
-    return sorted(results)
-
-
-def complete_video_files(_ctx, _param, incomplete):
-    """Autocomplete for video files in inputs/videos."""
-    videos_dir = Path("inputs/videos")
-    if not videos_dir.exists():
-        return []
-
-    # Normalize incomplete path for comparison
-    incomplete_norm = normalize_path(incomplete) if incomplete else ""
-
-    results = []
-    for video in videos_dir.rglob("color.mp4"):
-        relative_path = normalize_path(video)
-        if not incomplete_norm or relative_path.startswith(incomplete_norm):
-            results.append(relative_path)
-    return sorted(results)
-
-
 def complete_video_dirs(_ctx, _param, incomplete):
     """Autocomplete for video directories in inputs/videos/."""
     videos_dir = Path("inputs/videos")

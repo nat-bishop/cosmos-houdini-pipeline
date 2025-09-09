@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from cosmos_workflow.cli.base import CLIContext
 from cosmos_workflow.cli.list_commands import list_group
 
 
@@ -30,7 +31,7 @@ class TestListCommands:
         return context
 
     # Test list prompts command
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_default(self, mock_get_operations, runner, mock_operations):
         """Test listing prompts with default parameters."""
         # Arrange
@@ -54,7 +55,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["prompts"])
+        result = runner.invoke(list_group, ["prompts"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -64,7 +65,7 @@ class TestListCommands:
         assert "enhance" in result.output
         mock_operations.list_prompts.assert_called_once_with(model_type=None, limit=50)
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_with_model_filter(self, mock_get_operations, runner, mock_operations):
         """Test listing prompts filtered by model type."""
         # Arrange
@@ -81,7 +82,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["prompts", "--model", "transfer"])
+        result = runner.invoke(list_group, ["prompts", "--model", "transfer"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -89,7 +90,7 @@ class TestListCommands:
         assert "transfer" in result.output
         mock_operations.list_prompts.assert_called_once_with(model_type="transfer", limit=50)
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_with_limit(self, mock_get_operations, runner, mock_operations):
         """Test listing prompts with custom limit."""
         # Arrange
@@ -97,13 +98,13 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["prompts", "--limit", "10"])
+        result = runner.invoke(list_group, ["prompts", "--limit", "10"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         mock_operations.list_prompts.assert_called_once_with(model_type=None, limit=10)
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_empty_result(self, mock_get_operations, runner, mock_operations):
         """Test listing prompts with no results."""
         # Arrange
@@ -111,13 +112,13 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["prompts"])
+        result = runner.invoke(list_group, ["prompts"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         assert "No prompts found" in result.output
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_json_output(self, mock_get_operations, runner, mock_operations):
         """Test listing prompts with JSON output format."""
         # Arrange
@@ -134,7 +135,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["prompts", "--json"])
+        result = runner.invoke(list_group, ["prompts", "--json"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -143,7 +144,7 @@ class TestListCommands:
         assert output_data[0]["id"] == "ps_001"
 
     # Test list runs command
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_default(self, mock_get_operations, runner, mock_operations):
         """Test listing runs with default parameters."""
         # Arrange
@@ -169,7 +170,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs"])
+        result = runner.invoke(list_group, ["runs"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -179,7 +180,7 @@ class TestListCommands:
         assert "running" in result.output
         mock_operations.list_runs.assert_called_once_with(status=None, prompt_id=None, limit=50)
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_with_status_filter(self, mock_get_operations, runner, mock_operations):
         """Test listing runs filtered by status."""
         # Arrange
@@ -197,7 +198,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs", "--status", "completed"])
+        result = runner.invoke(list_group, ["runs", "--status", "completed"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -207,7 +208,7 @@ class TestListCommands:
             status="completed", prompt_id=None, limit=50
         )
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_with_prompt_filter(self, mock_get_operations, runner, mock_operations):
         """Test listing runs filtered by prompt ID."""
         # Arrange
@@ -225,7 +226,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs", "--prompt", "ps_specific"])
+        result = runner.invoke(list_group, ["runs", "--prompt", "ps_specific"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -235,7 +236,7 @@ class TestListCommands:
             status=None, prompt_id="ps_specific", limit=50
         )
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_with_multiple_filters(self, mock_get_operations, runner, mock_operations):
         """Test listing runs with both status and prompt filters."""
         # Arrange
@@ -243,7 +244,9 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs", "--status", "failed", "--prompt", "ps_001"])
+        result = runner.invoke(
+            list_group, ["runs", "--status", "failed", "--prompt", "ps_001"], obj=CLIContext()
+        )
 
         # Assert
         assert result.exit_code == 0
@@ -251,7 +254,7 @@ class TestListCommands:
             status="failed", prompt_id="ps_001", limit=50
         )
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_empty_result(self, mock_get_operations, runner, mock_operations):
         """Test listing runs with no results."""
         # Arrange
@@ -259,26 +262,26 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs"])
+        result = runner.invoke(list_group, ["runs"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         assert "No runs found" in result.output
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_invalid_status(self, mock_get_operations, runner, mock_operations):
         """Test listing runs with invalid status filter."""
         # Arrange
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs", "--status", "invalid"])
+        result = runner.invoke(list_group, ["runs", "--status", "invalid"], obj=CLIContext())
 
         # Assert
         assert result.exit_code != 0
         assert "Invalid value for '--status'" in result.output
 
-    @patch("cosmos_workflow.cli.list_commands.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_runs_json_output(self, mock_get_operations, runner, mock_operations):
         """Test listing runs with JSON output format."""
         # Arrange
@@ -296,7 +299,7 @@ class TestListCommands:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(list_group, ["runs", "--json"])
+        result = runner.invoke(list_group, ["runs", "--json"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0

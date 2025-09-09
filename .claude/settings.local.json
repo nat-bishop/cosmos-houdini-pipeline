@@ -11,7 +11,9 @@
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_wait_for",
       "Bash(sqlite3:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Read(//c/Users/17143/.cache/claude/staging//**)",
+      "Read(//c/Users/17143/.claude/todos/**)"
     ],
     "deny": [],
     "ask": []

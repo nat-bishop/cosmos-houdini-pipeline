@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from cosmos_workflow.cli.base import CLIContext
 from cosmos_workflow.cli.delete import delete_group
 
 
@@ -21,7 +22,7 @@ class TestDeletePromptCommand:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_prompt_with_confirmation(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -46,7 +47,7 @@ class TestDeletePromptCommand:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -60,7 +61,7 @@ class TestDeletePromptCommand:
         mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=False)
         mock_confirm.assert_called_once()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_prompt_cancelled(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -77,7 +78,7 @@ class TestDeletePromptCommand:
         mock_confirm.return_value = False
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -87,7 +88,7 @@ class TestDeletePromptCommand:
         )
         mock_operations.delete_prompt.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_prompt_with_force(self, mock_get_operations, runner, mock_operations):
         """Test deleting a prompt with --force flag."""
         # Arrange
@@ -104,7 +105,7 @@ class TestDeletePromptCommand:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id, "--force"])
+        result = runner.invoke(delete_group, ["prompt", prompt_id, "--force"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -114,7 +115,7 @@ class TestDeletePromptCommand:
         )
         mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_prompt_not_found(self, mock_get_operations, runner, mock_operations):
         """Test deleting a non-existent prompt."""
         # Arrange
@@ -128,14 +129,14 @@ class TestDeletePromptCommand:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 1
         assert "Error: Prompt not found" in result.output
         mock_operations.delete_prompt.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_prompt_with_active_runs(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -160,7 +161,7 @@ class TestDeletePromptCommand:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -182,7 +183,7 @@ class TestDeleteRunCommand:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_run_with_confirmation(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -202,7 +203,7 @@ class TestDeleteRunCommand:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -213,7 +214,7 @@ class TestDeleteRunCommand:
         mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=False)
         mock_confirm.assert_called_once()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_run_cancelled(self, mock_confirm, mock_get_operations, runner, mock_operations):
         """Test cancelling run deletion."""
@@ -227,7 +228,7 @@ class TestDeleteRunCommand:
         mock_confirm.return_value = False
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -235,7 +236,7 @@ class TestDeleteRunCommand:
         mock_operations.preview_run_deletion.assert_called_once_with(run_id, keep_outputs=False)
         mock_operations.delete_run.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_run_with_force(self, mock_get_operations, runner, mock_operations):
         """Test deleting a run with --force flag."""
         # Arrange
@@ -251,7 +252,7 @@ class TestDeleteRunCommand:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id, "--force"])
+        result = runner.invoke(delete_group, ["run", run_id, "--force"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -259,7 +260,7 @@ class TestDeleteRunCommand:
         mock_operations.preview_run_deletion.assert_called_once_with(run_id, keep_outputs=False)
         mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_run_not_found(self, mock_get_operations, runner, mock_operations):
         """Test deleting a non-existent run."""
         # Arrange
@@ -272,14 +273,14 @@ class TestDeleteRunCommand:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 1
         assert "Error: Run not found" in result.output
         mock_operations.delete_run.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_run_with_active_status(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -299,7 +300,7 @@ class TestDeleteRunCommand:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -307,7 +308,7 @@ class TestDeleteRunCommand:
         assert "Successfully deleted" in result.output
         mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_delete_run_with_warnings(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -328,7 +329,7 @@ class TestDeleteRunCommand:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -350,7 +351,7 @@ class TestDeletePromptWithKeepOutputs:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_prompt_deletes_outputs_by_default(
         self, mock_get_operations, runner, mock_operations
     ):
@@ -377,7 +378,7 @@ class TestDeletePromptWithKeepOutputs:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id, "--force"])
+        result = runner.invoke(delete_group, ["prompt", prompt_id, "--force"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -386,7 +387,7 @@ class TestDeletePromptWithKeepOutputs:
         # Should call delete_prompt with keep_outputs=False (default)
         mock_operations.delete_prompt.assert_called_once_with(prompt_id, keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_prompt_with_keep_outputs(self, mock_get_operations, runner, mock_operations):
         """Test deleting a prompt with --keep-outputs flag."""
         # Arrange
@@ -408,7 +409,9 @@ class TestDeletePromptWithKeepOutputs:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id, "--keep-outputs", "--force"])
+        result = runner.invoke(
+            delete_group, ["prompt", prompt_id, "--keep-outputs", "--force"], obj=CLIContext()
+        )
 
         # Assert
         assert result.exit_code == 0
@@ -430,7 +433,7 @@ class TestDeleteRunWithKeepOutputs:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_run_deletes_outputs_by_default(
         self, mock_get_operations, runner, mock_operations
     ):
@@ -449,7 +452,7 @@ class TestDeleteRunWithKeepOutputs:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id, "--force"])
+        result = runner.invoke(delete_group, ["run", run_id, "--force"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -457,7 +460,7 @@ class TestDeleteRunWithKeepOutputs:
         assert "Successfully deleted" in result.output
         mock_operations.delete_run.assert_called_once_with(run_id, keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_run_with_keep_outputs(self, mock_get_operations, runner, mock_operations):
         """Test deleting a run with --keep-outputs flag."""
         # Arrange
@@ -474,7 +477,9 @@ class TestDeleteRunWithKeepOutputs:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id, "--keep-outputs", "--force"])
+        result = runner.invoke(
+            delete_group, ["run", run_id, "--keep-outputs", "--force"], obj=CLIContext()
+        )
 
         # Assert
         assert result.exit_code == 0
@@ -496,7 +501,7 @@ class TestBulkDeletion:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.prompt")
     def test_delete_all_runs(self, mock_prompt, mock_get_operations, runner, mock_operations):
         """Test deleting all runs with --all flag."""
@@ -526,7 +531,7 @@ class TestBulkDeletion:
         mock_prompt.return_value = "DELETE ALL"
 
         # Act
-        result = runner.invoke(delete_group, ["run", "--all"])
+        result = runner.invoke(delete_group, ["run", "--all"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -537,7 +542,7 @@ class TestBulkDeletion:
         mock_operations.delete_all_runs.assert_called_once_with(keep_outputs=False)
         mock_prompt.assert_called_once_with("Type 'DELETE ALL' to confirm")
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_all_runs_with_force(self, mock_get_operations, runner, mock_operations):
         """Test deleting all runs with --all --force flags."""
         # Arrange
@@ -554,14 +559,14 @@ class TestBulkDeletion:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", "--all", "--force"])
+        result = runner.invoke(delete_group, ["run", "--all", "--force"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         assert "Successfully deleted 2 run(s)" in result.output
         mock_operations.delete_all_runs.assert_called_once_with(keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.prompt")
     def test_delete_all_runs_cancelled(
         self, mock_prompt, mock_get_operations, runner, mock_operations
@@ -577,14 +582,14 @@ class TestBulkDeletion:
         mock_prompt.return_value = "no"  # Wrong confirmation
 
         # Act
-        result = runner.invoke(delete_group, ["run", "--all"])
+        result = runner.invoke(delete_group, ["run", "--all"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         assert "Deletion cancelled" in result.output
         mock_operations.delete_all_runs.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_delete_all_runs_empty(self, mock_get_operations, runner, mock_operations):
         """Test deleting all runs when there are none."""
         # Arrange
@@ -596,14 +601,14 @@ class TestBulkDeletion:
         mock_get_operations.return_value = mock_operations
 
         # Act
-        result = runner.invoke(delete_group, ["run", "--all"])
+        result = runner.invoke(delete_group, ["run", "--all"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
         assert "No runs found to delete" in result.output
         mock_operations.delete_all_runs.assert_not_called()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.prompt")
     def test_delete_all_prompts(self, mock_prompt, mock_get_operations, runner, mock_operations):
         """Test deleting all prompts with --all flag."""
@@ -629,7 +634,7 @@ class TestBulkDeletion:
         mock_prompt.return_value = "DELETE ALL"
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", "--all"])
+        result = runner.invoke(delete_group, ["prompt", "--all"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -639,11 +644,11 @@ class TestBulkDeletion:
         mock_operations.preview_all_prompts_deletion.assert_called_once()
         mock_operations.delete_all_prompts.assert_called_once_with(keep_outputs=False)
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_cannot_use_all_with_id(self, mock_get_operations, runner, mock_operations):
         """Test that --all and ID are mutually exclusive."""
         # Act
-        result = runner.invoke(delete_group, ["run", "rs_123", "--all"])
+        result = runner.invoke(delete_group, ["run", "rs_123", "--all"], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 2
@@ -663,7 +668,7 @@ class TestEnhancedFilePreview:
         """Create a mock WorkflowOperations."""
         return MagicMock()
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_enhanced_file_preview_for_run(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -705,7 +710,7 @@ class TestEnhancedFilePreview:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["run", run_id])
+        result = runner.invoke(delete_group, ["run", run_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0
@@ -715,7 +720,7 @@ class TestEnhancedFilePreview:
         assert "2 json files (15 KB)" in result.output
         assert "Total: 5 files (1.2 GB)" in result.output
 
-    @patch("cosmos_workflow.cli.delete.get_operations")
+    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     @patch("cosmos_workflow.cli.delete.click.confirm")
     def test_enhanced_file_preview_for_prompt(
         self, mock_confirm, mock_get_operations, runner, mock_operations
@@ -749,7 +754,7 @@ class TestEnhancedFilePreview:
         mock_confirm.return_value = True
 
         # Act
-        result = runner.invoke(delete_group, ["prompt", prompt_id])
+        result = runner.invoke(delete_group, ["prompt", prompt_id], obj=CLIContext())
 
         # Assert
         assert result.exit_code == 0

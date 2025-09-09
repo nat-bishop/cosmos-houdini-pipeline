@@ -181,10 +181,10 @@ class TestPromptEnhancementRuns:
         mock_service.create_run.assert_called_once()
         mock_service.create_prompt.assert_called_once()
 
-        # New prompt should reference parent
+        # New prompt should have enhanced flag
         prompt_args = mock_service.create_prompt.call_args[1]
-        assert prompt_args["parameters"]["parent_prompt_id"] == "ps_test123"
         assert prompt_args["parameters"]["enhanced"] is True
+        assert prompt_args["parameters"]["name"] == "test_prompt_enhanced"
 
         assert result["enhanced_prompt_id"] == "ps_enhanced456"
 

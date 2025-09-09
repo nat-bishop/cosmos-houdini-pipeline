@@ -107,6 +107,21 @@
 - [ ] Extract execution logic into separate methods
 - [ ] Extract status update logic into separate methods
 
+### Directory Structure Refactoring
+**Goal:** Reorganize codebase directories to better couple related functionality and improve architectural clarity
+
+**Current Issues:**
+- data_repository.py located in services/ but contains database-specific logic
+- Related functionality scattered across multiple directories
+- Unclear separation of concerns in directory structure
+
+**Refactoring Tasks:**
+- [ ] Move data_repository.py from services/ to database/ directory
+- [ ] Identify and merge other directories with overlapping responsibilities
+- [ ] Update all import statements and references
+- [ ] Ensure tests continue to work after directory changes
+- [ ] Update documentation to reflect new structure
+
 ### Standardize Error Handling
 - [ ] Create base exception classes in `cosmos_workflow/exceptions.py`
 - [ ] Define ValidationError, ExecutionError, NetworkError

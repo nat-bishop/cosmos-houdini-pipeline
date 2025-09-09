@@ -1,101 +1,68 @@
 """Tests for GPU executor container monitoring functionality."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
 
-class TestContainerStatusChecking:
-    """Test container status checking functionality."""
+class TestThreadSafeDownload:
+    """Test thread-safe download functionality."""
 
-    def test_get_container_status_running(self):
-        """Test getting status of a running container."""
+    @patch("paramiko.SSHClient")
+    def test_thread_safe_download_success(self, mock_ssh_client):
+        """Test successful file download in thread-safe manner."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
-        gpu_executor.remote_executor = MagicMock()
-        gpu_executor.json_handler = MagicMock()
-
-        # Mock docker inspect output for running container
-        docker_state = {"Running": True, "ExitCode": 0, "Status": "running", "Error": ""}
-        gpu_executor.remote_executor.execute_command.return_value = '{"Running": true}'
-        gpu_executor.json_handler.parse_json.return_value = docker_state
-
-        # Act
-        status = gpu_executor._get_container_status("cosmos_transfer_abc12345")
-
-        # Assert
-        assert status["running"] is True
-        assert status["exit_code"] == 0
-        assert status["status"] == "running"
-        assert status["error"] == ""
-        gpu_executor.remote_executor.execute_command.assert_called_once_with(
-            "sudo docker inspect cosmos_transfer_abc12345 --format '{{json .State}}'"
-        )
-
-    def test_get_container_status_stopped_success(self):
-        """Test getting status of a successfully completed container."""
-        # Arrange
-        gpu_executor = GPUExecutor()
-        gpu_executor._initialize_services()
-        gpu_executor.remote_executor = MagicMock()
-        gpu_executor.json_handler = MagicMock()
-
-        # Mock docker inspect output for stopped container
-        docker_state = {"Running": False, "ExitCode": 0, "Status": "exited", "Error": ""}
-        gpu_executor.remote_executor.execute_command.return_value = '{"Running": false}'
-        gpu_executor.json_handler.parse_json.return_value = docker_state
-
-        # Act
-        status = gpu_executor._get_container_status("cosmos_transfer_abc12345")
-
-        # Assert
-        assert status["running"] is False
-        assert status["exit_code"] == 0
-        assert status["status"] == "exited"
-
-    def test_get_container_status_stopped_failed(self):
-        """Test getting status of a failed container."""
-        # Arrange
-        gpu_executor = GPUExecutor()
-        gpu_executor._initialize_services()
-        gpu_executor.remote_executor = MagicMock()
-        gpu_executor.json_handler = MagicMock()
-
-        # Mock docker inspect output for failed container
-        docker_state = {
-            "Running": False,
-            "ExitCode": 1,
-            "Status": "exited",
-            "Error": "Container failed",
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
         }
-        gpu_executor.remote_executor.execute_command.return_value = '{"Running": false}'
-        gpu_executor.json_handler.parse_json.return_value = docker_state
+
+        # Mock SSH and SFTP
+        mock_ssh_instance = MagicMock()
+        mock_sftp = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.open_sftp.return_value = mock_sftp
 
         # Act
-        status = gpu_executor._get_container_status("cosmos_enhance_def45678")
+        result = gpu_executor._thread_safe_download("/remote/path/file.mp4", "/local/path/file.mp4")
 
         # Assert
-        assert status["running"] is False
-        assert status["exit_code"] == 1
-        assert status["error"] == "Container failed"
+        assert result is True
+        mock_ssh_instance.connect.assert_called_once()
+        mock_sftp.get.assert_called_once_with("/remote/path/file.mp4", "/local/path/file.mp4")
+        mock_sftp.close.assert_called_once()
+        mock_ssh_instance.close.assert_called_once()
 
-    def test_get_container_status_not_found(self):
-        """Test getting status when container doesn't exist."""
+    @patch("paramiko.SSHClient")
+    def test_thread_safe_download_failure(self, mock_ssh_client):
+        """Test handling of download failures."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
-        gpu_executor.remote_executor = MagicMock()
-        gpu_executor.remote_executor.execute_command.side_effect = Exception("Container not found")
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
+        }
+
+        # Mock SSH connection failure
+        mock_ssh_instance = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.connect.side_effect = Exception("Connection failed")
 
         # Act
-        status = gpu_executor._get_container_status("non_existent_container")
+        result = gpu_executor._thread_safe_download("/remote/path/file.mp4", "/local/path/file.mp4")
 
         # Assert
-        assert status["running"] is False
-        assert status["exit_code"] is None
-        assert status["status"] == "not_found"
+        assert result is False
+        mock_ssh_instance.close.assert_called_once()
 
 
 class TestContainerMonitoring:
@@ -126,22 +93,29 @@ class TestContainerMonitoring:
         mock_thread_instance.start.assert_called_once()
 
     @patch("time.sleep")
-    def test_monitor_detects_successful_completion(self, mock_sleep):
+    @patch("paramiko.SSHClient")
+    def test_monitor_detects_successful_completion(self, mock_ssh_client, mock_sleep):
         """Test monitor detects when container completes successfully."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
         gpu_executor.config_manager = MagicMock()
         gpu_executor.config_manager.get_timeouts.return_value = {"docker_execution": 3600}
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
+        }
 
-        # Mock container status progression: running -> completed
-        gpu_executor._get_container_status = MagicMock(
-            side_effect=[
-                {"running": True, "exit_code": None, "status": "running"},
-                {"running": True, "exit_code": None, "status": "running"},
-                {"running": False, "exit_code": 0, "status": "exited"},
-            ]
-        )
+        # Mock SSH and container status progression: running -> completed
+        mock_ssh_instance = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.exec_command.side_effect = [
+            (None, MagicMock(read=lambda: b'{"Running": true, "ExitCode": null}'), None),
+            (None, MagicMock(read=lambda: b'{"Running": true, "ExitCode": null}'), None),
+            (None, MagicMock(read=lambda: b'{"Running": false, "ExitCode": 0}'), None),
+        ]
 
         completion_handler = MagicMock()
 
@@ -158,19 +132,27 @@ class TestContainerMonitoring:
         assert mock_sleep.call_count == 2  # Two sleep calls before completion
 
     @patch("time.sleep")
-    def test_monitor_detects_container_failure(self, mock_sleep):
+    @patch("paramiko.SSHClient")
+    def test_monitor_detects_container_failure(self, mock_ssh_client, mock_sleep):
         """Test monitor detects when container fails."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
+        }
 
-        # Mock container status: running -> failed
-        gpu_executor._get_container_status = MagicMock(
-            side_effect=[
-                {"running": True, "exit_code": None, "status": "running"},
-                {"running": False, "exit_code": 1, "status": "exited", "error": "Out of memory"},
-            ]
-        )
+        # Mock SSH and container status: running -> failed
+        mock_ssh_instance = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.exec_command.side_effect = [
+            (None, MagicMock(read=lambda: b'{"Running": true, "ExitCode": null}'), None),
+            (None, MagicMock(read=lambda: b'{"Running": false, "ExitCode": 1}'), None),
+        ]
 
         completion_handler = MagicMock()
 
@@ -187,16 +169,28 @@ class TestContainerMonitoring:
         assert mock_sleep.call_count == 1
 
     @patch("time.sleep")
-    def test_monitor_handles_timeout(self, mock_sleep):
+    @patch("paramiko.SSHClient")
+    def test_monitor_handles_timeout(self, mock_ssh_client, mock_sleep):
         """Test monitor handles timeout and kills container."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
         gpu_executor.kill_container = MagicMock(return_value=True)
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
+        }
 
-        # Mock container always running
-        gpu_executor._get_container_status = MagicMock(
-            return_value={"running": True, "exit_code": None, "status": "running"}
+        # Mock SSH and container always running
+        mock_ssh_instance = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.exec_command.return_value = (
+            None,
+            MagicMock(read=lambda: b'{"Running": true, "ExitCode": null}'),
+            None,
         )
 
         completion_handler = MagicMock()
@@ -214,14 +208,24 @@ class TestContainerMonitoring:
         completion_handler.assert_called_once_with("run_timeout", -1, "cosmos_transfer_timeout")
 
     @patch("time.sleep")
-    def test_monitor_handles_exception(self, mock_sleep):
+    @patch("paramiko.SSHClient")
+    def test_monitor_handles_exception(self, mock_ssh_client, mock_sleep):
         """Test monitor handles exceptions gracefully."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_ssh_options.return_value = {
+            "hostname": "test.host",
+            "username": "test_user",
+            "password": "test_pass",
+            "port": 22,
+        }
 
-        # Mock exception during status check
-        gpu_executor._get_container_status = MagicMock(side_effect=Exception("SSH connection lost"))
+        # Mock SSH connection failure
+        mock_ssh_instance = MagicMock()
+        mock_ssh_client.return_value = mock_ssh_instance
+        mock_ssh_instance.exec_command.side_effect = Exception("SSH connection lost")
 
         completion_handler = MagicMock()
 
@@ -240,13 +244,16 @@ class TestContainerMonitoring:
 class TestCompletionHandlers:
     """Test operation-specific completion handlers."""
 
-    def test_handle_inference_completion_success(self):
+    @patch("cosmos_workflow.execution.gpu_executor.GPUExecutor._thread_safe_download")
+    def test_handle_inference_completion_success(self, mock_download):
         """Test handling successful inference completion."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
         gpu_executor.service = MagicMock()
-        gpu_executor._download_outputs = MagicMock(return_value=Path("outputs/run_test/output.mp4"))
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_remote_config.return_value = MagicMock(remote_dir="/remote")
+        mock_download.return_value = True
 
         # Mock that output file exists
         with patch("pathlib.Path.exists", return_value=True):
@@ -254,7 +261,7 @@ class TestCompletionHandlers:
             gpu_executor._handle_inference_completion("run_test123", 0, "cosmos_transfer_test1234")
 
         # Assert
-        gpu_executor._download_outputs.assert_called_once()
+        mock_download.assert_called()
         gpu_executor.service.update_run.assert_called_once()
         gpu_executor.service.update_run_status.assert_called_once_with("run_test123", "completed")
 
@@ -288,7 +295,8 @@ class TestCompletionHandlers:
         gpu_executor.service.update_run.assert_called_once()
         assert "timeout" in str(gpu_executor.service.update_run.call_args).lower()
 
-    def test_handle_enhancement_completion_success(self):
+    @patch("cosmos_workflow.execution.gpu_executor.GPUExecutor._thread_safe_download")
+    def test_handle_enhancement_completion_success(self, mock_download):
         """Test handling successful enhancement completion."""
         # Arrange
         gpu_executor = GPUExecutor()
@@ -296,8 +304,8 @@ class TestCompletionHandlers:
         gpu_executor.service = MagicMock()
         gpu_executor.config_manager = MagicMock()
         gpu_executor.config_manager.get_remote_config.return_value = MagicMock(remote_dir="/remote")
-        gpu_executor.file_transfer = MagicMock()
         gpu_executor.json_handler = MagicMock()
+        mock_download.return_value = True
 
         # Mock enhanced text results
         gpu_executor.json_handler.read_json.return_value = [
@@ -308,22 +316,23 @@ class TestCompletionHandlers:
         gpu_executor._handle_enhancement_completion("run_enhance123", 0, "cosmos_enhance_test")
 
         # Assert
-        gpu_executor.file_transfer.download_file.assert_called_once()
+        mock_download.assert_called_once()
         gpu_executor.service.update_run.assert_called_once()
         assert "Enhanced prompt text here" in str(gpu_executor.service.update_run.call_args)
         gpu_executor.service.update_run_status.assert_called_once_with(
             "run_enhance123", "completed"
         )
 
-    def test_handle_upscaling_completion_success(self):
+    @patch("cosmos_workflow.execution.gpu_executor.GPUExecutor._thread_safe_download")
+    def test_handle_upscaling_completion_success(self, mock_download):
         """Test handling successful upscaling completion."""
         # Arrange
         gpu_executor = GPUExecutor()
         gpu_executor._initialize_services()
         gpu_executor.service = MagicMock()
-        gpu_executor._download_outputs = MagicMock(
-            return_value=Path("outputs/run_upscale/output_4k.mp4")
-        )
+        gpu_executor.config_manager = MagicMock()
+        gpu_executor.config_manager.get_remote_config.return_value = MagicMock(remote_dir="/remote")
+        mock_download.return_value = True
 
         # Mock that output file exists
         with patch("pathlib.Path.exists", return_value=True):
@@ -331,9 +340,7 @@ class TestCompletionHandlers:
             gpu_executor._handle_upscaling_completion("run_upscale123", 0, "cosmos_upscale_test")
 
         # Assert
-        gpu_executor._download_outputs.assert_called_once_with(
-            "run_upscale123", Path("outputs/run_run_upscale123"), upscaled=True
-        )
+        mock_download.assert_called()
         gpu_executor.service.update_run.assert_called_once()
         gpu_executor.service.update_run_status.assert_called_once_with(
             "run_upscale123", "completed"

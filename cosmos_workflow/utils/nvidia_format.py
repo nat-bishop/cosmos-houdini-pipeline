@@ -25,28 +25,34 @@ def to_cosmos_inference_json(
     execution_config = run_dict.get("execution_config", {})
     weights = execution_config.get("weights", {})
 
+    # Get run_id for path construction
+    run_id = run_dict.get("id", "")
+
     # Extract inputs
     inputs = prompt_dict.get("inputs", {})
 
-    # Flatten video paths to match actual upload location
-    def flatten_video_path(path: str) -> str:
-        """Flatten video path to match how files are uploaded.
+    # Convert video paths to match actual upload location with run_id
+    def convert_video_path(path: str) -> str:
+        """Convert video path to match how files are uploaded in run-specific directories.
 
-        Since files are uploaded flat to inputs/videos/, we need to
-        strip any subdirectories and keep only the filename.
+        Files are uploaded to runs/{run_id}/inputs/videos/, so we need to
+        strip any local path structure and use the run-specific path.
 
         Example:
-            inputs/videos/city_scene_20250830_203504/color.mp4 -> inputs/videos/color.mp4
+            inputs/videos/city_scene_20250830_203504/color.mp4 -> runs/{run_id}/inputs/videos/color.mp4
         """
         if not path:
             return path
+
+        # Convert Windows backslashes to forward slashes
+        path = path.replace("\\", "/")
 
         # Convert to Path to extract filename
         path_obj = Path(path)
         filename = path_obj.name
 
-        # Return flattened path
-        return f"inputs/videos/{filename}"
+        # Return run-specific path
+        return f"runs/{run_id}/inputs/videos/{filename}"
 
     # Extract negative prompt from parameters if not at top level
     negative_prompt = prompt_dict.get("negative_prompt", "")
@@ -61,7 +67,7 @@ def to_cosmos_inference_json(
     cosmos_json = {
         "prompt": prompt_dict.get("prompt_text", ""),
         "negative_prompt": negative_prompt,
-        "input_video_path": flatten_video_path(inputs.get("video", "")),
+        "input_video_path": convert_video_path(inputs.get("video", "")),
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
         "guidance": execution_config.get("guidance", 7.0),
@@ -91,7 +97,7 @@ def to_cosmos_inference_json(
         # Only add input_control if video path exists
         depth_path = inputs.get("depth", "")
         if depth_path:
-            cosmos_json["depth"]["input_control"] = flatten_video_path(depth_path)
+            cosmos_json["depth"]["input_control"] = convert_video_path(depth_path)
 
     seg_weight = weights.get("seg", 0.25)
     if seg_weight > 0:
@@ -99,7 +105,7 @@ def to_cosmos_inference_json(
         # Only add input_control if video path exists
         seg_path = inputs.get("seg", "")
         if seg_path:
-            cosmos_json["seg"]["input_control"] = flatten_video_path(seg_path)
+            cosmos_json["seg"]["input_control"] = convert_video_path(seg_path)
 
     return cosmos_json
 

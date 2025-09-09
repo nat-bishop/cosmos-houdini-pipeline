@@ -264,3 +264,55 @@ class RemoteCommandExecutor:
         """List files in a directory on the remote system."""
         output = self.ssh_manager.execute_command_success(f"ls -1 {path}")
         return output.strip().split("\n") if output.strip() else []
+
+    def execute_command(self, command: str, timeout: int = 300) -> str:
+        """Execute raw command on remote system.
+
+        DEPRECATED: This method is provided for backward compatibility only.
+        Please use specialized methods like cleanup_run_directories() or
+        inspect_container() instead.
+
+        Args:
+            command: Shell command to execute
+            timeout: Command timeout in seconds
+
+        Returns:
+            Command output
+        """
+        import warnings
+
+        warnings.warn(
+            "execute_command is deprecated. Use specialized methods like "
+            "cleanup_run_directories() or inspect_container() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.ssh_manager.execute_command_success(command, timeout=timeout)
+
+    def cleanup_run_directories(self, base_path: str) -> None:
+        """Clean up old run directories in outputs folder.
+
+        Removes all directories matching outputs/run_* pattern to prepare
+        for new runs. Errors are suppressed to handle non-existent directories.
+
+        Args:
+            base_path: Base directory path (e.g., /workspace)
+        """
+        command = f"rm -rf {base_path}/outputs/run_* 2>/dev/null || true"
+        self.ssh_manager.execute_command_success(command, stream_output=False)
+
+    def inspect_container(self, container_name: str, format_string: str = "{{json .State}}") -> str:
+        """Get container information via docker inspect.
+
+        Args:
+            container_name: Name or ID of the container to inspect
+            format_string: Docker format string for output (default: JSON state)
+
+        Returns:
+            Formatted docker inspect output
+        """
+        from shlex import quote
+
+        # Properly escape container name and build command
+        command = f"sudo docker inspect {quote(container_name)} --format '{format_string}'"
+        return self.ssh_manager.execute_command_success(command)

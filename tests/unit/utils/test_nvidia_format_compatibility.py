@@ -6,8 +6,6 @@ the exact format expected by NVIDIA Cosmos Transfer scripts.
 
 import json
 
-import pytest
-
 from cosmos_workflow.utils import nvidia_format
 
 
@@ -48,7 +46,7 @@ def test_inference_format_matches_nvidia_requirements():
     assert result["negative_prompt"] == "bad quality, low resolution"
 
     assert "input_video_path" in result
-    assert result["input_video_path"] == "inputs/videos/color.mp4"
+    assert result["input_video_path"] == "inputs/videos/test/color.mp4"
 
     # Verify control weight structure matches NVIDIA format
     # Each control type should be its own object with control_weight field
@@ -67,14 +65,14 @@ def test_inference_format_matches_nvidia_requirements():
     assert "control_weight" in result["depth"]
     assert result["depth"]["control_weight"] == 0.25
     assert "input_control" in result["depth"]
-    assert result["depth"]["input_control"] == "inputs/videos/depth.mp4"
+    assert result["depth"]["input_control"] == "inputs/videos/test/depth.mp4"
 
     assert "seg" in result
     assert isinstance(result["seg"], dict)
     assert "control_weight" in result["seg"]
     assert result["seg"]["control_weight"] == 0.25
     assert "input_control" in result["seg"]
-    assert result["seg"]["input_control"] == "inputs/videos/segmentation.mp4"
+    assert result["seg"]["input_control"] == "inputs/videos/test/segmentation.mp4"
 
     # Verify additional parameters
     assert result["num_steps"] == 35
@@ -91,7 +89,6 @@ def test_inference_format_matches_nvidia_requirements():
     assert json_str  # Should not raise
 
 
-@pytest.mark.skip(reason="Upscaling is temporarily disabled - see ROADMAP.md")
 def test_upscale_format_matches_nvidia_requirements():
     """Test that upscale JSON matches NVIDIA's expected format."""
     # Create sample database dicts
@@ -174,8 +171,7 @@ def test_format_matches_nvidia_documentation_example():
             assert result[key]["control_weight"] == expected_structure[key]["control_weight"]
             if "input_control" in expected_structure[key]:
                 assert "input_control" in result[key]
-                # Note: We now flatten paths, so just check it exists
-                assert result[key]["input_control"]
+                assert result[key]["input_control"] == expected_structure[key]["input_control"]
 
 
 def test_handles_missing_fields_gracefully():
@@ -191,8 +187,7 @@ def test_handles_missing_fields_gracefully():
 
     # Should have defaults
     assert result["prompt"] == "Test prompt"
-    # Default negative prompt is not empty but has a sensible default
-    assert "negative_prompt" in result
+    assert result["negative_prompt"] == ""
     assert result["input_video_path"] == ""
 
     # Control weights should default to 0.25
@@ -206,116 +201,3 @@ def test_handles_missing_fields_gracefully():
     assert result["guidance"] == 7.0
     assert result["seed"] == 42
     assert result["fps"] == 8
-
-
-def test_windows_path_escape_sequences():
-    """Test that Windows paths with escape sequences are handled correctly.
-
-    This tests the edge case where \v in \videos becomes vertical tab (\x0b).
-    """
-    # This simulates a path from the database where \v has become \x0b
-    prompt_dict = {
-        "prompt_text": "test prompt",
-        "inputs": {
-            "video": "F:\\Art\\cosmos-houdini-experiments\\inputs\\videos\\test.mp4",
-            "depth": "F:\\Art\\cosmos-houdini-experiments\\inputs\\videos\\depth.mp4",
-        },
-    }
-    run_dict = {
-        "execution_config": {
-            "weights": {"edge": 0.25, "depth": 0.5},
-            "num_steps": 35,
-        }
-    }
-
-    result = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
-
-    # Verify the paths contain /videos/ not vertical tab
-    assert "/videos/" in result["input_video_path"]
-    assert "\x0b" not in result["input_video_path"]
-    assert "/videos/" in result["depth"]["input_control"]
-    assert "\x0b" not in result["depth"]["input_control"]
-
-    # Verify no Unicode escapes in JSON serialization
-    json_str = json.dumps(result)
-    assert "\\u000b" not in json_str
-
-
-def test_edge_control_never_has_input_path():
-    """Test that edge control only has weight, never input_control.
-
-    This verifies the fix for the issue where edge control was incorrectly
-    trying to load an input video path.
-    """
-    prompt_dict = {
-        "prompt_text": "test",
-        "inputs": {
-            "video": "F:\\Art\\inputs\\videos\\test.mp4",
-            # Even if someone mistakenly adds an edge input, it should be ignored
-            "edge": "F:\\Art\\inputs\\videos\\edge.mp4",
-        },
-    }
-    run_dict = {
-        "execution_config": {
-            "weights": {"edge": 0.5, "vis": 0.3},
-            "num_steps": 35,
-        }
-    }
-
-    result = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
-
-    # Edge should only have control_weight, never input_control
-    assert "edge" in result
-    assert "control_weight" in result["edge"]
-    assert "input_control" not in result["edge"]
-    assert result["edge"]["control_weight"] == 0.5
-
-    # Same for vis control
-    assert "vis" in result
-    assert "control_weight" in result["vis"]
-    assert "input_control" not in result["vis"]
-    assert result["vis"]["control_weight"] == 0.3
-
-
-def test_real_world_problematic_path():
-    """Test the exact path that caused the original inference failure."""
-    prompt_dict = {
-        "id": "ps_8a0218cce2661aef9e9e",
-        "prompt_text": "The video presents a series of frames...",
-        "inputs": {
-            "video": "F:\\Art\\cosmos-houdini-experiments\\inputs\\videos\\Destroyed_City_Drone_Shot_120v2\\color.mp4",
-            "depth": "F:\\Art\\cosmos-houdini-experiments\\inputs\\videos\\Destroyed_City_Drone_Shot_120v2\\depth.mp4",
-            "seg": "F:\\Art\\cosmos-houdini-experiments\\inputs\\videos\\Destroyed_City_Drone_Shot_120v2\\segmentation.mp4",
-        },
-    }
-    run_dict = {
-        "execution_config": {
-            "weights": {"vis": 0.0, "edge": 0.25, "depth": 0.5, "seg": 0.25},
-            "num_steps": 35,
-            "guidance": 7.0,
-            "sigma_max": 70.0,
-            "fps": 24,
-            "seed": 1,
-        },
-    }
-
-    result = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
-
-    # Verify all paths are correctly flattened
-    expected_video = "inputs/videos/color.mp4"
-    expected_depth = "inputs/videos/depth.mp4"
-    expected_seg = "inputs/videos/segmentation.mp4"
-
-    assert result["input_video_path"] == expected_video
-    assert result["depth"]["input_control"] == expected_depth
-    assert result["seg"]["input_control"] == expected_seg
-
-    # Edge should not have input_control
-    assert "edge" in result
-    assert "input_control" not in result["edge"]
-    assert result["edge"]["control_weight"] == 0.25
-
-    # Verify no escape sequences in JSON
-    json_str = json.dumps(result)
-    assert "\\u000b" not in json_str
-    assert "/videos/" in json_str

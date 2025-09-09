@@ -309,7 +309,7 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "/workspace/bashscripts/inference.sh {prompt_name} {num_gpu} {cuda_devices}"'
+            f'bash -lc "/workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
         )
 
         # Run the command in background by appending & and using nohup
@@ -336,7 +336,7 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "/workspace/bashscripts/upscale.sh {prompt_name} {control_weight} {num_gpu} {cuda_devices}"'
+            f'bash -lc "/workspace/bashscripts/upscale.sh {run_id} {control_weight} {num_gpu} {cuda_devices}"'
         )
 
         # Run the command in background

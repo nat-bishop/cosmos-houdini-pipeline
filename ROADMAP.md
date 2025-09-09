@@ -2,6 +2,13 @@
 
 ## 🔥 Priority 1: Critical Fixes
 
+### Refactor RemoteCommandExecutor Usage
+- [ ] Replace deprecated `execute_command()` calls with specialized methods
+- [ ] Migrate 4 cleanup calls to use `cleanup_run_directories()`
+- [ ] Migrate container inspect call to use `inspect_container()`
+- [ ] Remove deprecated `execute_command()` method once migration complete
+- [ ] Add more specialized methods as patterns emerge (e.g., `get_container_logs()`)
+
 ### Log Recovery on Failure
 - [ ] Add `_ensure_log_downloaded()` method to DockerExecutor
 - [ ] Wrap Docker execution in try/finally blocks

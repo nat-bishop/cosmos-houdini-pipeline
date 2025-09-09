@@ -231,6 +231,25 @@ class ConfigManager:
         """
         return self._config_data.get(section, {})
 
+    def get_timeouts(self) -> dict[str, int]:
+        """Get timeout configuration values.
+
+        Returns default timeouts if not specified in config.
+
+        Returns:
+            Dictionary containing timeout values in seconds:
+                - docker_execution: Timeout for Docker container execution
+                - file_transfer: Timeout for file transfer operations
+                - ssh_command: Timeout for SSH command execution
+        """
+        timeouts = self.get_config_section("timeouts")
+        # Provide sensible defaults if not in config
+        return {
+            "docker_execution": timeouts.get("docker_execution", 3600),  # 1 hour default
+            "file_transfer": timeouts.get("file_transfer", 300),  # 5 minutes default
+            "ssh_command": timeouts.get("ssh_command", 300),  # 5 minutes default
+        }
+
     def reload_config(self) -> None:
         """Reload configuration from file.
 

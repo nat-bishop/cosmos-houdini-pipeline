@@ -17,6 +17,7 @@ from cosmos_workflow.connection import SSHManager
 from cosmos_workflow.execution.command_builder import RemoteCommandExecutor
 from cosmos_workflow.execution.docker_executor import DockerExecutor
 from cosmos_workflow.transfer.file_transfer import FileTransferService
+from cosmos_workflow.utils import nvidia_format
 from cosmos_workflow.utils.json_handler import JSONHandler
 from cosmos_workflow.utils.logging import logger
 
@@ -66,38 +67,9 @@ class GPUExecutor:
 
         self._services_initialized = True
 
+    # ========== Format Conversion Helpers ==========
+
     # ========== Container Monitoring ==========
-
-    def _get_container_status(self, container_name: str) -> dict[str, Any]:
-        """Get container status via docker inspect.
-
-        Args:
-            container_name: Name of the container to check
-
-        Returns:
-            Dictionary with status information:
-                - running: bool, whether container is running
-                - exit_code: int or None, container exit code
-                - status: str, container status string
-                - error: str, error message if any
-        """
-        try:
-            # Use existing SSH manager for the check
-            with self.ssh_manager:
-                cmd = f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
-                output = self.remote_executor.execute_command(cmd)
-                state = self.json_handler.parse_json(output)
-
-                return {
-                    "running": state.get("Running", False),
-                    "exit_code": state.get("ExitCode"),
-                    "status": state.get("Status", "unknown"),
-                    "error": state.get("Error", ""),
-                }
-        except Exception as e:
-            # Container might not exist or other error
-            logger.debug("Failed to get container status for %s: %s", container_name, e)
-            return {"running": False, "exit_code": None, "status": "not_found", "error": str(e)}
 
     def _monitor_container_completion(
         self,
@@ -135,12 +107,21 @@ class GPUExecutor:
     ) -> None:
         """Internal monitoring function that runs in background thread.
 
+        Simple, self-contained monitoring that checks Docker exit codes:
+        - Exit code 0 = Success
+        - Exit code non-zero = Failure
+        - Timeout or error = -1
+
         Args:
             run_id: Database run ID
             container_name: Docker container name
             completion_handler: Callback for completion
             timeout_seconds: Timeout in seconds
         """
+        import json
+
+        import paramiko
+
         elapsed = 0
         interval = 5  # Check every 5 seconds
 
@@ -151,16 +132,48 @@ class GPUExecutor:
             timeout_seconds,
         )
 
-        try:
-            while elapsed < timeout_seconds:
-                status = self._get_container_status(container_name)
+        # Create a dedicated SSH connection for this monitoring thread
+        ssh = None
 
-                if not status["running"]:
-                    # Container stopped
-                    exit_code = status.get("exit_code", -1)
-                    logger.info("Container %s stopped with exit code %d", container_name, exit_code)
-                    completion_handler(run_id, exit_code, container_name)
+        try:
+            # Simple paramiko connection - no wrappers needed
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh_options = self.config_manager.get_ssh_options()
+            ssh.connect(**ssh_options)
+
+            while elapsed < timeout_seconds:
+                # Simple docker inspect to get container state
+                stdin, stdout, stderr = ssh.exec_command(
+                    f"sudo docker inspect {container_name} --format '{{{{json .State}}}}'"
+                )
+
+                output = stdout.read().decode().strip()
+
+                if not output:
+                    # Container doesn't exist anymore
+                    logger.info("Container %s no longer exists", container_name)
+                    completion_handler(run_id, -1, container_name)
                     return
+
+                try:
+                    state = json.loads(output)
+                    running = state.get("Running", False)
+
+                    if not running:
+                        # Container stopped - check exit code
+                        exit_code = state.get("ExitCode", -1)
+                        logger.info(
+                            "Container %s stopped with exit code %d", container_name, exit_code
+                        )
+
+                        # Exit code 0 = success, non-zero = failure
+                        completion_handler(run_id, exit_code, container_name)
+                        return
+
+                except json.JSONDecodeError as e:
+                    logger.error("Failed to parse container state: %s", e)
+                    # Continue monitoring
 
                 time.sleep(interval)
                 elapsed += interval
@@ -172,17 +185,83 @@ class GPUExecutor:
 
             # Timeout reached
             logger.error("Container %s timed out after %d seconds", container_name, timeout_seconds)
-            self.kill_container(container_name)
+
+            # Try to stop the container
+            stdin, stdout, stderr = ssh.exec_command(f"sudo docker stop {container_name}")
+            stdout.read()  # Wait for completion
+
             completion_handler(run_id, -1, container_name)  # -1 indicates timeout
 
         except Exception as e:
             logger.error("Monitor failed for container %s: %s", container_name, e)
             completion_handler(run_id, -1, container_name)  # -1 for error
+        finally:
+            # Clean up SSH connection
+            if ssh:
+                try:
+                    ssh.close()
+                except Exception:
+                    pass
+
+    # ========== Thread-Safe Download Helper ==========
+
+    def _thread_safe_download(self, remote_path: str, local_path: str) -> bool:
+        """Download a file using thread-safe paramiko SFTP.
+
+        IMPORTANT: This is a workaround for threading limitations in our architecture.
+
+        WHY THIS EXISTS:
+        - Completion handlers run in background threads (for async monitoring)
+        - Our FileTransferService and SSHManager weren't designed for multi-threading
+        - They use context managers and shared connections that don't work across threads
+
+        WHAT IT DOES:
+        - Creates its own SSH connection inside the thread
+        - Uses raw paramiko instead of our wrappers
+        - Downloads the file and closes the connection
+
+        FUTURE IMPROVEMENT:
+        - Redesign FileTransferService to be thread-safe with connection pooling
+        - Or move to an async/await architecture throughout the codebase
+        - Or use a message queue system to handle downloads in the main thread
+
+        Args:
+            remote_path: Remote file path
+            local_path: Local file path
+
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        import paramiko
+
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(**self.config_manager.get_ssh_options())
+
+            try:
+                sftp = ssh.open_sftp()
+                try:
+                    sftp.get(remote_path, str(local_path))
+                    return True
+                except FileNotFoundError:
+                    logger.error("File not found: %s", remote_path)
+                    return False
+                finally:
+                    sftp.close()
+            finally:
+                ssh.close()
+        except Exception as e:
+            logger.error("Thread-safe download failed: %s", e)
+            return False
 
     # ========== Completion Handlers ==========
 
     def _handle_inference_completion(self, run_id: str, exit_code: int, container_name: str):
         """Handle inference container completion.
+
+        This runs in a background thread, so it needs to be self-contained.
+        We'll do the download directly here using paramiko SFTP.
 
         Args:
             run_id: Database run ID
@@ -196,33 +275,38 @@ class GPUExecutor:
             run_dir = Path("outputs") / f"run_{run_id}"
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            try:
-                output_path = self._download_outputs(run_id, run_dir, upscaled=False)
-                if output_path.exists():
-                    # Update database with success
-                    if self.service:
-                        self.service.update_run(
-                            run_id,
-                            outputs={
-                                "output_path": str(output_path),
-                                "completed_at": datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
-                        self.service.update_run_status(run_id, "completed")
-                    logger.info("Inference run %s completed successfully", run_id)
-                else:
-                    # Output not found despite container success
-                    if self.service:
-                        self.service.update_run_status(run_id, "failed")
-                        self.service.update_run(
-                            run_id, error_message="Output file not found after completion"
-                        )
-                    logger.error("Output file not found for run %s", run_id)
-            except Exception as e:
-                logger.error("Failed to download outputs for run %s: %s", run_id, e)
+            # Output paths
+            outputs_dir = run_dir / "outputs"
+            outputs_dir.mkdir(exist_ok=True)
+            local_output = outputs_dir / "output.mp4"
+
+            # Get remote config
+            remote_config = self.config_manager.get_remote_config()
+            remote_output = f"{remote_config.remote_dir}/outputs/run_{run_id}/output.mp4"
+
+            # Download using thread-safe helper
+            if self._thread_safe_download(remote_output, local_output):
+                logger.info("Downloaded output file for run %s", run_id)
+
+                # Update database with success
+                if self.service:
+                    self.service.update_run(
+                        run_id,
+                        outputs={
+                            "output_path": str(local_output),
+                            "completed_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    self.service.update_run_status(run_id, "completed")
+                logger.info("Inference run %s completed successfully", run_id)
+            else:
+                # Output not found or download failed
                 if self.service:
                     self.service.update_run_status(run_id, "failed")
-                    self.service.update_run(run_id, error_message=f"Download failed: {e}")
+                    self.service.update_run(
+                        run_id, error_message="Output file not found after completion"
+                    )
+                logger.error("Output file not found for run %s", run_id)
         else:
             # Container failed or timed out
             if self.service:
@@ -253,12 +337,14 @@ class GPUExecutor:
                 with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
                     tmp_path = Path(tmp.name)
 
-                try:
-                    self.file_transfer.download_file(remote_results, str(tmp_path))
-                    results = self.json_handler.read_json(tmp_path)
-                finally:
-                    # Always clean up temp file
-                    tmp_path.unlink(missing_ok=True)
+                # Download using thread-safe helper
+                if self._thread_safe_download(remote_results, str(tmp_path)):
+                    try:
+                        results = self.json_handler.read_json(tmp_path)
+                    finally:
+                        tmp_path.unlink(missing_ok=True)
+                else:
+                    results = None
 
                 if results and len(results) > 0:
                     enhanced_text = results[0].get("upsampled_prompt", "")
@@ -311,29 +397,36 @@ class GPUExecutor:
             run_dir = Path("outputs") / f"run_{run_id}"
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            try:
-                output_path = self._download_outputs(run_id, run_dir, upscaled=True)
-                if output_path.exists():
-                    if self.service:
-                        self.service.update_run(
-                            run_id,
-                            outputs={
-                                "output_path": str(output_path),
-                                "completed_at": datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
-                        self.service.update_run_status(run_id, "completed")
-                    logger.info("Upscaling run %s completed successfully", run_id)
-                else:
-                    if self.service:
-                        self.service.update_run_status(run_id, "failed")
-                        self.service.update_run(run_id, error_message="4K output file not found")
-                    logger.error("4K output not found for run %s", run_id)
-            except Exception as e:
-                logger.error("Failed to download 4K output for run %s: %s", run_id, e)
+            # Output paths
+            outputs_dir = run_dir / "outputs"
+            outputs_dir.mkdir(exist_ok=True)
+            local_output = outputs_dir / "output_4k.mp4"
+
+            # Get remote config
+            remote_config = self.config_manager.get_remote_config()
+            remote_output = f"{remote_config.remote_dir}/outputs/run_{run_id}/output_4k.mp4"
+
+            # Download using thread-safe helper
+            if self._thread_safe_download(remote_output, local_output):
+                logger.info("Downloaded 4K output file for run %s", run_id)
+
+                # Update database with success
+                if self.service:
+                    self.service.update_run(
+                        run_id,
+                        outputs={
+                            "output_path": str(local_output),
+                            "completed_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    self.service.update_run_status(run_id, "completed")
+                logger.info("Upscaling run %s completed successfully", run_id)
+            else:
+                # Output not found or download failed
                 if self.service:
                     self.service.update_run_status(run_id, "failed")
-                    self.service.update_run(run_id, error_message=f"Download failed: {e}")
+                    self.service.update_run(run_id, error_message="4K output file not found")
+                logger.error("4K output not found for run %s", run_id)
         else:
             # Upscaling failed
             if self.service:
@@ -368,8 +461,6 @@ class GPUExecutor:
         self._initialize_services()
 
         run_id = run["id"]
-        prompt_text = prompt["prompt_text"]
-        execution_config = run["execution_config"]
 
         logger.info("Executing run %s on GPU", run_id)
 
@@ -381,19 +472,11 @@ class GPUExecutor:
         inputs_dir = run_dir / "inputs"
         inputs_dir.mkdir(exist_ok=True)
 
-        # Create batch file for this single run
-        batch_data = [
-            {
-                "name": run_id,
-                "prompt": prompt_text,
-                "negative_prompt": prompt.get("parameters", {}).get("negative_prompt", ""),
-                "weights": execution_config.get("weights", {}),
-                "video_path": prompt.get("inputs", {}).get("video", ""),
-            }
-        ]
+        # Create spec file for this single run using nvidia_format
+        spec_data = nvidia_format.to_cosmos_inference_json(prompt, run)
 
-        batch_file = inputs_dir / "batch.json"
-        self.json_handler.write_json(batch_data, batch_file)
+        spec_file = inputs_dir / "spec.json"
+        self.json_handler.write_json(spec_data, spec_file)
 
         # Execute on GPU using DockerExecutor
         try:
@@ -408,15 +491,34 @@ class GPUExecutor:
 
                 remote_run_dir = f"{remote_config.remote_dir}/runs/{run_id}"
 
-                # Upload batch file
-                self.file_transfer.upload_file(batch_file, f"{remote_run_dir}/inputs")
+                # Upload spec file
+                self.file_transfer.upload_file(spec_file, f"{remote_run_dir}/inputs")
 
-                # Upload video if present
-                video_path = prompt.get("inputs", {}).get("video")
-                if video_path and Path(video_path).exists():
-                    self.file_transfer.upload_file(
-                        Path(video_path), f"{remote_run_dir}/inputs/videos"
-                    )
+                # Upload all video files from inputs (video, depth, seg, etc.)
+                inputs = prompt.get("inputs", {})
+                for input_type, input_path in inputs.items():
+                    if input_path and Path(input_path).exists():
+                        logger.info("Uploading %s: %s", input_type, input_path)
+                        self.file_transfer.upload_file(
+                            Path(input_path), f"{remote_run_dir}/inputs/videos"
+                        )
+
+                # Upload bash scripts if not already present
+                scripts_dir = Path(__file__).parent.parent.parent / "scripts"
+                remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
+
+                # Upload inference.sh script
+                inference_script = scripts_dir / "inference.sh"
+                if inference_script.exists():
+                    logger.info("Uploading inference script to remote")
+                    self.file_transfer.upload_file(inference_script, remote_scripts_dir)
+                else:
+                    logger.warning("Inference script not found at %s", inference_script)
+
+                # Upload upscale.sh script (might be needed later)
+                upscale_script = scripts_dir / "upscale.sh"
+                if upscale_script.exists():
+                    self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
 
                 # Run inference
                 # Create a prompt file path for DockerExecutor (it expects Path)
@@ -554,18 +656,14 @@ class GPUExecutor:
         batch_dir = Path("outputs") / batch_name
         batch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Prepare batch data
+        # Prepare batch data using the helper method
         batch_data = []
         for run_dict, prompt_dict in runs_and_prompts:
-            batch_data.append(
-                {
-                    "name": run_dict["id"],
-                    "prompt": prompt_dict["prompt_text"],
-                    "negative_prompt": prompt_dict.get("parameters", {}).get("negative_prompt", ""),
-                    "weights": run_dict["execution_config"].get("weights", {}),
-                    "video_path": prompt_dict.get("inputs", {}).get("video", ""),
-                }
-            )
+            # For batch, each item needs the spec format from nvidia_format
+            spec = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
+            # Add the run ID for batch tracking
+            spec["name"] = run_dict["id"]
+            batch_data.append(spec)
 
         # Create batch file
         batch_file = batch_dir / "batch.json"
@@ -1020,6 +1118,18 @@ class GPUExecutor:
                 logger.info("Cleaning up old run directories...")
                 cleanup_cmd = f"rm -rf {remote_config.remote_dir}/outputs/run_* 2>/dev/null || true"
                 self.remote_executor.execute_command(cleanup_cmd)
+
+                # Upload bash scripts if not already present
+                scripts_dir = Path(__file__).parent.parent.parent / "scripts"
+                remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
+
+                # Upload upscale.sh script
+                upscale_script = scripts_dir / "upscale.sh"
+                if upscale_script.exists():
+                    logger.info("Uploading upscale script to remote")
+                    self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
+                else:
+                    logger.warning("Upscale script not found at %s", upscale_script)
 
                 # Get prompt file name from parameters
                 prompt_name = prompt["parameters"].get("name", "unnamed")

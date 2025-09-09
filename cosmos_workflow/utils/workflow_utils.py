@@ -127,6 +127,27 @@ def log_workflow_event(
     logger.info("Logged %s event to {run_history_file}", event_type)
 
 
+def convert_local_path_to_remote_video(local_path: str, run_id: str) -> str:
+    """Convert local video path to remote container path.
+
+    Args:
+        local_path: Local path like "inputs\\videos\\city_scene\\color.mp4"
+        run_id: Run ID for organizing remote files
+
+    Returns:
+        Path relative to remote_dir like "runs/rs_xxx/inputs/videos/color.mp4"
+        (This will be accessible as /workspace/runs/... in the container)
+    """
+    # Convert backslashes to forward slashes
+    path_str = local_path.replace("\\", "/")
+
+    # Extract just the filename from the path
+    filename = Path(path_str).name
+
+    # Return path relative to remote_dir (which is mounted as /workspace in container)
+    return f"runs/{run_id}/inputs/videos/{filename}"
+
+
 def validate_gpu_configuration(num_gpu: int, cuda_devices: str) -> bool:
     """Validate GPU configuration parameters.
 

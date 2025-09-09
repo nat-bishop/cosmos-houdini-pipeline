@@ -485,3 +485,62 @@ class TestRemoteCommandExecutor:
         result = executor.list_directory("/tmp/empty")
 
         assert result == []
+
+    def test_execute_command_with_deprecation(self):
+        """Test execute_command shows deprecation warning."""
+        import warnings
+
+        ssh_manager = MagicMock()
+        ssh_manager.execute_command_success = MagicMock(return_value="output")
+
+        executor = RemoteCommandExecutor(ssh_manager)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = executor.execute_command("ls -la", timeout=500)
+
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "deprecated" in str(w[0].message)
+
+        assert result == "output"
+        ssh_manager.execute_command_success.assert_called_once_with("ls -la", timeout=500)
+
+    def test_cleanup_run_directories(self):
+        """Test cleanup_run_directories method."""
+        ssh_manager = MagicMock()
+        ssh_manager.execute_command_success = MagicMock()
+
+        executor = RemoteCommandExecutor(ssh_manager)
+        executor.cleanup_run_directories("/workspace")
+
+        ssh_manager.execute_command_success.assert_called_once_with(
+            "rm -rf /workspace/outputs/run_* 2>/dev/null || true", stream_output=False
+        )
+
+    def test_inspect_container(self):
+        """Test inspect_container method."""
+        ssh_manager = MagicMock()
+        ssh_manager.execute_command_success = MagicMock(return_value='{"State": "running"}')
+
+        executor = RemoteCommandExecutor(ssh_manager)
+        result = executor.inspect_container("my_container")
+
+        assert result == '{"State": "running"}'
+        # Check that the container name is properly quoted
+        call_args = ssh_manager.execute_command_success.call_args[0][0]
+        assert "sudo docker inspect" in call_args
+        assert "my_container" in call_args
+        assert "--format '{{json .State}}'" in call_args
+
+    def test_inspect_container_with_custom_format(self):
+        """Test inspect_container with custom format string."""
+        ssh_manager = MagicMock()
+        ssh_manager.execute_command_success = MagicMock(return_value="container_id")
+
+        executor = RemoteCommandExecutor(ssh_manager)
+        result = executor.inspect_container("test_container", "{{.Id}}")
+
+        assert result == "container_id"
+        call_args = ssh_manager.execute_command_success.call_args[0][0]
+        assert "--format '{{.Id}}'" in call_args

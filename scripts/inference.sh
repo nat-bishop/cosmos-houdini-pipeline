@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eu
 
-PROMPT_NAME="$1"           # e.g., my_prompt
+RUN_ID="$1"                # e.g., rs_xxxxx (run ID)
 NUM_GPU="${2:-1}"
 CUDA_VISIBLE_DEVICES="${3:-0}"
-RUN_ID="${4:-$PROMPT_NAME}"  # Use run_id if provided, otherwise fallback to prompt_name
+PROMPT_NAME="${4:-$RUN_ID}"  # For backwards compatibility
 
 # Use run_id for output directory
 OUTPUT_DIR="outputs/run_${RUN_ID}"
@@ -18,8 +18,8 @@ export PYTHONPATH="$(pwd)"
 # Log spec for reproducibility
 cat > "${OUTPUT_DIR}/spec_used.json" <<JSON
 {
-  "prompt_spec": $(cat "inputs/prompts/${PROMPT_NAME}.json"),
-  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder ${OUTPUT_DIR} --controlnet_specs inputs/prompts/${PROMPT_NAME}.json --offload_text_encoder_model --upsample_prompt --offload_prompt_upsampler --offload_guardrail_models --num_gpus \$NUM_GPU",
+  "prompt_spec": $(cat "runs/${RUN_ID}/inputs/spec.json"),
+  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder ${OUTPUT_DIR} --controlnet_specs runs/${RUN_ID}/inputs/spec.json --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
   "environment": {
     "CUDA_VISIBLE_DEVICES": "\$CUDA_VISIBLE_DEVICES",
     "CHECKPOINT_DIR": "\$CHECKPOINT_DIR",
@@ -32,7 +32,7 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   cosmos_transfer1/diffusion/inference/transfer.py \
   --checkpoint_dir "$CHECKPOINT_DIR" \
   --video_save_folder "${OUTPUT_DIR}" \
-  --controlnet_specs "inputs/prompts/${PROMPT_NAME}.json" \
+  --controlnet_specs "runs/${RUN_ID}/inputs/spec.json" \
   --offload_text_encoder_model \
   --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \

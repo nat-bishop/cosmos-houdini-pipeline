@@ -3,25 +3,18 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any
 
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from cosmos_workflow.utils import format_duration
+
+from .base import CLIContext
+
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def get_operations() -> Any:
-    """Get the workflow operations from context.
-
-    Returns:
-        CosmosAPI: The workflow operations instance.
-    """
-    ctx = click.get_current_context()
-    return ctx.obj.get_operations()
 
 
 @click.command(name="show")
@@ -43,7 +36,8 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
         cosmos show ps_abc123
         cosmos show ps_abc123 --json
     """
-    ops = get_operations()
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     try:
         prompt_data = ops.get_prompt_with_runs(prompt_id)
@@ -65,7 +59,7 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     created_at = dt.strftime("%Y-%m-%d %H:%M:%S")
                 except ValueError:
-                    pass
+                    logger.debug("Failed to parse created_at timestamp: %s", created_at)
 
             # Create prompt info panel
             prompt_info = f"""[bold cyan]ID:[/bold cyan] {prompt_data["id"]}
@@ -119,7 +113,7 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                             dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
                             created = dt.strftime("%m-%d %H:%M")
                         except ValueError:
-                            pass
+                            logger.debug("Failed to parse run created timestamp: %s", created)
 
                     # Calculate duration if completed
                     duration = "-"
@@ -128,11 +122,14 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                             start = datetime.fromisoformat(run["started_at"].replace("Z", "+00:00"))
                             end = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
                             delta = end - start
-                            minutes = int(delta.total_seconds() / 60)
-                            seconds = int(delta.total_seconds() % 60)
-                            duration = f"{minutes}m {seconds}s"
+                            duration = format_duration(delta.total_seconds())
                         except (ValueError, TypeError):
-                            pass
+                            logger.debug(
+                                "Failed to calculate duration for run %s: started_at=%s, completed_at=%s",
+                                run.get("id", "unknown"),
+                                run.get("started_at"),
+                                run.get("completed_at"),
+                            )
 
                     # Get output path if available
                     output = "-"

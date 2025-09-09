@@ -98,8 +98,6 @@ class DockerCommandBuilder:
         Returns:
             Docker logs command string
         """
-        from shlex import quote
-
         if not container_id or not container_id.strip():
             raise ValueError("Container ID cannot be empty")
 
@@ -137,8 +135,6 @@ class DockerCommandBuilder:
         Returns:
             Docker kill command string
         """
-        from shlex import quote
-
         if not isinstance(container_ids, list):
             raise TypeError("container_ids must be a list")
 
@@ -311,8 +307,6 @@ class RemoteCommandExecutor:
         Returns:
             Formatted docker inspect output
         """
-        from shlex import quote
-
         # Properly escape container name and build command
         command = f"sudo docker inspect {quote(container_name)} --format '{format_string}'"
         return self.ssh_manager.execute_command_success(command)

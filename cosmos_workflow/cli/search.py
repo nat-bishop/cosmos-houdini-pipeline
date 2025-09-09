@@ -3,25 +3,16 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any
 
 import click
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from .base import CLIContext
+
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def get_operations() -> Any:
-    """Get the workflow operations from context.
-
-    Returns:
-        CosmosAPI: The workflow operations instance.
-    """
-    ctx = click.get_current_context()
-    return ctx.obj.get_operations()
 
 
 @click.command(name="search")
@@ -55,7 +46,8 @@ def search_command(ctx: click.Context, query: str, limit: int, output_json: bool
         console.print("[red]Error: Search query cannot be empty[/red]")
         ctx.exit(1)
 
-    ops = get_operations()
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     try:
         prompts = ops.search_prompts(query, limit=limit)

@@ -3,24 +3,15 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any
 
 import click
 from rich.console import Console
 from rich.table import Table
 
+from .base import CLIContext
+
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def get_operations() -> Any:
-    """Get the workflow operations from context.
-
-    Returns:
-        CosmosAPI: The workflow operations instance.
-    """
-    ctx = click.get_current_context()
-    return ctx.obj.get_operations()
 
 
 @click.group(name="list")
@@ -57,7 +48,8 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
         cosmos list prompts --limit 10
         cosmos list prompts --json
     """
-    ops = get_operations()
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     try:
         prompts = ops.list_prompts(model_type=model, limit=limit)
@@ -142,7 +134,8 @@ def list_runs(
         cosmos list runs --status failed --prompt ps_abc123
         cosmos list runs --json
     """
-    ops = get_operations()
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     try:
         runs = ops.list_runs(status=status, prompt_id=prompt, limit=limit)

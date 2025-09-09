@@ -1,24 +1,15 @@
 """Delete commands for removing prompts and runs."""
 
 import logging
-from typing import Any
 
 import click
 from rich.console import Console
 from rich.panel import Panel
 
+from .base import CLIContext
+
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def get_operations() -> Any:
-    """Get the workflow operations from context.
-
-    Returns:
-        CosmosAPI: The workflow operations instance.
-    """
-    ctx = click.get_current_context()
-    return ctx.obj.get_operations()
 
 
 @click.group(name="delete")
@@ -40,25 +31,25 @@ def delete_group():
     help="Delete all prompts (cannot be used with PROMPT_ID)",
 )
 @click.option(
-    "--delete-outputs",
+    "--keep-outputs",
     is_flag=True,
-    help="Delete output files (default: keep outputs)",
+    help="Keep output files (default: delete outputs)",
 )
 @click.pass_context
 def delete_prompt(
-    ctx: click.Context, prompt_id: str, force: bool, all: bool, delete_outputs: bool
+    ctx: click.Context, prompt_id: str, force: bool, all: bool, keep_outputs: bool
 ) -> None:
     """Delete a prompt and all associated runs.
 
     This will permanently delete:
     - The prompt from the database
     - All runs associated with the prompt
-    - All output directories for those runs (if --delete-outputs is used)
+    - All output directories for those runs (unless --keep-outputs is used)
 
     Examples:
         cosmos delete prompt ps_abc123
         cosmos delete prompt ps_abc123 --force
-        cosmos delete prompt ps_abc123 --delete-outputs
+        cosmos delete prompt ps_abc123 --keep-outputs
         cosmos delete prompt --all
     """
     # Check for mutually exclusive options
@@ -70,8 +61,8 @@ def delete_prompt(
         console.print("[red]Error: Must specify either a prompt ID or --all[/red]")
         ctx.exit(2)
 
-    ops = get_operations()
-    keep_outputs = not delete_outputs
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     # Handle --all flag
     if all:
@@ -240,26 +231,24 @@ def delete_prompt(
     help="Delete all runs (cannot be used with RUN_ID)",
 )
 @click.option(
-    "--delete-outputs",
+    "--keep-outputs",
     is_flag=True,
-    help="Delete output files (default: keep outputs)",
+    help="Keep output files (default: delete outputs)",
 )
 @click.pass_context
-def delete_run(
-    ctx: click.Context, run_id: str, force: bool, all: bool, delete_outputs: bool
-) -> None:
+def delete_run(ctx: click.Context, run_id: str, force: bool, all: bool, keep_outputs: bool) -> None:
     """Delete a run and its output directory.
 
     This will permanently delete:
     - The run from the database
-    - The output directory for the run (if --delete-outputs is used)
+    - The output directory for the run (unless --keep-outputs is used)
 
     The associated prompt will NOT be deleted.
 
     Examples:
         cosmos delete run rs_xyz789
         cosmos delete run rs_xyz789 --force
-        cosmos delete run rs_xyz789 --delete-outputs
+        cosmos delete run rs_xyz789 --keep-outputs
         cosmos delete run --all
     """
     # Check for mutually exclusive options
@@ -271,8 +260,8 @@ def delete_run(
         console.print("[red]Error: Must specify either a run ID or --all[/red]")
         ctx.exit(2)
 
-    ops = get_operations()
-    keep_outputs = not delete_outputs
+    ctx_obj: CLIContext = ctx.obj
+    ops = ctx_obj.get_operations()
 
     # Handle --all flag
     if all:

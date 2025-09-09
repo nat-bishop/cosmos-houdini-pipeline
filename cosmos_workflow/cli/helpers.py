@@ -42,24 +42,6 @@ def display_error(message: str, error: str | None = None, verbose: bool = False)
         console.print_exception()
 
 
-def display_warning(message: str):
-    """Display a warning message.
-
-    Args:
-        message: Warning message to display.
-    """
-    console.print(f"[yellow][WARNING] {message}[/yellow]")
-
-
-def display_info(message: str):
-    """Display an informational message.
-
-    Args:
-        message: Informational message to display.
-    """
-    console.print(f"[cyan]i  {message}[/cyan]")  # Using 'i' instead of emoji
-
-
 def create_info_table(data: dict[str, Any], show_header: bool = False) -> Table:
     """Create a formatted table for displaying information.
 
@@ -187,25 +169,6 @@ def display_next_step(command: str):
     console.print(f"  {command}")
 
 
-def confirm_action(prompt: str, default: bool = False) -> bool:
-    """Ask for user confirmation (for future interactive features).
-
-    Args:
-        prompt: Confirmation prompt to display.
-        default: Default response if user presses Enter.
-
-    Returns:
-        True if user confirms, False otherwise.
-    """
-    suffix = " [Y/n]" if default else " [y/N]"
-    response = console.input(f"{prompt}{suffix}: ").strip().lower()
-
-    if not response:
-        return default
-
-    return response in ["y", "yes"]
-
-
 def format_weights(weights: dict[str, float]) -> str:
     """Format control weights for display.
 
@@ -219,59 +182,3 @@ def format_weights(weights: dict[str, float]) -> str:
     for key, value in weights.items():
         parts.append(f"{key}={value:.2f}")
     return " ".join(parts)
-
-
-def format_duration(seconds: float) -> str:
-    """Format a duration in seconds to a human-readable string.
-
-    Args:
-        seconds: Duration in seconds.
-
-    Returns:
-        Human-readable duration (e.g., "1.5m", "2.3h").
-
-    Note:
-        # TODO(Claude): This function has a different output format than
-        # the format_duration() in workflow_utils.py (returns "1.5h" decimal
-        # format vs "1h 0m 0s" detailed format). They should be consolidated
-        # once the appropriate format is determined for each use case.
-    """
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        minutes = seconds / 60
-        return f"{minutes:.1f}m"
-    else:
-        hours = seconds / 3600
-        return f"{hours:.1f}h"
-
-
-def format_file_size(size_bytes: int) -> str:
-    """Format file size in bytes to human-readable string.
-
-    Args:
-        size_bytes: File size in bytes.
-
-    Returns:
-        Human-readable size (e.g., "1.5MB", "2.3GB").
-    """
-    size = float(size_bytes)
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024:
-            return f"{size:.1f}{unit}"
-        size /= 1024
-    return f"{size:.1f}TB"
-
-
-def display_command_result(success: bool, message: str, details: dict[str, Any] | None = None):
-    """Display the result of a command execution.
-
-    Args:
-        success: Whether the command succeeded.
-        message: Result message to display.
-        details: Optional dictionary of additional details.
-    """
-    if success:
-        display_success(message, details)
-    else:
-        display_error(message)

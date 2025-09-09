@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from cosmos_workflow.connection import SSHManager
 from cosmos_workflow.execution.command_builder import RemoteCommandExecutor
+from cosmos_workflow.transfer.file_transfer import FileTransferService
 from cosmos_workflow.utils.json_handler import JSONHandler
 from cosmos_workflow.utils.logging import logger
 
@@ -14,30 +16,40 @@ from cosmos_workflow.utils.logging import logger
 class StatusChecker:
     """Checks container status and downloads outputs when complete."""
 
-    def __init__(self, ssh_manager, config_manager, file_transfer_service):
-        """Initialize StatusChecker with required dependencies.
+    def __init__(self, config_manager):
+        """Initialize StatusChecker with configuration.
 
         Args:
-            ssh_manager: SSHManager instance for SSH connections
             config_manager: ConfigManager instance for configuration
-            file_transfer_service: FileTransferService for file downloads
         """
-        self.ssh_manager = ssh_manager
         self.config_manager = config_manager
-        self.file_transfer = file_transfer_service
 
-        # Create RemoteCommandExecutor wrapper
-        self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
-
-        # Add execute method for compatibility if needed
-        if not hasattr(self.remote_executor, "execute"):
-            self.remote_executor.execute = self._execute_wrapper
+        # Services are created per sync operation for simplicity
+        self.ssh_manager = None
+        self.file_transfer = None
+        self.remote_executor = None
 
         # Create JSONHandler for JSON operations
         self.json_handler = JSONHandler()
 
         # Cache for completed runs to avoid re-checking
         self._completed_cache = set()
+
+    def _create_services(self):
+        """Create fresh SSH and FileTransfer services per sync operation.
+
+        Following the pattern used by GPUExecutor for service creation.
+        Services are created fresh per sync operation for simplicity and reliability.
+        """
+        # Initialize SSH and related services
+        self.ssh_manager = SSHManager(self.config_manager.get_ssh_options())
+        remote_config = self.config_manager.get_remote_config()
+        self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
+        self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
+
+        # Add execute method for compatibility if needed
+        if not hasattr(self.remote_executor, "execute"):
+            self.remote_executor.execute = self._execute_wrapper
 
     def _execute_wrapper(self, command: str) -> tuple:
         """Wrapper for execute_command to provide tuple return format.
@@ -215,40 +227,63 @@ class StatusChecker:
         if run_data.get("status") != "running":
             return run_data
 
-        # Check container status - use truncated ID to match existing codebase pattern
-        container_name = f"cosmos_transfer_{run_id[:8]}"
-        container_status = self.check_container_status(container_name)
-
-        if container_status["running"]:
-            # Still running
+        # Create services for this sync operation
+        try:
+            self._create_services()
+        except Exception as e:
+            logger.warning("Failed to create services for status sync: %s", e)
             return run_data
 
-        # Container stopped, check exit code from logs
-        exit_code = self.check_run_completion(run_id)
+        try:
+            # Check container status - use truncated ID to match existing codebase pattern
+            container_name = f"cosmos_transfer_{run_id[:8]}"
+            container_status = self.check_container_status(container_name)
 
-        if exit_code is None:
-            # No completion marker yet, might still be writing
+            if container_status["running"]:
+                # Still running
+                return run_data
+
+            # Container stopped, check exit code from logs
+            exit_code = self.check_run_completion(run_id)
+
+            if exit_code is None:
+                # No completion marker yet, might still be writing
+                return run_data
+
+            # Determine final status based on exit code
+            if exit_code == 0:
+                new_status = "completed"
+                # Download outputs
+                outputs = self.download_outputs(run_data)
+                if outputs:
+                    run_data["outputs"] = outputs
+                    data_service.update_run(run_id, outputs=outputs)
+            else:
+                new_status = "failed"
+                run_data["error_message"] = f"Container exited with code {exit_code}"
+                data_service.update_run(run_id, error_message=run_data["error_message"])
+
+            # Update status
+            run_data["status"] = new_status
+            data_service.update_run_status(run_id, new_status)
+
+            # Cache completed runs
+            self._completed_cache.add(run_id)
+
+            logger.info("Synced status for %s: %s", run_id, new_status)
             return run_data
 
-        # Determine final status based on exit code
-        if exit_code == 0:
-            new_status = "completed"
-            # Download outputs
-            outputs = self.download_outputs(run_data)
-            if outputs:
-                run_data["outputs"] = outputs
-                data_service.update_run(run_id, outputs=outputs)
-        else:
-            new_status = "failed"
-            run_data["error_message"] = f"Container exited with code {exit_code}"
-            data_service.update_run(run_id, error_message=run_data["error_message"])
+        except Exception as e:
+            logger.warning("Failed to sync status for %s: %s", run_id, e)
+            return run_data
 
-        # Update status
-        run_data["status"] = new_status
-        data_service.update_run_status(run_id, new_status)
-
-        # Cache completed runs
-        self._completed_cache.add(run_id)
-
-        logger.info("Synced status for %s: %s", run_id, new_status)
-        return run_data
+        finally:
+            # Clean up services - ensure SSH connections are properly closed
+            if self.ssh_manager:
+                try:
+                    self.ssh_manager.close()
+                except Exception as e:
+                    logger.debug("Error closing SSH connection: %s", e)
+            self.ssh_manager = None
+            self.file_transfer = None
+            self.remote_executor = None

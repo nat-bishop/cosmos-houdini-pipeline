@@ -52,21 +52,15 @@ class DataRepository:
         self.config = config_manager
         self.status_checker: StatusChecker | None = None
 
-    def initialize_status_checker(self, ssh_manager, file_transfer_service):
+    def initialize_status_checker(self):
         """Initialize the StatusChecker for lazy status synchronization.
 
-        Args:
-            ssh_manager: SSHManager instance for SSH connections
-            file_transfer_service: FileTransferService for file downloads
+        StatusChecker is now self-contained and creates its own services as needed.
         """
         if self.config is None:
             raise ValueError("config_manager must be set before initializing status checker")
 
-        self.status_checker = StatusChecker(
-            ssh_manager=ssh_manager,
-            config_manager=self.config,
-            file_transfer_service=file_transfer_service,
-        )
+        self.status_checker = StatusChecker(config_manager=self.config)
         logger.info("StatusChecker initialized for lazy sync")
 
     def create_prompt(

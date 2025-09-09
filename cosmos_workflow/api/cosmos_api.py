@@ -73,19 +73,13 @@ class CosmosAPI:
         logger.info("CosmosAPI initialized")
 
     def _initialize_status_checker(self):
-        """Initialize StatusChecker for lazy sync if dependencies are available."""
+        """Initialize StatusChecker for lazy sync.
+
+        StatusChecker is now self-contained and creates its own services as needed.
+        """
         try:
-            # Only initialize if GPUExecutor has initialized its services
-            if (
-                hasattr(self.orchestrator, "_services_initialized")
-                and self.orchestrator._services_initialized
-                and self.orchestrator.ssh_manager
-                and self.orchestrator.file_transfer
-            ):
-                self.service.initialize_status_checker(
-                    self.orchestrator.ssh_manager, self.orchestrator.file_transfer
-                )
-                logger.info("StatusChecker initialized for lazy sync")
+            self.service.initialize_status_checker()
+            logger.info("StatusChecker initialized for lazy sync")
         except Exception as e:
             # StatusChecker is optional - system works without it
             logger.debug("StatusChecker not initialized: %s", e)

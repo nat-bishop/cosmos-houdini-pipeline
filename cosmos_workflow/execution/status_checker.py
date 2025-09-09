@@ -156,44 +156,70 @@ class StatusChecker:
 
             outputs = {"completed_at": datetime.now(timezone.utc).isoformat()}
 
-            if model_type == "inference":
-                # Download inference output video
-                remote_file = f"{remote_dir}/outputs/run_{run_id}/output.mp4"
-                local_file = outputs_dir / "output.mp4"
+            # Download all files from the remote output directory
+            remote_output_dir = f"{remote_dir}/outputs/run_{run_id}"
+
+            # List all files in remote directory
+            command = f"ls -la {remote_output_dir} 2>/dev/null | grep '^-' | awk '{{print $9}}'"
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                command, stream_output=False
+            )
+
+            if exit_code != 0 or not stdout.strip():
+                logger.warning("No output files found for %s", run_id)
+                return outputs
+
+            # Download each file
+            files = stdout.strip().split("\n")
+            downloaded_files = []
+
+            for filename in files:
+                if not filename:
+                    continue
+
+                remote_file = f"{remote_output_dir}/{filename}"
+                local_file = outputs_dir / filename
 
                 if self.file_transfer.download_file(remote_file, local_file):
-                    outputs["output_path"] = str(local_file)
-                    logger.info("Downloaded inference output for %s", run_id)
+                    downloaded_files.append(str(local_file))
+                    logger.info("Downloaded %s for run %s", filename, run_id)
                 else:
-                    logger.error("Failed to download inference output for %s", run_id)
-                    return None
+                    logger.error("Failed to download %s for run %s", filename, run_id)
 
-            elif model_type == "enhancement":
-                # Download enhancement results JSON
-                remote_file = f"{remote_dir}/outputs/run_{run_id}/batch_results.json"
-                local_file = outputs_dir / "batch_results.json"
+            if downloaded_files:
+                outputs["files"] = downloaded_files
 
-                if self.file_transfer.download_file(remote_file, local_file):
-                    # Read JSON and extract enhanced text
-                    results = self.json_handler.read_json(local_file)
-                    if results and len(results) > 0:
-                        outputs["enhanced_text"] = results[0].get("upsampled_prompt", "")
-                    logger.info("Downloaded enhancement output for %s", run_id)
-                else:
-                    logger.error("Failed to download enhancement output for %s", run_id)
-                    return None
+                # Extract specific information based on model type
+                if model_type == "enhancement":
+                    # Try to extract enhanced text from batch_results.json if it exists
+                    batch_results_file = outputs_dir / "batch_results.json"
+                    if batch_results_file.exists():
+                        results = self.json_handler.read_json(batch_results_file)
+                        if results and len(results) > 0:
+                            outputs["enhanced_text"] = results[0].get("upsampled_prompt", "")
 
-            elif model_type == "upscaling":
-                # Download upscaled video
-                remote_file = f"{remote_dir}/outputs/run_{run_id}/output_4k.mp4"
-                local_file = outputs_dir / "output_4k.mp4"
+                    # Also check prompt_upsampled.json
+                    prompt_file = outputs_dir / "prompt_upsampled.json"
+                    if prompt_file.exists():
+                        prompt_data = self.json_handler.read_json(prompt_file)
+                        if prompt_data:
+                            outputs["prompt_data"] = prompt_data
 
-                if self.file_transfer.download_file(remote_file, local_file):
-                    outputs["output_path"] = str(local_file)
-                    logger.info("Downloaded upscaling output for %s", run_id)
-                else:
-                    logger.error("Failed to download upscaling output for %s", run_id)
-                    return None
+                elif model_type == "inference":
+                    # Look for output video
+                    output_file = outputs_dir / "output.mp4"
+                    if output_file.exists():
+                        outputs["output_path"] = str(output_file)
+
+                elif model_type == "upscaling":
+                    # Look for upscaled video
+                    output_file = outputs_dir / "output_4k.mp4"
+                    if output_file.exists():
+                        outputs["output_path"] = str(output_file)
+
+                logger.info("Downloaded %d files for %s", len(downloaded_files), run_id)
+            else:
+                logger.warning("No files downloaded for %s", run_id)
 
             return outputs
 

@@ -82,6 +82,7 @@
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
  - Avoid Over-Engineering and overly complex solutions
+ - Avoid Over-Abstraction; KISS - keep it simple, stupid
  - Write a high quality, general purpose solution.
  - Focus on understanding the problem requirements and implementing the correct algorithm
  - Try different methods if your first approach doesn't work

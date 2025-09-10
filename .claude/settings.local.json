@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh:*)",
+      "WebSearch",
+      "Read(//f/Art/cosmos-transfer1/server/**)",
+      "Read(//f/Art/cosmos-transfer1/**)",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_wait_for",
+      "Bash(sqlite3:*)",
+      "Bash(tree:*)",
+      "Read(//c/Users/17143/.cache/claude/staging//**)",
+      "Read(//c/Users/17143/.claude/todos/**)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": false
+}

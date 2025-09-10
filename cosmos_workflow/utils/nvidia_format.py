@@ -113,23 +113,32 @@ def to_cosmos_inference_json(
 def to_cosmos_upscale_json(
     input_video_path: str,
     control_weight: float = 0.5,
+    prompt: str | None = None,
 ) -> dict[str, Any]:
     """Convert upscaling parameters to Cosmos format JSON specification.
 
-    Creates a minimal spec for 4K upscaling that only includes:
+    Creates a spec for 4K upscaling that includes:
     - input_video_path: Path to the video to upscale
     - upscale.control_weight: Weight for upscaling control
+    - prompt: Optional prompt to guide the upscaling (only included if provided)
 
     This is separate from inference JSON as upscaling is an independent operation.
 
     Args:
-        input_video_path: Path to the input video (from parent run)
+        input_video_path: Path to the input video (from parent run or file)
         control_weight: Control weight for upscaling (0.0-1.0)
+        prompt: Optional prompt to guide the upscaling process
 
     Returns:
         Dictionary in Cosmos format for upscaling
     """
-    return {"input_video_path": input_video_path, "upscale": {"control_weight": control_weight}}
+    spec = {"input_video_path": input_video_path, "upscale": {"control_weight": control_weight}}
+
+    # Only include prompt if provided (following design principle)
+    if prompt:
+        spec["prompt"] = prompt
+
+    return spec
 
 
 def write_cosmos_json(cosmos_data: dict[str, Any], output_path: str | Path) -> Path:

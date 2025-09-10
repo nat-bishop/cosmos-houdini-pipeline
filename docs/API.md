@@ -251,6 +251,35 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 
 ## CLI Commands
 
+### Complete Command Reference
+
+#### Database Operations
+- `cosmos create prompt "text" video_dir` - Create prompt in database, returns ps_xxxxx ID
+- `cosmos list prompts [--model transfer] [--limit 50] [--json]` - List prompts with filtering
+- `cosmos list runs [--status completed] [--prompt ps_xxxxx] [--json]` - List runs with filtering
+- `cosmos search "query" [--limit 50] [--json]` - Full-text search prompts with highlighting
+- `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
+
+#### GPU Execution
+- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally, non-blocking)
+- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run, non-blocking)
+- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt, non-blocking)
+- `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
+- `cosmos status [--stream]` - Check GPU status or stream container logs
+- `cosmos kill [--force]` - Kill all running Cosmos containers on GPU instance
+
+#### System Management
+- `cosmos verify [--fix]` - Verify database-filesystem integrity
+- `cosmos delete prompt ps_xxxxx [--delete-outputs] [--force]` - Delete a prompt and its runs
+- `cosmos delete run rs_xxxxx [--delete-outputs] [--force]` - Delete a specific run
+- `cosmos delete prompt --all [--delete-outputs] [--force]` - Delete all prompts and runs
+- `cosmos delete run --all [--delete-outputs] [--force]` - Delete all runs
+- `cosmos ui` - Launch Gradio web interface
+
+For shell completion setup, see [docs/SHELL_COMPLETION.md](SHELL_COMPLETION.md)
+
+### Command Details
+
 **Service Layer Architecture - Production Ready**
 
 The Cosmos Workflow System uses a clean database-first service layer architecture:

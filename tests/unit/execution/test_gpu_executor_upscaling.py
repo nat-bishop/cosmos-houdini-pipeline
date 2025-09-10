@@ -57,11 +57,11 @@ class TestGPUExecutorUpscaling:
         """Create a mock docker executor."""
         mock_docker = MagicMock()
 
-        def mock_run_upscaling(parent_run_id, run_id, control_weight, **kwargs):
+        def mock_run_upscaling(video_path, run_id, control_weight, prompt=None, **kwargs):
             return {
                 "status": "started",
                 "log_path": f"outputs/run_{run_id}/logs/upscaling.log",
-                "parent_run_id": parent_run_id,
+                "video_path": video_path,
             }
 
         mock_docker.run_upscaling = Mock(side_effect=mock_run_upscaling)
@@ -132,156 +132,187 @@ class TestGPUExecutorUpscaling:
         self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
     ):
         """Test that execute_upscaling_run creates the run directory."""
+        video_path = "outputs/run_rs_inference123/output.mp4"
+
         with patch.object(gpu_executor, "_initialize_services"):
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    with patch.object(gpu_executor, "_download_outputs") as mock_download:
-                        # Setup mocks
-                        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                        mock_ssh.__exit__ = Mock(return_value=None)
-                        mock_docker.run_upscaling.return_value = {"status": "started"}
-                        mock_download.return_value = Path("outputs/run_rs_upscale456/output_4k.mp4")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True):
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(return_value=True)
 
-                        # Act
-                        with patch("pathlib.Path.mkdir") as mock_mkdir:
-                            result = gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act
+                            with patch("pathlib.Path.mkdir") as mock_mkdir:
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    result = gpu_executor.execute_upscaling_run(
+                                        sample_upscale_run,
+                                        video_path,
+                                        prompt_text="Enhanced quality",
+                                    )
 
-                        # Assert
-                        mock_mkdir.assert_called()
-                        assert "output_path" in result
-                        assert "parent_run_id" in result
-                        assert result["parent_run_id"] == "rs_inference123"
+                            # Assert
+                            mock_mkdir.assert_called()
+                            assert result["status"] == "started"
+                            assert "run_id" in result
+                            assert result["run_id"] == "rs_upscale456"
 
     def test_execute_upscaling_run_calls_docker_executor(
         self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
     ):
         """Test that execute_upscaling_run calls DockerExecutor.run_upscaling correctly."""
+        video_path = "outputs/run_rs_inference123/output.mp4"
+
         with patch.object(gpu_executor, "_initialize_services"):
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    with patch.object(gpu_executor, "_download_outputs") as mock_download:
-                        # Setup mocks
-                        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                        mock_ssh.__exit__ = Mock(return_value=None)
-                        mock_docker.run_upscaling.return_value = {"status": "started"}
-                        mock_download.return_value = Path("outputs/run_rs_upscale456/output_4k.mp4")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True):
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(return_value=True)
 
-                        # Act
-                        with patch("pathlib.Path.mkdir"):
-                            gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act
+                            with patch("pathlib.Path.mkdir"):
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    gpu_executor.execute_upscaling_run(
+                                        sample_upscale_run,
+                                        video_path,
+                                        prompt_text="Enhanced quality",
+                                    )
 
-                        # Assert - check docker executor was called
-                        mock_docker.run_upscaling.assert_called_once()
-                        call_args = mock_docker.run_upscaling.call_args
+                            # Assert - check docker executor was called
+                            mock_docker.run_upscaling.assert_called_once()
+                            call_kwargs = mock_docker.run_upscaling.call_args.kwargs
 
-                        # Check arguments
-                        assert call_args[1]["run_id"] == "rs_upscale456"
-                        assert call_args[1]["control_weight"] == 0.7
+                            # Check arguments
+                            assert call_kwargs["run_id"] == "rs_upscale456"
+                            assert call_kwargs["control_weight"] == 0.7
+                            assert call_kwargs["prompt"] == "Enhanced quality"
 
-    def test_execute_upscaling_run_downloads_outputs(
-        self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
-    ):
-        """Test that execute_upscaling_run downloads the upscaled outputs."""
+    def test_execute_upscaling_run_with_video_file(self, gpu_executor, sample_upscale_run):
+        """Test that execute_upscaling_run works with standalone video files."""
+        video_path = "/path/to/standalone/video.mp4"
+        sample_upscale_run["execution_config"]["source_run_id"] = None  # No parent run
+
         with patch.object(gpu_executor, "_initialize_services"):
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    with patch.object(gpu_executor, "_download_outputs") as mock_download:
-                        # Setup mocks
-                        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                        mock_ssh.__exit__ = Mock(return_value=None)
-                        mock_docker.run_upscaling.return_value = {"status": "started"}
-                        mock_download.return_value = Path("outputs/run_rs_upscale456/output_4k.mp4")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True) as mock_ft:
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(
+                                return_value=False
+                            )  # File doesn't exist on remote
+                            mock_ft.upload_file = Mock()  # Will need to upload
 
-                        # Act
-                        with patch("pathlib.Path.mkdir"):
-                            result = gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act
+                            with patch("pathlib.Path.mkdir"):
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    result = gpu_executor.execute_upscaling_run(
+                                        sample_upscale_run, video_path
+                                    )
 
-                        # Assert - check download was called
-                        mock_download.assert_called_once_with(
-                            "rs_upscale456",
-                            Path("outputs/run_rs_upscale456"),
-                            upscale=True,
-                        )
-
-                        assert result["output_path"] == "outputs/run_rs_upscale456/output_4k.mp4"
+                            # Assert - check video was uploaded
+                            mock_ft.upload_file.assert_called()
+                            assert result["status"] == "started"
+                            assert "run_id" in result
 
     def test_execute_upscaling_run_handles_docker_failure(
         self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
     ):
         """Test that execute_upscaling_run handles Docker execution failures."""
+        video_path = "outputs/run_rs_inference123/output.mp4"
+
         with patch.object(gpu_executor, "_initialize_services"):
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    # Setup mocks
-                    mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                    mock_ssh.__exit__ = Mock(return_value=None)
-                    mock_docker.run_upscaling.side_effect = RuntimeError("Docker failed")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True):
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.side_effect = RuntimeError("Docker failed")
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(return_value=True)
 
-                    # Act & Assert
-                    with patch("pathlib.Path.mkdir"):
-                        with pytest.raises(RuntimeError, match="Upscaling failed: Docker failed"):
-                            gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act & Assert
+                            with patch("pathlib.Path.mkdir"):
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    with pytest.raises(RuntimeError, match="Upscaling failed"):
+                                        gpu_executor.execute_upscaling_run(
+                                            sample_upscale_run, video_path
+                                        )
 
     def test_execute_upscaling_run_returns_correct_structure(
         self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
     ):
         """Test that execute_upscaling_run returns the expected result structure."""
+        video_path = "outputs/run_rs_inference123/output.mp4"
+
         with patch.object(gpu_executor, "_initialize_services"):
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    with patch.object(gpu_executor, "_download_outputs") as mock_download:
-                        # Setup mocks
-                        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                        mock_ssh.__exit__ = Mock(return_value=None)
-                        mock_docker.run_upscaling.return_value = {
-                            "status": "started",
-                            "duration_seconds": 180,
-                        }
-                        mock_download.return_value = Path("outputs/run_rs_upscale456/output_4k.mp4")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True):
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.return_value = {
+                                "status": "started",
+                                "duration_seconds": 180,
+                            }
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(return_value=True)
 
-                        # Act
-                        with patch("pathlib.Path.mkdir"):
-                            result = gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act
+                            with patch("pathlib.Path.mkdir"):
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    result = gpu_executor.execute_upscaling_run(
+                                        sample_upscale_run, video_path
+                                    )
 
-                        # Assert - check result structure
-                        assert "output_path" in result
-                        assert "parent_run_id" in result
-                        assert "duration_seconds" in result
-                        assert "log_path" in result
-
-                        assert result["parent_run_id"] == "rs_inference123"
-                        assert "run_rs_upscale456" in result["output_path"]
-                        assert "run_rs_upscale456" in result["log_path"]
+                            # Assert - check result structure
+                            assert "status" in result
+                            assert "run_id" in result
+                            assert result["status"] == "started"
+                            assert "log_path" in result
 
     def test_execute_upscaling_run_initializes_services(
         self, gpu_executor, sample_upscale_run, sample_parent_run, sample_prompt
     ):
         """Test that execute_upscaling_run initializes services if needed."""
+        video_path = "outputs/run_rs_inference123/output.mp4"
+
         with patch.object(gpu_executor, "_initialize_services") as mock_init:
             with patch.object(gpu_executor, "ssh_manager", create=True) as mock_ssh:
                 with patch.object(gpu_executor, "docker_executor", create=True) as mock_docker:
-                    with patch.object(gpu_executor, "_download_outputs") as mock_download:
-                        # Setup mocks
-                        mock_ssh.__enter__ = Mock(return_value=mock_ssh)
-                        mock_ssh.__exit__ = Mock(return_value=None)
-                        mock_docker.run_upscaling.return_value = {"status": "started"}
-                        mock_download.return_value = Path("outputs/run_rs_upscale456/output_4k.mp4")
+                    with patch.object(gpu_executor, "remote_executor", create=True) as mock_remote:
+                        with patch.object(gpu_executor, "file_transfer", create=True):
+                            # Setup mocks
+                            mock_ssh.__enter__ = Mock(return_value=mock_ssh)
+                            mock_ssh.__exit__ = Mock(return_value=None)
+                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            mock_remote.execute_command = Mock()
+                            mock_remote.file_exists = Mock(return_value=True)
 
-                        # Act
-                        with patch("pathlib.Path.mkdir"):
-                            gpu_executor.execute_upscaling_run(
-                                sample_upscale_run, sample_parent_run, sample_prompt
-                            )
+                            # Act
+                            with patch("pathlib.Path.mkdir"):
+                                with patch("pathlib.Path.exists", return_value=True):
+                                    gpu_executor.execute_upscaling_run(
+                                        sample_upscale_run, video_path
+                                    )
 
-                        # Assert - check services were initialized
-                        mock_init.assert_called_once()
+                            # Assert - check services were initialized
+                            mock_init.assert_called_once()

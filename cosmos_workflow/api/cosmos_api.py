@@ -336,68 +336,129 @@ class CosmosAPI:
                 "error": str(e),
             }
 
-    def upscale_run(
+    def upscale(
         self,
-        run_id: str,
+        video_source: str,
         control_weight: float = 0.5,
+        prompt: str | None = None,
     ) -> dict[str, Any]:
-        """Upscale the output of a completed inference run.
+        """Upscale a video to 4K resolution using AI enhancement.
 
         Creates a new database run with model_type="upscale" that operates
-        on the output video from the specified inference run.
+        on either an existing run's output or an arbitrary video file.
 
         Args:
-            run_id: The inference run ID whose output to upscale
+            video_source: Either a run ID (rs_xxx) or path to video file
             control_weight: Control weight for upscaling (0.0-1.0)
+            prompt: Optional prompt to guide the upscaling process
 
         Returns:
             Dictionary containing:
                 - upscale_run_id: The new upscaling run ID
-                - status: "success" or "failed"
+                - status: "success", "started", or "failed"
                 - output_path: Path to upscaled video (if successful)
 
         Raises:
-            ValueError: If run not found, not completed, or invalid control weight
+            ValueError: If video source invalid or control weight out of range
         """
-        logger.info("Upscaling run %s with control weight %s", run_id, control_weight)
+        from pathlib import Path
+
+        logger.info(
+            "Upscaling video source %s with control weight %s", video_source, control_weight
+        )
+        if prompt:
+            logger.info("Using upscaling prompt: %s", prompt[:100])
 
         # Validate control weight
         if not 0.0 <= control_weight <= 1.0:
             raise ValueError(f"Control weight must be between 0.0 and 1.0, got {control_weight}")
 
-        # Get the parent run
-        parent_run = self.service.get_run(run_id)
-        if not parent_run:
-            raise ValueError(f"Run not found: {run_id}")
+        # Determine if source is a run ID or video file
+        is_run_id = video_source.startswith("rs_") or video_source.startswith("run_")
 
-        if parent_run["status"] != "completed":
-            raise ValueError(f"Run {run_id} must be completed before upscaling")
+        parent_run = None
+        prompt_id = None
+        prompt_data = None
+        video_path = None
 
-        # Get the prompt for context
-        prompt = self.service.get_prompt(parent_run["prompt_id"])
-        if not prompt:
-            raise ValueError(f"Prompt not found for run: {run_id}")
+        if is_run_id:
+            # Source is an existing run
+            parent_run = self.service.get_run(video_source)
+            if not parent_run:
+                raise ValueError(f"Run not found: {video_source}")
+
+            if parent_run["status"] != "completed":
+                raise ValueError(f"Run {video_source} must be completed before upscaling")
+
+            # Get the prompt for context (if no custom prompt provided)
+            prompt_id = parent_run["prompt_id"]
+            if not prompt:
+                prompt_data = self.service.get_prompt(prompt_id)
+                if not prompt_data:
+                    raise ValueError(f"Prompt not found for run: {video_source}")
+
+            video_path = parent_run["outputs"].get("output_path")
+            if not video_path:
+                raise ValueError(f"Run {video_source} has no output video")
+        else:
+            # Source is a video file
+            video_file = Path(video_source)
+            if not video_file.exists():
+                raise ValueError(f"Video file not found: {video_source}")
+            if video_file.suffix.lower() not in [".mp4", ".mov", ".avi", ".mkv"]:
+                raise ValueError(f"Unsupported video format: {video_file.suffix}")
+
+            video_path = str(video_file.absolute())
+            # For video files, we need a prompt_id - use the first prompt or create a placeholder
+            prompts = self.service.list_prompts()
+            if prompts:
+                prompt_id = prompts[0]["id"]
+            else:
+                # Create a minimal prompt for tracking
+                prompt_result = self.service.create_prompt(
+                    description=f"Upscaling video: {video_file.name}",
+                    metadata={"type": "upscale_placeholder"},
+                )
+                prompt_id = prompt_result["id"]
 
         # Create execution config for upscaling
         execution_config = {
-            "parent_run_id": run_id,
+            "input_video_source": video_path,  # Actual video path
             "control_weight": control_weight,
-            "input_video": parent_run["outputs"].get("output_path"),
         }
+
+        # Add optional fields only if present
+        if parent_run:
+            execution_config["source_run_id"] = video_source  # For relationship tracking
+        if prompt:
+            execution_config["prompt"] = prompt  # Custom prompt for upscaling
 
         # Create new run with model_type="upscale"
         upscale_run = self.service.create_run(
-            prompt_id=parent_run["prompt_id"],
+            prompt_id=prompt_id,
             model_type="upscale",
             execution_config=execution_config,
         )
-        logger.info("Created upscaling run %s for parent run %s", upscale_run["id"], run_id)
+
+        if parent_run:
+            logger.info(
+                "Created upscaling run %s for parent run %s", upscale_run["id"], video_source
+            )
+        else:
+            logger.info(
+                "Created upscaling run %s for video file %s", upscale_run["id"], video_source
+            )
 
         # Update status and execute
         self.service.update_run_status(upscale_run["id"], "running")
 
         try:
-            result = self.orchestrator.execute_upscaling_run(upscale_run, parent_run, prompt)
+            # Pass video_path and optional prompt to the executor
+            result = self.orchestrator.execute_upscaling_run(
+                upscale_run,
+                video_path=video_path,
+                prompt_text=prompt,
+            )
 
             # Check if operation started in background
             if result.get("status") == "started":
@@ -427,6 +488,14 @@ class CosmosAPI:
                 "status": "failed",
                 "error": str(e),
             }
+
+    # Keep backward compatibility with old method name
+    def upscale_run(self, run_id: str, control_weight: float = 0.5) -> dict[str, Any]:
+        """Backward compatibility wrapper for upscale_run.
+
+        Deprecated: Use upscale() instead.
+        """
+        return self.upscale(video_source=run_id, control_weight=control_weight)
 
     # ========== Internal Helper Methods ==========
 

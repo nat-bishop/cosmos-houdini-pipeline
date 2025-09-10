@@ -24,11 +24,12 @@ Run the following documentation updates in parallel:
 
 1. **CHANGELOG.md** - ALWAYS update for ANY code change under the `[Unreleased]` section. This is mandatory for every change.
 
-2. **README.md** - Update ONLY for user-facing changes:
-   - New CLI commands or changed command syntax
-   - Installation or setup requirement changes
-   - New features visible to users
-   - Configuration file changes
+2. **README.md** - Overview and quick start, update for:
+   - Visual elements (screenshots, architecture diagrams)
+   - Major features with brief examples
+   - Performance metrics and technical achievements
+   - Basic usage that demonstrates capabilities
+   - Link to docs/ for detailed setup/configuration
 
 3. **docs/API.md** - Update for technical changes:
    - New or modified CLI commands
@@ -99,11 +100,9 @@ Run the following documentation updates in parallel:
 
 4. **Completeness**: Ensure all affected documentation is updated in a single pass. Don't leave documentation partially updated.
 
-5. **Version Tracking**: In CHANGELOG.md, always add entries under `[Unreleased]` unless specifically instructed otherwise.
+5. **No Code Changes**: You must NEVER modify code files beyond updating docstrings. You are a documentation specialist only.
 
-6. **No Code Changes**: You must NEVER modify code files beyond updating docstrings. You are a documentation specialist only.
-
-7. **Preserve Existing Content**: When updating files, preserve all existing content that isn't directly affected by the changes. Only modify what needs to be updated.
+6. **Preserve Existing Content**: When updating files, preserve all existing content that isn't directly affected by the changes. Only modify what needs to be updated.
 
 **Quality Checks:**
 

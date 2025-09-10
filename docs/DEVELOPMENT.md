@@ -4,11 +4,56 @@
 
 ### Install Dependencies
 ```bash
-# Basic usage
+# Clone and install
+git clone <repository-url>
+cd cosmos-houdini-experiments
 pip install -r requirements.txt
 
 # Development (includes testing, linting, type checking)
 pip install -r requirements-dev.txt
+
+# Run the CLI
+python cosmos --help
+```
+
+### Configuration
+
+Edit `cosmos_workflow/config/config.toml`:
+```toml
+[remote]
+host = "<your-gpu-host>"
+user = "<ssh-username>"
+ssh_key = "~/.ssh/your-key.pem"
+
+[paths]
+remote_dir = "/path/to/cosmos-transfer1"
+```
+
+### Remote GPU Setup
+
+The remote GPU instance needs NVIDIA Cosmos Transfer set up according to NVIDIA's instructions:
+
+```bash
+# Clone the cosmos-transfer1 source code
+git clone git@github.com:nvidia-cosmos/cosmos-transfer1.git
+cd cosmos-transfer1
+git submodule update --init --recursive
+```
+
+Cosmos runs only on Linux systems (tested with Ubuntu 24.04, 22.04, and 20.04) and requires Python 3.12.x. Docker and the NVIDIA Container Toolkit must be installed.
+
+```bash
+# Build the Docker image
+docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
+
+# Generate a Hugging Face access token (set to 'Read' permission)
+# Log in to Hugging Face with the access token:
+huggingface-cli login
+
+# Accept the Llama-Guard-3-8B terms on Hugging Face website
+
+# Download the Cosmos model weights from Hugging Face:
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
 ```
 
 ### Pre-commit Hooks

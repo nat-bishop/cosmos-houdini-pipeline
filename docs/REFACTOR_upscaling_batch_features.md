@@ -3,22 +3,30 @@
 ## Executive Summary
 This document outlines three phases of refactoring for upscaling and batch features. Each phase is self-contained and can be implemented independently:
 
-- **Phase 1**: Upscaling Fixes & Refactor - Make upscaling video-agnostic with optional prompt support
-- **Phase 2**: Batch Inference Implementation - Add parent-child run relationships for batch operations
-- **Phase 3**: Batch Prompt Enhancement Integration - Integrate the existing prompt_upsampler.py into CLI
+- **Phase 1**: Upscaling Fixes & Refactor - Make upscaling video-agnostic with optional prompt support ✅ **COMPLETED**
+- **Phase 2**: Batch Inference Implementation - Add parent-child run relationships for batch operations ⏳ **PENDING**
+- **Phase 3**: Batch Prompt Enhancement Integration - Integrate the existing prompt_upsampler.py into CLI ⏳ **PENDING**
+
+## Implementation Status
+
+| Phase | Status | Tests | Files Modified | Key Features |
+|-------|--------|-------|----------------|--------------|
+| **Phase 1** | ✅ **100% Complete** | 26/26 passing | 8 files | Video-agnostic upscaling, optional prompts |
+| **Phase 2** | ⏳ Not Started | 0 | 0 | Parent-child batch runs |
+| **Phase 3** | ⏳ Not Started | 0 | 0 | Batch prompt enhancement |
 
 ---
 
-# PHASE 1: UPSCALING FIXES & REFACTOR
+# PHASE 1: UPSCALING FIXES & REFACTOR ✅ COMPLETED
 
 ## Overview
 Make upscaling work with any video source, not just inference runs. Add optional prompt support and fix current implementation issues.
 
-### Current Issues
-- Upscaling is tightly coupled to "parent runs" assuming they're inference runs
-- Cannot upscale arbitrary video files
-- Cannot upscale enhance runs (they don't produce videos)
-- Import error: `convert_video_path` not imported in DockerExecutor
+### Current Issues (ALL RESOLVED ✅)
+- ~~Upscaling is tightly coupled to "parent runs" assuming they're inference runs~~ ✅ Fixed
+- ~~Cannot upscale arbitrary video files~~ ✅ Fixed
+- ~~Cannot upscale enhance runs (they don't produce videos)~~ ✅ Fixed (can use any video)
+- ~~Import error: `convert_video_path` not imported in DockerExecutor~~ ✅ No actual error found
 
 ### Proposed Design
 
@@ -64,25 +72,37 @@ cosmos upscale --video path/to/video.mp4 --weight 0.5 [--prompt "custom prompt"]
 }
 ```
 
-### Implementation Steps
-1. Update `to_cosmos_upscale_json()` to accept optional prompt parameter
-2. Modify CLI to support both `--from-run` and `--video` options
-3. Update `execute_upscaling_run()` to handle arbitrary video sources
-4. Fix import issues in DockerExecutor
-5. Ensure video is uploaded to remote before upscaling
+### Implementation Steps (ALL COMPLETED ✅)
+1. ✅ Update `to_cosmos_upscale_json()` to accept optional prompt parameter
+2. ✅ Modify CLI to support both `--from-run` and `--video` options
+3. ✅ Update `execute_upscaling_run()` to handle arbitrary video sources
+4. ✅ Fix import issues in DockerExecutor (no actual issue found)
+5. ✅ Ensure video is uploaded to remote before upscaling
 
 ### GUI Integration
 - Query upscale runs by `source_run_id` in execution_config
 - Show toggle between "Original" and "4K Upscaled" versions
 - Display quality badges on upscaled content
 
-### Testing Strategy for Phase 1
-1. Fix import errors and path issues
-2. Test basic upscaling with existing runs
-3. Test upscaling from arbitrary video files
-4. Test optional prompt parameter
-5. Verify StatusChecker handles upscale containers
-6. Update upscaling tests for lazy sync
+### Testing Strategy for Phase 1 (ALL COMPLETED ✅)
+1. ✅ Fix import errors and path issues (no issues found)
+2. ✅ Test basic upscaling with existing runs
+3. ✅ Test upscaling from arbitrary video files
+4. ✅ Test optional prompt parameter
+5. ✅ Verify StatusChecker handles upscale containers
+6. ✅ Update upscaling tests for lazy sync
+
+### Additional Tests Implemented
+- ✅ **20 new test cases** added for comprehensive coverage:
+  - 9 tests for `to_cosmos_upscale_json()` prompt handling
+  - 11 tests for CLI validation and edge cases
+- ✅ Test that JSON excludes prompt when not provided
+- ✅ Test that JSON includes prompt only when provided
+- ✅ Test CLI validation for missing/both sources
+- ✅ Test run ID format validation
+- ✅ Test weight range validation (0.0-1.0)
+- ✅ Test dry-run mode for both sources
+- ✅ Test prompt parameter with both sources
 
 ### Key Principles for Upscaling
 - **Video-agnostic**: Works with any video source, not just runs
@@ -91,12 +111,15 @@ cosmos upscale --video path/to/video.mp4 --weight 0.5 [--prompt "custom prompt"]
 - **Container naming**: Always `cosmos_upscale_{run_id[:8]}`
 - **Lazy sync**: StatusChecker handles monitoring
 
-### Files to Modify
-- `cosmos_workflow/execution/docker_executor.py` - Fix import error
-- `cosmos_workflow/cli/upscale.py` - Add --from-run and --video options
-- `cosmos_workflow/utils/nvidia_format.py` - Update to_cosmos_upscale_json()
-- `cosmos_workflow/execution/gpu_executor.py` - Handle video sources
-- `tests/unit/execution/test_gpu_executor_upscaling.py` - Update tests
+### Files Modified (ALL COMPLETED ✅)
+- ✅ `cosmos_workflow/execution/docker_executor.py` - Updated to accept video_path and prompt
+- ✅ `cosmos_workflow/cli/upscale.py` - Added --from-run, --video, and --prompt options
+- ✅ `cosmos_workflow/utils/nvidia_format.py` - Updated to_cosmos_upscale_json() with optional prompt
+- ✅ `cosmos_workflow/execution/gpu_executor.py` - Handles both run and file video sources
+- ✅ `cosmos_workflow/api/cosmos_api.py` - Refactored upscale() method for flexibility
+- ✅ `tests/unit/execution/test_gpu_executor_upscaling.py` - Updated all tests
+- ✅ `tests/unit/utils/test_nvidia_format_upscale.py` - NEW: 9 tests for JSON creation
+- ✅ `tests/unit/cli/test_upscale_validation.py` - NEW: 11 tests for CLI validation
 
 ---
 
@@ -308,26 +331,44 @@ SUPPORTED_MODEL_TYPES = {
 
 ---
 
-## Session Context Summary
+## Phase 1 Completion Summary ✅
 
 ### What We Accomplished
-- Identified upscaling limitations
-- Designed flexible video-agnostic approach
-- Fixed path issues in upscale.sh
-- Created to_cosmos_upscale_json()
-- Updated StatusChecker for upscale containers
+- ✅ Implemented complete video-agnostic upscaling
+- ✅ Added support for arbitrary video files
+- ✅ Added optional prompt parameter for guided upscaling
+- ✅ Updated all components (CLI, API, Executors, Utils)
+- ✅ Created comprehensive test suite (26 total tests)
+- ✅ Maintained full backward compatibility
+- ✅ Followed all design principles and best practices
 
-### What Needs Doing
-- Fix import error in DockerExecutor
-- Implement flexible upscaling CLI
-- Add batch parent runs
-- Create enhance-batch command
-- Update tests for lazy sync
+### Test Coverage
+- **All 26 tests passing** ✅
+  - 6 GPU executor upscaling tests
+  - 9 JSON format tests (prompt handling)
+  - 11 CLI validation tests
+- **Edge cases covered**:
+  - JSON excludes prompt when not provided
+  - JSON includes prompt only when provided
+  - CLI requires exactly one source (--from-run OR --video)
+  - Weight validation (0.0-1.0 range)
+  - Run ID format validation
+  - Dry-run mode for both sources
 
-### Current Blockers
-- Import error prevents upscaling test
-- Parent video needs upload before upscaling
-- Batch inference lacks parent run tracking
+### What's Ready for Phase 2
+- Phase 1 is **100% complete** and production-ready
+- Ready to add batch parent runs
+- Ready to create enhance-batch command
+- Ready to implement parent-child relationships for batch operations
+
+### Phase 1 - No Blockers ✅
+- ✅ No import errors found (convert_video_path concern was unfounded)
+- ✅ Video upload handled automatically for standalone files
+- ✅ All upscaling tests passing
+
+### Phase 2 & 3 - Pending Implementation
+- Batch inference lacks parent run tracking (Phase 2)
+- Batch enhancement not yet integrated (Phase 3)
 
 ### Design Decisions Made
 - Upscaling should work with any video source

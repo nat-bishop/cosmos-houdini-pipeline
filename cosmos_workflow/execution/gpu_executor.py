@@ -975,15 +975,15 @@ class GPUExecutor:
     def execute_upscaling_run(
         self,
         upscale_run: dict[str, Any],
-        parent_run: dict[str, Any],
-        prompt: dict[str, Any],
+        video_path: str,
+        prompt_text: str | None = None,
     ) -> dict[str, Any]:
         """Execute upscaling as an independent database run.
 
         Args:
             upscale_run: The upscaling run with id and execution_config
-            parent_run: The completed inference run to upscale
-            prompt: The original prompt for context
+            video_path: Path to the video file to upscale (local path)
+            prompt_text: Optional prompt to guide the upscaling
 
         Returns:
             Dictionary with upscaled output and metadata
@@ -991,7 +991,11 @@ class GPUExecutor:
         self._initialize_services()
 
         run_id = upscale_run["id"]
-        control_weight = upscale_run["execution_config"]["control_weight"]
+        execution_config = upscale_run["execution_config"]
+        control_weight = execution_config["control_weight"]
+
+        # Get source_run_id if this is from an existing run
+        source_run_id = execution_config.get("source_run_id")
 
         # Create run directory
         run_dir = Path("outputs") / f"run_{run_id}"
@@ -999,7 +1003,10 @@ class GPUExecutor:
         logs_dir = run_dir / "logs"
         logs_dir.mkdir(exist_ok=True)
 
-        logger.info("Executing upscaling run %s for parent %s", run_id, parent_run["id"])
+        if source_run_id:
+            logger.info("Executing upscaling run %s for parent run %s", run_id, source_run_id)
+        else:
+            logger.info("Executing upscaling run %s for video file %s", run_id, video_path)
 
         try:
             with self.ssh_manager:
@@ -1021,37 +1028,46 @@ class GPUExecutor:
                 else:
                     logger.warning("Upscale script not found at %s", upscale_script)
 
-                # Get parent run ID for upscaling
-                parent_run_id = parent_run["id"]
+                # Determine the video source and ensure it's uploaded to remote
+                local_video_path = Path(video_path)
 
-                # Check if parent run output exists locally
-                parent_output_path = (
-                    Path("outputs") / f"run_{parent_run_id}" / "outputs" / "output.mp4"
-                )
-                if not parent_output_path.exists():
-                    # Try alternative path structure
-                    parent_output_path = Path("outputs") / f"run_{parent_run_id}" / "output.mp4"
-                    if not parent_output_path.exists():
-                        raise FileNotFoundError(
-                            f"Parent run output not found locally: {parent_output_path}"
-                        )
+                if source_run_id:
+                    # Video is from a parent run - ensure it's uploaded to the expected location
+                    remote_video_dir = f"{remote_config.remote_dir}/outputs/run_{source_run_id}"
+                    remote_video_path = f"{remote_video_dir}/output.mp4"
 
-                # Upload parent run's output to remote if it doesn't exist
-                remote_parent_output = f"{remote_config.remote_dir}/outputs/run_{parent_run_id}"
-                logger.info("Ensuring parent run output exists on remote")
+                    # Check if video exists locally
+                    if not local_video_path.exists():
+                        raise FileNotFoundError(f"Video not found locally: {local_video_path}")
 
-                # Create remote parent output directory
-                self.remote_executor.execute_command(f"mkdir -p {remote_parent_output}")
+                    logger.info("Ensuring run output exists on remote for run %s", source_run_id)
+                    self.remote_executor.execute_command(f"mkdir -p {remote_video_dir}")
 
-                # Upload the parent output video
-                logger.info("Uploading parent run output video to remote")
-                self.file_transfer.upload_file(parent_output_path, remote_parent_output)
+                    # Upload the video to the expected parent run location
+                    logger.info("Uploading run output video to remote")
+                    self.file_transfer.upload_file(local_video_path, remote_video_dir)
 
-                # Run upscaling with its own run_id and parent_run_id
+                else:
+                    # Video is a standalone file - upload to a staging area
+                    remote_video_dir = f"{remote_config.remote_dir}/uploads/upscale_{run_id[:8]}"
+                    remote_video_path = f"{remote_video_dir}/{local_video_path.name}"
+
+                    # Check if video exists locally
+                    if not local_video_path.exists():
+                        raise FileNotFoundError(f"Video file not found: {local_video_path}")
+
+                    logger.info("Uploading video file %s to remote", local_video_path.name)
+                    self.remote_executor.execute_command(f"mkdir -p {remote_video_dir}")
+
+                    # Upload the video file
+                    self.file_transfer.upload_file(local_video_path, remote_video_dir)
+
+                # Run upscaling with video path and optional prompt
                 result = self.docker_executor.run_upscaling(
-                    parent_run_id=parent_run_id,
+                    video_path=remote_video_path,
                     run_id=run_id,
                     control_weight=control_weight,
+                    prompt=prompt_text,
                 )
 
                 if result["status"] == "failed":
@@ -1064,26 +1080,36 @@ class GPUExecutor:
                     logger.info("Container %s started for upscaling run %s", container_name, run_id)
 
                     # Return immediately with partial results
-                    return {
+                    result_data = {
                         "status": "started",
                         "message": "Upscaling started in background",
                         "run_id": run_id,
-                        "parent_run_id": parent_run["id"],
                         "log_path": (logs_dir / "upscaling.log").as_posix(),
                     }
+
+                    # Add source_run_id if this was from an existing run
+                    if source_run_id:
+                        result_data["parent_run_id"] = source_run_id
+
+                    return result_data
 
                 # Should not reach here with current implementation, but handle legacy behavior
                 # Download upscaled output
                 output_path = self._download_outputs(run_id, run_dir, upscaled=True)
 
-                return {
+                result_data = {
                     "output_path": output_path.as_posix()
                     if isinstance(output_path, Path)
                     else str(output_path),
-                    "parent_run_id": parent_run["id"],
                     "duration_seconds": result.get("duration_seconds", 0),
                     "log_path": (logs_dir / "upscaling.log").as_posix(),
                 }
+
+                # Add source_run_id if this was from an existing run
+                if source_run_id:
+                    result_data["parent_run_id"] = source_run_id
+
+                return result_data
         except Exception as e:
             logger.error("Upscaling run %s failed: %s", run_id, e)
             raise RuntimeError(f"Upscaling failed: {e}") from e

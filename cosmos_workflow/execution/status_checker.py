@@ -319,6 +319,70 @@ class StatusChecker:
                     logger.info("Downloaded outputs for {}: {}", run_id, outputs.keys())
                     run_data["outputs"] = outputs
                     data_service.update_run(run_id, outputs=outputs)
+
+                    # Handle enhancement prompt creation/update after successful completion
+                    model_type = run_data.get("model_type", "transfer")
+                    if model_type == "enhance" and outputs.get("enhanced_text"):
+                        try:
+                            # Get execution config to check create_new flag
+                            create_new = run_data.get("execution_config", {}).get(
+                                "create_new", True
+                            )
+                            enhanced_text = outputs["enhanced_text"]
+                            prompt_id = run_data["prompt_id"]
+
+                            # Get the original prompt
+                            original = data_service.get_prompt(prompt_id)
+                            if not original:
+                                logger.error(
+                                    "Original prompt {} not found for enhancement run {}",
+                                    prompt_id,
+                                    run_id,
+                                )
+                            else:
+                                if create_new:
+                                    # Create new enhanced prompt
+                                    name = original["parameters"].get("name", "unnamed")
+                                    enhanced = data_service.create_prompt(
+                                        model_type=original["model_type"],
+                                        prompt_text=enhanced_text,
+                                        inputs=original["inputs"],
+                                        parameters={
+                                            **original["parameters"],
+                                            "name": f"{name}_enhanced",
+                                            "enhanced": True,
+                                            "parent_prompt_id": prompt_id,
+                                        },
+                                    )
+                                    # Update run outputs with the new prompt ID
+                                    outputs["enhanced_prompt_id"] = enhanced["id"]
+                                    outputs["original_prompt_id"] = prompt_id
+                                    data_service.update_run(run_id, outputs=outputs)
+                                    logger.info(
+                                        "Created enhanced prompt {} from {} for run {}",
+                                        enhanced["id"],
+                                        prompt_id,
+                                        run_id,
+                                    )
+                                else:
+                                    # Update existing prompt
+                                    updated_params = {**original["parameters"], "enhanced": True}
+                                    data_service.update_prompt(
+                                        prompt_id,
+                                        prompt_text=enhanced_text,
+                                        parameters=updated_params,
+                                    )
+                                    outputs["enhanced_prompt_id"] = prompt_id
+                                    outputs["original_prompt_id"] = prompt_id
+                                    data_service.update_run(run_id, outputs=outputs)
+                                    logger.info(
+                                        "Updated prompt {} with enhanced text for run {}",
+                                        prompt_id,
+                                        run_id,
+                                    )
+                        except Exception as e:
+                            logger.error("Failed to finalize enhancement for run {}: {}", run_id, e)
+                            # Don't fail the whole sync, just log the error
                 else:
                     logger.warning("Failed to download outputs for {}", run_id)
             else:

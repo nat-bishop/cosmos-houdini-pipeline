@@ -17,7 +17,8 @@
       "Bash(export LOG_LEVEL=DEBUG)",
       "mcp__playwright__browser_navigate",
       "Read(//f/Art/cosmos-houdini-testarea/**)",
-      "mcp__playwright__browser_snapshot"
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages"
     ],
     "deny": [],
     "ask": [

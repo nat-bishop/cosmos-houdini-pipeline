@@ -83,14 +83,21 @@ Build a comprehensive Gradio UI that provides all cosmos CLI functionality with 
 ### Recent Improvements (2025-09-10):
 - Fixed "Loading..." screen bug - app now loads properly
 - Enhanced metadata display with proper line breaks
-- Gallery configured for 5 columns with 400px height
-- Video previews changed from tabs to side-by-side display
+- Gallery configured for 4 columns with 900px height for larger thumbnails
+- Video previews changed to tabs layout for cleaner display
 - Auto-navigation working when clicking "Create Prompt for This Input"
 - Negative prompt shows full default value, editable by user
+- Input Browser gallery is now 2x size of right panel (scale=2 vs scale=1)
+- Custom CSS enforces 16:9 aspect ratio with min-height of 200px
+- Added `interactive=False` to galleries to prevent file uploads
+- Theme set to Soft (respects system dark/light mode preference)
+- Fixed "Multimodal Control Inputs:" formatting with proper line break
 
-### Known Minor Issues:
-- Gallery thumbnails appear square despite videos being 16:9 (Gradio limitation)
-- "Multimodal Control Inputs:" label occasionally on same line as previous field
+### UI Layout Updates:
+- Input Browser: 4 columns, 900px height, scale=2 (left) vs scale=1 (right)
+- Thumbnails: 16:9 aspect ratio enforced via CSS with 200px minimum height
+- Video previews: Returned to tabbed layout (Color RGB, Depth Map, Segmentation)
+- Galleries: Non-interactive (read-only) to prevent accidental uploads
 
 ### Development Setup:
 - Use `cosmos ui` to launch the app (or `python -m cosmos_workflow.ui.app`)
@@ -126,8 +133,16 @@ Build a comprehensive Gradio UI that provides all cosmos CLI functionality with 
 
 ---
 
-## Phase 4: Run History & Outputs
+## Phase 4: Run History & Outputs (IN PROGRESS)
 **Goal**: View historical runs and outputs
+
+### Current Status (2025-09-10):
+- Basic Outputs tab structure implemented
+- Gallery and filtering UI in place
+- **ISSUE**: Output gallery not properly loading/displaying runs from database
+- **TODO**: Fix data loading in `load_outputs()` function
+- **TODO**: Verify `ops.list_runs()` returns expected data
+- **TODO**: Test gallery population with actual video files
 
 ### 4.1 Run History Table
 - [ ] Add "Runs" tab

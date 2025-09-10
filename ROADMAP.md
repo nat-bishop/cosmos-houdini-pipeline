@@ -1,6 +1,46 @@
 # ROADMAP - Cosmos Workflow System
 
+## ✅ Recently Completed (2025-09-10)
+
+### Fixed: Enhancement Runs Not Creating/Updating Prompts
+- **Issue:** When `cosmos prompt-enhance` completed in background, enhanced prompts were not created or updated
+- **Root Cause:** StatusChecker only downloaded outputs but didn't finalize prompt creation
+- **Solution:** Added prompt creation/update logic to StatusChecker when enhancement runs complete
+- **Files Changed:**
+  - `cosmos_workflow/execution/status_checker.py` - Added enhancement finalization
+  - `cosmos_workflow/cli/enhance.py` - Added proper preview and confirmation for --overwrite
+
+### Fixed: Overwrite Mode Missing Proper Warnings
+- **Issue:** `--overwrite` flag didn't show what would be deleted or require confirmation
+- **Solution:** Now shows preview of affected runs, storage impact, and requires user confirmation
+- **Benefit:** Safer operation with clear visibility of destructive actions
+
+### Fixed: Status Command Showing "Missing!" Container
+- **Issue:** Completed runs stayed as "running" in database, causing phantom container warnings
+- **Root Cause:** Same as enhancement issue - runs not properly finalized
+- **Solution:** Fixed by proper run finalization in StatusChecker
+
 ## 🔥 Priority 1: Critical Fixes
+
+### Database Schema Review: Model Type in Prompts
+**Issue:** The `model_type` field in the Prompts table may not make architectural sense
+
+**Current Problems:**
+- Almost all prompts use `model_type="transfer"` as default, suggesting the field is not meaningful
+- Model type seems more relevant to execution (Runs) than to the prompt itself
+- Prompts are just text + inputs/parameters - they don't inherently belong to a specific AI model
+- The same prompt could theoretically be used with different model types
+
+**Investigation Tasks:**
+- [ ] Analyze if `model_type` provides any actual value in the Prompts table
+- [ ] Consider whether this field should be removed entirely
+- [ ] If needed, evaluate moving model type specification to Run creation time only
+- [ ] Review impact on existing queries and CLI commands that filter by model_type
+
+**Enhancement Tracking Complexity:**
+- [ ] Document that there are no direct "enhanced" fields in Prompts table
+- [ ] Current enhancement relationships stored in Run.outputs JSON creates complex queries
+- [ ] Consider simpler approaches: direct foreign keys or dedicated enhancement fields
 
 ### Complete Abstraction Layer Migration
 **Issue:** Multiple files bypass abstraction layers, calling SSH/Docker commands directly instead of using RemoteCommandExecutor/DockerCommandBuilder

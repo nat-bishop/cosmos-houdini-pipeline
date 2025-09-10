@@ -2,7 +2,7 @@
 """Comprehensive Gradio UI for Cosmos Workflow - Full Featured Application."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import gradio as gr
@@ -119,7 +119,9 @@ def on_input_select(evt: gr.SelectData, gallery_data):
 
     # Get creation time from directory
     dir_stat = os.stat(selected_dir["path"])
-    created_time = datetime.fromtimestamp(dir_stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
+    created_time = datetime.fromtimestamp(dir_stat.st_ctime, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
     info_parts.append(f"**Created:** {created_time}")
     info_parts.append("")
 
@@ -194,7 +196,7 @@ def list_prompts(model_type="all", limit=50):
                 try:
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     created_at = dt.strftime("%Y-%m-%d %H:%M")
-                except:
+                except (ValueError, TypeError):
                     pass
 
             table_data.append([prompt_id, name, model_type, prompt_text, created_at])
@@ -389,7 +391,37 @@ def check_running_jobs():
 def create_ui():
     """Create the comprehensive Gradio interface."""
 
-    with gr.Blocks(title="Cosmos Workflow Manager", theme=gr.themes.Soft()) as app:
+    # Custom CSS for 16:9 aspect ratio in galleries with larger thumbnails
+    custom_css = """
+    #input_gallery .thumbnail-item {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        min-height: 200px !important;
+    }
+    #input_gallery video {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 200px !important;
+    }
+    #input_gallery .grid-container {
+        gap: 15px !important;
+    }
+    #output_gallery .thumbnail-item {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        min-height: 150px !important;
+    }
+    #output_gallery video {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+    """
+
+    with gr.Blocks(title="Cosmos Workflow Manager", theme=gr.themes.Soft(), css=custom_css) as app:
         gr.Markdown("# 🌌 Cosmos Workflow Manager")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
 
@@ -402,26 +434,27 @@ def create_ui():
                 gr.Markdown("Browse and select input video directories for processing")
 
                 with gr.Row():
-                    # Left: Gallery of inputs with rectangular aspect ratio
-                    with gr.Column(scale=1):
+                    # Left: Gallery of inputs - MUCH LARGER (2x the right panel)
+                    with gr.Column(scale=2):
                         input_gallery = gr.Gallery(
                             label="Input Directories",
                             show_label=True,
                             elem_id="input_gallery",
-                            columns=5,  # 5 columns for better display
+                            columns=4,  # 4 columns for larger thumbnails
                             rows=3,  # Allow 3 rows
-                            object_fit="cover",  # Use cover to fill 16:9 space
-                            height=600,  # Larger height for 16:9 aspect ratio
+                            object_fit="contain",  # Try contain for better aspect ratio
+                            height=900,  # Much larger height for bigger thumbnails
                             preview=False,  # Disable preview for cleaner look
                             allow_preview=False,
+                            interactive=False,  # Prevent uploads
                         )
 
                         refresh_inputs_btn = gr.Button(
                             "🔄 Refresh Inputs", variant="secondary", size="sm"
                         )
 
-                    # Right: Selected input details (larger)
-                    with gr.Column(scale=2):
+                    # Right: Selected input details (smaller)
+                    with gr.Column(scale=1):
                         selected_info = gr.Markdown("Select an input to view details")
 
                         # Hidden field to store selected directory path
@@ -609,10 +642,11 @@ def create_ui():
                             elem_id="output_gallery",
                             columns=3,
                             rows=2,
-                            object_fit="cover",
+                            object_fit="contain",
                             height=400,
                             preview=False,
                             allow_preview=False,
+                            interactive=False,  # Prevent uploads - this is output only
                         )
 
                         # Selected output details
@@ -746,14 +780,17 @@ def create_ui():
                 gallery_items = []
 
                 for run in runs:
-                    outputs = run.get("outputs", {})
-                    output_path = outputs.get("output_path")
+                    # Construct the path to the output video based on run ID
+                    run_id = run.get("id")
+                    output_path = Path("outputs") / f"run_{run_id}" / "outputs" / "output.mp4"
 
-                    if output_path and Path(output_path).exists():
+                    if output_path.exists():
                         runs_with_outputs.append(run)
                         # Add to gallery (path, label)
                         prompt_text = run.get("prompt_text", "No prompt")[:50] + "..."
-                        gallery_items.append((output_path, f"Run {run['id'][:8]}: {prompt_text}"))
+                        gallery_items.append(
+                            (str(output_path), f"Run {run['id'][:8]}: {prompt_text}")
+                        )
 
                 # Create table data
                 table_data = []
@@ -786,8 +823,8 @@ def create_ui():
                     return (
                         gr.update(visible=True),  # Show details group
                         run_info,  # Output info
-                        video_path,  # Video path for display
-                        video_path,  # Store path for download
+                        str(video_path),  # Video path for display (ensure it's a string)
+                        str(video_path),  # Store path for download (ensure it's a string)
                     )
 
             return gr.update(visible=False), "Select an output", None, ""
@@ -844,7 +881,7 @@ def create_ui():
 if __name__ == "__main__":
     # Get UI configuration from config.toml
     ui_config = config._config_data.get("ui", {})
-    host = ui_config.get("host", "0.0.0.0")
+    host = ui_config.get("host", "127.0.0.1")
     port = ui_config.get("port", 7860)
     share = ui_config.get("share", False)
 

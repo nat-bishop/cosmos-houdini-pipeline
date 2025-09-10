@@ -211,7 +211,7 @@ class StatusChecker:
                     if output_file.exists():
                         outputs["output_path"] = str(output_file)
 
-                elif model_type == "upscaling":
+                elif model_type == "upscale":
                     # Look for upscaled video
                     output_file = outputs_dir / "output_4k.mp4"
                     if output_file.exists():
@@ -256,10 +256,12 @@ class StatusChecker:
 
         try:
             # Check container status - use truncated ID to match existing codebase pattern
-            # Handle both transfer and enhance container types
+            # Handle transfer, enhance, and upscale container types
             model_type = run_data.get("model_type", "transfer")
             if model_type == "enhance":
                 container_name = f"cosmos_enhance_{run_id[:8]}"
+            elif model_type == "upscale":
+                container_name = f"cosmos_upscale_{run_id[:8]}"
             else:
                 container_name = f"cosmos_transfer_{run_id[:8]}"
             container_status = self.check_container_status(container_name)

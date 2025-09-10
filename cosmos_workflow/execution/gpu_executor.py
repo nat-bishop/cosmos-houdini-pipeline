@@ -1021,13 +1021,35 @@ class GPUExecutor:
                 else:
                     logger.warning("Upscale script not found at %s", upscale_script)
 
-                # Get prompt file name from parameters
-                prompt_name = prompt["parameters"].get("name", "unnamed")
-                prompt_file = Path(f"inputs/{prompt_name}.json")
+                # Get parent run ID for upscaling
+                parent_run_id = parent_run["id"]
 
-                # Run upscaling with its own run_id
+                # Check if parent run output exists locally
+                parent_output_path = (
+                    Path("outputs") / f"run_{parent_run_id}" / "outputs" / "output.mp4"
+                )
+                if not parent_output_path.exists():
+                    # Try alternative path structure
+                    parent_output_path = Path("outputs") / f"run_{parent_run_id}" / "output.mp4"
+                    if not parent_output_path.exists():
+                        raise FileNotFoundError(
+                            f"Parent run output not found locally: {parent_output_path}"
+                        )
+
+                # Upload parent run's output to remote if it doesn't exist
+                remote_parent_output = f"{remote_config.remote_dir}/outputs/run_{parent_run_id}"
+                logger.info("Ensuring parent run output exists on remote")
+
+                # Create remote parent output directory
+                self.remote_executor.execute_command(f"mkdir -p {remote_parent_output}")
+
+                # Upload the parent output video
+                logger.info("Uploading parent run output video to remote")
+                self.file_transfer.upload_file(parent_output_path, remote_parent_output)
+
+                # Run upscaling with its own run_id and parent_run_id
                 result = self.docker_executor.run_upscaling(
-                    prompt_file=prompt_file,
+                    parent_run_id=parent_run_id,
                     run_id=run_id,
                     control_weight=control_weight,
                 )

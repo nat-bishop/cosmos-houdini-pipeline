@@ -90,7 +90,7 @@ class DockerExecutor:
 
     def run_upscaling(
         self,
-        prompt_file: Path,
+        parent_run_id: str,
         run_id: str,
         control_weight: float = 0.5,
         num_gpu: int = 1,
@@ -103,7 +103,7 @@ class DockerExecutor:
         logs to monitor progress.
 
         Args:
-            prompt_file: Name of prompt file (without path).
+            parent_run_id: Parent run ID to upscale from.
             run_id: Run ID for tracking (REQUIRED).
             control_weight: Control weight for upscaling (0.0-1.0).
             num_gpu: Number of GPUs to use.
@@ -116,21 +116,17 @@ class DockerExecutor:
             FileNotFoundError: If input video for upscaling is not found.
             Exception: If upscaling launch fails.
         """
-        prompt_name = prompt_file.stem
-
         # Setup run-specific logger
-        run_logger = get_run_logger(run_id, f"{prompt_name}_upscaled")
-        run_logger.info("Running upscaling for %s with weight %s", prompt_name, control_weight)
+        run_logger = get_run_logger(run_id, f"upscale_from_{parent_run_id}")
+        run_logger.info(
+            "Running upscaling for parent %s with weight %s", parent_run_id, control_weight
+        )
 
         # Setup local log path
         local_log_path = get_log_path("upscaling", f"run_{run_id}", run_id)
 
         try:
             # Check if input video exists from parent run
-            # Extract parent_run_id from prompt_name (format: run_XXXXX)
-            parent_run_id = (
-                prompt_name.replace("run_", "") if prompt_name.startswith("run_") else prompt_name
-            )
             input_video_path = f"{self.remote_dir}/outputs/run_{parent_run_id}/output.mp4"
             if not self.remote_executor.file_exists(input_video_path):
                 raise FileNotFoundError(f"Input video not found: {input_video_path}")
@@ -139,8 +135,28 @@ class DockerExecutor:
             remote_output_dir = f"{self.remote_dir}/outputs/run_{run_id}"
             self.remote_executor.create_directory(remote_output_dir)
 
-            # Create upscaler spec
-            self._create_upscaler_spec(prompt_name, control_weight)
+            # Create upscaler spec using the new format
+            from cosmos_workflow.utils.nvidia_format import to_cosmos_upscale_json
+
+            upscale_spec = to_cosmos_upscale_json(
+                input_video_path=f"outputs/run_{parent_run_id}/output.mp4",
+                control_weight=control_weight,
+            )
+
+            # Write spec to remote run directory
+            import json
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+                json.dump(upscale_spec, f)
+                temp_spec_path = f.name
+
+            # Upload spec to remote run directory
+            spec_remote_path = f"{remote_output_dir}/spec.json"
+            self.remote_executor.upload_file(temp_spec_path, spec_remote_path)
+            import os
+
+            os.unlink(temp_spec_path)
 
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
@@ -151,19 +167,19 @@ class DockerExecutor:
             run_logger.info("Use 'cosmos status --stream' to monitor progress")
             run_logger.info("Launching upscaling in background...")
 
-            self._run_upscaling_script(prompt_name, run_id, control_weight, num_gpu, cuda_devices)
+            self._run_upscaling_script(parent_run_id, run_id, control_weight, num_gpu, cuda_devices)
 
-            run_logger.info("Upscaling started successfully for %s", prompt_name)
+            run_logger.info("Upscaling started successfully for parent %s", parent_run_id)
             run_logger.info("The process is now running in the background on the GPU")
 
             return {
                 "status": "started",  # Changed from "success" to "started"
                 "log_path": str(local_log_path),
-                "prompt_name": prompt_name,
+                "parent_run_id": parent_run_id,
             }
 
         except Exception as e:
-            run_logger.error("Upscaling failed for %s: %s", prompt_name, e)
+            run_logger.error("Upscaling failed for parent %s: %s", parent_run_id, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
@@ -321,7 +337,12 @@ class DockerExecutor:
         logger.info("Inference started in background")
 
     def _run_upscaling_script(
-        self, prompt_name: str, run_id: str, control_weight: float, num_gpu: int, cuda_devices: str
+        self,
+        parent_run_id: str,
+        run_id: str,
+        control_weight: float,
+        num_gpu: int,
+        cuda_devices: str,
     ) -> None:
         """Run upscaling using the bash script in background."""
         builder = DockerCommandBuilder(self.docker_image)
@@ -336,7 +357,7 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "/workspace/bashscripts/upscale.sh {run_id} {control_weight} {num_gpu} {cuda_devices}"'
+            f'bash -lc "/workspace/bashscripts/upscale.sh {run_id} {control_weight} {num_gpu} {cuda_devices} {parent_run_id}"'
         )
 
         # Run the command in background

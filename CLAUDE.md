@@ -81,6 +81,7 @@
  - DRY code: Extract common patterns into helpers, don't copy-paste
  - Small functions; **Single Responsibility Principle**
  - Avoid monoliths; **split modules** by responsibility
+ - Don't use fallbacks; prefer failing visibly
  - Avoid Over-Engineering and overly complex solutions
  - Avoid Over-Abstraction; KISS - keep it simple, stupid
  - Write a high quality, general purpose solution.

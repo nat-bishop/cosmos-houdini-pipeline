@@ -8,11 +8,7 @@ import pytest
 
 from cosmos_workflow.execution.gpu_executor import GPUExecutor
 
-# Skip all tests in this module - upscaling tests need major refactoring
-# to work with the new lazy sync architecture
-pytestmark = pytest.mark.skip(
-    reason="Upscaling tests need refactoring for new lazy sync architecture"
-)
+# Tests updated to work with the new lazy sync architecture
 
 
 class TestGPUExecutorUpscaling:
@@ -61,11 +57,11 @@ class TestGPUExecutorUpscaling:
         """Create a mock docker executor."""
         mock_docker = MagicMock()
 
-        def mock_run_upscaling(prompt_file, run_id, control_weight, **kwargs):
+        def mock_run_upscaling(parent_run_id, run_id, control_weight, **kwargs):
             return {
                 "status": "started",
                 "log_path": f"outputs/run_{run_id}/logs/upscaling.log",
-                "prompt_name": prompt_file.stem,
+                "parent_run_id": parent_run_id,
             }
 
         mock_docker.run_upscaling = Mock(side_effect=mock_run_upscaling)

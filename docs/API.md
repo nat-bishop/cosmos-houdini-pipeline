@@ -8,6 +8,7 @@ Complete API documentation for the Cosmos Workflow System.
 - [Core Modules](#core-modules)
 - [Log Visualization](#log-visualization)
 - [Schemas](#schemas)
+- [Execution Configuration Schema](#execution-configuration-schema)
 - [Configuration](#configuration)
 - [Utilities](#utilities)
 
@@ -1973,6 +1974,136 @@ CREATE TABLE runs (
 - **No directory structure**: Database provides organization and querying
 - **Easy relationships**: Foreign keys link runs to prompts automatically
 - **Analytics ready**: SQL queries enable dashboard creation and usage analytics
+
+## Execution Configuration Schema
+
+The `execution_config` field is a JSON column in the Run table that contains all configuration parameters needed for GPU execution. Its structure varies by model type and contains the specific settings required for each operation.
+
+### Schema Overview
+
+`execution_config` is a flexible JSON field that stores:
+- **Model parameters**: weights, steps, guidance, model type
+- **Runtime settings**: batch size, memory management, GPU configuration
+- **Workflow context**: parent run links, input files, control weights
+- **Infrastructure**: Docker images, GPU nodes, file paths
+
+### Model Type Structures
+
+#### Inference Runs (`model_type="transfer"`)
+
+Standard AI inference with control weight configuration:
+
+```json
+{
+    "weights": {
+        "vis": 0.25,      // Visual control weight (0.0-1.0)
+        "edge": 0.25,     // Edge detection weight (0.0-1.0)
+        "depth": 0.25,    // Depth estimation weight (0.0-1.0)
+        "seg": 0.25       // Segmentation weight (0.0-1.0)
+    },
+    "num_steps": 35,      // Inference steps (1-100)
+    "guidance": 7.0,      // Guidance scale (1.0-20.0)
+    "gpu_node": "gpu-001", // Optional: specific GPU node
+    "docker_image": "cosmos:latest" // Optional: Docker image override
+}
+```
+
+#### Enhancement Runs (`model_type="enhance"`)
+
+Prompt enhancement using AI models like Pixtral:
+
+```json
+{
+    "model": "pixtral",           // AI model: "pixtral", "claude", etc.
+    "offload": true,              // Memory efficient mode
+    "batch_size": 1,              // Batch size for processing
+    "video_context": "/path/to/video.mp4" // Optional: video context file
+}
+```
+
+#### Upscaling Runs (`model_type="upscale"`)
+
+Video upscaling with parent run context:
+
+```json
+{
+    "parent_run_id": "rs_abc123",    // Source run for upscaling
+    "control_weight": 0.8,           // Upscaling control strength (0.0-1.0)
+    "input_video": "/path/to/input.mp4" // Source video file path
+}
+```
+
+### Field Reference
+
+| Field | Type | Description | Model Types | Required |
+|-------|------|-------------|-------------|----------|
+| `weights` | Object | Control weight configuration for inference | inference | Yes |
+| `weights.vis` | Float | Visual control weight (0.0-1.0) | inference | Yes |
+| `weights.edge` | Float | Edge detection weight (0.0-1.0) | inference | Yes |
+| `weights.depth` | Float | Depth estimation weight (0.0-1.0) | inference | Yes |
+| `weights.seg` | Float | Segmentation weight (0.0-1.0) | inference | Yes |
+| `num_steps` | Integer | Number of inference steps (1-100) | inference | No (default: 35) |
+| `guidance` | Float | Guidance scale (1.0-20.0) | inference | No (default: 7.0) |
+| `model` | String | AI model name ("pixtral", "claude") | enhancement | Yes |
+| `offload` | Boolean | Enable memory efficient mode | enhancement | No (default: false) |
+| `batch_size` | Integer | Processing batch size | enhancement | No (default: 1) |
+| `video_context` | String | Video context file path | enhancement | No |
+| `parent_run_id` | String | Parent run ID for linked operations | upscaling | Yes |
+| `control_weight` | Float | Control strength (0.0-1.0) | upscaling | Yes |
+| `input_video` | String | Input video file path | upscaling | Yes |
+| `gpu_node` | String | Specific GPU node identifier | all | No |
+| `docker_image` | String | Docker image override | all | No |
+
+### Integration Flow
+
+The `execution_config` flows through the system as follows:
+
+1. **CosmosAPI** (`cosmos_workflow/api/cosmos_api.py:452`):
+   - `_build_execution_config()` creates the configuration
+   - Validates parameters and sets defaults
+   - Passes to DataRepository for storage
+
+2. **DataRepository** (`cosmos_workflow/services/data_repository.py:140`):
+   - `create_run()` validates and stores execution_config
+   - Ensures required fields are present
+   - Stores as JSON in database
+
+3. **GPUExecutor** (`cosmos_workflow/execution/gpu_executor.py:706`):
+   - Reads execution_config from run data
+   - Extracts model-specific parameters
+   - Configures GPU execution environment
+
+### Usage Examples
+
+**Creating inference run:**
+```python
+execution_config = {
+    "weights": {"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
+    "num_steps": 50,
+    "guidance": 8.0
+}
+run = api.create_inference(prompt_id="ps_abc123", weights=execution_config["weights"])
+```
+
+**Creating enhancement run:**
+```python
+run = api.enhance_prompt(prompt_id="ps_abc123", enhancement_model="pixtral")
+# Creates execution_config: {"model": "pixtral", "offload": true, "batch_size": 1}
+```
+
+**Creating upscaling run:**
+```python
+run = api.upscale_run(run_id="rs_abc123", control_weight=0.8)
+# Creates execution_config: {"parent_run_id": "rs_abc123", "control_weight": 0.8, "input_video": "..."}
+```
+
+### Validation Rules
+
+- **Weights must sum to ≤ 1.0**: Total control weights cannot exceed 1.0
+- **Required fields**: Each model type requires specific fields as marked in reference table
+- **Valid ranges**: Numeric fields must be within specified ranges
+- **File paths**: Input files must exist and be accessible
+- **Parent relationships**: `parent_run_id` must reference existing completed run
 
 ## Configuration
 

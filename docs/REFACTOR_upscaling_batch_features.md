@@ -361,10 +361,12 @@ SUPPORTED_MODEL_TYPES = {
 - Ready to create enhance-batch command
 - Ready to implement parent-child relationships for batch operations
 
-### Phase 1 - No Blockers ✅
+### Phase 1 - Production Issues Fixed ✅
 - ✅ No import errors found (convert_video_path concern was unfounded)
 - ✅ Video upload handled automatically for standalone files
 - ✅ All upscaling tests passing
+- ✅ Fixed `upscale.sh` to support standalone videos (reads from spec.json)
+- ✅ Fixed RemoteCommandExecutor method issue (changed from upload_file to write_file)
 
 ### Phase 2 & 3 - Pending Implementation
 - Batch inference lacks parent run tracking (Phase 2)

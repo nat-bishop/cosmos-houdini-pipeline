@@ -153,18 +153,11 @@ class DockerExecutor:
 
             # Write spec to remote run directory
             import json
-            import tempfile
 
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-                json.dump(upscale_spec, f)
-                temp_spec_path = f.name
-
-            # Upload spec to remote run directory
+            # Write spec directly to remote run directory
             spec_remote_path = f"{remote_output_dir}/spec.json"
-            self.remote_executor.upload_file(temp_spec_path, spec_remote_path)
-            import os
-
-            os.unlink(temp_spec_path)
+            spec_content = json.dumps(upscale_spec, indent=2)
+            self.remote_executor.write_file(spec_remote_path, spec_content)
 
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"

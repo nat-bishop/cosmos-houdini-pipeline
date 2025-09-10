@@ -116,14 +116,14 @@ class GPUExecutor:
                     sftp.get(remote_path, str(local_path))
                     return True
                 except FileNotFoundError:
-                    logger.error("File not found: %s", remote_path)
+                    logger.error("File not found: {}", remote_path)
                     return False
                 finally:
                     sftp.close()
             finally:
                 ssh.close()
         except Exception as e:
-            logger.error("Thread-safe download failed: %s", e)
+            logger.error("Thread-safe download failed: {}", e)
             return False
 
     # ========== Completion Handlers ==========
@@ -139,7 +139,7 @@ class GPUExecutor:
             exit_code: Container exit code (0=success, -1=timeout/error, other=failed)
             container_name: Container name for logging
         """
-        logger.info("Handling inference completion for run %s (exit code: %d)", run_id, exit_code)
+        logger.info("Handling inference completion for run {} (exit code: {})", run_id, exit_code)
 
         # Debug logging for service availability
         if self.service is None:
@@ -147,7 +147,7 @@ class GPUExecutor:
                 "ERROR: self.service is None in completion handler! Cannot update database."
             )
         else:
-            logger.info("self.service is available: %s", type(self.service))
+            logger.info("self.service is available: {}", type(self.service))
 
         try:
             if exit_code == 0:
@@ -162,12 +162,12 @@ class GPUExecutor:
 
                 # Get remote config - add explicit error handling
                 try:
-                    logger.debug("Getting remote config for run %s", run_id)
+                    logger.debug("Getting remote config for run {}", run_id)
                     remote_config = self.config_manager.get_remote_config()
                     remote_output = f"{remote_config.remote_dir}/outputs/run_{run_id}/output.mp4"
                 except Exception as e:
-                    logger.error("Failed to get remote config: %s (type: %s)", e, type(e).__name__)
-                    logger.error("config_manager type: %s", type(self.config_manager))
+                    logger.error("Failed to get remote config: {} (type: {})", e, type(e).__name__)
+                    logger.error("config_manager type: {}", type(self.config_manager))
                     if self.service:
                         self.service.update_run_status(run_id, "failed")
                         self.service.update_run(run_id, error_message=f"Configuration error: {e}")
@@ -175,7 +175,7 @@ class GPUExecutor:
 
                 # Download using thread-safe helper
                 if self._thread_safe_download(remote_output, local_output):
-                    logger.info("Downloaded output file for run %s", run_id)
+                    logger.info("Downloaded output file for run {}", run_id)
 
                     # Update database with success
                     if self.service:
@@ -187,7 +187,7 @@ class GPUExecutor:
                             },
                         )
                         self.service.update_run_status(run_id, "completed")
-                    logger.info("Inference run %s completed successfully", run_id)
+                    logger.info("Inference run {} completed successfully", run_id)
                 else:
                     # Output not found or download failed
                     if self.service:
@@ -195,7 +195,7 @@ class GPUExecutor:
                         self.service.update_run(
                             run_id, error_message="Output file not found after completion"
                         )
-                    logger.error("Output file not found for run %s", run_id)
+                    logger.error("Output file not found for run {}", run_id)
             else:
                 # Container failed or timed out
                 if self.service:
@@ -205,9 +205,9 @@ class GPUExecutor:
                     else:
                         error_msg = f"Container failed with exit code {exit_code}"
                     self.service.update_run(run_id, error_message=error_msg)
-                logger.error("Inference run %s failed with exit code %d", run_id, exit_code)
+                logger.error("Inference run {} failed with exit code {}", run_id, exit_code)
         except Exception as e:
-            logger.error("Error in completion handler for run %s: %s", run_id, e)
+            logger.error("Error in completion handler for run {}: {}", run_id, e)
             if self.service:
                 self.service.update_run_status(run_id, "failed")
                 self.service.update_run(run_id, error_message=f"Completion handler error: {e}")
@@ -220,7 +220,7 @@ class GPUExecutor:
             exit_code: Container exit code
             container_name: Container name for logging
         """
-        logger.info("Handling enhancement completion for run %s (exit code: %d)", run_id, exit_code)
+        logger.info("Handling enhancement completion for run {} (exit code: {})", run_id, exit_code)
 
         if exit_code == 0:
             # Download and parse results
@@ -251,17 +251,17 @@ class GPUExecutor:
                             },
                         )
                         self.service.update_run_status(run_id, "completed")
-                    logger.info("Enhancement run %s completed successfully", run_id)
+                    logger.info("Enhancement run {} completed successfully", run_id)
                 else:
                     if self.service:
                         self.service.update_run_status(run_id, "failed")
                         self.service.update_run(
                             run_id, error_message="No enhancement results found"
                         )
-                    logger.error("No enhancement results for run %s", run_id)
+                    logger.error("No enhancement results for run {}", run_id)
 
             except Exception as e:
-                logger.error("Failed to process enhancement results for run %s: %s", run_id, e)
+                logger.error("Failed to process enhancement results for run {}: {}", run_id, e)
                 if self.service:
                     self.service.update_run_status(run_id, "failed")
                     self.service.update_run(run_id, error_message=f"Results processing failed: {e}")
@@ -274,7 +274,7 @@ class GPUExecutor:
                 else:
                     error_msg = f"Enhancement failed with exit code {exit_code}"
                 self.service.update_run(run_id, error_message=error_msg)
-            logger.error("Enhancement run %s failed with exit code %d", run_id, exit_code)
+            logger.error("Enhancement run {} failed with exit code {}", run_id, exit_code)
 
     def _handle_upscaling_completion(self, run_id: str, exit_code: int, container_name: str):
         """Handle upscaling container completion.
@@ -284,7 +284,7 @@ class GPUExecutor:
             exit_code: Container exit code
             container_name: Container name for logging
         """
-        logger.info("Handling upscaling completion for run %s (exit code: %d)", run_id, exit_code)
+        logger.info("Handling upscaling completion for run {} (exit code: {})", run_id, exit_code)
 
         if exit_code == 0:
             # Success - download 4K output
@@ -302,7 +302,7 @@ class GPUExecutor:
 
             # Download using thread-safe helper
             if self._thread_safe_download(remote_output, local_output):
-                logger.info("Downloaded 4K output file for run %s", run_id)
+                logger.info("Downloaded 4K output file for run {}", run_id)
 
                 # Update database with success
                 if self.service:
@@ -314,13 +314,13 @@ class GPUExecutor:
                         },
                     )
                     self.service.update_run_status(run_id, "completed")
-                logger.info("Upscaling run %s completed successfully", run_id)
+                logger.info("Upscaling run {} completed successfully", run_id)
             else:
                 # Output not found or download failed
                 if self.service:
                     self.service.update_run_status(run_id, "failed")
                     self.service.update_run(run_id, error_message="4K output file not found")
-                logger.error("4K output not found for run %s", run_id)
+                logger.error("4K output not found for run {}", run_id)
         else:
             # Upscaling failed
             if self.service:
@@ -330,7 +330,7 @@ class GPUExecutor:
                 else:
                     error_msg = f"Upscaling failed with exit code {exit_code}"
                 self.service.update_run(run_id, error_message=error_msg)
-            logger.error("Upscaling run %s failed with exit code %d", run_id, exit_code)
+            logger.error("Upscaling run {} failed with exit code {}", run_id, exit_code)
 
     def execute_run(
         self,
@@ -354,7 +354,7 @@ class GPUExecutor:
 
         run_id = run["id"]
 
-        logger.info("Executing run %s on GPU", run_id)
+        logger.info("Executing run {} on GPU", run_id)
 
         # Create local run directory
         run_dir = Path("outputs") / f"run_{run_id}"
@@ -390,7 +390,7 @@ class GPUExecutor:
                 inputs = prompt.get("inputs", {})
                 for input_type, input_path in inputs.items():
                     if input_path and Path(input_path).exists():
-                        logger.info("Uploading %s: %s", input_type, input_path)
+                        logger.info("Uploading {}: {}", input_type, input_path)
                         self.file_transfer.upload_file(
                             Path(input_path), f"{remote_run_dir}/inputs/videos"
                         )
@@ -405,7 +405,7 @@ class GPUExecutor:
                     logger.info("Uploading inference script to remote")
                     self.file_transfer.upload_file(inference_script, remote_scripts_dir)
                 else:
-                    logger.warning("Inference script not found at %s", inference_script)
+                    logger.warning("Inference script not found at {}", inference_script)
 
                 # Upload upscale.sh script (might be needed later)
                 upscale_script = scripts_dir / "upscale.sh"
@@ -430,7 +430,7 @@ class GPUExecutor:
                     container_name = f"cosmos_transfer_{run_id[:8]}"
                     # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
                     # StatusChecker will check container status and download outputs when get_run() is called
-                    logger.info("Container %s started for run %s", container_name, run_id)
+                    logger.info("Container {} started for run {}", container_name, run_id)
 
                     # Return immediately with partial results
                     return {
@@ -452,7 +452,7 @@ class GPUExecutor:
                 }
 
         except Exception as e:
-            logger.error("GPU execution failed for run %s: %s", run_id, e)
+            logger.error("GPU execution failed for run {}: {}", run_id, e)
             raise RuntimeError(f"GPU execution failed: {e}") from e
 
     def _download_outputs(
@@ -491,20 +491,20 @@ class GPUExecutor:
         # Download the output file
         try:
             self.file_transfer.download_file(remote_file, str(local_file))
-            logger.info("Downloaded output to %s", local_file)
+            logger.info("Downloaded output to {}", local_file)
         except Exception as e:
-            logger.error("Failed to download output: %s", e)
+            logger.error("Failed to download output: {}", e)
 
         # Also download the log file
         remote_log = f"{remote_output_dir}/run.log"
         local_log = logs_dir / "remote_run.log"
         try:
             self.file_transfer.download_file(remote_log, str(local_log))
-            logger.info("Downloaded remote log to %s", local_log)
+            logger.info("Downloaded remote log to {}", local_log)
         except FileNotFoundError:
-            logger.warning("Remote log not found: %s", remote_log)
+            logger.warning("Remote log not found: {}", remote_log)
         except Exception as e:
-            logger.error("Failed to download log: %s", e)
+            logger.error("Failed to download log: {}", e)
 
         return local_file
 
@@ -539,7 +539,7 @@ class GPUExecutor:
         # Initialize services if not already done
         self._initialize_services()
 
-        logger.info("Executing batch of %d runs on GPU", len(runs_and_prompts))
+        logger.info("Executing batch of {} runs on GPU", len(runs_and_prompts))
 
         # Generate batch name from first run ID
         batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
@@ -605,7 +605,7 @@ class GPUExecutor:
                 }
 
         except Exception as e:
-            logger.error("Batch execution failed: %s", e)
+            logger.error("Batch execution failed: {}", e)
             return {
                 "status": "failed",
                 "batch_name": batch_name,
@@ -707,7 +707,7 @@ class GPUExecutor:
         model = execution_config.get("model", "pixtral")
         video_path = execution_config.get("video_context")
 
-        logger.info("Executing enhancement run %s with model %s", run_id, model)
+        logger.info("Executing enhancement run {} with model {}", run_id, model)
 
         # Create run directory structure
         run_dir = Path("outputs") / f"run_{run_id}"
@@ -748,7 +748,7 @@ class GPUExecutor:
                     # Upload video if provided
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
-                        logger.info("Uploading video for context: %s", video_path)
+                        logger.info("Uploading video for context: {}", video_path)
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
                     # Upload upsampler script
@@ -799,7 +799,7 @@ class GPUExecutor:
                     }
 
             except Exception as e:
-                logger.error("Enhancement run %s failed: %s", run_id, e)
+                logger.error("Enhancement run {} failed: {}", run_id, e)
                 raise RuntimeError(f"Enhancement failed: {e}") from e
 
     def run_prompt_upsampling(
@@ -854,7 +854,7 @@ class GPUExecutor:
         # Initialize services if not already done
         self._initialize_services()
 
-        logger.info("Starting prompt upsampling for run %s using %s model", run_id, model)
+        logger.info("Starting prompt upsampling for run {} using {} model", run_id, model)
 
         # Prepare batch data for the upsampler script
         batch_data = [
@@ -892,7 +892,7 @@ class GPUExecutor:
                     if video_path and Path(video_path).exists():
                         remote_videos_dir = f"{remote_config.remote_dir}/inputs/videos"
                         # upload_file will create the directory automatically
-                        logger.info("Uploading video for context: %s", video_path)
+                        logger.info("Uploading video for context: {}", video_path)
                         self.file_transfer.upload_file(Path(video_path), remote_videos_dir)
 
                     # Upload upsampler script - upload_file will create directory automatically
@@ -917,7 +917,7 @@ class GPUExecutor:
                     )
 
                     if enhancement_result.get("log_path"):
-                        logger.debug("Enhancement log path: %s", enhancement_result["log_path"])
+                        logger.debug("Enhancement log path: {}", enhancement_result["log_path"])
 
                     if enhancement_result["status"] == "failed":
                         raise RuntimeError(
@@ -968,7 +968,7 @@ class GPUExecutor:
                         return prompt_text
 
             except Exception as e:
-                logger.error("Prompt upsampling failed: %s", e)
+                logger.error("Prompt upsampling failed: {}", e)
                 # Return original prompt on failure rather than raising
                 return prompt_text
 
@@ -1004,9 +1004,9 @@ class GPUExecutor:
         logs_dir.mkdir(exist_ok=True)
 
         if source_run_id:
-            logger.info("Executing upscaling run %s for parent run %s", run_id, source_run_id)
+            logger.info("Executing upscaling run {} for parent run {}", run_id, source_run_id)
         else:
-            logger.info("Executing upscaling run %s for video file %s", run_id, video_path)
+            logger.info("Executing upscaling run {} for video file {}", run_id, video_path)
 
         try:
             with self.ssh_manager:
@@ -1026,7 +1026,7 @@ class GPUExecutor:
                     logger.info("Uploading upscale script to remote")
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
                 else:
-                    logger.warning("Upscale script not found at %s", upscale_script)
+                    logger.warning("Upscale script not found at {}", upscale_script)
 
                 # Determine the video source and ensure it's uploaded to remote
                 local_video_path = Path(video_path)
@@ -1040,7 +1040,7 @@ class GPUExecutor:
                     if not local_video_path.exists():
                         raise FileNotFoundError(f"Video not found locally: {local_video_path}")
 
-                    logger.info("Ensuring run output exists on remote for run %s", source_run_id)
+                    logger.info("Ensuring run output exists on remote for run {}", source_run_id)
                     self.remote_executor.execute_command(f"mkdir -p {remote_video_dir}")
 
                     # Upload the video to the expected parent run location
@@ -1056,7 +1056,7 @@ class GPUExecutor:
                     if not local_video_path.exists():
                         raise FileNotFoundError(f"Video file not found: {local_video_path}")
 
-                    logger.info("Uploading video file %s to remote", local_video_path.name)
+                    logger.info("Uploading video file {} to remote", local_video_path.name)
                     self.remote_executor.execute_command(f"mkdir -p {remote_video_dir}")
 
                     # Upload the video file
@@ -1077,7 +1077,7 @@ class GPUExecutor:
                     # Container started successfully
                     container_name = f"cosmos_upscale_{run_id[:8]}"
                     # StatusChecker will handle lazy sync when get_run() is called
-                    logger.info("Container %s started for upscaling run %s", container_name, run_id)
+                    logger.info("Container {} started for upscaling run {}", container_name, run_id)
 
                     # Return immediately with partial results
                     result_data = {
@@ -1111,7 +1111,7 @@ class GPUExecutor:
 
                 return result_data
         except Exception as e:
-            logger.error("Upscaling run %s failed: %s", run_id, e)
+            logger.error("Upscaling run {} failed: {}", run_id, e)
             raise RuntimeError(f"Upscaling failed: {e}") from e
 
     # ========== Status and Container Management ==========
@@ -1170,7 +1170,7 @@ class GPUExecutor:
             with self.ssh_manager:
                 return self.docker_executor.kill_container(container_id)
         except Exception as e:
-            logger.error("Failed to kill container %s: %s", container_id, e)
+            logger.error("Failed to kill container {}: {}", container_id, e)
             return False
 
     def kill_all_containers(self) -> int:
@@ -1186,5 +1186,5 @@ class GPUExecutor:
             with self.ssh_manager:
                 return self.docker_executor.kill_all_containers()
         except Exception as e:
-            logger.error("Failed to kill all containers: %s", e)
+            logger.error("Failed to kill all containers: {}", e)
             return 0

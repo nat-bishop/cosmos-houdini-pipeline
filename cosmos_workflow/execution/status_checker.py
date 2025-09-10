@@ -99,7 +99,7 @@ class StatusChecker:
 
         if exit_code != 0:
             # Container not found
-            logger.warning("Container %s not found: %s", container_name, stderr)
+            logger.warning("Container {} not found: {}", container_name, stderr)
             return {"running": False, "exit_code": -1}
 
         try:
@@ -109,7 +109,7 @@ class StatusChecker:
                 "exit_code": state.get("ExitCode"),
             }
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse container state: %s", e)
+            logger.error("Failed to parse container state: {}", e)
             return {"running": False, "exit_code": -1}
 
     def check_run_completion(self, run_id: str) -> int | None:
@@ -131,6 +131,36 @@ class StatusChecker:
         if exit_code == 0 and stdout:
             return self.parse_completion_marker(stdout)
         return None
+
+    def download_logs(self, run_id: str) -> bool:
+        """Download log files for a run (used for failed runs).
+
+        Args:
+            run_id: Run ID to download logs for
+
+        Returns:
+            True if logs were downloaded successfully
+        """
+        try:
+            remote_config = self.config_manager.get_remote_config()
+            remote_log = f"{remote_config.remote_dir}/outputs/run_{run_id}/run.log"
+
+            # Create local directories
+            run_dir = Path("outputs") / f"run_{run_id}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            logs_dir = run_dir / "logs"
+            logs_dir.mkdir(exist_ok=True)
+            local_log = logs_dir / "remote_run.log"
+
+            # Download the log file
+            logger.info("Downloading remote log for run {}", run_id)
+            self.file_transfer.download_file(remote_log, str(local_log))
+            logger.info("Downloaded log to {}", local_log)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to download logs for {}: {}", run_id, e)
+            return False
 
     def download_outputs(self, run_data: dict[str, Any]) -> dict[str, Any] | None:
         """Download output files for a completed run.
@@ -166,7 +196,7 @@ class StatusChecker:
             )
 
             if exit_code != 0 or not stdout.strip():
-                logger.warning("No output files found for %s", run_id)
+                logger.warning("No output files found for {}", run_id)
                 return outputs
 
             # Download each file
@@ -182,9 +212,9 @@ class StatusChecker:
 
                 if self.file_transfer.download_file(remote_file, local_file):
                     downloaded_files.append(str(local_file))
-                    logger.info("Downloaded %s for run %s", filename, run_id)
+                    logger.info("Downloaded {} for run {}", filename, run_id)
                 else:
-                    logger.error("Failed to download %s for run %s", filename, run_id)
+                    logger.error("Failed to download {} for run {}", filename, run_id)
 
             if downloaded_files:
                 outputs["files"] = downloaded_files
@@ -217,14 +247,14 @@ class StatusChecker:
                     if output_file.exists():
                         outputs["output_path"] = str(output_file)
 
-                logger.info("Downloaded %d files for %s", len(downloaded_files), run_id)
+                logger.info("Downloaded {} files for {}", len(downloaded_files), run_id)
             else:
-                logger.warning("No files downloaded for %s", run_id)
+                logger.warning("No files downloaded for {}", run_id)
 
             return outputs
 
         except Exception as e:
-            logger.error("Error downloading outputs for %s: %s", run_id, e)
+            logger.error("Error downloading outputs for {}: {}", run_id, e)
             return None
 
     def sync_run_status(self, run_data: dict[str, Any], data_service: Any) -> dict[str, Any]:
@@ -251,7 +281,7 @@ class StatusChecker:
         try:
             self._create_services()
         except Exception as e:
-            logger.warning("Failed to create services for status sync: %s", e)
+            logger.warning("Failed to create services for status sync: {}", e)
             return run_data
 
         try:
@@ -272,28 +302,33 @@ class StatusChecker:
 
             # Container stopped, check exit code from logs
             exit_code = self.check_run_completion(run_id)
-            logger.info("Checked completion for %s, exit_code=%s", run_id, exit_code)
+            logger.info("Checked completion for {}, exit_code={}", run_id, exit_code)
 
             if exit_code is None:
                 # No completion marker yet, might still be writing
-                logger.info("No completion marker found for %s", run_id)
+                logger.info("No completion marker found for {}", run_id)
                 return run_data
 
             # Determine final status based on exit code
             if exit_code == 0:
                 new_status = "completed"
                 # Download outputs
-                logger.info("Downloading outputs for %s", run_id)
+                logger.info("Downloading outputs for {}", run_id)
                 outputs = self.download_outputs(run_data)
                 if outputs:
-                    logger.info("Downloaded outputs for %s: %s", run_id, outputs.keys())
+                    logger.info("Downloaded outputs for {}: {}", run_id, outputs.keys())
                     run_data["outputs"] = outputs
                     data_service.update_run(run_id, outputs=outputs)
                 else:
-                    logger.warning("Failed to download outputs for %s", run_id)
+                    logger.warning("Failed to download outputs for {}", run_id)
             else:
                 new_status = "failed"
                 run_data["error_message"] = f"Container exited with code {exit_code}"
+
+                # Download logs for failed runs too
+                logger.info("Downloading logs for failed run {}", run_id)
+                self.download_logs(run_id)
+
                 data_service.update_run(run_id, error_message=run_data["error_message"])
 
             # Update status
@@ -303,11 +338,11 @@ class StatusChecker:
             # Cache completed runs
             self._completed_cache.add(run_id)
 
-            logger.info("Synced status for %s: %s", run_id, new_status)
+            logger.info("Synced status for {}: {}", run_id, new_status)
             return run_data
 
         except Exception as e:
-            logger.warning("Failed to sync status for %s: %s", run_id, e)
+            logger.warning("Failed to sync status for {}: {}", run_id, e)
             return run_data
 
         finally:
@@ -316,7 +351,7 @@ class StatusChecker:
                 try:
                     self.ssh_manager.close()
                 except Exception as e:
-                    logger.debug("Error closing SSH connection: %s", e)
+                    logger.debug("Error closing SSH connection: {}", e)
             self.ssh_manager = None
             self.file_transfer = None
             self.remote_executor = None

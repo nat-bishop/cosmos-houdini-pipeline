@@ -261,7 +261,7 @@ if __name__ == "__main__":
     port = ui_config.get("port", 7860)
     share = ui_config.get("share", False)
 
-    logger.info("Starting Gradio UI on %s:%d", host, port)
+    logger.info("Starting Gradio UI on {}:{}", host, port)
 
     app = create_ui()
     app.launch(

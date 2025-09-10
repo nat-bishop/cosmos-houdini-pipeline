@@ -72,11 +72,11 @@ def kill(force: bool) -> None:
         else:
             error_msg = result.get("error", "Unknown error")
             console.print(f"\n[red]✗[/red] Failed to kill containers: {error_msg}")
-            logger.error("Kill containers failed: %s", error_msg)
+            logger.error("Kill containers failed: {}", error_msg)
 
     except Exception as e:
         console.print(f"\n[red]✗[/red] Error: {e}")
-        logger.error("Kill command failed: %s", e)
+        logger.error("Kill command failed: {}", e)
         raise click.ClickException(str(e)) from e
 
 

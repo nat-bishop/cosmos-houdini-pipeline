@@ -36,12 +36,12 @@ class JSONHandler:
         try:
             with open(file_path, "w") as f:
                 json.dump(data, f, indent=indent)
-            logger.debug("Wrote JSON to %s", file_path)
+            logger.debug("Wrote JSON to {}", file_path)
         except (TypeError, ValueError) as e:
-            logger.error("Failed to serialize data to JSON: %s", e)
+            logger.error("Failed to serialize data to JSON: {}", e)
             raise ValueError(f"Data not JSON serializable: {e}") from e
         except OSError as e:
-            logger.error("Failed to write JSON file %s: %s", file_path, e)
+            logger.error("Failed to write JSON file {}: {}", file_path, e)
             raise
 
     @staticmethod
@@ -65,13 +65,13 @@ class JSONHandler:
         try:
             with open(file_path) as f:
                 data = json.load(f)
-            logger.debug("Read JSON from %s", file_path)
+            logger.debug("Read JSON from {}", file_path)
             return data
         except json.JSONDecodeError as e:
-            logger.error("Invalid JSON in file %s: %s", file_path, e)
+            logger.error("Invalid JSON in file {}: {}", file_path, e)
             raise ValueError(f"Invalid JSON in {file_path}: {e}") from e
         except OSError as e:
-            logger.error("Failed to read JSON file %s: %s", file_path, e)
+            logger.error("Failed to read JSON file {}: {}", file_path, e)
             raise
 
     @staticmethod
@@ -91,7 +91,7 @@ class JSONHandler:
         try:
             return json.dumps(data, **kwargs)
         except (TypeError, ValueError) as e:
-            logger.error("Failed to serialize data: %s", e)
+            logger.error("Failed to serialize data: {}", e)
             raise ValueError(f"Data not JSON serializable: {e}") from e
 
     @staticmethod
@@ -110,5 +110,5 @@ class JSONHandler:
         try:
             return json.loads(json_string)
         except json.JSONDecodeError as e:
-            logger.error("Invalid JSON string: %s", e)
+            logger.error("Invalid JSON string: {}", e)
             raise ValueError(f"Invalid JSON: {e}") from e

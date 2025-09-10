@@ -53,8 +53,8 @@ class DockerExecutor:
         # Setup run-specific logger
         run_logger = get_run_logger(run_id, prompt_name)
 
-        run_logger.info("Starting inference for prompt: %s", prompt_name)
-        run_logger.debug("GPU config: num_gpu=%d, devices=%s", num_gpu, cuda_devices)
+        run_logger.info("Starting inference for prompt: {}", prompt_name)
+        run_logger.debug("GPU config: num_gpu={}, devices={}", num_gpu, cuda_devices)
 
         # Create output directory on remote using run_id
         remote_output_dir = f"{self.remote_dir}/outputs/run_{run_id}"
@@ -66,7 +66,7 @@ class DockerExecutor:
         try:
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: %s", remote_log_path)
+            run_logger.info("Remote log path: {}", remote_log_path)
 
             # Execute inference using bash script
             run_logger.info("Starting inference on GPU. This may take several minutes...")
@@ -75,7 +75,7 @@ class DockerExecutor:
 
             self._run_inference_script(prompt_name, run_id, num_gpu, cuda_devices)
 
-            run_logger.info("Inference started successfully for %s", prompt_name)
+            run_logger.info("Inference started successfully for {}", prompt_name)
             run_logger.info("The process is now running in the background on the GPU")
 
             return {
@@ -85,7 +85,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            run_logger.error("Inference failed for %s: %s", prompt_name, e)
+            run_logger.error("Inference failed for {}: {}", prompt_name, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_upscaling(
@@ -123,9 +123,9 @@ class DockerExecutor:
 
         video_name = Path(video_path).name
         run_logger = get_run_logger(run_id, f"upscale_{video_name}")
-        run_logger.info("Running upscaling for video %s with weight %s", video_path, control_weight)
+        run_logger.info("Running upscaling for video {} with weight {}", video_path, control_weight)
         if prompt:
-            run_logger.info("Using prompt: %s", prompt[:100])
+            run_logger.info("Using prompt: {}", prompt[:100])
 
         # Setup local log path
         local_log_path = get_log_path("upscaling", f"run_{run_id}", run_id)
@@ -161,7 +161,7 @@ class DockerExecutor:
 
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: %s", remote_log_path)
+            run_logger.info("Remote log path: {}", remote_log_path)
 
             # Execute upscaling using bash script
             run_logger.info("Starting upscaling on GPU. This may take several minutes...")
@@ -170,7 +170,7 @@ class DockerExecutor:
 
             self._run_upscaling_script(video_path, run_id, control_weight, num_gpu, cuda_devices)
 
-            run_logger.info("Upscaling started successfully for video %s", video_name)
+            run_logger.info("Upscaling started successfully for video {}", video_name)
             run_logger.info("The process is now running in the background on the GPU")
 
             return {
@@ -180,7 +180,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            run_logger.error("Upscaling failed for video %s: %s", video_path, e)
+            run_logger.error("Upscaling failed for video {}: {}", video_path, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
@@ -219,7 +219,7 @@ class DockerExecutor:
             run_logger = logger
             local_log_path = None
 
-        run_logger.info("Running prompt enhancement for batch %s", batch_filename)
+        run_logger.info("Running prompt enhancement for batch {}", batch_filename)
 
         # Setup container log path (inside container, like inference.sh does)
         container_log_path = None
@@ -293,7 +293,7 @@ class DockerExecutor:
             # This returns immediately since we're running in background
             self.ssh_manager.execute_command(background_command, timeout=5)
 
-            run_logger.info("Prompt enhancement started successfully for batch %s", batch_filename)
+            run_logger.info("Prompt enhancement started successfully for batch {}", batch_filename)
             run_logger.info("The process is now running in the background on the GPU")
 
             return {
@@ -303,7 +303,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            run_logger.error("Prompt enhancement launch failed: %s", e)
+            run_logger.error("Prompt enhancement launch failed: {}", e)
             return {
                 "status": "failed",
                 "error": str(e),
@@ -388,7 +388,7 @@ class DockerExecutor:
         spec_path = f"{self.remote_dir}/outputs/{prompt_name}/upscaler_spec.json"
 
         self.remote_executor.write_file(spec_path, spec_content)
-        logger.info("Created upscaler spec: %s", spec_path)
+        logger.info("Created upscaler spec: {}", spec_path)
 
     def _check_remote_file_exists(self, remote_path: str) -> bool:
         """Check if a file exists on the remote system."""
@@ -483,7 +483,7 @@ class DockerExecutor:
             return container
 
         except Exception as e:
-            logger.error("Failed to get active container: %s", e)
+            logger.error("Failed to get active container: {}", e)
             return None
 
     def get_gpu_info(self) -> dict[str, str] | None:
@@ -536,7 +536,7 @@ class DockerExecutor:
                 return gpu_info
 
         except Exception as e:
-            logger.debug("GPU not available or nvidia-smi failed: %s", e)
+            logger.debug("GPU not available or nvidia-smi failed: {}", e)
             return None
 
     def kill_containers(self) -> dict[str, Any]:
@@ -551,7 +551,7 @@ class DockerExecutor:
             output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
 
             if not output or not output.strip():
-                logger.info("No running containers found for image %s", self.docker_image)
+                logger.info("No running containers found for image {}", self.docker_image)
                 return {
                     "status": "success",
                     "killed_count": 0,
@@ -574,7 +574,7 @@ class DockerExecutor:
             kill_cmd = DockerCommandBuilder.build_kill_command(container_ids)
             self.ssh_manager.execute_command_success(kill_cmd, stream_output=False)
 
-            logger.info("Killed %d containers: %s", len(container_ids), container_ids)
+            logger.info("Killed {} containers: {}", len(container_ids), container_ids)
 
             return {
                 "status": "success",
@@ -584,7 +584,7 @@ class DockerExecutor:
             }
 
         except Exception as e:
-            logger.error("Failed to kill containers: %s", e)
+            logger.error("Failed to kill containers: {}", e)
             return {"status": "failed", "error": str(e), "killed_count": 0, "killed_containers": []}
 
     def get_container_logs(self, container_id: str) -> str:
@@ -594,7 +594,7 @@ class DockerExecutor:
                 DockerCommandBuilder.build_logs_command(container_id), stream_output=False
             )
         except Exception as e:
-            logger.error("Failed to get container logs: %s", e)
+            logger.error("Failed to get container logs: {}", e)
             return f"Error retrieving logs: {e}"
 
     def run_batch_inference(
@@ -615,7 +615,7 @@ class DockerExecutor:
         Returns:
             Dictionary with batch results including output paths
         """
-        logger.info("Running batch inference %s with %d GPU(s)", batch_name, num_gpu)
+        logger.info("Running batch inference {} with {} GPU(s)", batch_name, num_gpu)
 
         # Setup logging paths
         remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
@@ -639,7 +639,7 @@ class DockerExecutor:
             batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
         )
 
-        logger.info("Batch inference started successfully for %s", batch_name)
+        logger.info("Batch inference started successfully for {}", batch_name)
         logger.info("The process is now running in the background on the GPU")
 
         return {
@@ -696,7 +696,7 @@ class DockerExecutor:
                 return [f for f in files if f]
             return []
         except Exception as e:
-            logger.warning("Failed to list output files: %s", e)
+            logger.warning("Failed to list output files: {}", e)
             return []
 
     def stream_container_logs(self, container_id: str | None = None) -> None:
@@ -711,7 +711,7 @@ class DockerExecutor:
         """
         if not container_id:
             # Use get_active_container for auto-detection
-            logger.info("Auto-detecting active container for image %s", self.docker_image)
+            logger.info("Auto-detecting active container for image {}", self.docker_image)
             container = self.get_active_container()
 
             if not container:
@@ -723,7 +723,7 @@ class DockerExecutor:
             if "warning" in container:
                 print(f"[WARNING] {container['warning']}")
 
-        logger.info("Streaming logs from container %s", container_id)
+        logger.info("Streaming logs from container {}", container_id)
         print(f"[INFO] Streaming logs from container {container_id[:12]}...")
         print("[INFO] Press Ctrl+C to stop streaming\n")
 

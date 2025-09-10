@@ -114,6 +114,6 @@ def search_command(ctx: click.Context, query: str, limit: int, output_json: bool
             console.print(table)
 
     except Exception as e:
-        logger.error("Failed to search prompts: %s", e)
+        logger.error("Failed to search prompts: {}", e)
         console.print(f"[red]Error: Failed to search prompts - {e}[/red]")
         ctx.exit(1)

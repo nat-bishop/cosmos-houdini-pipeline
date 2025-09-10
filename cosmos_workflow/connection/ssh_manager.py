@@ -95,7 +95,7 @@ class SSHManager:
         """
         self.ensure_connected()
 
-        logger.debug("Executing command: %s", command)
+        logger.debug("Executing command: {}", command)
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
@@ -109,7 +109,7 @@ class SSHManager:
                 for line in stdout:
                     line = line.strip()
                     if line:
-                        logger.debug("STDOUT: %s", line)
+                        logger.debug("STDOUT: {}", line)
                         print(line, flush=True)  # Print to console for real-time streaming
                         stdout_lines.append(line)
 
@@ -119,7 +119,7 @@ class SSHManager:
                     stderr_lines = stderr_output.split("\n")
                     for line in stderr_lines:
                         if line.strip():
-                            logger.warning("STDERR: %s", line.strip())
+                            logger.warning("STDERR: {}", line.strip())
                             print(f"[ERROR] {line.strip()}", flush=True)  # Print errors to console
             else:
                 # Collect all output at once
@@ -134,12 +134,12 @@ class SSHManager:
             # Wait for command completion
             exit_code = stdout.channel.recv_exit_status()
 
-            logger.debug("Command completed with exit code: %d", exit_code)
+            logger.debug("Command completed with exit code: {}", exit_code)
 
             return exit_code, "\n".join(stdout_lines), "\n".join(stderr_lines)
 
         except Exception as e:
-            logger.error("Command execution failed: %s", e)
+            logger.error("Command execution failed: {}", e)
             raise RuntimeError(f"Command execution failed: {e}") from e
 
     def execute_command_success(

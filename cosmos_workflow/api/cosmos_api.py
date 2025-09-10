@@ -82,7 +82,7 @@ class CosmosAPI:
             logger.info("StatusChecker initialized for lazy sync")
         except Exception as e:
             # StatusChecker is optional - system works without it
-            logger.debug("StatusChecker not initialized: %s", e)
+            logger.debug("StatusChecker not initialized: {}", e)
 
     # ========== Prompt Operations ==========
 
@@ -110,7 +110,7 @@ class CosmosAPI:
             FileNotFoundError: If required video files are missing
             ValueError: If prompt creation fails
         """
-        logger.info("Creating prompt with text: %s", prompt_text[:50])
+        logger.info("Creating prompt with text: {}", prompt_text[:50])
 
         # Convert to Path if string
         video_dir = Path(video_dir)
@@ -135,7 +135,7 @@ class CosmosAPI:
         # Generate name if not provided
         if name is None:
             name = generate_smart_name(prompt_text, max_length=30)
-            logger.debug("Generated name: %s", name)
+            logger.debug("Generated name: {}", name)
 
         # Build parameters (get default negative prompt from config if not provided)
         generation_config = self.config.get_config_section("generation")
@@ -153,7 +153,7 @@ class CosmosAPI:
             parameters=parameters,
         )
 
-        logger.info("Created prompt with ID: %s", prompt["id"])
+        logger.info("Created prompt with ID: {}", prompt["id"])
         return prompt
 
     def enhance_prompt(
@@ -184,7 +184,7 @@ class CosmosAPI:
         Raises:
             ValueError: If prompt not found or has existing runs without force_overwrite
         """
-        logger.info("Enhancing prompt %s with model %s", prompt_id, enhancement_model)
+        logger.info("Enhancing prompt {} with model {}", prompt_id, enhancement_model)
 
         # Get original prompt
         original = self.service.get_prompt(prompt_id)
@@ -225,7 +225,7 @@ class CosmosAPI:
 
                 # Delete all blocking runs before overwriting
                 for run in blocking_runs:
-                    logger.info("Deleting run %s before prompt overwrite", run["id"])
+                    logger.info("Deleting run {} before prompt overwrite", run["id"])
                     self.service.delete_run(run["id"], keep_outputs=True)
 
         # Build execution config for enhancement
@@ -243,7 +243,7 @@ class CosmosAPI:
             model_type="enhance",  # New model type for enhancement
             execution_config=execution_config,
         )
-        logger.info("Created enhancement run %s for prompt %s", run["id"], prompt_id)
+        logger.info("Created enhancement run {} for prompt {}", run["id"], prompt_id)
 
         # Update status to running
         self.service.update_run_status(run["id"], "running")
@@ -255,7 +255,7 @@ class CosmosAPI:
             # Check if operation started in background
             if result.get("status") == "started":
                 # Don't update prompt yet - monitor will handle it
-                logger.info("Enhancement run %s started in background", run["id"])
+                logger.info("Enhancement run {} started in background", run["id"])
                 return {
                     "run_id": run["id"],
                     "status": "started",
@@ -282,7 +282,7 @@ class CosmosAPI:
                         "enhanced": True,
                     },
                 )
-                logger.info("Created enhanced prompt: %s", enhanced["id"])
+                logger.info("Created enhanced prompt: {}", enhanced["id"])
                 enhanced_prompt_id = enhanced["id"]
             else:
                 # Update existing prompt
@@ -294,7 +294,7 @@ class CosmosAPI:
                         "enhanced": True,
                     },
                 )
-                logger.info("Updated prompt %s with enhanced text", prompt_id)
+                logger.info("Updated prompt {} with enhanced text", prompt_id)
                 enhanced_prompt_id = prompt_id
 
             # Update run with outputs (including enhancement metadata)
@@ -309,7 +309,7 @@ class CosmosAPI:
             }
             self.service.update_run(run["id"], outputs=outputs)
             self.service.update_run_status(run["id"], "completed")
-            logger.info("Enhancement run %s completed successfully", run["id"])
+            logger.info("Enhancement run {} completed successfully", run["id"])
 
             # Return in format expected by tests and CLI
             return {
@@ -321,7 +321,7 @@ class CosmosAPI:
             }
 
         except Exception as e:
-            logger.exception("Enhancement run %s failed", run["id"])
+            logger.exception("Enhancement run {} failed", run["id"])
             self.service.update_run_status(run["id"], "failed")
             self.service.update_run(
                 run["id"],
@@ -373,7 +373,7 @@ class CosmosAPI:
             "Upscaling video source %s with control weight %s", video_source, control_weight
         )
         if prompt:
-            logger.info("Using upscaling prompt: %s", prompt[:100])
+            logger.info("Using upscaling prompt: {}", prompt[:100])
 
         # Validate control weight
         if not 0.0 <= control_weight <= 1.0:
@@ -469,7 +469,7 @@ class CosmosAPI:
             # Check if operation started in background
             if result.get("status") == "started":
                 # Don't update to completed yet - monitor will handle it
-                logger.info("Upscaling run %s started in background", upscale_run["id"])
+                logger.info("Upscaling run {} started in background", upscale_run["id"])
                 return {
                     "upscale_run_id": upscale_run["id"],
                     "status": "started",
@@ -479,7 +479,7 @@ class CosmosAPI:
             # Legacy synchronous completion (shouldn't happen with new implementation)
             self.service.update_run(upscale_run["id"], outputs=result)
             self.service.update_run_status(upscale_run["id"], "completed")
-            logger.info("Upscaling run %s completed successfully", upscale_run["id"])
+            logger.info("Upscaling run {} completed successfully", upscale_run["id"])
 
             return {
                 "upscale_run_id": upscale_run["id"],
@@ -487,7 +487,7 @@ class CosmosAPI:
                 "output_path": result["output_path"],
             }
         except Exception as e:
-            logger.exception("Upscaling run %s failed", upscale_run["id"])
+            logger.exception("Upscaling run {} failed", upscale_run["id"])
             self.service.update_run_status(upscale_run["id"], "failed")
             return {
                 "upscale_run_id": upscale_run["id"],
@@ -590,7 +590,7 @@ class CosmosAPI:
         Raises:
             ValueError: If prompt not found
         """
-        logger.info("Quick inference for prompt %s", prompt_id)
+        logger.info("Quick inference for prompt {}", prompt_id)
 
         # Validate prompt exists
         prompt = self._validate_prompt(prompt_id)
@@ -603,7 +603,7 @@ class CosmosAPI:
             prompt_id=prompt_id,
             execution_config=execution_config,
         )
-        logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+        logger.info("Created run {} for prompt {}", run["id"], prompt_id)
 
         # Update status and execute
         self.service.update_run_status(run["id"], "running")
@@ -618,7 +618,7 @@ class CosmosAPI:
             # Check if operation started in background
             if result.get("status") == "started":
                 # Don't update to completed yet - monitor will handle it
-                logger.info("Run %s started in background", run["id"])
+                logger.info("Run {} started in background", run["id"])
                 return {
                     "run_id": run["id"],
                     "status": "started",
@@ -629,7 +629,7 @@ class CosmosAPI:
             # Update run with results
             self.service.update_run(run["id"], outputs=result)
             self.service.update_run_status(run["id"], "completed")
-            logger.info("Run %s completed successfully", run["id"])
+            logger.info("Run {} completed successfully", run["id"])
 
             return {
                 "run_id": run["id"],
@@ -639,7 +639,7 @@ class CosmosAPI:
             }
 
         except Exception as e:
-            logger.exception("Run %s failed", run["id"])
+            logger.exception("Run {} failed", run["id"])
             self.service.update_run_status(run["id"], "failed")
             return {
                 "run_id": run["id"],
@@ -671,7 +671,7 @@ class CosmosAPI:
         Note:
             Missing prompts are logged and skipped gracefully.
         """
-        logger.info("Batch inference for %d prompts", len(prompt_ids))
+        logger.info("Batch inference for {} prompts", len(prompt_ids))
 
         # Handle empty list case
         if not prompt_ids:
@@ -693,11 +693,11 @@ class CosmosAPI:
                     prompt_id=prompt_id,
                     execution_config=execution_config,
                 )
-                logger.info("Created run %s for prompt %s", run["id"], prompt_id)
+                logger.info("Created run {} for prompt {}", run["id"], prompt_id)
                 runs_and_prompts.append((run, prompt))
 
             except ValueError as e:
-                logger.warning("Skipping prompt %s: %s", prompt_id, e)
+                logger.warning("Skipping prompt {}: {}", prompt_id, e)
                 continue
 
         # Execute as batch
@@ -990,7 +990,7 @@ class CosmosAPI:
                     ]
                 return []
         except Exception as e:
-            logger.error("Failed to get containers: %s", e)
+            logger.error("Failed to get containers: {}", e)
             return []
 
     def stream_container_logs(self, container_id: str, callback=None) -> None:
@@ -1006,7 +1006,7 @@ class CosmosAPI:
         Raises:
             RuntimeError: If streaming fails
         """
-        logger.info("Streaming logs from container %s", container_id)
+        logger.info("Streaming logs from container {}", container_id)
 
         if callback:
             # Gradio mode - use callback with threading to not block UI
@@ -1134,12 +1134,12 @@ class CosmosAPI:
                 result = self.orchestrator.docker_executor.kill_containers()
 
                 if result["status"] == "success":
-                    logger.info("Successfully killed %d container(s)", result["killed_count"])
+                    logger.info("Successfully killed {} container(s)", result["killed_count"])
                 else:
-                    logger.error("Failed to kill containers: %s", result.get("error"))
+                    logger.error("Failed to kill containers: {}", result.get("error"))
 
                 return result
 
         except Exception as e:
-            logger.error("Failed to kill containers: %s", e)
+            logger.error("Failed to kill containers: {}", e)
             return {"status": "failed", "error": str(e), "killed_count": 0, "killed_containers": []}

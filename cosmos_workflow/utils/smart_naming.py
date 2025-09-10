@@ -39,7 +39,7 @@ def _get_keybert_model():
         MODEL_NAME = "all-MiniLM-L6-v2"
         sentence_model = SentenceTransformer(MODEL_NAME)
         kw_model = KeyBERT(model=sentence_model)
-        logger.info("KeyBERT with %s loaded for smart naming", MODEL_NAME)
+        logger.info("KeyBERT with {} loaded for smart naming", MODEL_NAME)
         return kw_model
     except ImportError as e:
         error_msg = (
@@ -291,9 +291,9 @@ def generate_smart_name(text: str, max_length: int = 20) -> str:
                 return name if name else "sequence"
 
     except Exception as e:
-        logger.error("KeyBERT extraction failed: %s", e)
+        logger.error("KeyBERT extraction failed: {}", e)
         raise RuntimeError(f"Failed to generate smart name: {e}") from e
 
     # If we get here, no keywords were extracted
-    logger.warning("No keywords extracted from text: %s", text[:100])
+    logger.warning("No keywords extracted from text: {}", text[:100])
     return "sequence"

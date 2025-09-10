@@ -78,20 +78,20 @@ class FileTransferService:
                 try:
                     sftp.stat(remote_file)
                 except FileNotFoundError as e:
-                    logger.error("Remote file not found: %s", remote_file)
+                    logger.error("Remote file not found: {}", remote_file)
                     raise FileNotFoundError(f"Remote file not found: {remote_file}") from e
 
-                logger.info("Downloading file: %s -> %s", remote_file, str(local_path))
+                logger.info("Downloading file: {} -> {}", remote_file, str(local_path))
                 sftp.get(remote_file, str(local_path))
-                logger.debug("Successfully downloaded %s", local_path.name)
+                logger.debug("Successfully downloaded {}", local_path.name)
 
         except PermissionError:
-            logger.error("Permission denied accessing remote file: %s", remote_file)
+            logger.error("Permission denied accessing remote file: {}", remote_file)
             raise
         except FileNotFoundError:
             raise  # Re-raise the FileNotFoundError we caught above
         except Exception as e:
-            logger.error("Failed to download file %s: %s", remote_file, e)
+            logger.error("Failed to download file {}: {}", remote_file, e)
             raise RuntimeError(f"Download failed: {e}") from e
 
         return True
@@ -120,7 +120,7 @@ class FileTransferService:
             # Create manifest of downloaded files
             self._create_manifest(local_out)
         else:
-            logger.info("No remote outputs found at %s", remote_out)
+            logger.info("No remote outputs found at {}", remote_out)
 
         # Upscaled outputs (optional)
         remote_up = f"{remote_out}_upscaled"
@@ -152,9 +152,9 @@ class FileTransferService:
                         stat = file_path.stat()
                         f.write(f"{file_path.name}\t{stat.st_size}\t{stat.st_mtime}\n")
 
-                logger.debug("Created manifest at %s", manifest_path)
+                logger.debug("Created manifest at {}", manifest_path)
         except Exception as e:
-            logger.warning("Failed to create manifest: %s", e)
+            logger.warning("Failed to create manifest: {}", e)
 
     def create_remote_directory(self, remote_path: str) -> None:
         """Create a directory on the remote system."""
@@ -175,7 +175,7 @@ class FileTransferService:
             with self.ssh_manager.get_sftp() as sftp:
                 return sftp.listdir(remote_dir)
         except Exception as e:
-            logger.error("Failed to list remote directory %s: %s", remote_dir, e)
+            logger.error("Failed to list remote directory {}: {}", remote_dir, e)
             return []
 
     # ------------------------------------------------------------------ #
@@ -186,9 +186,9 @@ class FileTransferService:
         """Upload a single file via SFTP to a specific remote absolute path."""
         remote_abs_file = sanitize_remote_path(remote_abs_file)
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Uploading file: %s -> %s", local_file, remote_abs_file)
+            logger.info("Uploading file: {} -> {}", local_file, remote_abs_file)
             sftp.put(str(local_file), remote_abs_file)
-            logger.debug("Successfully uploaded %s", local_file.name)
+            logger.debug("Successfully uploaded {}", local_file.name)
 
     def _sftp_upload_dir(self, local_dir: Path, remote_abs_dir: str) -> None:
         """Upload a directory to a remote absolute directory via SFTP.
@@ -196,13 +196,13 @@ class FileTransferService:
         """
         remote_abs_dir = sanitize_remote_path(remote_abs_dir)
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Uploading directory: %s -> %s", local_dir, remote_abs_dir)
+            logger.info("Uploading directory: {} -> {}", local_dir, remote_abs_dir)
 
             for item in local_dir.iterdir():
                 if item.is_file():
                     remote_path = f"{remote_abs_dir}/{item.name}"
                     sftp.put(str(item), remote_path)
-                    logger.debug("Uploaded %s", item.name)
+                    logger.debug("Uploaded {}", item.name)
                 elif item.is_dir():
                     # Recursively handle subdirectories
                     remote_subdir = f"{remote_abs_dir}/{item.name}"
@@ -213,13 +213,13 @@ class FileTransferService:
         """Download a remote directory to a local directory via SFTP."""
         remote_abs_dir = sanitize_remote_path(remote_abs_dir)
         with self.ssh_manager.get_sftp() as sftp:
-            logger.info("Downloading directory: %s -> %s", remote_abs_dir, local_dir)
+            logger.info("Downloading directory: {} -> {}", remote_abs_dir, local_dir)
 
             # List remote directory contents
             try:
                 items = sftp.listdir_attr(remote_abs_dir)
             except Exception as e:
-                logger.error("Failed to list directory %s: %s", remote_abs_dir, e)
+                logger.error("Failed to list directory {}: {}", remote_abs_dir, e)
                 return
 
             for item in items:
@@ -233,7 +233,7 @@ class FileTransferService:
                 else:
                     # Download file
                     sftp.get(remote_path, str(local_path))
-                    logger.debug("Downloaded %s", item.filename)
+                    logger.debug("Downloaded {}", item.filename)
 
     # ------------------------------------------------------------------ #
     # Misc helpers

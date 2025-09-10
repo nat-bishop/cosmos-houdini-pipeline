@@ -49,11 +49,12 @@ results = api.batch_inference([
 ## 💪 Technical Achievements
 
 - **🧪 Testing:** 450+ passing tests with 80%+ code coverage
-- **🔄 Scalability:** Handles 100+ concurrent video generation jobs
+- **🎥 Video Pipeline Innovation:** Seamless integration with NVIDIA Cosmos Transfer models for AI video generation
+- **🔄 Video-Agnostic Upscaling:** Universal 4K upscaling system that works with any video source (inference outputs or arbitrary files)
+- **🌐 Remote GPU Orchestration:** SSH-based Docker container management across distributed GPU infrastructure
 - **📊 Monitoring:** Real-time GPU status with lazy evaluation pattern
 - **🏗️ Architecture:** Clean facade pattern with separation of concerns
-- **🔒 Safety:** Transaction-safe database operations with rollback
-- **⚡ Performance:** 40% faster batch processing vs sequential execution
+- **🔧 Robust File Transfer:** SFTP-based file synchronization with integrity verification and retry mechanisms
 
 ## 🛠️ Tech Stack
 
@@ -110,7 +111,7 @@ results = api.batch_inference([
 ### **Batch Processing Engine**
 - JSONL format for efficient batch operations
 - Single model load for multiple inferences
-- 40-44% performance improvement over sequential
+- Streamlined batch execution with shared GPU resources
 - Automatic retry and error recovery
 
 ### **Lazy Status Monitoring**

@@ -18,13 +18,8 @@ ops = CosmosAPI(config=config)
 log_viewer = LogViewer(max_lines=2000)
 
 
-def stream_callback(content):
-    """Callback for log streaming."""
-    log_viewer.add_from_stream(content)
-
-
 def start_log_streaming():
-    """Start streaming logs from active container."""
+    """Generator that streams logs to the UI."""
     # Clear previous logs
     log_viewer.clear()
 
@@ -33,7 +28,8 @@ def start_log_streaming():
         containers = ops.get_active_containers()
 
         if not containers:
-            return "No active containers found", log_viewer.get_html()
+            yield "No active containers found", log_viewer.get_html()
+            return
 
         if len(containers) > 1:
             # Multiple containers - use the first one
@@ -43,13 +39,21 @@ def start_log_streaming():
             container_id = containers[0]["container_id"]
             message = f"Streaming logs from container {container_id}"
 
-        # Stream with callback for UI updates
-        ops.stream_container_logs(container_id, callback=stream_callback)
-        return message, log_viewer.get_html()
+        # Initial yield to show streaming started
+        yield message, log_viewer.get_html()
+
+        # Stream logs line by line using generator
+        try:
+            for log_line in ops.stream_logs_generator(container_id):
+                log_viewer.add_from_stream(log_line)
+                yield message, log_viewer.get_html()
+        except KeyboardInterrupt:
+            yield "Streaming stopped", log_viewer.get_html()
+
     except RuntimeError as e:
-        return f"Error: {e}", log_viewer.get_html()
+        yield f"Error: {e}", log_viewer.get_html()
     except Exception as e:
-        return f"Failed to start streaming: {e}", log_viewer.get_html()
+        yield f"Failed to start streaming: {e}", log_viewer.get_html()
 
 
 def refresh_logs():
@@ -113,10 +117,11 @@ def check_and_auto_stream():
                 display_text += f"Status: {container.get('status', 'Unknown')}\n"
                 display_text += "-" * 40 + "\n"
 
-            # Auto-start streaming if single container
+            # Show status - don't auto-start streaming since it's now a generator
             if len(containers) == 1:
-                streaming_status, log_html = start_log_streaming()
-                job_status = f"Auto-streaming from container {containers[0]['container_id']}"
+                job_status = f"Ready to stream from container {containers[0]['container_id']}"
+                streaming_status = "Click 'Start Streaming' to begin"
+                log_html = log_viewer.get_html()
             else:
                 job_status = "Multiple containers found. Click 'Start Streaming' to begin."
                 streaming_status = "Multiple containers active"

@@ -993,61 +993,48 @@ class CosmosAPI:
             logger.error("Failed to get containers: {}", e)
             return []
 
-    def stream_container_logs(self, container_id: str, callback=None) -> None:
-        """Stream logs from a specific Docker container.
-
-        Handles both CLI (stdout) and Gradio (callback) streaming modes.
+    def stream_container_logs(self, container_id: str) -> None:
+        """Stream logs from a Docker container to stdout (CLI only).
 
         Args:
             container_id: Docker container ID to stream from
-            callback: Optional callback function for each log line (for Gradio).
-                     If None, streams directly to stdout (for CLI).
 
         Raises:
             RuntimeError: If streaming fails
         """
         logger.info("Streaming logs from container {}", container_id)
 
-        if callback:
-            # Gradio mode - use callback with threading to not block UI
-            import threading
+        cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
+        self.orchestrator.ssh_manager.execute_command(
+            cmd,
+            timeout=86400,  # 24 hour timeout for long streams
+            stream_output=True,
+        )
 
-            cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
+    def stream_logs_generator(self, container_id: str):
+        """Generator that yields log lines for Gradio streaming.
 
-            def stream_output():
-                try:
-                    # Execute command without streaming (we'll process output)
-                    exit_code, stdout, stderr = self.orchestrator.ssh_manager.execute_command(
-                        cmd,
-                        timeout=3600,  # 1 hour timeout
-                        stream_output=False,  # We handle output ourselves
-                    )
+        Args:
+            container_id: Docker container ID to stream from
 
-                    # Send stdout lines to callback
-                    for line in stdout.split("\n"):
-                        if line:
-                            callback(line)
+        Yields:
+            str: Log lines as they arrive
+        """
+        logger.info("Starting log generator for container {}", container_id)
+        self.orchestrator._initialize_services()
 
-                    # Send stderr lines to callback with error prefix
-                    if stderr:
-                        for line in stderr.split("\n"):
-                            if line:
-                                callback(f"[ERROR] {line}")
+        cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
 
-                except Exception as e:
-                    callback(f"[ERROR] Stream failed: {e}")
+        with self.orchestrator.ssh_manager:
+            stdin, stdout, stderr = self.orchestrator.ssh_manager.ssh_client.exec_command(cmd)
 
-            # Run in background thread to not block
-            thread = threading.Thread(target=stream_output, daemon=True)
-            thread.start()
-        else:
-            # CLI mode - stream directly to stdout
-            cmd = DockerCommandBuilder.build_logs_command(container_id, follow=True)
-            self.orchestrator.ssh_manager.execute_command(
-                cmd,
-                timeout=86400,  # 24 hour timeout for long streams
-                stream_output=True,
-            )
+            # Stream stdout lines
+            for line in stdout:
+                yield line.strip()
+
+            # Stream stderr lines with error prefix
+            for line in stderr:
+                yield f"[ERROR] {line.strip()}"
 
     def verify_integrity(self) -> dict[str, Any]:
         """Verify database-filesystem integrity.

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 1 Upscaling Refactor Complete (2025-09-10)
+- **Video-Agnostic Upscaling System**
+  - Complete refactor enabling upscaling of any video file, not just inference run outputs
+  - New CLI interface with mutually exclusive options: `--from-run` or `--video`
+  - Support for guided upscaling with optional `--prompt` parameter
+  - Added `--dry-run` mode for previewing upscaling operations without execution
+  - Comprehensive validation of video formats and run completion status
+
+- **Enhanced CLI Commands**
+  - `cosmos upscale --from-run rs_123` - upscale from existing inference run
+  - `cosmos upscale --video path/to/video.mp4` - upscale arbitrary video file
+  - `cosmos upscale --prompt "cinematic quality" --weight 0.7` - guided upscaling with custom prompts
+  - `cosmos upscale --dry-run` - preview mode showing what would be upscaled
+  - Improved error handling with detailed validation messages
+
+- **API Architecture Changes**
+  - Replaced `CosmosAPI.upscale_run()` with `CosmosAPI.upscale()` for video-agnostic functionality
+  - New signature: `upscale(video_source: str, control_weight: float = 0.5, prompt: str | None = None)`
+  - No backward compatibility - old method removed (wasn't working anyway)
+  - Enhanced parameter validation and error reporting
+
+- **JSON Format Improvements**
+  - Updated `to_cosmos_upscale_json()` to accept optional prompt parameter
+  - Conditional prompt inclusion - only added to JSON when explicitly provided
+  - Cleaner JSON structure following "include only when needed" design principle
+  - Improved documentation for upscaling JSON format
+
+- **Comprehensive Test Coverage**
+  - 26 total tests across all upscaling functionality, all passing
+  - 9 tests specifically for JSON prompt handling and conditional inclusion
+  - 11 tests for CLI validation, edge cases, and error handling
+  - 6 tests for GPU executor upscaling operations
+  - Complete test coverage for video-agnostic upscaling workflows
+
 ### Added - StatusChecker Feature for Lazy Container Monitoring (2025-09-09)
 - **Complete StatusChecker Implementation**
   - New StatusChecker class in cosmos_workflow/execution/status_checker.py for lazy container monitoring

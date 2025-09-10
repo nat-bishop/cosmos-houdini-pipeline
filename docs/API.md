@@ -725,22 +725,32 @@ cosmos ui --share            # Create public share link
 ```
 
 ### upscale
-Upscale the output of a completed inference run to 4K resolution.
+Upscale video to 4K resolution using AI enhancement (Phase 1 Refactor - Video-Agnostic).
 
 ```bash
-cosmos upscale RUN_ID [--weight 0.5] [--dry-run]
+# From inference run
+cosmos upscale --from-run RUN_ID [--weight 0.5] [--prompt TEXT] [--dry-run]
+
+# From video file
+cosmos upscale --video VIDEO_PATH [--weight 0.5] [--prompt TEXT] [--dry-run]
 ```
 
-**Arguments:**
-- `RUN_ID`: Run ID of completed inference run to upscale (rs_xxxxx format)
+**Source Options (Mutually Exclusive):**
+- `--from-run, -r RUN_ID`: Run ID of completed inference run to upscale (rs_xxxxx format)
+- `--video, -v VIDEO_PATH`: Path to video file to upscale (supports .mp4, .mov, .avi, .mkv)
 
-**Options:**
-- `--weight, -w`: Control weight for upscaling (0.0-1.0, default: 0.5)
+**Enhancement Options:**
+- `--prompt, -p TEXT`: Optional prompt to guide the AI upscaling process
+- `--weight, -w`: Control weight for upscaling strength (0.0-1.0, default: 0.5)
 - `--dry-run`: Preview the upscaling operation without executing
 
-**Phase 3 Independent Upscaling System:**
+**Phase 1 Upscaling Refactor - Video-Agnostic System:**
+- **Video-agnostic upscaling** - works with any video file, not just inference runs
+- **Mutually exclusive sources** - either `--from-run` OR `--video` (never both)
+- **Guided upscaling** - optional `--prompt` parameter for AI-directed enhancement
+- **Comprehensive validation** - file existence, format support, run completion status
 - Creates separate database run with model_type="upscale" for complete tracking independence
-- Links to parent inference run via execution_config["parent_run_id"] for traceability
+- Links to parent inference run via execution_config["source_run_id"] for traceability (when from run)
 - Independent status lifecycle: pending → running → completed/failed
 - Creates dedicated run directory as `outputs/run_{upscale_run_id}/` with separate logs
 - Follows "One GPU Operation = One Database Run" architecture principle
@@ -748,15 +758,20 @@ cosmos upscale RUN_ID [--weight 0.5] [--dry-run]
 
 **Examples:**
 ```bash
-# Basic upscaling with default settings
-cosmos upscale rs_abc123
+# From inference run
+cosmos upscale --from-run rs_abc123
 # Returns: Created upscaling run rs_upscale_xyz789
 
-# Custom control weight
-cosmos upscale rs_abc123 --weight 0.7
+# From video file with custom weight
+cosmos upscale --video my_video.mp4 --weight 0.7
+
+# Guided upscaling with prompt
+cosmos upscale --video video.mp4 --prompt "cinematic 8K quality"
+cosmos upscale --from-run rs_abc123 --prompt "enhance details"
 
 # Preview mode (no execution)
-cosmos upscale rs_abc123 --dry-run
+cosmos upscale --from-run rs_abc123 --dry-run
+cosmos upscale --video video.mp4 --dry-run
 
 # Monitor progress
 cosmos status --stream
@@ -766,7 +781,7 @@ cosmos show run rs_upscale_xyz789
 ```
 
 **Complete Upscaling Workflow:**
-1. **Validation**: Checks parent run exists and status is "completed"
+1. **Source Validation**: Verifies run exists/completed OR video file exists/supported format
 2. **Run Creation**: Creates new database run with model_type="upscale" and unique run_id
 3. **GPU Execution**: Uploads upscaling spec, executes 4K upscaling on GPU cluster
 4. **Output Download**: Downloads upscaled video to dedicated run directory
@@ -1484,9 +1499,16 @@ result = ops.quick_inference(
 # Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
 
 # Separate upscaling operation
-upscale_result = ops.upscale_run(
-  run_id="rs_xyz789",
+# Phase 1 Refactor - Video-agnostic upscaling
+upscale_result = ops.upscale(
+  video_source="rs_xyz789",  # From run
   control_weight=0.5
+)
+# OR from video file
+upscale_result = ops.upscale(
+  video_source="/path/to/video.mp4",  # From file
+  control_weight=0.5,
+  prompt="cinematic quality"  # Optional guided upscaling
 )
 # Returns: {"upscale_run_id": "rs_upscale_abc", "status": "success", "output_path": "/outputs/run_rs_upscale_abc/"}
 
@@ -1541,7 +1563,7 @@ result = ops.delete_all_runs(keep_outputs=True)
   - Accepts prompt_id directly, creates run internally
   - Supports all execution parameters (num_steps, guidance, seed, etc.)
   - Returns execution results with run_id for tracking
-  - Note: Upscaling parameters removed - use separate `upscale_run()` method
+  - Note: Upscaling parameters removed - use separate `upscale()` method (Phase 1 refactor)
 
 - `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
   - Accepts list of prompt_ids, creates runs internally for each
@@ -1556,7 +1578,7 @@ result = ops.delete_all_runs(keep_outputs=True)
 - `execute_run(run_id)`: Explicit run execution
   - For workflows that need control over execution timing
   - Returns execution results
-  - Note: Upscaling parameters removed - use separate `upscale_run()` method
+  - Note: Upscaling parameters removed - use separate `upscale()` method (Phase 1 refactor)
 
 **Convenience Methods:**
 - `create_and_run(prompt_text, video_dir, **kwargs)`: Complete workflow in one call
@@ -2122,8 +2144,12 @@ run = api.enhance_prompt(prompt_id="ps_abc123", enhancement_model="pixtral")
 
 **Creating upscaling run:**
 ```python
-run = api.upscale_run(run_id="rs_abc123", control_weight=0.8)
-# Creates execution_config: {"parent_run_id": "rs_abc123", "control_weight": 0.8, "input_video": "..."}
+# Phase 1 Refactor - Video-agnostic upscaling
+run = api.upscale(video_source="rs_abc123", control_weight=0.8)  # From run
+run = api.upscale(video_source="/path/to/video.mp4", control_weight=0.8)  # From file
+run = api.upscale(video_source="video.mp4", prompt="cinematic quality")  # Guided
+
+# Creates execution_config: {"source_run_id": "rs_abc123", "control_weight": 0.8, "input_video_source": "..."}
 ```
 
 ### Validation Rules

@@ -127,7 +127,9 @@ results = api.batch_inference([
 
 ### **AI Enhancement Pipeline**
 - Prompt optimization using Pixtral model
-- 4K upscaling with control weights
+- **Video-agnostic 4K upscaling** - upscale any video file or inference output
+- **Guided upscaling** with optional prompts for AI-directed enhancement
+- **Flexible upscaling sources** - from inference runs or arbitrary video files
 - Safety controls and content filtering
 - Metadata tracking for all operations
 
@@ -146,6 +148,11 @@ cosmos ui
 # Or use CLI
 cosmos create prompt "Your vision" inputs/videos/
 cosmos inference ps_xxxxx
+
+# Upscaling (Phase 1 Refactor - Video-Agnostic)
+cosmos upscale --from-run rs_xxxxx              # From inference run
+cosmos upscale --video path/to/video.mp4        # From any video file
+cosmos upscale --video video.mp4 --prompt "8K cinematic"  # Guided upscaling
 cosmos status
 ```
 

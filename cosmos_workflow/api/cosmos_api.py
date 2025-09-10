@@ -342,24 +342,30 @@ class CosmosAPI:
         control_weight: float = 0.5,
         prompt: str | None = None,
     ) -> dict[str, Any]:
-        """Upscale a video to 4K resolution using AI enhancement.
+        """Upscale any video to 4K resolution using AI enhancement.
 
-        Creates a new database run with model_type="upscale" that operates
-        on either an existing run's output or an arbitrary video file.
+        Phase 1 Upscaling Refactor: Now supports video-agnostic upscaling.
+        Creates a new database run with model_type="upscale" that can operate
+        on either an existing inference run's output or any arbitrary video file.
 
         Args:
-            video_source: Either a run ID (rs_xxx) or path to video file
-            control_weight: Control weight for upscaling (0.0-1.0)
-            prompt: Optional prompt to guide the upscaling process
+            video_source: Either a run ID (rs_xxx) or absolute path to video file.
+                         Supported formats: .mp4, .mov, .avi, .mkv
+            control_weight: Control weight for upscaling strength (0.0-1.0, default: 0.5)
+            prompt: Optional text prompt to guide the upscaling process.
+                   When provided, influences the AI enhancement direction.
 
         Returns:
             Dictionary containing:
-                - upscale_run_id: The new upscaling run ID
+                - upscale_run_id: The new upscaling run ID for tracking
                 - status: "success", "started", or "failed"
-                - output_path: Path to upscaled video (if successful)
+                - output_path: Path to upscaled video (if completed synchronously)
+                - message: Status message for background operations
 
         Raises:
-            ValueError: If video source invalid or control weight out of range
+            ValueError: If video source is invalid, file doesn't exist,
+                       unsupported format, or control weight out of range
+            FileNotFoundError: If video file doesn't exist
         """
         from pathlib import Path
 
@@ -488,14 +494,6 @@ class CosmosAPI:
                 "status": "failed",
                 "error": str(e),
             }
-
-    # Keep backward compatibility with old method name
-    def upscale_run(self, run_id: str, control_weight: float = 0.5) -> dict[str, Any]:
-        """Backward compatibility wrapper for upscale_run.
-
-        Deprecated: Use upscale() instead.
-        """
-        return self.upscale(video_source=run_id, control_weight=control_weight)
 
     # ========== Internal Helper Methods ==========
 

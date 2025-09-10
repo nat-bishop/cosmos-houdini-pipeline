@@ -227,8 +227,8 @@ def upscale_batch(ctx: CLIContext, run_ids: tuple[str, ...], weight: float):
             )
 
             try:
-                result = ops.upscale_run(
-                    run_id=run_id,
+                result = ops.upscale(
+                    video_source=run_id,
                     control_weight=weight,
                 )
 

@@ -20,6 +20,12 @@
 - **Root Cause:** Same as enhancement issue - runs not properly finalized
 - **Solution:** Fixed by proper run finalization in StatusChecker
 
+### Fixed: Status Command Requiring Two Runs
+- **Issue:** First `cosmos status` showed completed runs as "running" with missing container
+- **Root Cause:** `list_runs(status="running")` returned runs that were synced to "completed" during the query
+- **Solution:** Filter out runs that no longer match the status filter after sync
+- **Files Changed:** `cosmos_workflow/services/data_repository.py` - Added post-sync filtering
+
 ## 🔥 Priority 1: Critical Fixes
 
 ### Database Schema Review: Model Type in Prompts

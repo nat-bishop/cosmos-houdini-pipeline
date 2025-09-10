@@ -295,6 +295,237 @@ def populate_from_input_dir(selected_dir_path):
     return ""
 
 
+# ============================================================================
+# Phase 3: Operations Functions
+# ============================================================================
+
+
+def load_ops_prompts(model_type="all", limit=50):
+    """Load prompts for operations table with selection column."""
+    try:
+        # Use CosmosAPI to get prompts
+        if model_type == "all":
+            prompts = ops.list_prompts(limit=limit)
+        else:
+            prompts = ops.list_prompts(model_type=model_type, limit=limit)
+
+        # Format for operations table with selection column
+        table_data = []
+        for prompt in prompts:
+            prompt_id = prompt.get("id", "")
+            name = prompt.get("parameters", {}).get("name", "unnamed")
+            model = prompt.get("model_type", "transfer")
+            text = prompt.get("prompt_text", "")
+
+            # Truncate text for display
+            if len(text) > 60:
+                text = text[:57] + "..."
+
+            # Add with selection checkbox (False by default)
+            table_data.append([False, prompt_id, name, model, text])
+
+        return table_data
+    except Exception as e:
+        logger.error("Failed to load prompts for operations: {}", e)
+        return []
+
+
+def update_selection_count(dataframe_data):
+    """Update the selection count based on checked rows."""
+    try:
+        if not dataframe_data:
+            return "0 selected"
+
+        # Handle both list and dataframe formats
+        if hasattr(dataframe_data, "values"):
+            # It's a pandas DataFrame
+            data = dataframe_data.values.tolist()
+        elif isinstance(dataframe_data, list):
+            data = dataframe_data
+        else:
+            return "0 selected"
+
+        # Count rows where first column (checkbox) is True
+        selected = sum(1 for row in data if len(row) > 0 and row[0] is True)
+        return f"{selected} selected"
+    except Exception as e:
+        logger.debug("Error counting selection: {}", e)
+        return "0 selected"
+
+
+def select_all_prompts(dataframe_data):
+    """Select all prompts in the table."""
+    if not dataframe_data:
+        return []
+
+    # Set all checkboxes to True
+    updated_data = []
+    for row in dataframe_data:
+        new_row = row.copy() if isinstance(row, list) else list(row)
+        new_row[0] = True
+        updated_data.append(new_row)
+
+    return updated_data
+
+
+def clear_all_prompts(dataframe_data):
+    """Clear all selections in the table."""
+    if not dataframe_data:
+        return []
+
+    # Set all checkboxes to False
+    updated_data = []
+    for row in dataframe_data:
+        new_row = row.copy() if isinstance(row, list) else list(row)
+        new_row[0] = False
+        updated_data.append(new_row)
+
+    return updated_data
+
+
+def toggle_enhance_force_visibility(create_new):
+    """Show/hide force overwrite checkbox based on action selection."""
+    # Show force checkbox only when overwrite is selected
+    return gr.update(visible=not create_new)
+
+
+def run_inference_on_selected(
+    dataframe_data,
+    weight_vis,
+    weight_edge,
+    weight_depth,
+    weight_seg,
+    steps,
+    guidance,
+    seed,
+    fps,
+    sigma_max,
+    blur_strength,
+    canny_threshold,
+):
+    """Run inference on selected prompts."""
+    try:
+        # Get selected prompt IDs
+        selected_ids = []
+        if dataframe_data:
+            for row in dataframe_data:
+                if row[0]:  # Checkbox is checked
+                    selected_ids.append(row[1])  # Prompt ID is second column
+
+        if not selected_ids:
+            return "❌ No prompts selected", "Idle"
+
+        # Build weights dictionary
+        weights = {
+            "vis": weight_vis,
+            "edge": weight_edge,
+            "depth": weight_depth,
+            "seg": weight_seg,
+        }
+
+        logger.info("Starting inference on {} prompts", len(selected_ids))
+
+        # Run inference based on count
+        if len(selected_ids) == 1:
+            # Single inference
+            result = ops.quick_inference(
+                prompt_id=selected_ids[0],
+                weights=weights,
+                num_steps=int(steps),
+                guidance_scale=guidance,
+                seed=int(seed),
+                fps=int(fps),
+                sigma_max=sigma_max,
+                blur_strength=blur_strength,
+                canny_threshold=canny_threshold,
+            )
+
+            if result.get("status") == "started":
+                return (
+                    f"✅ Inference started for {selected_ids[0]}",
+                    f"Running: {result.get('run_id', 'unknown')}",
+                )
+            elif result.get("status") == "success":
+                return ("✅ Inference completed successfully", "Idle")
+            else:
+                return (f"❌ Inference failed: {result.get('error', 'Unknown error')}", "Idle")
+        else:
+            # Batch inference
+            result = ops.batch_inference(
+                prompt_ids=selected_ids,
+                shared_weights=weights,
+                num_steps=int(steps),
+                guidance_scale=guidance,
+                seed=int(seed),
+                fps=int(fps),
+                sigma_max=sigma_max,
+                blur_strength=blur_strength,
+                canny_threshold=canny_threshold,
+            )
+
+            successful = len(result.get("output_mapping", {}))
+            return (
+                f"✅ Batch inference completed: {successful}/{len(selected_ids)} successful",
+                "Idle",
+            )
+
+    except Exception as e:
+        logger.error("Failed to run inference: {}", e)
+        return f"❌ Error: {e}", "Idle"
+
+
+def run_enhance_on_selected(dataframe_data, create_new, force_overwrite):
+    """Run enhancement on selected prompts."""
+    try:
+        # Get selected prompt IDs
+        selected_ids = []
+        if dataframe_data:
+            for row in dataframe_data:
+                if row[0]:  # Checkbox is checked
+                    selected_ids.append(row[1])  # Prompt ID
+
+        if not selected_ids:
+            return "❌ No prompts selected", "Idle"
+
+        # Always use pixtral model
+        model = "pixtral"
+        logger.info("Starting enhancement on {} prompts with model {}", len(selected_ids), model)
+
+        results = []
+        errors = []
+
+        for prompt_id in selected_ids:
+            try:
+                result = ops.enhance_prompt(
+                    prompt_id=prompt_id,
+                    create_new=create_new,
+                    enhancement_model=model,
+                    force_overwrite=force_overwrite,
+                )
+
+                if result.get("status") in ["success", "started"]:
+                    results.append(prompt_id)
+                else:
+                    errors.append(f"{prompt_id}: {result.get('error', 'Unknown error')}")
+
+            except Exception as e:
+                errors.append(f"{prompt_id}: {e}")
+
+        # Build status message
+        if errors:
+            error_msg = "\n".join(errors[:3])  # Show first 3 errors
+            if len(errors) > 3:
+                error_msg += f"\n... and {len(errors) - 3} more errors"
+            return (f"⚠️ Enhanced {len(results)}/{len(selected_ids)} prompts\n{error_msg}", "Idle")
+        else:
+            action = "created new" if create_new else "updated"
+            return (f"✅ Successfully {action} {len(results)} enhanced prompt(s)", "Idle")
+
+    except Exception as e:
+        logger.error("Failed to run enhancement: {}", e)
+        return f"❌ Error: {e}", "Idle"
+
+
 def list_prompts_for_input(video_dir):
     """List prompts associated with a specific input directory."""
     try:
@@ -421,7 +652,7 @@ def create_ui():
     }
     """
 
-    with gr.Blocks(title="Cosmos Workflow Manager", theme=gr.themes.Soft(), css=custom_css) as app:
+    with gr.Blocks(title="Cosmos Workflow Manager", css=custom_css) as app:
         gr.Markdown("# 🌌 Cosmos Workflow Manager")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
 
@@ -576,14 +807,202 @@ def create_ui():
                             create_status = gr.Markdown("")
 
             # ========================================
-            # Tab 3: Operations (Placeholder for Phase 3)
+            # Tab 3: Operations
             # ========================================
             with gr.Tab("🚀 Operations", id=3):
                 gr.Markdown("### Run Operations")
-                gr.Markdown("*Coming in Phase 3: Run inference, enhancement, and upscaling*")
+                gr.Markdown("Execute inference and enhancement operations on your prompts")
 
                 with gr.Row():
-                    gr.Column()
+                    # Left: Prompt selection table
+                    with gr.Column(scale=3):
+                        gr.Markdown("#### Select Prompts")
+
+                        # Filter row
+                        with gr.Row():
+                            ops_model_filter = gr.Dropdown(
+                                choices=["all", "transfer", "upscale", "enhance"],
+                                value="all",
+                                label="Model Type",
+                                scale=1,
+                            )
+                            ops_limit = gr.Number(
+                                value=50,
+                                label="Limit",
+                                minimum=1,
+                                maximum=500,
+                                scale=1,
+                            )
+                            ops_refresh_btn = gr.Button(
+                                "🔄 Refresh",
+                                variant="secondary",
+                                size="sm",
+                                scale=1,
+                            )
+
+                        # Prompts table with selection
+                        ops_prompts_table = gr.Dataframe(
+                            headers=["Select", "ID", "Name", "Model", "Text"],
+                            datatype=["bool", "str", "str", "str", "str"],
+                            interactive=True,  # Allow checkbox interaction
+                            col_count=(5, "fixed"),
+                            wrap=True,
+                        )
+
+                        # Selection controls
+                        with gr.Row():
+                            select_all_btn = gr.Button("Select All", size="sm")
+                            clear_selection_btn = gr.Button("Clear", size="sm")
+                            selection_count = gr.Markdown("0 selected")
+
+                    # Right: Operation controls
+                    with gr.Column(scale=2):
+                        gr.Markdown("#### Operation Controls")
+
+                        # Tabs for different operations
+                        with gr.Tabs():
+                            # Inference tab
+                            with gr.Tab("Inference"):
+                                gr.Markdown("##### Inference Parameters")
+
+                                with gr.Group():
+                                    # Weights control
+                                    gr.Markdown("**Control Weights**")
+                                    with gr.Row():
+                                        weight_vis = gr.Slider(
+                                            label="Visual",
+                                            minimum=0.0,
+                                            maximum=1.0,
+                                            value=0.25,
+                                            step=0.05,
+                                        )
+                                        weight_edge = gr.Slider(
+                                            label="Edge",
+                                            minimum=0.0,
+                                            maximum=1.0,
+                                            value=0.25,
+                                            step=0.05,
+                                        )
+                                    with gr.Row():
+                                        weight_depth = gr.Slider(
+                                            label="Depth",
+                                            minimum=0.0,
+                                            maximum=1.0,
+                                            value=0.25,
+                                            step=0.05,
+                                        )
+                                        weight_seg = gr.Slider(
+                                            label="Segmentation",
+                                            minimum=0.0,
+                                            maximum=1.0,
+                                            value=0.25,
+                                            step=0.05,
+                                        )
+
+                                    # Advanced parameters
+                                    with gr.Accordion("Advanced", open=False):
+                                        with gr.Row():
+                                            inf_steps = gr.Number(
+                                                label="Steps",
+                                                value=35,
+                                                minimum=1,
+                                                maximum=100,
+                                            )
+                                            inf_guidance = gr.Number(
+                                                label="Guidance (CFG)",
+                                                value=7.0,
+                                                minimum=1.0,
+                                                maximum=20.0,
+                                            )
+                                            inf_seed = gr.Number(
+                                                label="Seed",
+                                                value=1,
+                                                minimum=0,
+                                            )
+
+                                        with gr.Row():
+                                            inf_fps = gr.Number(
+                                                label="FPS",
+                                                value=24,
+                                                minimum=1,
+                                                maximum=60,
+                                            )
+                                            inf_sigma_max = gr.Number(
+                                                label="Sigma Max",
+                                                value=70.0,
+                                            )
+
+                                        inf_blur_strength = gr.Dropdown(
+                                            label="Blur Strength",
+                                            choices=[
+                                                "very_low",
+                                                "low",
+                                                "medium",
+                                                "high",
+                                                "very_high",
+                                            ],
+                                            value="medium",
+                                        )
+                                        inf_canny_threshold = gr.Dropdown(
+                                            label="Canny Threshold",
+                                            choices=[
+                                                "very_low",
+                                                "low",
+                                                "medium",
+                                                "high",
+                                                "very_high",
+                                            ],
+                                            value="medium",
+                                        )
+
+                                # Run button
+                                run_inference_btn = gr.Button(
+                                    "🚀 Run Inference",
+                                    variant="primary",
+                                    size="lg",
+                                )
+
+                                inference_status = gr.Markdown("")
+
+                            # Prompt Enhance tab
+                            with gr.Tab("Prompt Enhance"):
+                                gr.Markdown("##### Enhancement Settings")
+
+                                with gr.Group():
+                                    gr.Markdown("**AI Model:** pixtral")
+
+                                    enhance_create_new = gr.Radio(
+                                        label="Action",
+                                        choices=[
+                                            ("Create new enhanced prompt", True),
+                                            ("Overwrite existing prompt", False),
+                                        ],
+                                        value=True,
+                                    )
+
+                                    enhance_force = gr.Checkbox(
+                                        label="Force overwrite (delete existing runs if needed)",
+                                        value=False,
+                                        visible=False,  # Show only when overwrite is selected
+                                    )
+
+                                # Run button
+                                run_enhance_btn = gr.Button(
+                                    "✨ Enhance Prompts",
+                                    variant="primary",
+                                    size="lg",
+                                )
+
+                                enhance_status = gr.Markdown("")
+
+                        # Execution status
+                        gr.Markdown("#### Execution Status")
+                        with gr.Group():
+                            execution_status = gr.Textbox(
+                                label="Current Status",
+                                value="Idle",
+                                interactive=False,
+                            )
 
             # ========================================
             # Tab 4: Outputs (Phase 4 Implementation)
@@ -849,6 +1268,67 @@ def create_ui():
 
         # Download functionality will be handled through the video component itself
 
+        # Operations tab events
+        ops_refresh_btn.click(
+            fn=load_ops_prompts, inputs=[ops_model_filter, ops_limit], outputs=[ops_prompts_table]
+        )
+
+        # Selection controls
+        select_all_btn.click(
+            fn=select_all_prompts, inputs=[ops_prompts_table], outputs=[ops_prompts_table]
+        ).then(fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count])
+
+        clear_selection_btn.click(
+            fn=clear_all_prompts, inputs=[ops_prompts_table], outputs=[ops_prompts_table]
+        ).then(fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count])
+
+        # Update selection count when table changes
+        ops_prompts_table.change(
+            fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count]
+        )
+
+        # Enhance tab - toggle force visibility
+        enhance_create_new.change(
+            fn=toggle_enhance_force_visibility, inputs=[enhance_create_new], outputs=[enhance_force]
+        )
+
+        # Run inference button
+        run_inference_btn.click(
+            fn=run_inference_on_selected,
+            inputs=[
+                ops_prompts_table,
+                weight_vis,
+                weight_edge,
+                weight_depth,
+                weight_seg,
+                inf_steps,
+                inf_guidance,
+                inf_seed,
+                inf_fps,
+                inf_sigma_max,
+                inf_blur_strength,
+                inf_canny_threshold,
+            ],
+            outputs=[inference_status, execution_status],
+        ).then(
+            # Refresh prompts table after inference
+            fn=load_ops_prompts,
+            inputs=[ops_model_filter, ops_limit],
+            outputs=[ops_prompts_table],
+        )
+
+        # Run enhance button
+        run_enhance_btn.click(
+            fn=run_enhance_on_selected,
+            inputs=[ops_prompts_table, enhance_create_new, enhance_force],
+            outputs=[enhance_status, execution_status],
+        ).then(
+            # Refresh prompts table after enhancement
+            fn=load_ops_prompts,
+            inputs=[ops_model_filter, ops_limit],
+            outputs=[ops_prompts_table],
+        )
+
         # Log monitor events (existing)
         check_jobs_btn.click(
             fn=check_running_jobs,
@@ -873,6 +1353,10 @@ def create_ui():
             fn=lambda: list_prompts("all", 50),  # Provide default values
             inputs=[],
             outputs=[prompts_table],
+        ).then(
+            fn=lambda: load_ops_prompts("all", 50),  # Load operations prompts
+            inputs=[],
+            outputs=[ops_prompts_table],
         )
 
     return app

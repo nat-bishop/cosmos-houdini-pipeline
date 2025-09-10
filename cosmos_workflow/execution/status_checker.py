@@ -220,7 +220,7 @@ class StatusChecker:
                 outputs["files"] = downloaded_files
 
                 # Extract specific information based on model type
-                if model_type == "enhancement":
+                if model_type == "enhance":
                     # Try to extract enhanced text from batch_results.json if it exists
                     batch_results_file = outputs_dir / "batch_results.json"
                     if batch_results_file.exists():

@@ -590,6 +590,11 @@ class DataRepository:
                                 "Failed to sync run status for %s: %s", run_dict["id"], e
                             )
 
+                    # Only include runs that match the requested status filter after sync
+                    # If we filtered by status and the run no longer matches, skip it
+                    if status and run_dict.get("status") != status:
+                        continue
+
                     result.append(run_dict)
 
                 return result

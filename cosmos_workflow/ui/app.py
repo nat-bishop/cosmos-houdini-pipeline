@@ -333,20 +333,21 @@ def load_ops_prompts(model_type="all", limit=50):
 def update_selection_count(dataframe_data):
     """Update the selection count based on checked rows."""
     try:
-        if not dataframe_data:
+        if dataframe_data is None:
             return "0 selected"
 
         # Handle both list and dataframe formats
-        if hasattr(dataframe_data, "values"):
+        import pandas as pd
+
+        if isinstance(dataframe_data, pd.DataFrame):
             # It's a pandas DataFrame
-            data = dataframe_data.values.tolist()
+            selected = dataframe_data.iloc[:, 0].sum() if not dataframe_data.empty else 0
         elif isinstance(dataframe_data, list):
-            data = dataframe_data
+            # List format
+            selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
         else:
             return "0 selected"
 
-        # Count rows where first column (checkbox) is True
-        selected = sum(1 for row in data if len(row) > 0 and row[0] is True)
         return f"{selected} selected"
     except Exception as e:
         logger.debug("Error counting selection: {}", e)
@@ -355,32 +356,46 @@ def update_selection_count(dataframe_data):
 
 def select_all_prompts(dataframe_data):
     """Select all prompts in the table."""
-    if not dataframe_data:
+    if dataframe_data is None:
         return []
 
-    # Set all checkboxes to True
-    updated_data = []
-    for row in dataframe_data:
-        new_row = row.copy() if isinstance(row, list) else list(row)
-        new_row[0] = True
-        updated_data.append(new_row)
+    import pandas as pd
 
-    return updated_data
+    if isinstance(dataframe_data, pd.DataFrame):
+        # DataFrame format - set first column to True
+        dataframe_data = dataframe_data.copy()
+        dataframe_data.iloc[:, 0] = True
+        return dataframe_data
+    else:
+        # List format
+        updated_data = []
+        for row in dataframe_data:
+            new_row = row.copy() if isinstance(row, list) else list(row)
+            new_row[0] = True
+            updated_data.append(new_row)
+        return updated_data
 
 
 def clear_all_prompts(dataframe_data):
     """Clear all selections in the table."""
-    if not dataframe_data:
+    if dataframe_data is None:
         return []
 
-    # Set all checkboxes to False
-    updated_data = []
-    for row in dataframe_data:
-        new_row = row.copy() if isinstance(row, list) else list(row)
-        new_row[0] = False
-        updated_data.append(new_row)
+    import pandas as pd
 
-    return updated_data
+    if isinstance(dataframe_data, pd.DataFrame):
+        # DataFrame format - set first column to False
+        dataframe_data = dataframe_data.copy()
+        dataframe_data.iloc[:, 0] = False
+        return dataframe_data
+    else:
+        # List format
+        updated_data = []
+        for row in dataframe_data:
+            new_row = row.copy() if isinstance(row, list) else list(row)
+            new_row[0] = False
+            updated_data.append(new_row)
+        return updated_data
 
 
 def toggle_enhance_force_visibility(create_new):
@@ -407,10 +422,20 @@ def run_inference_on_selected(
     try:
         # Get selected prompt IDs
         selected_ids = []
-        if dataframe_data:
-            for row in dataframe_data:
-                if row[0]:  # Checkbox is checked
-                    selected_ids.append(row[1])  # Prompt ID is second column
+        if dataframe_data is not None:
+            # Handle different data formats
+            import pandas as pd
+
+            if isinstance(dataframe_data, pd.DataFrame):
+                # DataFrame format
+                for _, row in dataframe_data.iterrows():
+                    if row.iloc[0]:  # Checkbox is checked
+                        selected_ids.append(row.iloc[1])  # Prompt ID is second column
+            else:
+                # List format
+                for row in dataframe_data:
+                    if row[0]:  # Checkbox is checked
+                        selected_ids.append(row[1])  # Prompt ID is second column
 
         if not selected_ids:
             return "❌ No prompts selected", "Idle"
@@ -477,12 +502,31 @@ def run_inference_on_selected(
 def run_enhance_on_selected(dataframe_data, create_new, force_overwrite):
     """Run enhancement on selected prompts."""
     try:
+        # Handle force_overwrite parameter - it might be None or wrapped
+        if force_overwrite is None:
+            force_overwrite = False
+        elif hasattr(force_overwrite, "item"):
+            # In case it's a numpy scalar or similar
+            force_overwrite = bool(force_overwrite.item())
+        else:
+            force_overwrite = bool(force_overwrite)
+
         # Get selected prompt IDs
         selected_ids = []
-        if dataframe_data:
-            for row in dataframe_data:
-                if row[0]:  # Checkbox is checked
-                    selected_ids.append(row[1])  # Prompt ID
+        if dataframe_data is not None:
+            # Handle different data formats
+            import pandas as pd
+
+            if isinstance(dataframe_data, pd.DataFrame):
+                # DataFrame format
+                for _, row in dataframe_data.iterrows():
+                    if row.iloc[0]:  # Checkbox is checked
+                        selected_ids.append(row.iloc[1])  # Prompt ID
+            else:
+                # List format
+                for row in dataframe_data:
+                    if row[0]:  # Checkbox is checked
+                        selected_ids.append(row[1])  # Prompt ID
 
         if not selected_ids:
             return "❌ No prompts selected", "Idle"
@@ -522,7 +566,10 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite):
             return (f"✅ Successfully {action} {len(results)} enhanced prompt(s)", "Idle")
 
     except Exception as e:
-        logger.error("Failed to run enhancement: {}", e)
+        import traceback
+
+        logger.error("Failed to run enhancement: {}", str(e))
+        logger.error("Traceback: {}", traceback.format_exc())
         return f"❌ Error: {e}", "Idle"
 
 

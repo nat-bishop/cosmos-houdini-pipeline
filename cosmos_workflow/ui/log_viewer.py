@@ -32,8 +32,10 @@ class LogViewer:
             HTML string with colored and filtered logs
         """
         html_lines = [
-            '<div style="font-family:monospace; background:#1e1e1e; '
-            'padding:10px; color:#fff; overflow-y:auto; max-height:600px;">'
+            '<div style="font-family:monospace; '
+            "padding:10px; overflow-y:auto; max-height:600px; "
+            "background:var(--body-background-fill); color:var(--body-text-color); "
+            'border:1px solid var(--border-color-primary);">'
         ]
 
         for entry in self.entries:
@@ -47,18 +49,18 @@ class LogViewer:
             if search and search.lower() not in text.lower():
                 continue
 
-            # Color based on content
-            color = "#fff"  # Default white
+            # Color based on content - semantic colors for log levels
+            color = "inherit"  # Default to inherit theme color
             if "ERROR" in text or "Error" in text or "error" in text.lower():
-                color = "#ff6b6b"  # Red
+                color = "#ff6b6b"  # Red for errors
             elif "WARNING" in text or "Warning" in text or "warning" in text.lower():
-                color = "#ffd93d"  # Yellow
+                color = "#ffa500"  # Orange for warnings
             elif "SUCCESS" in text or "complete" in text.lower() or "✓" in text:
-                color = "#6bcf7f"  # Green
+                color = "#6bcf7f"  # Green for success
             elif "INFO" in text or "[INFO]" in text:
-                color = "#4dabf7"  # Blue
+                color = "#4dabf7"  # Blue for info
             elif "DEBUG" in text or "[DEBUG]" in text:
-                color = "#868e96"  # Gray
+                color = "#868e96"  # Gray for debug
 
             # Escape HTML for safety
             safe_text = html.escape(text)

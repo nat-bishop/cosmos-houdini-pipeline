@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Operations Tab UI Implementation (2025-09-10)
+- **Advanced Operations Interface in Gradio UI**
+  - New Operations tab with sophisticated two-column layout for improved workflow management
+  - Left column: Prompt selection with comprehensive filtering and search capabilities
+  - Right column: Inference controls with fine-grained parameter adjustment
+  - Enhanced user experience with intuitive prompt-to-inference workflow
+
+- **Inference Controls Enhancement**
+  - Adjustable weights for all control modalities: visual, edge, depth, segmentation (0.0-1.0 range)
+  - Advanced parameter controls for inference customization
+  - Real-time parameter validation and visual feedback
+  - Streamlined inference execution with immediate visual confirmation
+
+- **AI-Powered Prompt Enhancement Integration**
+  - Pixtral AI model integration for intelligent prompt enhancement
+  - Semantic analysis and improvement of user prompts for better video generation
+  - Enhanced description quality through advanced language model processing
+  - Optional enhancement workflow with quality comparison features
+
+### Fixed - Theme System and Visual Improvements (2025-09-10)
+- **Theme System Overhaul**
+  - Fixed theme system to properly respect system dark/light mode preferences
+  - Automatic theme detection and application across all UI components
+  - Consistent visual styling between light and dark modes
+  - Improved user experience with seamless theme transitions
+
+- **LogViewer CSS Architecture**
+  - Replaced hardcoded colors in LogViewer with CSS variables for better maintainability
+  - Theme-aware log display with proper contrast ratios in both light and dark modes
+  - Improved readability and accessibility of log streaming interface
+  - Consistent styling across all logging components
+
+### Enhanced - Status Synchronization System (2025-09-10)
+- **Improved Status Tracking**
+  - Enhanced status synchronization between UI components and backend systems
+  - Real-time status updates across all interface elements
+  - Better error handling and status reporting for long-running operations
+  - Consistent status indicators throughout the application
+
 ### Added - Phase 1 Upscaling Refactor Complete (2025-09-10)
 - **Video-Agnostic Upscaling System**
   - Complete refactor enabling upscaling of any video file, not just inference run outputs

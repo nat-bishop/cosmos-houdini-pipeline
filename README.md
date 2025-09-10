@@ -6,16 +6,39 @@
 
 <div align="center">
 
-### Web Interface for AI Video Generation Workflow
+### Advanced Operations Interface with Two-Column Layout
 
-![Generate Tab](docs/images/generate-tab.png)
-*Create prompts and run inference with real-time preview*
+![Operations Interface](docs/images/inference.png)
+*New Operations tab with prompt selection and inference controls including adjustable weights*
 
-![Gallery Tab](docs/images/gallery-tab.png)
-*Browse and manage generated videos with visual gallery*
+### Multimodal Input Support
 
-![Status Tab](docs/images/status-tab.png)
-*Monitor GPU resources and container status in real-time*
+![Multimodal Inputs](docs/images/multimodal-inputs.png)
+*Support for color, depth, edge, and segmentation control inputs with flexible weight system*
+
+### Prompt Creation & Enhancement
+
+![Prompt Creation](docs/images/prompt-creation.png)
+*Create prompts with AI enhancement using Pixtral model for improved descriptions*
+
+### Results & Log Streaming
+
+<table>
+<tr>
+<td width="50%">
+
+![Results Gallery](docs/images/results.png)
+*Visual gallery for generated videos with metadata*
+
+</td>
+<td width="50%">
+
+![Real-time Logs](docs/images/log-streaming.png)
+*Real-time log streaming with theme-aware CSS variables*
+
+</td>
+</tr>
+</table>
 
 </div>
 
@@ -49,11 +72,13 @@ results = api.batch_inference([
 ## 💪 Technical Achievements
 
 - **🧪 Testing:** 450+ passing tests with 80%+ code coverage
+- **🎨 Advanced UI:** Two-column Operations interface with intelligent prompt selection and fine-grained inference controls
+- **🤖 AI Integration:** Pixtral model integration for prompt enhancement and semantic improvement
 - **🎥 Video Pipeline Innovation:** Seamless integration with NVIDIA Cosmos Transfer models for AI video generation
 - **🔄 Video-Agnostic Upscaling:** Universal 4K upscaling system that works with any video source (inference outputs or arbitrary files)
 - **🌐 Remote GPU Orchestration:** SSH-based Docker container management across distributed GPU infrastructure
-- **📊 Monitoring:** Real-time GPU status with lazy evaluation pattern
-- **🏗️ Architecture:** Clean facade pattern with separation of concerns
+- **📊 Monitoring:** Real-time GPU status with lazy evaluation pattern and theme-aware log visualization
+- **🏗️ Architecture:** Clean facade pattern with separation of concerns and proper dependency injection
 - **🔧 Robust File Transfer:** SFTP-based file synchronization with integrity verification and retry mechanisms
 
 ## 🛠️ Tech Stack
@@ -120,11 +145,14 @@ results = api.batch_inference([
 - No background threads - reliable CLI operation
 - Exit code parsing from container logs
 
-### **Web Interface (Gradio)**
-- Five comprehensive tabs for complete workflow
-- Real-time status updates and log streaming
-- Visual gallery for generated videos
-- Batch management with progress tracking
+### **Advanced Web Interface (Gradio)**
+- **Operations Tab**: New two-column layout with prompt selection and inference controls
+- **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
+- **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions
+- **Theme System**: Proper dark/light mode support respecting system preferences
+- **Real-time Monitoring**: Log streaming with CSS variables instead of hardcoded colors
+- **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
+- **Batch Management**: Progress tracking for multiple inference operations
 
 ### **AI Enhancement Pipeline**
 - Prompt optimization using Pixtral model

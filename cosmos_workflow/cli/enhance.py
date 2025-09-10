@@ -99,29 +99,55 @@ def prompt_enhance(ctx, prompt_id, model, create_new, dry_run):
 
         progress.update(task, completed=True)
 
-    # Display results
-    if create_new:
+    # Enhancement always runs in background now
+    if result.get("status") == "started":
+        # Display background execution info
         results_data = {
+            "Run ID": format_id(result["run_id"]),
             "Original prompt": format_id(prompt_id),
-            "Enhanced prompt": format_id(result["enhanced_prompt_id"]),
-            "Model used": model,
+            "Model": model,
+            "Status": "Running in background",
         }
-        success_message = "Prompt enhanced successfully!"
+
+        display_success("Enhancement started in background!", results_data)
+
+        console.print("\n[yellow]The enhancement is now running on the GPU.[/yellow]")
+        console.print("\nTo monitor progress:")
+        console.print("  [cyan]cosmos status --stream[/cyan]")
+        console.print("\nThe enhanced prompt will be created automatically when complete.")
+
+        if create_new:
+            console.print(
+                "\n[dim]Once complete, the new enhanced prompt ID will be available via:[/dim]"
+            )
+            console.print(f"  [cyan]cosmos show run {result['run_id']}[/cyan]")
     else:
-        results_data = {
-            "Updated prompt": format_id(prompt_id),
-            "Model used": model,
-        }
-        success_message = "Prompt updated successfully!"
+        # Legacy synchronous path (shouldn't happen with current implementation)
+        if create_new:
+            results_data = {
+                "Original prompt": format_id(prompt_id),
+                "Enhanced prompt": format_id(result.get("enhanced_prompt_id", "pending")),
+                "Model used": model,
+            }
+            success_message = "Prompt enhanced successfully!"
+        else:
+            results_data = {
+                "Updated prompt": format_id(prompt_id),
+                "Model used": model,
+            }
+            success_message = "Prompt updated successfully!"
 
-    display_success(success_message, results_data)
+        display_success(success_message, results_data)
 
-    # Show the enhanced text
-    console.print("\n[bold]Enhanced text:[/bold]")
-    console.print(format_prompt_text(result["enhanced_text"]))
+        # Only show enhanced text if it exists
+        if result.get("enhanced_text"):
+            console.print("\n[bold]Enhanced text:[/bold]")
+            console.print(format_prompt_text(result["enhanced_text"]))
 
-    # Suggest next step
-    if create_new:
-        console.print(f"\n[dim]Next step: cosmos inference {result['enhanced_prompt_id']}[/dim]")
-    else:
-        console.print(f"\n[dim]Next step: cosmos inference {prompt_id}[/dim]")
+        # Suggest next step if we have the enhanced prompt ID
+        if create_new and result.get("enhanced_prompt_id"):
+            console.print(
+                f"\n[dim]Next step: cosmos inference {result['enhanced_prompt_id']}[/dim]"
+            )
+        elif not create_new:
+            console.print(f"\n[dim]Next step: cosmos inference {prompt_id}[/dim]")

@@ -98,6 +98,39 @@
 - [ ] Configure environment variables and secrets
 - [ ] Add health check verification
 
+### Video Metadata Extraction for Gradio UI
+**Issue:** Gradio UI displays hardcoded placeholder values for video resolution and duration instead of actual metadata
+
+**Current Problems:**
+- UI shows static "1920x1080" resolution for all videos (line 114 in app.py)
+- Duration shows placeholder "120 frames (5.0 seconds @ 24fps)" (line 116 in app.py)
+- No validation that multimodal videos (color, depth, segmentation) have matching properties
+- CosmosSequenceValidator only works with PNG sequences, not video files
+
+**Implementation Tasks:**
+- [ ] Create `cosmos_workflow/utils/video_metadata.py` for video analysis
+  - Implement `extract_video_resolution(video_path)` using cv2.VideoCapture
+  - Implement `extract_video_duration(video_path)` for duration in seconds
+  - Implement `extract_video_frame_count(video_path)` for total frames
+  - Implement `extract_video_fps(video_path)` for frame rate
+  - Implement `get_video_metadata(video_path)` combining all metadata
+- [ ] Create `cosmos_workflow/utils/multimodal_validator.py` for consistency checks
+  - Implement `validate_video_consistency(video_dir)` to check all videos have same length
+  - Implement `validate_matching_properties(video_paths)` for resolution/fps matching
+  - Report mismatches between color, depth, and segmentation videos
+- [ ] Update Gradio UI to use real metadata
+  - Replace TODO comments in `on_input_select()` function
+  - Handle edge cases (missing files, corrupted videos)
+- [ ] Add comprehensive tests
+  - Unit tests for metadata extraction
+  - Integration tests for multimodal validation
+  - Test error handling for invalid videos
+
+**Technical Approach:**
+- Leverage existing OpenCV (cv2) dependency already in project
+- Place in utils/ as these are general-purpose utilities for remote GPU workflows
+- Follow project patterns: parameterized logging, type hints, Google docstrings
+
 ## 🛠️ Priority 3: Code Quality
 
 ### Reduce Method Complexity

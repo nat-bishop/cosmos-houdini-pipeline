@@ -235,7 +235,7 @@ class CosmosVideoConverter:
             if "color" in sequence_info.modalities:
                 description = self._generate_ai_description(sequence_info.modalities["color"])
                 name = generate_smart_name(description)
-                logger.info("Generated smart name: '%s' from description: '%s'", name, description)
+                logger.info("Generated smart name: '{}' from description: '{}'", name, description)
             else:
                 name = "sequence"
         elif name is None:
@@ -263,7 +263,7 @@ class CosmosVideoConverter:
                     success, video_path = future.result()
                     if success:
                         results["videos"][modality] = str(video_path)
-                        logger.info("Created %s.mp4", modality)
+                        logger.info("Created {}.mp4", modality)
                     else:
                         results["errors"].append(f"Failed to create {modality}.mp4")
                         results["success"] = False
@@ -287,13 +287,13 @@ class CosmosVideoConverter:
             Tuple of (success, output_path)
         """
         if not frame_paths:
-            logger.error("No frames for %s", modality)
+            logger.error("No frames for {}", modality)
             return False, None
 
         # Read first frame to get dimensions
         first_frame = cv2.imread(str(frame_paths[0]))
         if first_frame is None:
-            logger.error("Cannot read first frame for %s", modality)
+            logger.error("Cannot read first frame for {}", modality)
             return False, None
 
         height, width = first_frame.shape[:2]
@@ -305,7 +305,7 @@ class CosmosVideoConverter:
             out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
             if not out.isOpened():
                 # Fallback to mp4v if H.264 fails
-                logger.warning("H.264 codec failed for %s, using mp4v fallback", modality)
+                logger.warning("H.264 codec failed for {}, using mp4v fallback", modality)
                 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                 out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
         except Exception:
@@ -314,7 +314,7 @@ class CosmosVideoConverter:
             out = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
 
         if not out.isOpened():
-            logger.error("Failed to open video writer for %s", modality)
+            logger.error("Failed to open video writer for {}", modality)
             return False, None
 
         try:
@@ -332,9 +332,9 @@ class CosmosVideoConverter:
                     out.write(frame)
                     frames_written += 1
                 else:
-                    logger.warning("Cannot read frame: %s", frame_path)
+                    logger.warning("Cannot read frame: {}", frame_path)
 
-            logger.info("Created %s video with %d frames", modality, frames_written)
+            logger.info("Created {} video with {} frames", modality, frames_written)
 
             # Validate codec for browser compatibility
             self._validate_video_codec(output_path, modality)
@@ -342,7 +342,7 @@ class CosmosVideoConverter:
             return True, output_path
 
         except Exception as e:
-            logger.error("Error creating %s video: %s", modality, e)
+            logger.error("Error creating {} video: {}", modality, e)
             return False, None
 
         finally:
@@ -374,9 +374,9 @@ class CosmosVideoConverter:
                         codec,
                     )
                 else:
-                    logger.info("Video %s.mp4 uses browser-compatible codec: %s", modality, codec)
+                    logger.info("Video {}.mp4 uses browser-compatible codec: {}", modality, codec)
         except Exception as e:
-            logger.warning("Could not validate video codec for %s: %s", modality, e)
+            logger.warning("Could not validate video codec for {}: {}", modality, e)
 
     def generate_metadata(
         self,
@@ -413,7 +413,7 @@ class CosmosVideoConverter:
                 and description != f"Sequence with {sequence_info.frame_count} frames"
             ):
                 name = generate_smart_name(description)
-                logger.info("Generated smart name: '%s' from description: '%s'", name, description)
+                logger.info("Generated smart name: '{}' from description: '{}'", name, description)
             else:
                 name = "sequence"
 
@@ -505,12 +505,12 @@ class CosmosVideoConverter:
             out = model.generate(**inputs, max_length=50)
             description = processor.decode(out[0], skip_special_tokens=True)
 
-            logger.info("Generated AI description: %s", description)
+            logger.info("Generated AI description: {}", description)
             return description
 
         except ImportError:
             logger.warning("AI models not available (install transformers)")
             return f"Sequence with {len(color_frames)} frames"
         except Exception as e:
-            logger.warning("Could not generate AI description: %s", e)
+            logger.warning("Could not generate AI description: {}", e)
             return f"Sequence with {len(color_frames)} frames"

@@ -707,11 +707,18 @@ cosmos verify --fix   # Fix integrity issues automatically
 ```
 
 ### ui
-Launch the Gradio web interface.
+Launch the advanced Gradio web interface with Operations tab and enhanced controls.
 
 ```bash
 cosmos ui [OPTIONS]
 ```
+
+**Features:**
+- **Operations Tab**: Two-column layout with prompt selection and inference controls
+- **Inference Controls**: Adjustable weights for visual, edge, depth, segmentation (0.0-1.0)
+- **AI Enhancement**: Pixtral model integration for prompt enhancement
+- **Theme System**: Automatic dark/light mode with system preference detection
+- **Real-time Logs**: Theme-aware log streaming with CSS variables
 
 **Options:**
 - `--port`: Port to run the server on (default: 7860)
@@ -723,6 +730,12 @@ cosmos ui                    # Launch on localhost:7860
 cosmos ui --port 8080        # Launch on custom port
 cosmos ui --share            # Create public share link
 ```
+
+**Interface Tabs:**
+- **Operations**: New two-column interface for prompt selection and inference execution
+- **Gallery**: Visual browsing of generated videos with metadata
+- **Logs**: Real-time log streaming with advanced filtering and theme support
+- **Status**: GPU monitoring and container management
 
 ### upscale
 Upscale video to 4K resolution using AI enhancement (Phase 1 Refactor - Video-Agnostic).

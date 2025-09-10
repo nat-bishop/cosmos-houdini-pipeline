@@ -13,10 +13,17 @@
       "Bash(sqlite3:*)",
       "Bash(tree:*)",
       "Read(//c/Users/17143/.cache/claude/staging//**)",
-      "Read(//c/Users/17143/.claude/todos/**)"
+      "Read(//c/Users/17143/.claude/todos/**)",
+      "Bash(export LOG_LEVEL=DEBUG)",
+      "mcp__playwright__browser_navigate",
+      "Read(//f/Art/cosmos-houdini-testarea/**)",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages"
     ],
     "deny": [],
-    "ask": []
+    "ask": [
+      "Bash(cosmos delete:*)"
+    ]
   },
   "enableAllProjectMcpServers": false
 }

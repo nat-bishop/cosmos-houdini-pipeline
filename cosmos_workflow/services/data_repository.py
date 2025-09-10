@@ -84,7 +84,7 @@ class DataRepository:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        logger.info("Creating prompt with model_type=%s", model_type)
+        logger.info("Creating prompt with model_type={}", model_type)
 
         # Validate inputs
         if model_type is None:
@@ -131,7 +131,7 @@ class DataRepository:
             }
 
             session.commit()
-            logger.info("Created prompt with id=%s", prompt.id)
+            logger.info("Created prompt with id={}", prompt.id)
             return result
 
     def create_run(
@@ -158,7 +158,7 @@ class DataRepository:
         Raises:
             ValueError: If prompt not found or invalid parameters
         """
-        logger.info("Creating run for prompt_id=%s", prompt_id)
+        logger.info("Creating run for prompt_id={}", prompt_id)
 
         # Validate inputs
         if prompt_id is None:
@@ -214,7 +214,7 @@ class DataRepository:
 
             session.commit()
             logger.info(
-                "Created run with id=%s for prompt=%s with model_type=%s",
+                "Created run with id={} for prompt={} with model_type={}",
                 run.id,
                 prompt_id,
                 run_model_type,
@@ -238,7 +238,7 @@ class DataRepository:
         if not prompt_id or prompt_id.isspace():
             raise ValueError("prompt_id cannot be empty")
 
-        logger.debug("Retrieving prompt with id=%s", prompt_id)
+        logger.debug("Retrieving prompt with id={}", prompt_id)
 
         with self.db.get_session() as session:
             prompt = session.query(Prompt).filter_by(id=prompt_id).first()
@@ -271,7 +271,7 @@ class DataRepository:
         if not run_id or run_id.isspace():
             raise ValueError("run_id cannot be empty")
 
-        logger.debug("Retrieving run with id=%s", run_id)
+        logger.debug("Retrieving run with id={}", run_id)
 
         with self.db.get_session() as session:
             run = session.query(Run).filter_by(id=run_id).first()
@@ -285,7 +285,7 @@ class DataRepository:
                 try:
                     run_dict = self.status_checker.sync_run_status(run_dict, self)
                 except Exception as e:
-                    logger.warning("Failed to sync run status for %s: %s", run_id, e)
+                    logger.warning("Failed to sync run status for {}: {}", run_id, e)
 
             return run_dict
 
@@ -373,7 +373,7 @@ class DataRepository:
                 f"Invalid status: {status}. Must be one of pending, running, completed, failed"
             )
 
-        logger.info("Updating run status for id=%s to %s", run_id, status)
+        logger.info("Updating run status for id={} to {}", run_id, status)
 
         with self.db.get_session() as session:
             run = session.query(Run).filter_by(id=run_id).first()
@@ -393,7 +393,7 @@ class DataRepository:
             session.flush()  # Flush to ensure updated_at is set
             result = self._run_to_dict(run)
             session.commit()
-            logger.info("Updated run %s status to %s", run_id, status)
+            logger.info("Updated run {} status to {}", run_id, status)
             return result
 
     def update_run(self, run_id: str, **kwargs) -> dict[str, Any] | None:
@@ -427,7 +427,7 @@ class DataRepository:
         if invalid_fields:
             raise ValueError(f"Invalid fields: {invalid_fields}. Allowed: {allowed_fields}")
 
-        logger.info("Updating run id=%s with fields: %s", run_id, list(kwargs.keys()))
+        logger.info("Updating run id={} with fields: {}", run_id, list(kwargs.keys()))
 
         with self.db.get_session() as session:
             run = session.query(Run).filter_by(id=run_id).first()
@@ -457,9 +457,9 @@ class DataRepository:
 
             # Log appropriately based on what was updated
             if "error_message" in kwargs:
-                logger.error("Run %s failed: %s", run_id, kwargs["error_message"][:100])
+                logger.error("Run {} failed: {}", run_id, kwargs["error_message"][:100])
             else:
-                logger.info("Updated run %s", run_id)
+                logger.info("Updated run {}", run_id)
             return result
 
     @staticmethod
@@ -520,7 +520,7 @@ class DataRepository:
 
                 return result
         except SQLAlchemyError as e:
-            logger.error("Error listing prompts: %s", e)
+            logger.error("Error listing prompts: {}", e)
             return []
 
     def list_runs(
@@ -590,11 +590,16 @@ class DataRepository:
                                 "Failed to sync run status for %s: %s", run_dict["id"], e
                             )
 
+                    # Only include runs that match the requested status filter after sync
+                    # If we filtered by status and the run no longer matches, skip it
+                    if status and run_dict.get("status") != status:
+                        continue
+
                     result.append(run_dict)
 
                 return result
         except SQLAlchemyError as e:
-            logger.error("Error listing runs: %s", e)
+            logger.error("Error listing runs: {}", e)
             return []
 
     def search_prompts(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -611,7 +616,7 @@ class DataRepository:
             logger.debug("Empty search query provided")
             return []
 
-        logger.debug("Searching prompts with query=%s, limit=%s", query, limit)
+        logger.debug("Searching prompts with query={}, limit={}", query, limit)
 
         try:
             with self.db.get_session() as session:
@@ -645,7 +650,7 @@ class DataRepository:
 
                 return result
         except SQLAlchemyError as e:
-            logger.error("Error searching prompts: %s", e)
+            logger.error("Error searching prompts: {}", e)
             return []
 
     @staticmethod
@@ -667,14 +672,14 @@ class DataRepository:
             logger.debug("Empty prompt_id provided")
             return None
 
-        logger.debug("Updating prompt %s with fields: %s", prompt_id, kwargs.keys())
+        logger.debug("Updating prompt {} with fields: {}", prompt_id, kwargs.keys())
 
         try:
             with self.db.get_session() as session:
                 prompt = session.query(Prompt).filter_by(id=prompt_id).first()
 
                 if not prompt:
-                    logger.warning("Prompt not found: %s", prompt_id)
+                    logger.warning("Prompt not found: {}", prompt_id)
                     return None
 
                 # Update allowed fields
@@ -690,12 +695,12 @@ class DataRepository:
                 # Note: We don't allow updating inputs or model_type for data integrity
 
                 session.commit()
-                logger.info("Updated prompt %s", prompt_id)
+                logger.info("Updated prompt {}", prompt_id)
 
                 return self._prompt_to_dict(prompt)
 
         except SQLAlchemyError as e:
-            logger.error("Error updating prompt %s: %s", prompt_id, e)
+            logger.error("Error updating prompt {}: {}", prompt_id, e)
             return None
 
     def get_prompt_with_runs(self, prompt_id: str) -> dict[str, Any] | None:
@@ -711,7 +716,7 @@ class DataRepository:
             logger.debug("Empty prompt_id provided")
             return None
 
-        logger.debug("Getting prompt with runs for prompt_id=%s", prompt_id)
+        logger.debug("Getting prompt with runs for prompt_id={}", prompt_id)
 
         try:
             with self.db.get_session() as session:
@@ -755,7 +760,7 @@ class DataRepository:
 
                 return result
         except SQLAlchemyError as e:
-            logger.error("Error getting prompt with runs: %s", e)
+            logger.error("Error getting prompt with runs: {}", e)
             return None
 
     def preview_prompt_deletion(self, prompt_id: str, keep_outputs: bool = True) -> dict[str, Any]:
@@ -774,7 +779,7 @@ class DataRepository:
             - files_summary: Summary of files to be deleted (if not keeping outputs)
             - error: Error message if prompt not found
         """
-        logger.debug("Previewing deletion for prompt_id=%s", prompt_id)
+        logger.debug("Previewing deletion for prompt_id={}", prompt_id)
 
         result = {
             "prompt": None,
@@ -853,7 +858,7 @@ class DataRepository:
             - total_size: Total size of files
             - error: Error message if run not found
         """
-        logger.debug("Previewing deletion for run_id=%s", run_id)
+        logger.debug("Previewing deletion for run_id={}", run_id)
 
         result = {
             "run": None,
@@ -962,7 +967,7 @@ class DataRepository:
             - deleted: Information about what was deleted
             - error: Error message if failed
         """
-        logger.info("Deleting prompt_id=%s", prompt_id)
+        logger.info("Deleting prompt_id={}", prompt_id)
 
         # Check if prompt exists
         prompt_data = self.get_prompt_with_runs(prompt_id)
@@ -1001,9 +1006,9 @@ class DataRepository:
                 if run_dir.exists():
                     try:
                         shutil.rmtree(run_dir)
-                        logger.info("Deleted directory: %s", run_dir)
+                        logger.info("Deleted directory: {}", run_dir)
                     except Exception as e:
-                        logger.warning("Failed to delete directory %s: %s", run_dir, e)
+                        logger.warning("Failed to delete directory {}: {}", run_dir, e)
 
         # Delete from database (cascade will delete runs)
         try:
@@ -1018,7 +1023,7 @@ class DataRepository:
                         len(deleted_info["run_ids"]),
                     )
         except SQLAlchemyError as e:
-            logger.error("Database error deleting prompt %s: %s", prompt_id, e)
+            logger.error("Database error deleting prompt {}: {}", prompt_id, e)
             return {
                 "success": False,
                 "error": f"Database error: {e!s}",
@@ -1043,7 +1048,7 @@ class DataRepository:
             - warnings: Any warnings during deletion
             - error: Error message if failed
         """
-        logger.info("Deleting run_id=%s", run_id)
+        logger.info("Deleting run_id={}", run_id)
 
         # Check if run exists
         run_data = self.get_run(run_id)
@@ -1079,13 +1084,13 @@ class DataRepository:
             if run_dir.exists():
                 try:
                     shutil.rmtree(run_dir)
-                    logger.info("Deleted directory: %s", run_dir)
+                    logger.info("Deleted directory: {}", run_dir)
                 except PermissionError as e:
                     warnings.append(f"Could not delete directory due to permission error: {e!s}")
-                    logger.warning("Permission error deleting directory %s: %s", run_dir, e)
+                    logger.warning("Permission error deleting directory {}: {}", run_dir, e)
                 except Exception as e:
                     warnings.append(f"Failed to delete directory: {e!s}")
-                    logger.warning("Failed to delete directory %s: %s", run_dir, e)
+                    logger.warning("Failed to delete directory {}: {}", run_dir, e)
 
         # Delete from database
         try:
@@ -1094,9 +1099,9 @@ class DataRepository:
                 if run:
                     session.delete(run)
                     session.commit()
-                    logger.info("Deleted run %s from database", run_id)
+                    logger.info("Deleted run {} from database", run_id)
         except SQLAlchemyError as e:
-            logger.error("Database error deleting run %s: %s", run_id, e)
+            logger.error("Database error deleting run {}: {}", run_id, e)
             return {
                 "success": False,
                 "error": f"Database error: {e!s}",
@@ -1159,7 +1164,7 @@ class DataRepository:
         Returns:
             Dictionary with deletion results
         """
-        logger.info("Deleting all runs, keep_outputs=%s", keep_outputs)
+        logger.info("Deleting all runs, keep_outputs={}", keep_outputs)
 
         runs = self.list_runs(limit=1000)
 
@@ -1253,7 +1258,7 @@ class DataRepository:
         Returns:
             Dictionary with deletion results
         """
-        logger.info("Deleting all prompts, keep_outputs=%s", keep_outputs)
+        logger.info("Deleting all prompts, keep_outputs={}", keep_outputs)
 
         prompts = self.list_prompts(limit=1000)
 

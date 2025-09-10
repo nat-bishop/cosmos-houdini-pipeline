@@ -94,7 +94,7 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
             console.print(table)
 
     except Exception as e:
-        logger.error("Failed to list prompts: %s", e)
+        logger.error("Failed to list prompts: {}", e)
         console.print(f"[red]Error: Failed to list prompts - {e}[/red]")
         ctx.exit(1)
 
@@ -188,6 +188,6 @@ def list_runs(
             console.print(table)
 
     except Exception as e:
-        logger.error("Failed to list runs: %s", e)
+        logger.error("Failed to list runs: {}", e)
         console.print(f"[red]Error: Failed to list runs - {e}[/red]")
         ctx.exit(1)

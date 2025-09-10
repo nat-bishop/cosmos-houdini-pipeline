@@ -77,8 +77,8 @@ def status(ctx, stream):
     active_run = status_info.get("active_run")
     if active_run:
         status_data["Active Operation"] = f"[green]{active_run['model_type'].upper()}[/green]"
-        status_data["  Run ID"] = active_run["id"][:8]  # Show first 8 chars
-        status_data["  Prompt"] = active_run["prompt_id"]
+        status_data["  Run ID"] = active_run["id"]  # Show full ID, not truncated
+        status_data["  Prompt ID"] = active_run["prompt_id"]
         if active_run.get("started_at"):
             status_data["  Started"] = active_run["started_at"]
 

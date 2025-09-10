@@ -4,7 +4,7 @@ import click
 
 from .base import CLIContext, handle_errors
 from .completions import complete_video_dirs
-from .helpers import console, display_next_step, display_success, format_id
+from .helpers import console, display_success, format_id
 
 
 @click.group()
@@ -67,4 +67,8 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
     }
 
     display_success("Prompt created successfully!", results_data)
-    display_next_step(f"cosmos inference {prompt['id']}")
+
+    # Display multiple next step options
+    console.print("\n[dim]Next steps:[/dim]")
+    console.print(f"  cosmos inference {prompt['id']}")
+    console.print(f"  cosmos prompt-enhance {prompt['id']}")

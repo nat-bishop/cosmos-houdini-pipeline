@@ -1,6 +1,52 @@
 # ROADMAP - Cosmos Workflow System
 
+## ✅ Recently Completed (2025-09-10)
+
+### Fixed: Enhancement Runs Not Creating/Updating Prompts
+- **Issue:** When `cosmos prompt-enhance` completed in background, enhanced prompts were not created or updated
+- **Root Cause:** StatusChecker only downloaded outputs but didn't finalize prompt creation
+- **Solution:** Added prompt creation/update logic to StatusChecker when enhancement runs complete
+- **Files Changed:**
+  - `cosmos_workflow/execution/status_checker.py` - Added enhancement finalization
+  - `cosmos_workflow/cli/enhance.py` - Added proper preview and confirmation for --overwrite
+
+### Fixed: Overwrite Mode Missing Proper Warnings
+- **Issue:** `--overwrite` flag didn't show what would be deleted or require confirmation
+- **Solution:** Now shows preview of affected runs, storage impact, and requires user confirmation
+- **Benefit:** Safer operation with clear visibility of destructive actions
+
+### Fixed: Status Command Showing "Missing!" Container
+- **Issue:** Completed runs stayed as "running" in database, causing phantom container warnings
+- **Root Cause:** Same as enhancement issue - runs not properly finalized
+- **Solution:** Fixed by proper run finalization in StatusChecker
+
+### Fixed: Status Command Requiring Two Runs
+- **Issue:** First `cosmos status` showed completed runs as "running" with missing container
+- **Root Cause:** `list_runs(status="running")` returned runs that were synced to "completed" during the query
+- **Solution:** Filter out runs that no longer match the status filter after sync
+- **Files Changed:** `cosmos_workflow/services/data_repository.py` - Added post-sync filtering
+
 ## 🔥 Priority 1: Critical Fixes
+
+### Database Schema Review: Model Type in Prompts
+**Issue:** The `model_type` field in the Prompts table may not make architectural sense
+
+**Current Problems:**
+- Almost all prompts use `model_type="transfer"` as default, suggesting the field is not meaningful
+- Model type seems more relevant to execution (Runs) than to the prompt itself
+- Prompts are just text + inputs/parameters - they don't inherently belong to a specific AI model
+- The same prompt could theoretically be used with different model types
+
+**Investigation Tasks:**
+- [ ] Analyze if `model_type` provides any actual value in the Prompts table
+- [ ] Consider whether this field should be removed entirely
+- [ ] If needed, evaluate moving model type specification to Run creation time only
+- [ ] Review impact on existing queries and CLI commands that filter by model_type
+
+**Enhancement Tracking Complexity:**
+- [ ] Document that there are no direct "enhanced" fields in Prompts table
+- [ ] Current enhancement relationships stored in Run.outputs JSON creates complex queries
+- [ ] Consider simpler approaches: direct foreign keys or dedicated enhancement fields
 
 ### Complete Abstraction Layer Migration
 **Issue:** Multiple files bypass abstraction layers, calling SSH/Docker commands directly instead of using RemoteCommandExecutor/DockerCommandBuilder
@@ -97,6 +143,39 @@
 - [ ] Automate checkpoint download and verification
 - [ ] Configure environment variables and secrets
 - [ ] Add health check verification
+
+### Video Metadata Extraction for Gradio UI
+**Issue:** Gradio UI displays hardcoded placeholder values for video resolution and duration instead of actual metadata
+
+**Current Problems:**
+- UI shows static "1920x1080" resolution for all videos (line 114 in app.py)
+- Duration shows placeholder "120 frames (5.0 seconds @ 24fps)" (line 116 in app.py)
+- No validation that multimodal videos (color, depth, segmentation) have matching properties
+- CosmosSequenceValidator only works with PNG sequences, not video files
+
+**Implementation Tasks:**
+- [ ] Create `cosmos_workflow/utils/video_metadata.py` for video analysis
+  - Implement `extract_video_resolution(video_path)` using cv2.VideoCapture
+  - Implement `extract_video_duration(video_path)` for duration in seconds
+  - Implement `extract_video_frame_count(video_path)` for total frames
+  - Implement `extract_video_fps(video_path)` for frame rate
+  - Implement `get_video_metadata(video_path)` combining all metadata
+- [ ] Create `cosmos_workflow/utils/multimodal_validator.py` for consistency checks
+  - Implement `validate_video_consistency(video_dir)` to check all videos have same length
+  - Implement `validate_matching_properties(video_paths)` for resolution/fps matching
+  - Report mismatches between color, depth, and segmentation videos
+- [ ] Update Gradio UI to use real metadata
+  - Replace TODO comments in `on_input_select()` function
+  - Handle edge cases (missing files, corrupted videos)
+- [ ] Add comprehensive tests
+  - Unit tests for metadata extraction
+  - Integration tests for multimodal validation
+  - Test error handling for invalid videos
+
+**Technical Approach:**
+- Leverage existing OpenCV (cv2) dependency already in project
+- Place in utils/ as these are general-purpose utilities for remote GPU workflows
+- Follow project patterns: parameterized logging, type hints, Google docstrings
 
 ## 🛠️ Priority 3: Code Quality
 

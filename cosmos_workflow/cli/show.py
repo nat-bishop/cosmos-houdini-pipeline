@@ -59,7 +59,7 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                     created_at = dt.strftime("%Y-%m-%d %H:%M:%S")
                 except ValueError:
-                    logger.debug("Failed to parse created_at timestamp: %s", created_at)
+                    logger.debug("Failed to parse created_at timestamp: {}", created_at)
 
             # Create prompt info panel
             prompt_info = f"""[bold cyan]ID:[/bold cyan] {prompt_data["id"]}
@@ -113,7 +113,7 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                             dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
                             created = dt.strftime("%m-%d %H:%M")
                         except ValueError:
-                            logger.debug("Failed to parse run created timestamp: %s", created)
+                            logger.debug("Failed to parse run created timestamp: {}", created)
 
                     # Calculate duration if completed
                     duration = "-"
@@ -155,6 +155,6 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
                 console.print("\n[yellow]No runs found for this prompt[/yellow]")
 
     except Exception as e:
-        logger.error("Failed to show prompt details: %s", e)
+        logger.error("Failed to show prompt details: {}", e)
         console.print(f"[red]Error: Failed to show prompt details - {e}[/red]")
         ctx.exit(1)

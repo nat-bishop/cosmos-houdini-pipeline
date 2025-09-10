@@ -542,12 +542,10 @@ class CosmosAPI:
         if weights is None:
             weights = {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
 
-        # Validate weights
+        # Validate weights - only check individual weight bounds
+        # The model handles normalization internally
         if not all(0 <= w <= 1 for w in weights.values()):
             raise ValueError("All weights must be between 0 and 1")
-        if not (0.99 <= sum(weights.values()) <= 1.01):
-            error_msg = f"Weights must sum to 1.0, got {sum(weights.values())}"
-            raise ValueError(error_msg)
 
         # Build execution config
         execution_config = {

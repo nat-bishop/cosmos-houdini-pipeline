@@ -140,24 +140,25 @@ Docker `run` without `-d` (detach) flag naturally blocks until container complet
 
 ---
 
-### Phase 5: Remove StatusChecker
+### Phase 5: Remove StatusChecker ✅ COMPLETE
 
 #### Step 5.1: Remove StatusChecker Class
-- [ ] Delete file: `cosmos_workflow/execution/status_checker.py`
-- [ ] Run: `git rm cosmos_workflow/execution/status_checker.py`
+- [x] Delete file: `cosmos_workflow/execution/status_checker.py`
+- [x] Run: `git rm cosmos_workflow/execution/status_checker.py`
 
 #### Step 5.2: Remove StatusChecker References
 **File:** `cosmos_workflow/api/cosmos_api.py`
 
-- [ ] Remove import: `from cosmos_workflow.execution.status_checker import StatusChecker`
-- [ ] Remove line ~71: `self._initialize_status_checker()`
-- [ ] Remove method `_initialize_status_checker()` (lines ~75-86)
+- [x] Remove import: `from cosmos_workflow.execution.status_checker import StatusChecker`
+- [x] Remove line ~71: `self._initialize_status_checker()`
+- [x] Remove method `_initialize_status_checker()` (lines ~75-86)
 
 **File:** `cosmos_workflow/services/data_repository.py`
 
-- [ ] Remove any `status_checker` field
-- [ ] Remove `initialize_status_checker()` method if present
-- [ ] Remove StatusChecker import if present
+- [x] Remove any `status_checker` field
+- [x] Remove `initialize_status_checker()` method if present
+- [x] Remove StatusChecker import if present
+- [x] Remove lazy sync logic from `get_run()` and `list_runs()`
 
 ---
 

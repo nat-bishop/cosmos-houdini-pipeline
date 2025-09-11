@@ -120,40 +120,59 @@ def load_input_gallery():
 def on_input_select(evt: gr.SelectData, gallery_data):
     """Handle input selection from gallery."""
     if evt.index is None:
-        return "", "", "", "", "", gr.update(visible=False), ""
+        return (
+            gr.update(visible=False),  # input_details_group
+            "",  # input_name
+            "",  # input_path
+            "",  # input_resolution
+            "",  # input_duration
+            "",  # input_created
+            "",  # input_files
+            "",  # selected_dir_path
+            "",  # color_preview
+            "",  # depth_preview
+            "",  # seg_preview
+            gr.update(visible=False),  # preview_group
+            "",  # create_video_dir
+        )
 
     directories = get_input_directories()
     if evt.index >= len(directories):
-        return "", "", "", "", "", gr.update(visible=False), ""
+        return (
+            gr.update(visible=False),  # input_details_group
+            "",  # input_name
+            "",  # input_path
+            "",  # input_resolution
+            "",  # input_duration
+            "",  # input_created
+            "",  # input_files
+            "",  # selected_dir_path
+            "",  # color_preview
+            "",  # depth_preview
+            "",  # seg_preview
+            gr.update(visible=False),  # preview_group
+            "",  # create_video_dir
+        )
 
     selected_dir = directories[evt.index]
 
-    # Format directory info with proper line breaks
+    # Format directory info for structured fields
     from datetime import datetime
 
-    # Use line breaks with proper Markdown formatting
-    info_parts = []
-    info_parts.append(f"**Name:** {selected_dir['name']}")
-    info_parts.append("")
-    info_parts.append(f"**Path:** `{selected_dir['path']}`")
-    info_parts.append("")
-    info_parts.append("**Resolution:** 1920x1080")  # TODO: Extract from video
-    info_parts.append("")
-    info_parts.append("**Duration:** 120 frames (5.0 seconds @ 24fps)")  # TODO: Extract from video
-    info_parts.append("")
+    # Extract individual field values
+    name = selected_dir["name"]
+    path = selected_dir["path"]
+    resolution = "1920x1080"  # TODO: Extract from video
+    duration = "120 frames (5.0 seconds @ 24fps)"  # TODO: Extract from video
 
     # Get creation time from directory
     dir_stat = os.stat(selected_dir["path"])
     created_time = datetime.fromtimestamp(dir_stat.st_ctime, tz=timezone.utc).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
-    info_parts.append(f"**Created:** {created_time}")
-    info_parts.append("")
 
-    info_text = "\n".join(info_parts)
-
-    info_text += "\n**Multimodal Control Inputs:**\n"
-
+    # Format file list
+    files_list = []
     for file_info in selected_dir["files"]:
         size_mb = file_info["size"] / (1024 * 1024)
         file_type = ""
@@ -163,7 +182,9 @@ def on_input_select(evt: gr.SelectData, gallery_data):
             file_type = " (Depth Map)"
         elif "segmentation" in file_info["name"]:
             file_type = " (Semantic Segmentation)"
-        info_text += f"- {file_info['name']}{file_type} ({size_mb:.2f} MB)\n"
+        files_list.append(f"{file_info['name']}{file_type} ({size_mb:.2f} MB)")
+
+    files_text = "\n".join(files_list)
 
     # Load videos for preview
     color_video = (
@@ -182,13 +203,19 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     video_dir_value = selected_dir["path"].replace("\\", "/")
 
     return (
-        info_text,
-        selected_dir["path"],  # Store the directory path
-        color_video,
-        depth_video,
-        seg_video,
-        gr.update(visible=True),
-        video_dir_value,  # Return normalized path for create_video_dir field
+        gr.update(visible=True),  # input_details_group
+        name,  # input_name
+        path,  # input_path
+        resolution,  # input_resolution
+        duration,  # input_duration
+        created_time,  # input_created
+        files_text,  # input_files
+        selected_dir["path"],  # selected_dir_path
+        color_video,  # color_preview
+        depth_video,  # depth_preview
+        seg_video,  # seg_preview
+        gr.update(visible=True),  # preview_group
+        video_dir_value,  # create_video_dir (auto-fill)
     )
 
 
@@ -398,28 +425,6 @@ def update_selection_count(dataframe_data):
     except Exception as e:
         logger.debug("Error counting selection: %s", str(e))
         return "**0** prompts selected"
-
-
-def select_all_prompts(dataframe_data):
-    """Select all prompts in the table."""
-    if dataframe_data is None:
-        return []
-
-    import pandas as pd
-
-    if isinstance(dataframe_data, pd.DataFrame):
-        # DataFrame format - set first column to True
-        dataframe_data = dataframe_data.copy()
-        dataframe_data.iloc[:, 0] = True
-        return dataframe_data
-    else:
-        # List format
-        updated_data = []
-        for row in dataframe_data:
-            new_row = row.copy() if isinstance(row, list) else list(row)
-            new_row[0] = True
-            updated_data.append(new_row)
-        return updated_data
 
 
 def clear_all_prompts(dataframe_data):
@@ -1126,7 +1131,45 @@ def create_ui():
 
                     # Right: Selected input details (smaller)
                     with gr.Column(scale=1):
-                        selected_info = gr.Markdown("Select an input to view details")
+                        # Input Details Section with structured fields
+                        with gr.Group(
+                            elem_classes=["detail-card"], visible=False
+                        ) as input_details_group:
+                            gr.Markdown("#### 📁 Input Details")
+
+                            input_name = gr.Textbox(
+                                label="Name",
+                                interactive=False,
+                                elem_classes=["loading-skeleton"],
+                            )
+
+                            input_path = gr.Textbox(
+                                label="Path",
+                                interactive=False,
+                            )
+
+                            with gr.Row():
+                                input_resolution = gr.Textbox(
+                                    label="Resolution",
+                                    interactive=False,
+                                    scale=1,
+                                )
+                                input_duration = gr.Textbox(
+                                    label="Duration",
+                                    interactive=False,
+                                    scale=2,
+                                )
+
+                            input_created = gr.Textbox(
+                                label="Created",
+                                interactive=False,
+                            )
+
+                            input_files = gr.Textbox(
+                                label="Multimodal Control Inputs",
+                                lines=3,
+                                interactive=False,
+                            )
 
                         # Hidden field to store selected directory path
                         selected_dir_path = gr.Textbox(visible=False)
@@ -1252,11 +1295,8 @@ def create_ui():
 
                             # Selection controls with visual feedback
                             with gr.Row(elem_classes=["batch-operation"]):
-                                select_all_btn = gr.Button(
-                                    "☑ Select All", size="sm", variant="secondary"
-                                )
                                 clear_selection_btn = gr.Button(
-                                    "☐ Clear", size="sm", variant="secondary"
+                                    "☐ Clear Selection", size="sm", variant="secondary"
                                 )
                                 selection_count = gr.Markdown(
                                     "**0** prompts selected", elem_classes=["selection-counter"]
@@ -1614,7 +1654,13 @@ def create_ui():
             fn=on_input_select,
             inputs=[input_gallery],
             outputs=[
-                selected_info,
+                input_details_group,
+                input_name,
+                input_path,
+                input_resolution,
+                input_duration,
+                input_created,
+                input_files,
                 selected_dir_path,
                 color_preview,
                 depth_preview,
@@ -1847,10 +1893,6 @@ def create_ui():
         )
 
         # Selection controls
-        select_all_btn.click(
-            fn=select_all_prompts, inputs=[ops_prompts_table], outputs=[ops_prompts_table]
-        ).then(fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count])
-
         clear_selection_btn.click(
             fn=clear_all_prompts, inputs=[ops_prompts_table], outputs=[ops_prompts_table]
         ).then(fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count])

@@ -340,17 +340,30 @@ def update_selection_count(dataframe_data):
         import pandas as pd
 
         if isinstance(dataframe_data, pd.DataFrame):
-            # It's a pandas DataFrame
-            selected = dataframe_data.iloc[:, 0].sum() if not dataframe_data.empty else 0
+            # It's a pandas DataFrame - Gradio returns DataFrame with values
+            if not dataframe_data.empty:
+                # Access the actual values array and check first column
+                first_col_values = (
+                    dataframe_data.values[:, 0] if dataframe_data.shape[1] > 0 else []
+                )
+                selected = sum(1 for val in first_col_values if val is True)
+            else:
+                selected = 0
         elif isinstance(dataframe_data, list):
-            # List format
+            # List format - check if rows have boolean first element
             selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
+        elif hasattr(dataframe_data, "__len__"):
+            # Could be a numpy array or similar
+            try:
+                selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
+            except Exception:
+                return "0 selected"
         else:
             return "0 selected"
 
         return f"{selected} selected"
     except Exception as e:
-        logger.debug("Error counting selection: {}", e)
+        logger.debug("Error counting selection: %s", str(e))
         return "0 selected"
 
 

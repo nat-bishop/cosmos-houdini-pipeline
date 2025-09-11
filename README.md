@@ -43,25 +43,41 @@ https://github.com/user-attachments/assets/ca96da3a-ef7a-4625-beda-ebeae7dcfb94
 </td>
 <td width="50%">
 
-### Multimodal Inputs
-![Multimodal Inputs](docs/images/multimodal-inputs.png)
-*Weight control for depth, edge, segmentation (0.0-1.0)*
+### Run History Management
+![Run History Interface](docs/images/run-history.png)
+*Comprehensive run filtering, search, and batch operations*
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### AI Enhancement
-![Prompt Creation](docs/images/prompt-creation.png)
-*Pixtral model integration for prompt improvement*
+### Enhanced Status Indicators
+![Enhanced Prompts](docs/images/enhanced-status.png)
+*AI enhancement status with visual indicators*
 
 </td>
 <td width="50%">
 
-### Real-time Monitoring
-![Real-time Logs](docs/images/log-streaming.png)
-*Live log streaming with theme-aware display*
+### Multi-tab Run Details
+![Run Details](docs/images/run-details.png)
+*Professional tabs for General, Parameters, Logs, and Output*
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### Advanced Filtering
+![Advanced Filters](docs/images/advanced-filtering.png)
+*Multi-criteria filtering with date ranges and text search*
+
+</td>
+<td width="50%">
+
+### Professional Design System
+![Design System](docs/images/design-system.png)
+*Glassmorphism effects, gradients, and loading animations*
 
 </td>
 </tr>
@@ -226,9 +242,13 @@ Local Machine                                    Remote GPU Server (H100)
 
 ### **Advanced Web Interface (Gradio)**
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
+- **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
-- **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions
-- **Queue Management**: Sequential job processing with queue status display
+- **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
+- **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
+- **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
+- **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
+- **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
 - **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback
 - **Theme System**: Professional design with gradient animations and glassmorphism effects
 - **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
@@ -265,6 +285,7 @@ cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 
 ## 📚 Documentation
 
+- **[UI Guide](UI_GUIDE.md)** - Comprehensive guide to the Gradio web interface with tab-by-tab walkthrough
 - **[Development Guide](docs/DEVELOPMENT.md)** - Complete setup, configuration, testing workflows
 - **[API Reference](docs/API.md)** - Full command reference, Python API, database schemas
 - **[Changelog](CHANGELOG.md)** - Version history and feature updates

@@ -80,41 +80,13 @@ class TestWorkflowServiceQueries:
         # Assert
         assert len(result) == 2
         assert result[0]["id"] == "ps_001"
-        assert result[0]["model_type"] == "transfer"
+        # model_type no longer returned for prompts
         assert result[1]["id"] == "ps_002"
         mock_query.order_by.assert_called_once()
         mock_query.order_by().limit.assert_called_with(50)
         mock_query.order_by().limit().offset.assert_called_with(0)
 
-    def test_list_prompts_with_model_filter(self, service, mock_session):
-        """Test listing prompts filtered by model type."""
-        # Arrange
-        mock_prompts = [
-            MagicMock(
-                id="ps_001",
-                model_type="enhance",
-                prompt_text="Enhanced prompt",
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-                inputs={},
-                parameters={},
-                model_config={},
-            )
-        ]
-
-        mock_query = MagicMock()
-        mock_filter = MagicMock()
-        mock_query.filter.return_value = mock_filter
-        mock_filter.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_prompts
-        mock_session.query.return_value = mock_query
-
-        # Act
-        result = service.list_prompts(model_type="enhance")
-
-        # Assert
-        assert len(result) == 1
-        assert result[0]["model_type"] == "enhance"
-        mock_query.filter.assert_called_once()
+    # Model filter test removed - prompts no longer have model_type filter
 
     def test_list_prompts_with_pagination(self, service, mock_session):
         """Test listing prompts with pagination."""

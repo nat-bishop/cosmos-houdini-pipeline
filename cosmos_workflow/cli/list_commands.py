@@ -22,11 +22,6 @@ def list_group():
 
 @list_group.command(name="prompts")
 @click.option(
-    "--model",
-    type=click.Choice(["transfer", "enhancement", "reason", "predict"], case_sensitive=False),
-    help="Filter by model type",
-)
-@click.option(
     "--limit",
     type=int,
     default=50,
@@ -39,12 +34,11 @@ def list_group():
     help="Output in JSON format",
 )
 @click.pass_context
-def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json: bool) -> None:
+def list_prompts(ctx: click.Context, limit: int, output_json: bool) -> None:
     """List all prompts in the database.
 
     Examples:
         cosmos list prompts
-        cosmos list prompts --model transfer
         cosmos list prompts --limit 10
         cosmos list prompts --json
     """
@@ -52,7 +46,7 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
     ops = ctx_obj.get_operations()
 
     try:
-        prompts = ops.list_prompts(model_type=model, limit=limit)
+        prompts = ops.list_prompts(limit=limit)
 
         if output_json:
             # Output as JSON
@@ -65,7 +59,6 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
 
             table = Table(title=f"Prompts ({len(prompts)} found)")
             table.add_column("ID", style="cyan", no_wrap=True)
-            table.add_column("Model", style="magenta")
             table.add_column("Prompt", style="white", max_width=50)
             table.add_column("Created", style="green")
 
@@ -86,7 +79,6 @@ def list_prompts(ctx: click.Context, model: str | None, limit: int, output_json:
 
                 table.add_row(
                     prompt["id"],
-                    prompt["model_type"],
                     prompt_text,
                     created_at,
                 )

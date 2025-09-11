@@ -54,13 +54,11 @@ class TestWorkflowServiceCreatePrompt:
     def test_create_prompt_transfer(self, service):
         """Test creating a transfer model prompt."""
         result = service.create_prompt(
-            model_type="transfer",
             prompt_text="cyberpunk city",
             inputs={"video": "inputs/city.mp4", "depth": "inputs/depth.mp4"},
             parameters={"num_steps": 35, "cfg_scale": 3.5},
         )
 
-        assert result["model_type"] == "transfer"
         assert result["prompt_text"] == "cyberpunk city"
         assert result["inputs"]["video"] == "inputs/city.mp4"
         assert result["inputs"]["depth"] == "inputs/depth.mp4"
@@ -73,13 +71,11 @@ class TestWorkflowServiceCreatePrompt:
     def test_create_prompt_reason(self, service):
         """Test creating a reason model prompt."""
         result = service.create_prompt(
-            model_type="reason",
             prompt_text="What happens next?",
             inputs={"video": "outputs/result.mp4"},
             parameters={"reasoning_depth": 3},
         )
 
-        assert result["model_type"] == "reason"
         assert result["prompt_text"] == "What happens next?"
         assert result["inputs"]["video"] == "outputs/result.mp4"
         assert result["parameters"]["reasoning_depth"] == 3
@@ -87,41 +83,35 @@ class TestWorkflowServiceCreatePrompt:
     def test_create_prompt_predict(self, service):
         """Test creating a predict model prompt."""
         result = service.create_prompt(
-            model_type="predict",
             prompt_text="Continue this scene",
             inputs={"frames": ["frame1.png", "frame2.png"]},
             parameters={"prediction_length": 60},
         )
 
-        assert result["model_type"] == "predict"
         assert result["prompt_text"] == "Continue this scene"
         assert result["inputs"]["frames"] == ["frame1.png", "frame2.png"]
         assert result["parameters"]["prediction_length"] == 60
 
-    def test_create_prompt_missing_model_type(self, service):
-        """Test that missing model_type raises error."""
-        with pytest.raises(ValueError, match="model_type is required"):
-            service.create_prompt(model_type=None, prompt_text="test", inputs={}, parameters={})
 
     def test_create_prompt_empty_prompt_text(self, service):
         """Test that empty prompt_text raises error."""
         with pytest.raises(ValueError, match="prompt_text cannot be empty"):
             service.create_prompt(
-                model_type="transfer", prompt_text="", inputs={"video": "test.mp4"}, parameters={}
+                prompt_text="", inputs={"video": "test.mp4"}, parameters={}
             )
 
     def test_create_prompt_invalid_inputs(self, service):
         """Test that None inputs raises error."""
         with pytest.raises(ValueError, match="inputs cannot be None"):
             service.create_prompt(
-                model_type="transfer", prompt_text="test", inputs=None, parameters={}
+                prompt_text="test", inputs=None, parameters={}
             )
 
     def test_create_prompt_invalid_parameters(self, service):
         """Test that None parameters raises error."""
         with pytest.raises(ValueError, match="parameters cannot be None"):
             service.create_prompt(
-                model_type="transfer", prompt_text="test", inputs={}, parameters=None
+                prompt_text="test", inputs={}, parameters=None
             )
 
 
@@ -138,7 +128,6 @@ class TestWorkflowServiceCreateRun:
 
         # Create a test prompt
         prompt = service.create_prompt(
-            model_type="transfer",
             prompt_text="test prompt",
             inputs={"video": "test.mp4"},
             parameters={"num_steps": 30},
@@ -211,13 +200,11 @@ class TestWorkflowServiceGetPrompt:
 
         # Create test prompts
         prompt1 = service.create_prompt(
-            model_type="transfer",
             prompt_text="prompt 1",
             inputs={"video": "test1.mp4"},
             parameters={"num_steps": 30},
         )
         prompt2 = service.create_prompt(
-            model_type="reason",
             prompt_text="prompt 2",
             inputs={"video": "test2.mp4"},
             parameters={"depth": 2},
@@ -232,7 +219,6 @@ class TestWorkflowServiceGetPrompt:
         result = svc.get_prompt(prompt1_id)
 
         assert result["id"] == prompt1_id
-        assert result["model_type"] == "transfer"
         assert result["prompt_text"] == "prompt 1"
         assert result["inputs"]["video"] == "test1.mp4"
         assert result["parameters"]["num_steps"] == 30
@@ -244,7 +230,6 @@ class TestWorkflowServiceGetPrompt:
         result = svc.get_prompt(prompt2_id)
 
         assert result["id"] == prompt2_id
-        assert result["model_type"] == "reason"
         assert result["prompt_text"] == "prompt 2"
 
     def test_get_prompt_nonexistent(self, service):
@@ -282,7 +267,6 @@ class TestWorkflowServiceGetRun:
 
         # Create test prompt and runs
         prompt = service.create_prompt(
-            model_type="transfer",
             prompt_text="test prompt",
             inputs={"video": "test.mp4"},
             parameters={"num_steps": 30},
@@ -354,7 +338,7 @@ class TestWorkflowServiceTransactions:
         """Test that transactions are rolled back on error."""
         # Create a prompt successfully
         prompt = service.create_prompt(
-            model_type="transfer", prompt_text="test", inputs={"video": "test.mp4"}, parameters={}
+            prompt_text="test", inputs={"video": "test.mp4"}, parameters={}
         )
 
         # Try to create a run with invalid data that will cause an error
@@ -376,7 +360,6 @@ class TestWorkflowServiceTransactions:
         prompts = []
         for i in range(5):
             prompt = service.create_prompt(
-                model_type="transfer",
                 prompt_text=f"prompt {i}",
                 inputs={"video": f"video{i}.mp4"},
                 parameters={"index": i},

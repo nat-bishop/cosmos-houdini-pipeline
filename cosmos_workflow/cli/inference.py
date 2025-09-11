@@ -125,7 +125,6 @@ def inference(
                 "Prompt ID": format_id(prompt["id"]),
                 "Prompt text": format_prompt_text(prompt["prompt_text"]),
                 "Input video": prompt["inputs"].get("video", "N/A"),
-                "Model type": prompt["model_type"],
                 "Weights": format_weights(weights_dict),
                 "Steps": str(steps),
                 "Would create": "Run specification internally",

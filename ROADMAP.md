@@ -1,31 +1,5 @@
 # ROADMAP - Cosmos Workflow System
 
-## ✅ Recently Completed (2025-09-10)
-
-### Fixed: Enhancement Runs Not Creating/Updating Prompts
-- **Issue:** When `cosmos prompt-enhance` completed in background, enhanced prompts were not created or updated
-- **Root Cause:** StatusChecker only downloaded outputs but didn't finalize prompt creation
-- **Solution:** Added prompt creation/update logic to StatusChecker when enhancement runs complete
-- **Files Changed:**
-  - `cosmos_workflow/execution/status_checker.py` - Added enhancement finalization
-  - `cosmos_workflow/cli/enhance.py` - Added proper preview and confirmation for --overwrite
-
-### Fixed: Overwrite Mode Missing Proper Warnings
-- **Issue:** `--overwrite` flag didn't show what would be deleted or require confirmation
-- **Solution:** Now shows preview of affected runs, storage impact, and requires user confirmation
-- **Benefit:** Safer operation with clear visibility of destructive actions
-
-### Fixed: Status Command Showing "Missing!" Container
-- **Issue:** Completed runs stayed as "running" in database, causing phantom container warnings
-- **Root Cause:** Same as enhancement issue - runs not properly finalized
-- **Solution:** Fixed by proper run finalization in StatusChecker
-
-### Fixed: Status Command Requiring Two Runs
-- **Issue:** First `cosmos status` showed completed runs as "running" with missing container
-- **Root Cause:** `list_runs(status="running")` returned runs that were synced to "completed" during the query
-- **Solution:** Filter out runs that no longer match the status filter after sync
-- **Files Changed:** `cosmos_workflow/services/data_repository.py` - Added post-sync filtering
-
 ## 🔥 Priority 1: Critical Fixes
 
 ### Database Schema Review: Model Type in Prompts

@@ -30,7 +30,7 @@ class Prompt(Base):
 
     # Core fields common to all AI models
     id = Column(String, primary_key=True)
-    model_type = Column(String, nullable=False)  # transfer, reason, predict, etc.
+    model_type = Column(String, nullable=False, default="transfer")  # Temporary, will be removed
     prompt_text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

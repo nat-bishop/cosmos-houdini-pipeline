@@ -1,5 +1,27 @@
 #!/usr/bin/env python3
-"""Comprehensive Gradio UI for Cosmos Workflow - Full Featured Application."""
+"""Comprehensive Gradio UI for Cosmos Workflow - Full Featured Application.
+
+This module provides a complete web-based interface for the Cosmos Workflow System,
+featuring advanced run management, filtering capabilities, and professional design.
+
+Key Features:
+- **Run History Management**: Comprehensive filtering, search, and batch operations
+- **Enhanced Status Indicators**: Visual indicators for AI-enhanced prompts
+- **Multi-tab Run Details**: General, Parameters, Logs, and Output information
+- **Professional Design System**: Gradient animations and glassmorphism effects
+- **Advanced Filtering**: Multi-criteria filtering with real-time search
+- **Batch Operations**: Select and manage multiple runs simultaneously
+
+Interface Tabs:
+- Inputs: Video browser with prompt creation and multimodal preview
+- Prompts: Unified prompt management with enhanced status indicators
+- Outputs: Generated video gallery with comprehensive metadata
+- Run History: Advanced run filtering, statistics, and batch management
+- Jobs & Queue: Real-time monitoring and log streaming
+
+The interface integrates with CosmosAPI for all operations, providing a complete
+workflow management system from input preparation to output generation.
+"""
 
 import atexit
 import os

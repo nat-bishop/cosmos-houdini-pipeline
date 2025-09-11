@@ -831,7 +831,6 @@ class GPUExecutor:
                                 # Create new enhanced prompt
                                 name = prompt.get("parameters", {}).get("name", "unnamed")
                                 enhanced_prompt = data_repo.create_prompt(
-                                    model_type=prompt["model_type"],
                                     prompt_text=enhanced_text,
                                     inputs=prompt.get("inputs", {}),
                                     parameters={

@@ -52,7 +52,6 @@ class DataRepository:
 
     def create_prompt(
         self,
-        model_type: str,
         prompt_text: str,
         inputs: dict[str, Any],
         parameters: dict[str, Any],
@@ -60,7 +59,6 @@ class DataRepository:
         """Create a new prompt in the database.
 
         Args:
-            model_type: Type of AI model (transfer, reason, predict, etc.)
             prompt_text: The prompt text
             inputs: Input data (video paths, images, etc.)
             parameters: Model-specific parameters
@@ -71,15 +69,7 @@ class DataRepository:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        logger.info("Creating prompt with model_type={}", model_type)
-
-        # Validate inputs
-        if model_type is None:
-            raise ValueError("model_type is required")
-        if model_type not in SUPPORTED_MODEL_TYPES:
-            raise ValueError(
-                f"Unsupported model_type: {model_type}. Must be one of {SUPPORTED_MODEL_TYPES}"
-            )
+        logger.info("Creating prompt")
         if not prompt_text or prompt_text.isspace():
             raise ValueError("prompt_text cannot be empty")
         if len(prompt_text) > MAX_PROMPT_LENGTH:
@@ -99,7 +89,7 @@ class DataRepository:
         with self.db.get_session() as session:
             prompt = Prompt(
                 id=prompt_id,
-                model_type=model_type,
+                model_type="transfer",  # Temporary until database column is removed
                 prompt_text=prompt_text,
                 inputs=inputs,
                 parameters=parameters,
@@ -110,7 +100,6 @@ class DataRepository:
             # Extract data after flush but before commit for transaction safety
             result = {
                 "id": prompt.id,
-                "model_type": prompt.model_type,
                 "prompt_text": prompt.prompt_text,
                 "inputs": prompt.inputs,
                 "parameters": prompt.parameters,
@@ -127,7 +116,7 @@ class DataRepository:
         execution_config: dict[str, Any],
         metadata: dict[str, Any] | None = None,
         initial_status: str = "pending",
-        model_type: str | None = None,
+        model_type: str = "transfer",
     ) -> dict[str, Any]:
         """Create a new run for a prompt.
 
@@ -136,8 +125,7 @@ class DataRepository:
             execution_config: Execution configuration (GPU node, weights, etc.)
             metadata: Optional metadata (user, priority, etc.)
             initial_status: Initial status for the run (default: "pending")
-            model_type: Override model type (default: use prompt's model_type)
-                       Used for "enhance" and "upscale" runs
+            model_type: Model type for the run (default: "transfer")
 
         Returns:
             Dictionary containing run data
@@ -165,20 +153,17 @@ class DataRepository:
             # Generate run ID
             run_id = self._generate_run_id()
 
-            # Validate provided model_type if specified
-            if model_type is not None and model_type not in SUPPORTED_MODEL_TYPES:
+            # Validate model_type
+            if model_type not in SUPPORTED_MODEL_TYPES:
                 raise ValueError(
                     f"Invalid model_type '{model_type}'. Must be one of: {SUPPORTED_MODEL_TYPES}"
                 )
-
-            # Use provided model_type or default to prompt's model_type
-            run_model_type = model_type if model_type is not None else prompt.model_type
 
             # Create run
             run = Run(
                 id=run_id,
                 prompt_id=prompt_id,
-                model_type=run_model_type,
+                model_type=model_type,
                 status=initial_status,
                 execution_config=execution_config,
                 outputs={},  # Empty initially
@@ -204,7 +189,7 @@ class DataRepository:
                 "Created run with id={} for prompt={} with model_type={}",
                 run.id,
                 prompt_id,
-                run_model_type,
+                model_type,
             )
             return result
 
@@ -234,7 +219,6 @@ class DataRepository:
 
             return {
                 "id": prompt.id,
-                "model_type": prompt.model_type,
                 "prompt_text": prompt.prompt_text,
                 "inputs": prompt.inputs,
                 "parameters": prompt.parameters,
@@ -312,7 +296,6 @@ class DataRepository:
         """
         return {
             "id": prompt.id,
-            "model_type": prompt.model_type,
             "prompt_text": prompt.prompt_text,
             "inputs": prompt.inputs,
             "parameters": prompt.parameters,
@@ -453,12 +436,11 @@ class DataRepository:
         return f"rs_{unique_id}"
 
     def list_prompts(
-        self, model_type: str | None = None, limit: int = 50, offset: int = 0
+        self, limit: int = 50, offset: int = 0
     ) -> list[dict[str, Any]]:
-        """List prompts with optional filtering and pagination.
+        """List prompts with pagination.
 
         Args:
-            model_type: Optional filter by model type
             limit: Maximum number of results to return (default: 50)
             offset: Number of results to skip (default: 0)
 
@@ -466,16 +448,12 @@ class DataRepository:
             List of prompt dictionaries
         """
         logger.debug(
-            "Listing prompts with model_type=%s, limit=%s, offset=%s", model_type, limit, offset
+            "Listing prompts with limit=%s, offset=%s", limit, offset
         )
 
         try:
             with self.db.get_session() as session:
                 query = session.query(Prompt)
-
-                # Apply model type filter if specified
-                if model_type:
-                    query = query.filter(Prompt.model_type == model_type)
 
                 # Order by created_at descending (newest first)
                 query = query.order_by(Prompt.created_at.desc())
@@ -489,7 +467,6 @@ class DataRepository:
                     result.append(
                         {
                             "id": prompt.id,
-                            "model_type": prompt.model_type,
                             "prompt_text": prompt.prompt_text,
                             "inputs": prompt.inputs,
                             "parameters": prompt.parameters,
@@ -609,7 +586,6 @@ class DataRepository:
                     result.append(
                         {
                             "id": prompt.id,
-                            "model_type": prompt.model_type,
                             "prompt_text": prompt.prompt_text,
                             "inputs": prompt.inputs,
                             "parameters": prompt.parameters,
@@ -703,7 +679,6 @@ class DataRepository:
                 # Build prompt dictionary
                 result = {
                     "id": prompt.id,
-                    "model_type": prompt.model_type,
                     "prompt_text": prompt.prompt_text,
                     "inputs": prompt.inputs,
                     "parameters": prompt.parameters,

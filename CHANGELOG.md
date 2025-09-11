@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - UI Enhancements and Run History System (2025-01-15)
+- **Comprehensive Run History Tab Implementation**
+  - New comprehensive Run History tab with advanced filtering, search, and batch operations
+  - Multi-criteria filtering: status (all/completed/running/pending/failed/cancelled), date range (all/today/yesterday/last 7 days/last 30 days)
+  - Text search functionality for prompt text and run IDs with real-time results
+  - Configurable result limits (10-500 runs) with pagination support
+  - Run statistics panel showing total runs, status breakdown, and success rate calculation
+  - Interactive table with checkbox selection for batch operations
+  - Multi-tab run details viewer: General, Parameters, Logs, and Output tabs
+  - Batch operations: Select All/Clear Selection buttons with delete functionality
+  - Professional card layouts with glassmorphism effects and loading skeleton animations
+
+- **Model Type Removal and Interface Simplification**
+  - Removed all model_type dropdowns and filters from the Gradio UI for cleaner interface
+  - Simplified Create Prompt section by removing model_type selection
+  - Removed model_type from Prompt Details display to focus on essential information
+  - Updated all data tables to exclude model_type column, reducing visual clutter
+  - Streamlined prompt operations to focus on core functionality
+
+- **Enhanced Status Indicators**
+  - Added enhanced status checkbox (✨ Enhanced) to Prompt Details view
+  - Visual indicator for prompts that have been enhanced using AI enhancement features
+  - Integrated enhanced status with prompt parameter display
+  - Clear differentiation between standard and AI-enhanced prompts
+
+- **Advanced Run Details System**
+  - Multi-tab detailed run viewer with General, Parameters, Logs, and Output sections
+  - General tab: Run ID, status, duration, prompt information, timestamps
+  - Parameters tab: Control weights display (JSON format), inference parameters (JSON format)
+  - Logs tab: Log file path display, full log content viewer with copy functionality
+  - Output tab: Generated video preview, output path, download/delete buttons (handlers pending)
+  - Professional card styling with hover effects and smooth transitions
+
+- **Professional UI Design System**
+  - Advanced CSS with gradient animations and glassmorphism card effects
+  - Loading skeleton animations for better perceived performance
+  - Professional gradient headers with animated color shifting effects
+  - Interactive hover states and smooth transitions throughout interface
+  - Improved visual hierarchy with consistent styling patterns
+  - Enhanced button animations with shine effects and scaling transforms
+  - Theme-aware design system with CSS variables for maintainability
+
+### Enhanced - User Interface and Experience (2025-01-15)
+- **Improved Filtering and Search Capabilities**
+  - Advanced multi-criteria filtering system in Run History tab
+  - Real-time search with text matching across prompt content and run IDs
+  - Date range filtering with preset options for common time periods
+  - Status-based filtering with comprehensive status support
+  - Configurable result limits with performance optimization
+
+- **Visual Design Improvements**
+  - Comprehensive design system with consistent color schemes and typography
+  - Enhanced card layouts with professional glassmorphism effects
+  - Animated elements with smooth transitions and loading states
+  - Interactive elements with hover effects and visual feedback
+  - Improved accessibility with better contrast ratios and focus states
+
 ### Changed - Synchronous Execution Migration (2025-01-15)
 - **Complete Migration from Asynchronous to Synchronous Execution**
   - All GPU operations now use blocking (synchronous) execution instead of lazy/async

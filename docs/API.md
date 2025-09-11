@@ -707,7 +707,7 @@ cosmos verify --fix   # Fix integrity issues automatically
 ```
 
 ### ui
-Launch the advanced Gradio web interface with Operations tab and enhanced controls.
+Launch the advanced Gradio web interface with comprehensive run management and enhanced controls.
 
 ```bash
 cosmos ui [OPTIONS]
@@ -715,6 +715,12 @@ cosmos ui [OPTIONS]
 
 **Features:**
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
+- **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
+- **Enhanced Status Indicators**: Visual indicators for AI-enhanced prompts with enhanced status checkbox
+- **Multi-tab Run Details**: General, Parameters, Logs, and Output tabs for comprehensive run information
+- **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search capabilities
+- **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
+- **Professional Design System**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Inference Controls**: Adjustable weights for visual, edge, depth, segmentation (0.0-1.0)
 - **AI Enhancement**: Pixtral model integration for prompt enhancement
 - **Theme System**: Automatic dark/light mode with system preference detection
@@ -732,10 +738,23 @@ cosmos ui --share            # Create public share link
 ```
 
 **Interface Tabs:**
-- **Operations**: New two-column interface for prompt selection and inference execution
-- **Gallery**: Visual browsing of generated videos with metadata
-- **Logs**: Real-time log streaming with advanced filtering and theme support
-- **Status**: GPU monitoring and container management
+- **Inputs**: Input video browser with create prompt functionality and multimodal preview
+- **Prompts**: Unified prompt management and operations with enhanced status indicators
+- **Outputs**: Generated video gallery with comprehensive metadata and download capabilities
+- **Run History**: Advanced run filtering, search, statistics, and batch management system
+- **Jobs & Queue**: Real-time job monitoring, queue status, and log streaming interface
+
+**Run History Features:**
+- **Filtering System**: Filter by status (all/completed/running/pending/failed/cancelled), date range (all/today/yesterday/last 7 days/last 30 days)
+- **Text Search**: Real-time search across prompt text and run IDs with instant results
+- **Statistics Panel**: Total runs, status breakdown, and success rate calculations
+- **Batch Operations**: Select All/Clear Selection with batch delete functionality
+- **Run Details Tabs**:
+  - **General**: Run ID, status, duration, prompt information, created/completed timestamps
+  - **Parameters**: Control weights (JSON), inference parameters (JSON)
+  - **Logs**: Log file path, full log content viewer with copy button
+  - **Output**: Generated video preview, output path, download/delete buttons
+- **Professional UI**: Card layouts with glassmorphism effects, hover animations, and loading states
 
 ### upscale
 Upscale video to 4K resolution using AI enhancement (Phase 1 Refactor - Video-Agnostic).

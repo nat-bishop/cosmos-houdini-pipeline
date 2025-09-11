@@ -63,7 +63,6 @@ def search_command(ctx: click.Context, query: str, limit: int, output_json: bool
 
             table = Table(title=f"Search Results for '{query}' ({len(prompts)} found)")
             table.add_column("ID", style="cyan", no_wrap=True)
-            table.add_column("Model", style="magenta")
             table.add_column("Prompt", style="white")
             table.add_column("Created", style="green")
 
@@ -106,7 +105,6 @@ def search_command(ctx: click.Context, query: str, limit: int, output_json: bool
 
                 table.add_row(
                     prompt["id"],
-                    prompt["model_type"],
                     text,
                     created_at,
                 )

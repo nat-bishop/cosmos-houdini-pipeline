@@ -38,14 +38,12 @@ class TestListCommands:
         mock_prompts = [
             {
                 "id": "ps_001",
-                "model_type": "transfer",
                 "prompt_text": "Test prompt 1",
                 "created_at": "2024-01-01T00:00:00",
                 "inputs": {"video": "test.mp4"},
             },
             {
                 "id": "ps_002",
-                "model_type": "enhance",
                 "prompt_text": "Test prompt 2",
                 "created_at": "2024-01-01T01:00:00",
                 "inputs": {},
@@ -61,34 +59,10 @@ class TestListCommands:
         assert result.exit_code == 0
         assert "ps_001" in result.output
         assert "ps_002" in result.output
-        assert "transfer" in result.output
-        assert "enhance" in result.output
-        mock_operations.list_prompts.assert_called_once_with(model_type=None, limit=50)
+        # Model type no longer displayed for prompts
+        mock_operations.list_prompts.assert_called_once_with(limit=50)
 
-    @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
-    def test_list_prompts_with_model_filter(self, mock_get_operations, runner, mock_operations):
-        """Test listing prompts filtered by model type."""
-        # Arrange
-        mock_prompts = [
-            {
-                "id": "ps_001",
-                "model_type": "transfer",
-                "prompt_text": "Test prompt",
-                "created_at": "2024-01-01T00:00:00",
-                "inputs": {"video": "test.mp4"},
-            }
-        ]
-        mock_operations.list_prompts.return_value = mock_prompts
-        mock_get_operations.return_value = mock_operations
-
-        # Act
-        result = runner.invoke(list_group, ["prompts", "--model", "transfer"], obj=CLIContext())
-
-        # Assert
-        assert result.exit_code == 0
-        assert "ps_001" in result.output
-        assert "transfer" in result.output
-        mock_operations.list_prompts.assert_called_once_with(model_type="transfer", limit=50)
+    # Model filter removed - prompts no longer have model_type
 
     @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_with_limit(self, mock_get_operations, runner, mock_operations):
@@ -102,7 +76,7 @@ class TestListCommands:
 
         # Assert
         assert result.exit_code == 0
-        mock_operations.list_prompts.assert_called_once_with(model_type=None, limit=10)
+        mock_operations.list_prompts.assert_called_once_with(limit=10)
 
     @patch("cosmos_workflow.cli.base.CLIContext.get_operations")
     def test_list_prompts_empty_result(self, mock_get_operations, runner, mock_operations):
@@ -125,7 +99,6 @@ class TestListCommands:
         mock_prompts = [
             {
                 "id": "ps_001",
-                "model_type": "transfer",
                 "prompt_text": "Test prompt",
                 "created_at": "2024-01-01T00:00:00",
                 "inputs": {"video": "test.mp4"},
@@ -152,16 +125,16 @@ class TestListCommands:
             {
                 "id": "rs_001",
                 "prompt_id": "ps_001",
-                "status": "completed",
                 "model_type": "transfer",
+                "status": "completed",
                 "created_at": "2024-01-01T00:00:00",
                 "outputs": {"video_path": "output.mp4"},
             },
             {
                 "id": "rs_002",
                 "prompt_id": "ps_002",
+                "model_type": "enhance",
                 "status": "running",
-                "model_type": "transfer",
                 "created_at": "2024-01-01T01:00:00",
                 "outputs": {},
             },
@@ -187,9 +160,9 @@ class TestListCommands:
         mock_runs = [
             {
                 "id": "rs_001",
+                "model_type": "transfer",
                 "prompt_id": "ps_001",
                 "status": "completed",
-                "model_type": "transfer",
                 "created_at": "2024-01-01T00:00:00",
                 "outputs": {"video_path": "output.mp4"},
             }
@@ -215,9 +188,9 @@ class TestListCommands:
         mock_runs = [
             {
                 "id": "rs_001",
+                "model_type": "transfer",
                 "prompt_id": "ps_specific",
                 "status": "completed",
-                "model_type": "transfer",
                 "created_at": "2024-01-01T00:00:00",
                 "outputs": {},
             }
@@ -288,9 +261,9 @@ class TestListCommands:
         mock_runs = [
             {
                 "id": "rs_001",
+                "model_type": "transfer",
                 "prompt_id": "ps_001",
                 "status": "completed",
-                "model_type": "transfer",
                 "created_at": "2024-01-01T00:00:00",
                 "outputs": {"video_path": "output.mp4"},
             }

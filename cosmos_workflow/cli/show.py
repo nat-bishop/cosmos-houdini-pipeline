@@ -63,7 +63,6 @@ def show_command(ctx: click.Context, prompt_id: str, output_json: bool) -> None:
 
             # Create prompt info panel
             prompt_info = f"""[bold cyan]ID:[/bold cyan] {prompt_data["id"]}
-[bold cyan]Model:[/bold cyan] {prompt_data["model_type"]}
 [bold cyan]Created:[/bold cyan] {created_at}
 
 [bold cyan]Prompt Text:[/bold cyan]

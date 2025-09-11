@@ -77,7 +77,6 @@ class CosmosAPI:
         video_dir: Path | str,
         name: str | None = None,
         negative_prompt: str | None = None,
-        model_type: str = "transfer",
     ) -> dict[str, Any]:
         """Create a prompt with simplified interface.
 
@@ -86,7 +85,6 @@ class CosmosAPI:
             video_dir: Directory containing video files (color.mp4, depth.mp4, etc.)
             name: Optional name for the prompt (auto-generated if not provided)
             negative_prompt: Optional negative prompt (uses default if not provided)
-            model_type: Model type (default: "transfer")
 
         Returns:
             Dictionary containing prompt data with 'id' key
@@ -132,7 +130,6 @@ class CosmosAPI:
 
         # Create prompt using service
         prompt = self.service.create_prompt(
-            model_type=model_type,
             prompt_text=prompt_text,
             inputs=inputs,
             parameters=parameters,
@@ -260,7 +257,6 @@ class CosmosAPI:
                 # Create new enhanced prompt
                 name = original["parameters"].get("name", "unnamed")
                 enhanced = self.service.create_prompt(
-                    model_type=original["model_type"],
                     prompt_text=enhanced_text,
                     inputs=original["inputs"],
                     parameters={

@@ -167,11 +167,11 @@ def upscale(
             raise click.Exit(1) from e
 
     # Display results
-    if result["status"] in ["success", "started"]:
+    if result["status"] in ["success", "started", "completed"]:
         results_data = {
             "Upscale Run ID": format_id(result["upscale_run_id"]),
             "Control Weight": str(weight),
-            "Status": "Started in background",
+            "Status": "Completed",
         }
 
         if run_id:
@@ -185,13 +185,7 @@ def upscale(
         if result.get("output_path"):
             results_data["Output Path"] = result["output_path"]
 
-        display_success("Upscaling started successfully!", results_data)
-
-        # Show monitoring instructions
-        console.print("\n[cyan]Monitor progress with:[/cyan]")
-        console.print("  cosmos status --stream")
-        console.print("\n[cyan]Check upscaling run:[/cyan]")
-        console.print(f"  cosmos show run {result['upscale_run_id']}")
+        display_success("Upscaling completed successfully!", results_data)
 
     else:
         display_error(f"Upscaling failed: {result.get('error', 'Unknown error')}")

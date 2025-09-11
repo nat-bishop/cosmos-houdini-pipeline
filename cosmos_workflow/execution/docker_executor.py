@@ -28,22 +28,23 @@ class DockerExecutor:
         run_id: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        stream_output: bool = False,
     ) -> dict:
-        """Run Cosmos-Transfer1 inference on remote instance.
+        """Run Cosmos-Transfer1 inference on remote instance synchronously.
 
-        Starts inference as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes inference and waits for completion. Returns when the Docker
+        container finishes with either success or failure status.
 
         Args:
             prompt_file: Name of prompt file (without path).
             run_id: Run ID for tracking (REQUIRED).
             num_gpu: Number of GPUs to use.
             cuda_devices: CUDA device IDs to use.
+            stream_output: Whether to stream output to console in real-time.
 
         Returns:
-            Dict containing status ('started'), log_path to local log file,
-            and prompt_name for the executed inference.
+            Dict containing status ('completed' or 'failed'), exit_code,
+            log_path to local log file, and prompt_name.
 
         Raises:
             Exception: If inference launch fails.
@@ -73,16 +74,28 @@ class DockerExecutor:
             run_logger.info("Use 'cosmos status --stream' to monitor progress")
             run_logger.info("Launching inference in background...")
 
-            self._run_inference_script(prompt_name, run_id, num_gpu, cuda_devices)
+            # Run inference synchronously and get exit code
+            exit_code = self._run_inference_script(
+                prompt_name, run_id, num_gpu, cuda_devices, stream_output=stream_output
+            )
 
-            run_logger.info("Inference started successfully for {}", prompt_name)
-            run_logger.info("The process is now running in the background on the GPU")
-
-            return {
-                "status": "started",  # Changed from "success" to "started"
-                "log_path": str(local_log_path),
-                "prompt_name": prompt_name,
-            }
+            if exit_code == 0:
+                run_logger.info("Inference completed successfully for {}", prompt_name)
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path),
+                    "prompt_name": prompt_name,
+                }
+            else:
+                run_logger.error("Inference failed with exit code {}", exit_code)
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Inference failed with exit code {exit_code}",
+                    "log_path": str(local_log_path),
+                    "prompt_name": prompt_name,
+                }
 
         except Exception as e:
             run_logger.error("Inference failed for {}: {}", prompt_name, e)
@@ -96,12 +109,12 @@ class DockerExecutor:
         prompt: str | None = None,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        stream_output: bool = False,
     ) -> dict:
-        """Run 4K upscaling on remote instance.
+        """Run 4K upscaling on remote instance synchronously.
 
-        Starts upscaling as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes upscaling and waits for completion. Returns when the Docker
+        container finishes with either success or failure status.
 
         Args:
             video_path: Remote path to the video file to upscale.
@@ -110,9 +123,11 @@ class DockerExecutor:
             prompt: Optional prompt to guide the upscaling process.
             num_gpu: Number of GPUs to use.
             cuda_devices: CUDA device IDs to use.
+            stream_output: Whether to stream output to console in real-time.
 
         Returns:
-            Dict containing status ('started') and log_path to local log file.
+            Dict containing status ('completed' or 'failed'), exit_code,
+            and log_path to local log file.
 
         Raises:
             FileNotFoundError: If input video for upscaling is not found.
@@ -168,16 +183,33 @@ class DockerExecutor:
             run_logger.info("Use 'cosmos status --stream' to monitor progress")
             run_logger.info("Launching upscaling in background...")
 
-            self._run_upscaling_script(video_path, run_id, control_weight, num_gpu, cuda_devices)
+            # Run upscaling synchronously and get exit code
+            exit_code = self._run_upscaling_script(
+                video_path,
+                run_id,
+                control_weight,
+                num_gpu,
+                cuda_devices,
+                stream_output=stream_output,
+            )
 
-            run_logger.info("Upscaling started successfully for video {}", video_name)
-            run_logger.info("The process is now running in the background on the GPU")
-
-            return {
-                "status": "started",  # Changed from "success" to "started"
-                "log_path": str(local_log_path),
-                "video_path": video_path,
-            }
+            if exit_code == 0:
+                run_logger.info("Upscaling completed successfully for video {}", video_name)
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path),
+                    "video_path": video_path,
+                }
+            else:
+                run_logger.error("Upscaling failed with exit code {}", exit_code)
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Upscaling failed with exit code {exit_code}",
+                    "log_path": str(local_log_path),
+                    "video_path": video_path,
+                }
 
         except Exception as e:
             run_logger.error("Upscaling failed for video {}: {}", video_path, e)
@@ -190,11 +222,10 @@ class DockerExecutor:
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
     ) -> dict:
-        """Run prompt enhancement using Pixtral model on GPU.
+        """Run prompt enhancement using Pixtral model on GPU synchronously.
 
-        Starts enhancement as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes enhancement and waits for completion. Streams output to console
+        for real-time progress monitoring.
 
         Args:
             batch_filename: Name of batch JSON file in inputs directory
@@ -203,7 +234,7 @@ class DockerExecutor:
             checkpoint_dir: Directory containing model checkpoints
 
         Returns:
-            Dict containing status ('started') and log_path to local log file.
+            Dict containing status ('completed' or 'failed'), exit_code, and log_path.
 
         Raises:
             FileNotFoundError: If script or batch file not found.
@@ -282,25 +313,32 @@ class DockerExecutor:
             # Build the docker command
             command = builder.build()
 
-            # Run in background like inference does
-            background_command = f"nohup {command} > /dev/null 2>&1 &"
-
-            # Execute in background - returns immediately
+            # Run synchronously (blocking)
             run_logger.info("Starting prompt enhancement on GPU...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching enhancement in background...")
 
-            # This returns immediately since we're running in background
-            self.ssh_manager.execute_command(background_command, timeout=5)
+            # Execute and wait for completion
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                command,
+                timeout=1800,  # 30 minutes timeout for enhancement
+                stream_output=True,  # Stream output for CLI
+            )
 
-            run_logger.info("Prompt enhancement started successfully for batch {}", batch_filename)
-            run_logger.info("The process is now running in the background on the GPU")
+            run_logger.info("Prompt enhancement completed with exit code %d", exit_code)
 
-            return {
-                "status": "started",  # Changed from "success" to "started" for consistency
-                "log_path": str(local_log_path) if local_log_path else None,
-                "batch_filename": batch_filename,
-            }
+            if exit_code == 0:
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path) if local_log_path else None,
+                    "batch_filename": batch_filename,
+                }
+            else:
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Enhancement failed with exit code {exit_code}",
+                    "log_path": str(local_log_path) if local_log_path else None,
+                }
 
         except Exception as e:
             run_logger.error("Prompt enhancement launch failed: {}", e)
@@ -311,9 +349,18 @@ class DockerExecutor:
             }
 
     def _run_inference_script(
-        self, prompt_name: str, run_id: str, num_gpu: int, cuda_devices: str
-    ) -> None:
-        """Run inference using the bash script in background."""
+        self,
+        prompt_name: str,
+        run_id: str,
+        num_gpu: int,
+        cuda_devices: str,
+        stream_output: bool = False,
+    ) -> int:
+        """Run inference using the bash script synchronously.
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -329,13 +376,18 @@ class DockerExecutor:
             f'bash -lc "/workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
         )
 
-        # Run the command in background by appending & and using nohup
+        # Run synchronously (blocking)
         command = builder.build()
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Inference started in background")
+        # Execute and wait for completion
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=3600,  # 1 hour timeout
+            stream_output=stream_output,
+        )
+
+        logger.info("Inference completed with exit code %d", exit_code)
+        return exit_code
 
     def _run_upscaling_script(
         self,
@@ -344,8 +396,13 @@ class DockerExecutor:
         control_weight: float,
         num_gpu: int,
         cuda_devices: str,
-    ) -> None:
-        """Run upscaling using the bash script in background."""
+        stream_output: bool = False,
+    ) -> int:
+        """Run upscaling using the bash script synchronously.
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -368,13 +425,18 @@ class DockerExecutor:
             f'bash -lc "/workspace/bashscripts/upscale.sh {run_id} {control_weight} {num_gpu} {cuda_devices} {parent_run_id}"'
         )
 
-        # Run the command in background
+        # Run synchronously (blocking)
         command = builder.build()
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Upscaling started in background")
+        # Execute and wait for completion
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=3600,  # 1 hour timeout
+            stream_output=stream_output,
+        )
+
+        logger.info("Upscaling completed with exit code %d", exit_code)
+        return exit_code
 
     def _create_upscaler_spec(self, prompt_name: str, control_weight: float) -> None:
         """Create upscaler specification file on remote."""

@@ -11,39 +11,53 @@ Docker `run` without `-d` (detach) flag naturally blocks until container complet
 ## Implementation Steps
 
 ### ✅ Prerequisites
-- [ ] Backup current working state: `git add . && git commit -m "backup: before sync migration"`
-- [ ] Stop any running containers: `cosmos kill-all`
-- [ ] Close Gradio UI if running
+- [x] Backup current working state: `git add . && git commit -m "backup: before sync migration"`
+- [x] Stop any running containers: `cosmos kill`
+- [x] Close Gradio UI if running
 
 ---
 
-### Phase 1: Update Docker Execution Layer
+### Phase 1: Update Docker Execution Layer ✅ COMPLETE
 
 #### Step 1.1: Modify docker_executor.py - Remove Background Execution
 **File:** `cosmos_workflow/execution/docker_executor.py`
 
-- [ ] Find `_run_inference_script()` method
-- [ ] Remove `nohup {command} > /dev/null 2>&1 &` wrapping
-- [ ] Change to return exit code instead of None
-- [ ] Update to return exit code
-- [ ] Apply same pattern to `_run_enhancement_script()`
-- [ ] Apply same pattern to `_run_upscaling_script()`
-- [ ] Verify no `-d` flags in DockerCommandBuilder calls
+- [x] Find `_run_inference_script()` method - Now returns exit code
+- [x] Remove `nohup {command} > /dev/null 2>&1 &` wrapping - All removed
+- [x] Change to return exit code instead of None - Returns int exit code
+- [x] Update to return exit code - All methods updated
+- [x] Apply same pattern to `run_prompt_enhancement()` - Now synchronous
+- [x] Apply same pattern to `_run_upscaling_script()` - Now synchronous
+- [x] Verify no `-d` flags in DockerCommandBuilder calls - Verified
 
 **Test:**
-- [ ] Run `ruff check cosmos_workflow/execution/docker_executor.py`
+- [x] Run `ruff check cosmos_workflow/execution/docker_executor.py` - Passed
+
+**Changes Made:**
+- `_run_inference_script()`: Now blocks and returns exit code
+- `_run_upscaling_script()`: Now blocks and returns exit code
+- `run_prompt_enhancement()`: Now blocks and returns status with exit_code
+- All use `stream_output` parameter for CLI visibility
+- Timeouts set to 3600s (1 hour) for inference/upscaling, 1800s (30 min) for enhancement
 
 ---
 
-### Phase 2: Update GPU Executor
+### Phase 2: Update GPU Executor 🚧 IN PROGRESS
 
 #### Step 2.1: Modify execute_run() for Synchronous Execution
 **File:** `cosmos_workflow/execution/gpu_executor.py`
 
-- [ ] Find `execute_run()` method
-- [ ] Remove the section that returns `{"status": "started"}`
+**Current Status:** Ready to modify - found at line 350
+- [ ] Find `execute_run()` method - Located, needs modification
+- [ ] Remove the section that returns `{"status": "started"}` - At line 428
 - [ ] Add completion handling after container execution
 - [ ] Add `stream_output` parameter to method signature if missing
+
+**Key Changes Needed:**
+- After `docker_executor.run_inference()` call (line 418), handle the exit code
+- Download outputs using existing `_download_outputs()` method
+- Update database with completion status
+- Return completed status instead of started
 
 **Test:**
 - [ ] Create a test prompt: `cosmos create prompt "Test sync" inputs/videos/urban_scene`
@@ -86,15 +100,15 @@ Docker `run` without `-d` (detach) flag naturally blocks until container complet
 
 ---
 
-### Phase 3: Update CLI Commands
+### Phase 3: Update CLI Commands ✅ COMPLETE
 
 #### Step 3.1: Update inference CLI
 **File:** `cosmos_workflow/cli/inference.py`
 
-- [ ] Find result display section (around line 190)
-- [ ] Change status message from "Started in background" to "Completed"
-- [ ] Remove "Monitor progress with cosmos status" message
-- [ ] Add completion message
+- [x] Find result display section (around line 190)
+- [x] Change status message from "Started in background" to "Completed"
+- [x] Remove "Monitor progress with cosmos status" message
+- [x] Add completion message
 
 **Test:**
 - [ ] Run: `cosmos inference ps_xxxxx`
@@ -105,8 +119,8 @@ Docker `run` without `-d` (detach) flag naturally blocks until container complet
 #### Step 3.2: Update enhance CLI
 **File:** `cosmos_workflow/cli/enhance.py`
 
-- [ ] Apply same changes as inference CLI
-- [ ] Show enhanced prompt ID in results
+- [x] Apply same changes as inference CLI (handled in upscale.py)
+- [x] Show enhanced prompt ID in results (returns in execute_enhancement_run)
 
 ---
 

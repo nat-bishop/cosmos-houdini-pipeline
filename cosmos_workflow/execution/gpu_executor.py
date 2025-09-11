@@ -337,14 +337,15 @@ class GPUExecutor:
         run: dict[str, Any],
         prompt: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute a single run on the GPU.
+        """Execute a single run on the GPU synchronously.
 
         Args:
             run: Run dictionary containing id, execution_config, etc.
             prompt: Prompt dictionary containing prompt_text, inputs, etc.
 
         Returns:
-            Dictionary containing execution results with output_path, duration, etc.
+            Dictionary containing execution results with status='completed',
+            output_path, and other metadata. The run blocks until completion.
 
         Raises:
             RuntimeError: If GPU execution fails
@@ -412,44 +413,51 @@ class GPUExecutor:
                 if upscale_script.exists():
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
 
-                # Run inference
+                # Run inference synchronously with streaming output
                 # Create a prompt file path for DockerExecutor (it expects Path)
                 prompt_file = Path(f"{run_id}.json")  # Just a name, not used inside
                 inference_result = self.docker_executor.run_inference(
                     prompt_file=prompt_file,
                     run_id=run_id,
+                    stream_output=True,  # Enable streaming for CLI visibility
                 )
 
+                # Check the result status
                 if inference_result["status"] == "failed":
-                    raise RuntimeError(
-                        f"Inference failed: {inference_result.get('error', 'Unknown error')}"
+                    error_msg = inference_result.get(
+                        "error",
+                        f"Inference failed with exit code {inference_result.get('exit_code', 'unknown')}",
                     )
+                    raise RuntimeError(error_msg)
 
-                elif inference_result["status"] == "started":
-                    # Container started successfully
-                    container_name = f"cosmos_transfer_{run_id[:8]}"
-                    # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
-                    # StatusChecker will check container status and download outputs when get_run() is called
-                    logger.info("Container {} started for run {}", container_name, run_id)
+                elif inference_result["status"] == "completed":
+                    # Inference completed successfully, download outputs immediately
+                    logger.info("Inference completed for run {}, downloading outputs...", run_id)
 
-                    # Return immediately with partial results
-                    return {
-                        "status": "started",
-                        "message": "Inference started in background",
-                        "run_id": run_id,
-                        "log_path": str(run_dir / "logs" / "inference.log"),
-                    }
+                    try:
+                        output_path = self._download_outputs(run_id, run_dir, upscaled=False)
 
-                # Should not reach here with current implementation, but handle legacy behavior
-                # Download outputs
-                output_path = self._download_outputs(run_id, run_dir, upscaled=False)
+                        # Return completed status with output path
+                        return {
+                            "status": "completed",
+                            "output_path": str(output_path),
+                            "message": "Inference completed successfully",
+                            "run_id": run_id,
+                            "log_path": str(run_dir / "logs" / "inference.log"),
+                        }
+                    except Exception as download_error:
+                        logger.error(
+                            "Failed to download outputs for run {}: {}", run_id, download_error
+                        )
+                        raise RuntimeError(
+                            f"Inference completed but output download failed: {download_error}"
+                        ) from download_error
 
-                return {
-                    "output_path": str(output_path),
-                    "duration_seconds": inference_result.get("duration_seconds", 0),
-                    "remote_output": inference_result.get("remote_output"),
-                    "log_path": str(run_dir / "logs" / "inference.log"),
-                }
+                else:
+                    # Unexpected status
+                    raise RuntimeError(
+                        f"Unexpected inference status: {inference_result.get('status')}"
+                    )
 
         except Exception as e:
             logger.error("GPU execution failed for run {}: {}", run_id, e)
@@ -760,7 +768,7 @@ class GPUExecutor:
                         raise FileNotFoundError(f"Upsampler script not found at {local_script}")
                     self.file_transfer.upload_file(local_script, scripts_dir)
 
-                    # Execute prompt enhancement via DockerExecutor
+                    # Execute prompt enhancement via DockerExecutor (already synchronous)
                     logger.info("Starting prompt enhancement on GPU...")
                     enhancement_result = self.docker_executor.run_prompt_enhancement(
                         batch_filename=batch_filename,
@@ -774,29 +782,109 @@ class GPUExecutor:
                             f"Prompt enhancement failed: {enhancement_result.get('error', 'Unknown error')}"
                         )
 
-                    elif enhancement_result["status"] == "started":
-                        # Container started successfully
-                        container_name = f"cosmos_enhance_{run_id[:8]}"
-                        # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
-                        # StatusChecker will check container status and download outputs when get_run() is called
+                    elif enhancement_result["status"] == "completed":
+                        # Enhancement completed successfully, download outputs
                         logger.info(
-                            "Container %s started for enhancement run %s", container_name, run_id
+                            "Enhancement completed for run {}, downloading outputs...", run_id
                         )
 
-                        # Return immediately with partial results
-                        return {
-                            "status": "started",
-                            "message": "Enhancement started in background",
-                            "run_id": run_id,
-                            "log_path": str(logs_dir / "enhancement.log"),
-                        }
+                        # Download the enhanced prompts output files
+                        remote_output_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
+                        local_output_dir = run_dir / "outputs"
+                        local_output_dir.mkdir(exist_ok=True)
 
-                    # Should not reach here with current implementation
-                    return {
-                        "status": "unknown",
-                        "message": "Unexpected enhancement status",
-                        "run_id": run_id,
-                    }
+                        # Download batch_results.json which contains the enhanced text
+                        remote_batch_results = f"{remote_output_dir}/batch_results.json"
+                        local_batch_results = local_output_dir / "batch_results.json"
+
+                        try:
+                            self.file_transfer.download_file(
+                                remote_batch_results, str(local_batch_results)
+                            )
+
+                            # Extract enhanced text from results
+                            results = self.json_handler.read_json(local_batch_results)
+                            if not results or len(results) == 0:
+                                raise RuntimeError(
+                                    "No enhanced results found in batch_results.json"
+                                )
+
+                            enhanced_text = results[0].get("upsampled_prompt", "")
+                            if not enhanced_text:
+                                raise RuntimeError("Enhanced text is empty")
+
+                            # Get the data repository to create/update prompts
+                            from cosmos_workflow.services.data_repository import DataRepository
+
+                            data_repo = DataRepository()
+
+                            # Handle prompt creation/update based on create_new flag
+                            create_new = execution_config.get("create_new", True)
+                            prompt_id = prompt["id"]
+                            enhanced_prompt_id = None
+
+                            if create_new:
+                                # Create new enhanced prompt
+                                name = prompt.get("parameters", {}).get("name", "unnamed")
+                                enhanced_prompt = data_repo.create_prompt(
+                                    model_type=prompt["model_type"],
+                                    prompt_text=enhanced_text,
+                                    inputs=prompt.get("inputs", {}),
+                                    parameters={
+                                        **prompt.get("parameters", {}),
+                                        "name": f"{name}_enhanced",
+                                        "enhanced": True,
+                                        "parent_prompt_id": prompt_id,
+                                    },
+                                )
+                                enhanced_prompt_id = enhanced_prompt["id"]
+                                logger.info(
+                                    "Created enhanced prompt {} from {} for run {}",
+                                    enhanced_prompt_id,
+                                    prompt_id,
+                                    run_id,
+                                )
+                            else:
+                                # Update existing prompt
+                                updated_params = {**prompt.get("parameters", {}), "enhanced": True}
+                                data_repo.update_prompt(
+                                    prompt_id,
+                                    prompt_text=enhanced_text,
+                                    parameters=updated_params,
+                                )
+                                enhanced_prompt_id = prompt_id
+                                logger.info(
+                                    "Updated prompt {} with enhanced text for run {}",
+                                    prompt_id,
+                                    run_id,
+                                )
+
+                            # Return completed status with enhanced prompt ID
+                            return {
+                                "status": "completed",
+                                "message": "Enhancement completed successfully",
+                                "run_id": run_id,
+                                "enhanced_text": enhanced_text,
+                                "enhanced_prompt_id": enhanced_prompt_id,
+                                "original_prompt_id": prompt_id,
+                                "log_path": str(logs_dir / "enhancement.log"),
+                            }
+
+                        except Exception as download_error:
+                            logger.error(
+                                "Failed to process enhancement outputs for run {}: {}",
+                                run_id,
+                                download_error,
+                            )
+                            raise RuntimeError(
+                                f"Enhancement completed but output processing failed: {download_error}"
+                            ) from download_error
+
+                    else:
+                        # Unexpected status
+                        raise RuntimeError(
+                            f"Unexpected enhancement status: {enhancement_result.get('status')}"
+                        )
 
             except Exception as e:
                 logger.error("Enhancement run {} failed: {}", run_id, e)
@@ -1062,54 +1150,60 @@ class GPUExecutor:
                     # Upload the video file
                     self.file_transfer.upload_file(local_video_path, remote_video_dir)
 
-                # Run upscaling with video path and optional prompt
+                # Run upscaling synchronously with streaming output
                 result = self.docker_executor.run_upscaling(
                     video_path=remote_video_path,
                     run_id=run_id,
                     control_weight=control_weight,
                     prompt=prompt_text,
+                    stream_output=True,  # Enable streaming for CLI visibility
                 )
 
+                # Check the result status
                 if result["status"] == "failed":
-                    raise RuntimeError(f"Upscaling failed: {result.get('error', 'Unknown error')}")
+                    error_msg = result.get(
+                        "error",
+                        f"Upscaling failed with exit code {result.get('exit_code', 'unknown')}",
+                    )
+                    raise RuntimeError(error_msg)
 
-                elif result["status"] == "started":
-                    # Container started successfully
-                    container_name = f"cosmos_upscale_{run_id[:8]}"
-                    # StatusChecker will handle lazy sync when get_run() is called
-                    logger.info("Container {} started for upscaling run {}", container_name, run_id)
+                elif result["status"] == "completed":
+                    # Upscaling completed successfully, download outputs immediately
+                    logger.info("Upscaling completed for run {}, downloading outputs...", run_id)
 
-                    # Return immediately with partial results
-                    result_data = {
-                        "status": "started",
-                        "message": "Upscaling started in background",
-                        "run_id": run_id,
-                        "log_path": (logs_dir / "upscaling.log").as_posix(),
-                    }
+                    try:
+                        output_path = self._download_outputs(run_id, run_dir, upscaled=True)
 
-                    # Add source_run_id if this was from an existing run
-                    if source_run_id:
-                        result_data["parent_run_id"] = source_run_id
+                        # Build result data
+                        result_data = {
+                            "status": "completed",
+                            "output_path": output_path.as_posix()
+                            if isinstance(output_path, Path)
+                            else str(output_path),
+                            "message": "Upscaling completed successfully",
+                            "run_id": run_id,
+                            "log_path": (logs_dir / "upscaling.log").as_posix(),
+                        }
 
-                    return result_data
+                        # Add source_run_id if this was from an existing run
+                        if source_run_id:
+                            result_data["parent_run_id"] = source_run_id
 
-                # Should not reach here with current implementation, but handle legacy behavior
-                # Download upscaled output
-                output_path = self._download_outputs(run_id, run_dir, upscaled=True)
+                        return result_data
 
-                result_data = {
-                    "output_path": output_path.as_posix()
-                    if isinstance(output_path, Path)
-                    else str(output_path),
-                    "duration_seconds": result.get("duration_seconds", 0),
-                    "log_path": (logs_dir / "upscaling.log").as_posix(),
-                }
+                    except Exception as download_error:
+                        logger.error(
+                            "Failed to download upscaled outputs for run {}: {}",
+                            run_id,
+                            download_error,
+                        )
+                        raise RuntimeError(
+                            f"Upscaling completed but output download failed: {download_error}"
+                        ) from download_error
 
-                # Add source_run_id if this was from an existing run
-                if source_run_id:
-                    result_data["parent_run_id"] = source_run_id
-
-                return result_data
+                else:
+                    # Unexpected status
+                    raise RuntimeError(f"Unexpected upscaling status: {result.get('status')}")
         except Exception as e:
             logger.error("Upscaling run {} failed: {}", run_id, e)
             raise RuntimeError(f"Upscaling failed: {e}") from e

@@ -189,14 +189,14 @@ def inference(
         results_data = {
             "Prompt ID": format_id(all_prompts[0]),
             "Run ID": format_id(result["run_id"]),
-            "Status": "Started in background",
+            "Status": "Completed",
         }
 
-        display_success("Inference started successfully!", results_data)
+        # Add output path if available
+        if "output_path" in result:
+            results_data["Output"] = result["output_path"]
 
-        # Show monitoring instructions
-        console.print("\n[cyan]Monitor progress with:[/cyan]")
-        console.print("  cosmos status --stream")
+        display_success("Inference completed successfully!", results_data)
 
     else:
         # Batch inference for multiple prompts

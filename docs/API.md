@@ -261,9 +261,9 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 - `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
 
 #### GPU Execution
-- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally, non-blocking)
-- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run, non-blocking)
-- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt, non-blocking)
+- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally, blocks until complete)
+- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run, blocks until complete)
+- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt, blocks until complete)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
 - `cosmos kill [--force]` - Kill all running Cosmos containers on GPU instance
@@ -989,205 +989,173 @@ with gr.Tab("Generate"):
     gr.Timer(fn=update_logs, outputs=[log_display], active=True)
 ```
 
-## StatusChecker - Lazy Container Monitoring
+## Synchronous Execution Model
 
-The StatusChecker provides reliable container status monitoring using a lazy evaluation approach that eliminates the problems with background threads dying when CLI commands exit.
+The Cosmos Workflow System now uses a fully synchronous execution model that eliminates the complexity of background monitoring and provides immediate, reliable operation completion.
 
 ### Overview
 
-The StatusChecker replaces the previous async background monitoring system with a lazy evaluation pattern:
+The synchronous execution model provides:
 
-- **Lazy Evaluation**: Status checks occur only when users query run data via get_run() or list_runs()
-- **Container Exit Markers**: Reads [COSMOS_COMPLETE] markers from container logs to determine final status
-- **Automatic Downloads**: Downloads output files when containers complete successfully
-- **Model Support**: Handles all supported model types (inference, enhancement, upscaling) appropriately
+- **Blocking Operations**: All GPU operations block until completion, returning final status
+- **Direct Exit Code Handling**: Container exit codes processed immediately
+- **Immediate Output Downloads**: Outputs downloaded synchronously after container completion
+- **Real-time Status Updates**: Database status updated during execution, not after
 
 ### Key Features
 
-**Lazy Sync Integration**
+**Synchronous API Usage**
 ```python
 from cosmos_workflow.api import CosmosAPI
 
-# StatusChecker is automatically initialized and used transparently
+# All operations block until complete
 ops = CosmosAPI()
 
-# These operations trigger lazy sync for "running" containers
-run_data = ops.get_run("rs_abc123")  # StatusChecker automatically checks container
-runs = ops.list_runs()  # StatusChecker syncs all running containers
+# This blocks until inference is finished
+result = ops.quick_inference("ps_abc123")
+if result["status"] == "completed":
+    print(f"Output ready: {result['output_path']}")
+else:
+    print(f"Failed: {result.get('error', 'Unknown error')}")
 ```
 
-**Exit Marker Detection**
+**Direct Container Execution**
 ```python
-from cosmos_workflow.execution.status_checker import StatusChecker
-
-# StatusChecker reads completion markers from container logs
-# Shell scripts write markers like: [COSMOS_COMPLETE] exit_code=0
-checker = StatusChecker(ssh_manager, config_manager, file_transfer)
-
-# Parse completion markers
-exit_code = checker.parse_completion_marker(log_content)
-# Returns: 0 for success, 1+ for failure, None if not complete
+# Docker containers run without -d flag, naturally blocking
+# Exit codes handled immediately:
+# 0 = success → status="completed", outputs downloaded
+# non-zero = failure → status="failed", error logged
 ```
 
-**Automatic Output Downloads**
-```python
-# When containers complete, StatusChecker automatically downloads outputs:
-# - inference: output.mp4 → outputs/run_rs_abc123/outputs/output.mp4
-# - enhancement: batch_results.json with enhanced text
-# - upscaling: output_4k.mp4 for upscaled videos
-
-outputs = checker.download_outputs(run_data)
-# Returns: {"output_path": "/path/to/file", "completed_at": "2024-01-01T12:00:00Z"}
+**Configuration-driven Timeouts**
+```toml
+# config.toml
+[execution]
+docker_execution = 3600  # 1 hour timeout for inference/upscaling
+enhancement_timeout = 1800  # 30 minutes for AI enhancement
 ```
 
 ### Architecture Benefits
 
-**Solves CLI Exit Problem**
-- Previous background monitoring threads would die when CLI commands exited
-- Lazy evaluation only activates when users actually query run status
-- No background thread lifecycle management required
-- More reliable than async approaches that depend on process lifetime
+**Eliminates Background Complexity**
+- No background threads that die with CLI exit
+- No container status polling or monitoring
+- No lazy evaluation or completion detection
+- No race conditions between monitoring and database updates
 
-**Container Exit Detection**
-```bash
-# Shell scripts (inference.sh, upscale.sh, batch_inference.sh) write completion markers:
-echo "[COSMOS_COMPLETE] exit_code=${EXIT_CODE}" >> "${OUTPUT_DIR}/run.log"
+**Immediate Feedback**
+```python
+# Before (async): Operations returned "started" status
+result = ops.quick_inference("ps_abc123")
+# Returns: {"status": "started", "run_id": "rs_xyz"}
+
+# Now (sync): Operations return final completion status
+result = ops.quick_inference("ps_abc123")
+# Returns: {"status": "completed", "output_path": "/outputs/...", "duration": 245.6}
 ```
 
-**Integration Points**
-- StatusChecker initialized in DataRepository for automatic lazy sync
-- CosmosAPI automatically initializes StatusChecker when dependencies available
-- No changes required to CLI commands or user-facing APIs
-- Maintains facade pattern integrity while adding monitoring capabilities
-
-### Methods
-
+**Queue Management Integration**
 ```python
-class StatusChecker:
-    def parse_completion_marker(self, log_content: str) -> Optional[int]:
-        """Parse [COSMOS_COMPLETE] marker from log content.
-
-        Args:
-            log_content: Container log file content
-
-        Returns:
-            Exit code if found, None if container still running
-        """
-
-    def check_container_status(self, container_name: str) -> Dict[str, Any]:
-        """Check Docker container status via docker inspect.
-
-        Args:
-            container_name: Name of container (e.g., cosmos_transfer_abc12345)
-
-        Returns:
-            Dict with running status and exit code
-        """
-
-    def check_run_completion(self, run_id: str) -> Optional[int]:
-        """Check if run completed by reading log file for completion marker.
-
-        Args:
-            run_id: Run ID to check
-
-        Returns:
-            Exit code if completed, None if still running
-        """
-
-    def download_outputs(self, run_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Download output files for completed run.
-
-        Args:
-            run_data: Run data with id and model_type
-
-        Returns:
-            Dict with output paths and completion timestamp
-        """
-
-    def sync_run_status(self, run_data: Dict[str, Any], data_service: Any) -> Dict[str, Any]:
-        """Sync status of running container and download outputs if complete.
-
-        This is the main method called by DataRepository for lazy sync.
-
-        Args:
-            run_data: Dictionary with run information
-            data_service: DataRepository service for updating status
-
-        Returns:
-            Updated run data dictionary
-        """
+# Gradio UI uses queue to prevent concurrent GPU operations
+app.queue(
+    max_size=50,  # Maximum queued jobs
+    default_concurrency_limit=1,  # One job at a time
+    status_update_rate="auto"  # Real-time queue updates
+)
 ```
 
 ### Usage Examples
 
-**Transparent Integration**
+**CLI Operations**
+```bash
+# All CLI commands now block until completion
+cosmos inference ps_abc123  # Waits for inference to finish
+# Output: "✅ Inference completed for ps_abc123"
+#         "📁 Output: outputs/run_rs_xyz789/output.mp4"
+
+cosmos prompt-enhance ps_abc123  # Waits for enhancement
+# Output: "✅ Enhanced prompt created: ps_def456"
+```
+
+**API Integration**
 ```python
-# StatusChecker works transparently through existing APIs
 ops = CosmosAPI()
 
-# Start inference
-result = ops.quick_inference("ps_abc123")
-run_id = result["run_id"]  # e.g., "rs_xyz789"
+# Single inference - blocks until done
+result = ops.quick_inference(
+    prompt_id="ps_abc123",
+    weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
+    stream_output=True  # Show real-time progress in CLI
+)
 
-# Later: Check status (triggers lazy sync if container completed)
-run_data = ops.get_run(run_id)
-if run_data["status"] == "completed":
-    print(f"Output: {run_data['outputs']['output_path']}")
+# Batch inference - processes sequentially
+results = ops.batch_inference(
+    prompt_ids=["ps_001", "ps_002", "ps_003"],
+    shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+)
 ```
 
-**Manual StatusChecker Usage (Advanced)**
+**Gradio UI Integration**
 ```python
-from cosmos_workflow.execution.status_checker import StatusChecker
-from cosmos_workflow.connection import SSHManager
-from cosmos_workflow.config import ConfigManager
-from cosmos_workflow.transfer import FileTransferService
+# UI operations use gr.Progress() for real-time feedback
+def run_inference_on_selected(dataframe_data, weights, progress=None):
+    if progress is None:
+        progress = gr.Progress()
 
-# Initialize components (normally done automatically)
-ssh_manager = SSHManager(ssh_options)
-config_manager = ConfigManager()
-file_transfer = FileTransferService(ssh_manager, remote_dir)
+    progress(0.1, desc="Initializing inference...")
 
-# Create StatusChecker
-checker = StatusChecker(ssh_manager, config_manager, file_transfer)
+    result = ops.quick_inference(
+        prompt_id=selected_ids[0],
+        weights=weights,
+        stream_output=False,  # Clean UI without console output
+        # ... other parameters
+    )
 
-# Check specific run
-run_data = {"id": "rs_abc123", "model_type": "inference", "status": "running"}
-data_service = DataRepository()
+    progress(1.0, desc="Inference complete!")
 
-# Sync status (downloads outputs if complete)
-updated_run = checker.sync_run_status(run_data, data_service)
-print(f"Status: {updated_run['status']}")
+    if result.get("status") == "completed":
+        return f"✅ Inference completed", "Idle"
+    else:
+        return f"❌ Failed: {result.get('error')}", "Idle"
 ```
 
-### Design Philosophy
+### Error Handling
 
-**Lazy Evaluation vs Background Monitoring**
+**Immediate Error Detection**
+- Container failures detected through exit codes
+- Network issues cause immediate operation failure
+- No timeout-based error detection needed
+- Cleaner error propagation through execution stack
 
-Previous Approach (Background Threads):
-- Launched background threads to monitor containers
-- Threads would die when CLI commands exited
-- Complex lifecycle management and error handling
-- Race conditions between threads and database updates
+**Timeout Management**
+```python
+# Timeouts configured per operation type
+TIMEOUTS = {
+    "inference": config.get("execution", {}).get("docker_execution", 3600),
+    "upscaling": config.get("execution", {}).get("docker_execution", 3600),
+    "enhancement": config.get("execution", {}).get("enhancement_timeout", 1800)
+}
+```
 
-Current Approach (Lazy Evaluation):
-- Check status only when users query run data
-- No background processes to manage
-- More predictable and reliable
-- Eliminates CLI exit dependencies
+### Migration Benefits
 
-**When Status Checks Occur**
+**Simplified Codebase**
+- Removed StatusChecker class and all monitoring infrastructure
+- Eliminated background thread management
+- No more container lifecycle complexity
+- Direct execution flow from start to completion
 
-StatusChecker activates during:
-- `CosmosAPI.get_run(run_id)` - Single run queries
-- `CosmosAPI.list_runs()` - Bulk run queries
-- Any DataRepository method that returns run data
+**Improved Reliability**
+- No more orphaned "running" runs
+- Database always reflects actual operation state
+- No CLI exit dependencies
+- Predictable execution behavior
 
-StatusChecker does NOT activate during:
-- Run creation or initial execution
-- Background processes (there are none)
-- Periodic polling or scheduled checks
-
-This lazy approach ensures monitoring happens exactly when needed without unnecessary overhead or reliability issues.
+**Better User Experience**
+- Immediate completion feedback
+- Real-time progress in UI with queue status
+- Clear success/failure indication
+- No more "check status later" workflows
 
 ## Core Modules
 
@@ -2196,9 +2164,9 @@ print(local_config.prompts_dir) # Path("inputs/prompts")
 ### Configuration File (cosmos_workflow/config/config.toml)
 ```toml
 [remote]
-host = "192.222.52.92"
+host = "209.20.156.243"  # Remote GPU instance IP
 user = "ubuntu"
-ssh_key = "~/.ssh/key.pem"
+ssh_key = "~/.ssh/LambdaSSHkey.pem"
 port = 22
 
 [paths]
@@ -2211,15 +2179,26 @@ local_notes_dir = "./notes"
 
 [docker]
 image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
-shm_size = "8g"
-ipc_mode = "host"
 
-[execution]
-default_num_steps = 35
-default_guidance_scale = 8.0
-default_upscale_weight = 0.5
-offload_models = true
-offload_vae = true
+[generation]
+# Default negative prompt for video generation quality control
+negative_prompt = """
+The video captures a game playing, with bad crappy graphics and \
+cartoonish frames. It represents a recording of old outdated games. \
+The lighting looks very fake. The textures are very raw and basic. \
+The geometries are very primitive. The images are very pixelated and \
+of poor CG quality. There are many subtitles in the footage. \
+Overall, the video is unrealistic at all.\
+"""
+
+[timeouts]
+docker_execution = 3600  # 1 hour timeout for inference/upscaling operations
+stream_logs = 86400      # 24 hours for log streaming operations
+
+[ui]
+port = 7860             # Default Gradio port
+host = "0.0.0.0"        # Bind to all interfaces for SSH tunnel access
+share = false           # Don't create public Gradio share links
 ```
 
 ## Utilities

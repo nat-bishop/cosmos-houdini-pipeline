@@ -116,11 +116,11 @@ def load_input_gallery():
 def on_input_select(evt: gr.SelectData, gallery_data):
     """Handle input selection from gallery."""
     if evt.index is None:
-        return "", "", "", "", gr.update(visible=False)
+        return "", "", "", "", "", gr.update(visible=False), ""
 
     directories = get_input_directories()
     if evt.index >= len(directories):
-        return "", "", "", "", gr.update(visible=False)
+        return "", "", "", "", "", gr.update(visible=False), ""
 
     selected_dir = directories[evt.index]
 
@@ -181,6 +181,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         depth_video,
         seg_video,
         gr.update(visible=True),
+        selected_dir["path"],  # Also return path for create_video_dir field
     )
 
 
@@ -898,13 +899,13 @@ def create_ui():
         gr.Markdown("# 🌌 Cosmos Workflow Manager")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
 
-        with gr.Tabs() as tabs:
+        with gr.Tabs():
             # ========================================
-            # Tab 1: Inputs Browser
+            # Tab 1: Inputs Browser with Create Prompt
             # ========================================
             with gr.Tab("📁 Inputs", id=1):
                 gr.Markdown("### Input Video Browser")
-                gr.Markdown("Browse and select input video directories for processing")
+                gr.Markdown("Browse input videos and create prompts directly")
 
                 with gr.Row():
                     # Left: Gallery of inputs - MUCH LARGER (2x the right panel)
@@ -947,63 +948,15 @@ def create_ui():
                                 with gr.Tab("Segmentation"):
                                     seg_preview = gr.Video(height=300, autoplay=False)
 
-                            # Add button to create prompt for selected input
-                            create_prompt_for_input_btn = gr.Button(
-                                "✨ Create Prompt for This Input", variant="primary", size="sm"
-                            )
-
-            # ========================================
-            # Tab 2: Prompts (Phase 2 Implementation)
-            # ========================================
-            with gr.Tab("✏️ Prompts", id="prompts_tab"):
-                gr.Markdown("### Prompt Management")
-                gr.Markdown("Create and manage prompts for your video inputs")
-
-                with gr.Row():
-                    # Left: Prompt list and filters
-                    with gr.Column(scale=2):
-                        gr.Markdown("#### Existing Prompts")
-
-                        with gr.Row():
-                            model_type_filter = gr.Dropdown(
-                                choices=[
-                                    "all",
-                                    "transfer",
-                                    "upscale",
-                                    "enhance",
-                                    "reason",
-                                    "predict",
-                                ],
-                                value="all",
-                                label="Model Type",
-                                scale=1,
-                            )
-                            limit_filter = gr.Number(
-                                value=50, label="Limit", minimum=1, maximum=500, scale=1
-                            )
-                            refresh_prompts_btn = gr.Button(
-                                "🔄 Refresh", variant="secondary", size="sm", scale=1
-                            )
-
-                        prompts_table = gr.Dataframe(
-                            headers=["ID", "Name", "Model", "Prompt Text", "Created"],
-                            datatype=["str", "str", "str", "str", "str"],
-                            interactive=False,
-                            wrap=True,
-                        )
-
-                        gr.Textbox(label="Selected Prompt ID", interactive=False, visible=False)
-
-                    # Right: Create new prompt
-                    with gr.Column(scale=1):
+                        # Create Prompt Section (moved from Prompts tab)
                         gr.Markdown("#### Create New Prompt")
 
                         with gr.Group():
                             # Video Directory at the top for easy access
                             create_video_dir = gr.Textbox(
                                 label="Video Directory",
-                                placeholder="Path to input video directory (e.g., inputs/videos/example)",
-                                info="Must contain color.mp4 - auto-filled when clicking 'Create Prompt for This Input'",
+                                placeholder="Auto-filled when selecting an input",
+                                info="Must contain color.mp4",
                             )
 
                             create_prompt_text = gr.Textbox(
@@ -1047,6 +1000,46 @@ def create_ui():
                             )
 
                             create_status = gr.Markdown("")
+
+            # ========================================
+            # Tab 2: Prompts (Phase 2 Implementation)
+            # ========================================
+            with gr.Tab("✏️ Prompts", id="prompts_tab"):
+                gr.Markdown("### Prompt Management")
+                gr.Markdown("Create and manage prompts for your video inputs")
+
+                # Existing Prompts table (no longer has create form)
+                gr.Markdown("#### Existing Prompts")
+
+                with gr.Row():
+                    model_type_filter = gr.Dropdown(
+                        choices=[
+                            "all",
+                            "transfer",
+                            "upscale",
+                            "enhance",
+                            "reason",
+                            "predict",
+                        ],
+                        value="all",
+                        label="Model Type",
+                        scale=1,
+                    )
+                    limit_filter = gr.Number(
+                        value=50, label="Limit", minimum=1, maximum=500, scale=1
+                    )
+                    refresh_prompts_btn = gr.Button(
+                        "🔄 Refresh", variant="secondary", size="sm", scale=1
+                    )
+
+                prompts_table = gr.Dataframe(
+                    headers=["ID", "Name", "Model", "Prompt Text", "Created"],
+                    datatype=["str", "str", "str", "str", "str"],
+                    interactive=False,
+                    wrap=True,
+                )
+
+                gr.Textbox(label="Selected Prompt ID", interactive=False, visible=False)
 
             # ========================================
             # Tab 3: Operations
@@ -1391,24 +1384,26 @@ def create_ui():
                 depth_preview,
                 seg_preview,
                 preview_group,
+                create_video_dir,  # Auto-fill the video directory in create prompt form
             ],
         )
 
-        # Input-Prompt association with auto-navigation
-        def navigate_to_prompt_creation(path):
-            """Navigate to Prompts tab and populate the video directory."""
-            input_id = Path(path).name if path else ""
-            # Return values for: video_dir, tabs (switch to prompts_tab), and status
-            return (
-                path,  # Video directory
-                gr.update(selected="prompts_tab"),  # Switch to Prompts tab using its ID
-                f"🎯 Creating prompt for: {input_id}",  # Status message
-            )
+        # Auto-fill create prompt form when selecting an input
+        def fill_create_prompt_form(selected_info):
+            """Extract path from selected info and fill video directory."""
+            # The selected_info contains the path in the markdown
+            if selected_info and "Path:** `" in selected_info:
+                start = selected_info.find("Path:** `") + len("Path:** `")
+                end = selected_info.find("`", start)
+                if end > start:
+                    return selected_info[start:end]
+            return ""
 
-        create_prompt_for_input_btn.click(
-            fn=navigate_to_prompt_creation,
-            inputs=[selected_dir_path],
-            outputs=[create_video_dir, tabs, create_status],
+        # Connect input selection to create prompt form
+        selected_info.change(
+            fn=fill_create_prompt_form,
+            inputs=[selected_info],
+            outputs=[create_video_dir],
         )
 
         # Prompt management events

@@ -206,10 +206,11 @@ Local Machine                                    Remote GPU Server (H100)
 - Extensible schema for multiple AI models
 
 ### **Remote GPU Orchestration**
-- SSH-based Docker container management
+- SSH-based Docker container management with synchronous execution
 - Automatic file transfer with integrity checks
 - Real-time log streaming from containers
-- Queue management for resource optimization
+- Queue management for sequential resource utilization
+- Graceful shutdown handling with container cleanup
 
 ### **Batch Processing Engine**
 - JSONL format for efficient batch operations
@@ -217,20 +218,21 @@ Local Machine                                    Remote GPU Server (H100)
 - Streamlined batch execution with shared GPU resources
 - Automatic retry and error recovery
 
-### **Lazy Status Monitoring**
-- Checks container status only when queried
-- Automatic output downloading on completion
-- No background threads - reliable CLI operation
-- Exit code parsing from container logs
+### **Synchronous Execution Model**
+- Blocking operations that complete before returning control
+- Immediate status updates and output downloading
+- No background threads or async complexity
+- Direct exit code handling from Docker containers
 
 ### **Advanced Web Interface (Gradio)**
-- **Operations Tab**: New two-column layout with prompt selection and inference controls
+- **Operations Tab**: Two-column layout with prompt selection and inference controls
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions
-- **Theme System**: Proper dark/light mode support respecting system preferences
-- **Real-time Monitoring**: Log streaming with CSS variables instead of hardcoded colors
+- **Queue Management**: Sequential job processing with queue status display
+- **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback
+- **Theme System**: Professional design with gradient animations and glassmorphism effects
 - **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
-- **Batch Management**: Progress tracking for multiple inference operations
+- **Graceful Shutdown**: Container cleanup on server termination
 
 ### **AI Enhancement Pipeline**
 - Prompt optimization using Pixtral model
@@ -252,8 +254,8 @@ cosmos ui  # Opens at http://localhost:7860
 
 # Or use CLI
 cosmos create prompt "Cyberpunk transformation" outputs/houdini/scene_001/
-cosmos inference ps_xxxxx --weights 0.3 0.4 0.2 0.1
-cosmos status --stream  # Watch live execution
+cosmos inference ps_xxxxx --weights 0.3 0.4 0.2 0.1  # Blocks until complete
+cosmos status --stream  # Watch live execution logs
 
 # Advanced features
 cosmos batch-inference ps_001 ps_002 ps_003  # 40% faster

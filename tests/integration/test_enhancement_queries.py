@@ -102,7 +102,6 @@ class TestEnhancementQueries:
         """Test getting enhancement details for a prompt."""
         # Create and enhance a prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original text",
             inputs={"video": "/test.mp4"},
             parameters={"name": "test"},
@@ -128,7 +127,6 @@ class TestEnhancementQueries:
     def test_get_enhancement_details_returns_none_for_unenhanced(self, repository):
         """Test that get_enhancement_details returns None for unenhanced prompts."""
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Unenhanced text",
             inputs={},
             parameters={},
@@ -141,7 +139,6 @@ class TestEnhancementQueries:
         """Test getting the original prompt from an enhanced one."""
         # Create original
         original = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original",
             inputs={"video": "/test.mp4"},
             parameters={"name": "original"},
@@ -164,7 +161,6 @@ class TestEnhancementQueries:
     def test_get_original_prompt_returns_none_for_overwritten(self, api, repository):
         """Test that overwritten enhancements return None for original."""
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Text",
             inputs={},
             parameters={},
@@ -185,14 +181,12 @@ class TestEnhancementQueries:
         """Test listing all enhanced prompts."""
         # Create mix of enhanced and regular prompts
         regular1 = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Regular 1",
             inputs={},
             parameters={},
         )
 
         regular2 = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Regular 2",
             inputs={},
             parameters={},
@@ -232,7 +226,6 @@ class TestEnhancementQueries:
         """Test getting all enhancement runs for a prompt."""
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Text to enhance",
             inputs={},
             parameters={},
@@ -271,7 +264,6 @@ class TestEnhancementQueries:
         """Test that helper functions work with old metadata structure."""
         # Manually create a prompt with old-style enhancement metadata
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Enhanced text from old system",
             inputs={},
             parameters={
@@ -301,7 +293,6 @@ class TestEnhancementQueries:
         """Test tracking enhancement lineage through multiple generations."""
         # Create original
         original = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Generation 0",
             inputs={},
             parameters={"name": "gen0"},
@@ -339,7 +330,6 @@ class TestEnhancementQueries:
     def test_queries_work_with_no_runs(self, repository):
         """Test that queries handle prompts with no runs gracefully."""
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="No runs",
             inputs={},
             parameters={},
@@ -360,8 +350,7 @@ class TestEnhancementQueries:
         # Create multiple enhanced prompts
         for i in range(5):
             prompt = repository.create_prompt(
-                model_type="transfer",
-                prompt_text=f"Prompt {i}",
+                    prompt_text=f"Prompt {i}",
                 inputs={},
                 parameters={},
             )

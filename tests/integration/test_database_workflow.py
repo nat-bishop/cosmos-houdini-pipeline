@@ -54,7 +54,6 @@ class TestDatabaseWorkflow:
         """Test creating a prompt through the service layer."""
         # Create prompt
         prompt = test_service.create_prompt(
-            model_type="transfer",
             prompt_text="A beautiful sunset over mountains",
             inputs=sample_video_files,
             parameters={"negative_prompt": "blurry, dark", "fps": 24},
@@ -62,7 +61,6 @@ class TestDatabaseWorkflow:
 
         # Verify prompt created
         assert prompt["id"] is not None
-        assert prompt["model_type"] == "transfer"
         assert prompt["prompt_text"] == "A beautiful sunset over mountains"
         assert prompt["inputs"]["video"] == sample_video_files["video"]
         assert prompt["parameters"]["fps"] == 24
@@ -76,7 +74,6 @@ class TestDatabaseWorkflow:
         """Test creating and executing a run through the service layer."""
         # Create prompt first
         prompt = test_service.create_prompt(
-            model_type="transfer",
             prompt_text="Ocean waves crashing on shore",
             inputs=sample_video_files,
             parameters={"negative_prompt": "static"},
@@ -91,6 +88,7 @@ class TestDatabaseWorkflow:
                 "guidance": 8.0,
                 "seed": 42,
             },
+            model_type="transfer",
             metadata={"test_run": True},
         )
 
@@ -117,27 +115,25 @@ class TestDatabaseWorkflow:
         """Test querying prompts and runs through the service layer."""
         # Create multiple prompts
         prompt1 = test_service.create_prompt(
-            model_type="transfer",
             prompt_text="First prompt",
             inputs=sample_video_files,
             parameters={},
         )
 
         prompt2 = test_service.create_prompt(
-            model_type="reason",
             prompt_text="Second prompt",
             inputs=sample_video_files,
             parameters={},
         )
 
         # Create multiple runs for first prompt
-        run1 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 1})
+        run1 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 1}, model_type="transfer")
         test_service.update_run_status(run1["id"], "completed")
 
-        run2 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 2})
+        run2 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 2}, model_type="transfer")
         test_service.update_run_status(run2["id"], "failed")
 
-        test_service.create_run(prompt_id=prompt2["id"], execution_config={"seed": 3})
+        test_service.create_run(prompt_id=prompt2["id"], execution_config={"seed": 3}, model_type="reason")
 
         # Query all prompts
         all_prompts = test_service.list_prompts()
@@ -160,7 +156,6 @@ class TestDatabaseWorkflow:
         """Test the prompt enhancement workflow."""
         # Create base prompt
         prompt = test_service.create_prompt(
-            model_type="enhance",
             prompt_text="A simple scene",
             inputs={"base_prompt": "A simple scene"},
             parameters={},
@@ -170,6 +165,7 @@ class TestDatabaseWorkflow:
         enhancement_run = test_service.create_run(
             prompt_id=prompt["id"],
             execution_config={"operation": "enhance", "model": "pixtral", "temperature": 0.7},
+            model_type="enhance",
             metadata={"type": "enhancement"},
         )
 
@@ -180,7 +176,6 @@ class TestDatabaseWorkflow:
 
         # Create new prompt from enhanced text
         enhanced_prompt = test_service.create_prompt(
-            model_type="enhance",
             prompt_text=enhanced_text,
             inputs={"base_prompt": "A simple scene"},
             parameters={"parent_prompt_id": prompt["id"]},
@@ -204,7 +199,6 @@ class TestDatabaseWorkflow:
         prompts = []
         for i in range(5):
             prompt = test_service.create_prompt(
-                model_type="transfer",
                 prompt_text=f"Batch prompt {i}",
                 inputs=sample_video_files,
                 parameters={"batch_id": "test_batch"},
@@ -215,7 +209,7 @@ class TestDatabaseWorkflow:
         runs = []
         for prompt in prompts[:3]:  # Only create runs for first 3
             run = test_service.create_run(
-                prompt_id=prompt["id"], execution_config={"seed": prompt["id"]}
+                prompt_id=prompt["id"], execution_config={"seed": prompt["id"]}, model_type="transfer"
             )
             runs.append(run)
 
@@ -239,14 +233,13 @@ class TestDatabaseWorkflow:
         """Test error recovery and retry logic."""
         # Create prompt
         prompt = test_service.create_prompt(
-            model_type="transfer",
             prompt_text="Error test prompt",
             inputs=sample_video_files,
             parameters={},
         )
 
         # Create failing run
-        run = test_service.create_run(prompt_id=prompt["id"], execution_config={"will_fail": True})
+        run = test_service.create_run(prompt_id=prompt["id"], execution_config={"will_fail": True}, model_type="transfer")
 
         # Fail the run
         test_service.update_run(run["id"], outputs={"error": "GPU out of memory"})
@@ -261,6 +254,7 @@ class TestDatabaseWorkflow:
         retry_run = test_service.create_run(
             prompt_id=prompt["id"],
             execution_config={"retry_of": run["id"], "reduced_batch": True},
+            model_type="transfer",
             metadata={"retry_attempt": 1},
         )
 
@@ -281,14 +275,13 @@ class TestDatabaseWorkflow:
 
         for index in range(10):
             prompt = test_service.create_prompt(
-                model_type="transfer",
                 prompt_text=f"Concurrent prompt {index}",
                 inputs=sample_video_files,
                 parameters={},
             )
 
             run = test_service.create_run(
-                prompt_id=prompt["id"], execution_config={"thread_index": index}
+                prompt_id=prompt["id"], execution_config={"thread_index": index}, model_type="transfer"
             )
 
             test_service.update_run_status(run["id"], "completed")

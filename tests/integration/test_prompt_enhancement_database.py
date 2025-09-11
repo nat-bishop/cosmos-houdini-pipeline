@@ -103,7 +103,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test complete enhancement workflow with database persistence."""
         # Create a prompt first
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="A beautiful sunset over mountains",
             inputs={"video": "/test/video.mp4"},
             parameters={"name": "sunset_scene"},
@@ -138,7 +137,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that enhancement runs appear in run listings."""
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original text",
             inputs={},
             parameters={},
@@ -166,7 +164,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that create_new=True creates linked prompts."""
         # Create original prompt
         original = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Short description",
             inputs={"video": "/test.mp4"},
             parameters={"name": "original"},
@@ -199,7 +196,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that video context is properly stored."""
         # Create prompt with video
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Scene description",
             inputs={"video": "/path/to/context/video.mp4"},
             parameters={},
@@ -223,7 +219,6 @@ class TestPromptEnhancementDatabaseIntegration:
 
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test prompt",
             inputs={},
             parameters={},
@@ -246,7 +241,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that multiple enhancement runs can exist for one prompt."""
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Base text",
             inputs={},
             parameters={},
@@ -281,7 +275,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that enhancement runs use standard run_id format."""
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Text",
             inputs={},
             parameters={},
@@ -302,7 +295,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that overwriting with existing runs requires force_overwrite."""
         # Create prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original text",
             inputs={},
             parameters={},
@@ -311,7 +303,6 @@ class TestPromptEnhancementDatabaseIntegration:
         # Create a run for this prompt
         run = repository.create_run(
             prompt_id=prompt["id"],
-            model_type="transfer",
             execution_config={},
         )
 
@@ -346,7 +337,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that create_new=True leaves original prompt completely unchanged."""
         # Create original prompt with specific data
         original = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original creative prompt",
             inputs={"video_path": "/path/to/video.mp4"},
             parameters={"name": "test_scene", "cfg_scale": 7.5},
@@ -402,7 +392,6 @@ class TestPromptEnhancementDatabaseIntegration:
         """Test that overwrite properly updates enhancement metadata."""
         # Create original prompt
         original = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original text",
             inputs={"video_path": "/path/to/video.mp4"},
             parameters={"name": "test_scene"},

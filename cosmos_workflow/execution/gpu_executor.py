@@ -60,7 +60,10 @@ class GPUExecutor:
         self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
         self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
         self.docker_executor = DockerExecutor(
-            self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
+            self.ssh_manager,
+            remote_config.remote_dir,
+            remote_config.docker_image,
+            config_manager=self.config_manager,
         )
 
         self._services_initialized = True

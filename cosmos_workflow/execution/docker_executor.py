@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
 from cosmos_workflow.utils.logging import get_run_logger, logger
@@ -16,11 +17,28 @@ from cosmos_workflow.utils.workflow_utils import get_log_path
 class DockerExecutor:
     """Executes Docker commands on remote instances using bash scripts."""
 
-    def __init__(self, ssh_manager: SSHManager, remote_dir: str, docker_image: str):
+    def __init__(
+        self,
+        ssh_manager: SSHManager,
+        remote_dir: str,
+        docker_image: str,
+        config_manager: ConfigManager | None = None,
+    ):
         self.ssh_manager = ssh_manager
         self.remote_dir = remote_dir
         self.docker_image = docker_image
         self.remote_executor = RemoteCommandExecutor(ssh_manager)
+        self.config_manager = config_manager
+
+        # Get timeout from config or use default
+        self.docker_timeout = 3600  # Default 1 hour
+        if config_manager:
+            try:
+                config_data = config_manager.get_config()
+                self.docker_timeout = config_data.get("timeouts", {}).get("docker_execution", 3600)
+                logger.info("Using docker timeout from config: {} seconds", self.docker_timeout)
+            except Exception:
+                logger.debug("Using default docker timeout: {} seconds", self.docker_timeout)
 
     def run_inference(
         self,
@@ -319,7 +337,7 @@ class DockerExecutor:
             # Execute and wait for completion
             exit_code, stdout, stderr = self.ssh_manager.execute_command(
                 command,
-                timeout=1800,  # 30 minutes timeout for enhancement
+                timeout=min(1800, self.docker_timeout // 2),  # Half of docker timeout or 30 min
                 stream_output=True,  # Stream output for CLI
             )
 
@@ -382,7 +400,7 @@ class DockerExecutor:
         # Execute and wait for completion
         exit_code, stdout, stderr = self.ssh_manager.execute_command(
             command,
-            timeout=3600,  # 1 hour timeout
+            timeout=self.docker_timeout,  # Use configured timeout
             stream_output=stream_output,
         )
 
@@ -431,7 +449,7 @@ class DockerExecutor:
         # Execute and wait for completion
         exit_code, stdout, stderr = self.ssh_manager.execute_command(
             command,
-            timeout=3600,  # 1 hour timeout
+            timeout=self.docker_timeout,  # Use configured timeout
             stream_output=stream_output,
         )
 

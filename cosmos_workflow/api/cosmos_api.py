@@ -596,6 +596,7 @@ class CosmosAPI:
         run = self.service.create_run(
             prompt_id=prompt_id,
             execution_config=execution_config,
+            model_type="transfer",  # Explicitly specify model type for inference
         )
         logger.info("Created run {} for prompt {}", run["id"], prompt_id)
 
@@ -694,6 +695,7 @@ class CosmosAPI:
                 run = self.service.create_run(
                     prompt_id=prompt_id,
                     execution_config=execution_config,
+                    model_type="transfer",  # Explicitly specify model type for inference
                 )
                 logger.info("Created run {} for prompt {}", run["id"], prompt_id)
                 runs_and_prompts.append((run, prompt))

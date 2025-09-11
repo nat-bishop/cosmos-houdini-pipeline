@@ -1594,9 +1594,192 @@ def create_ui():
                                 )
 
             # ========================================
-            # Tab 4: Jobs & Queue (formerly Log Monitor)
+            # Tab 4: Run History - Comprehensive Run Management
             # ========================================
-            with gr.Tab("📦 Jobs & Queue", id=4):
+            with gr.Tab("📊 Run History", id=4):
+                gr.Markdown("### Comprehensive Run History & Management")
+                gr.Markdown("View, filter, and manage all runs with detailed information")
+
+                with gr.Row():
+                    # Left: Filters and controls
+                    with gr.Column(scale=1):
+                        gr.Markdown("#### 🔍 Filter Options")
+
+                        with gr.Group(elem_classes=["detail-card"]):
+                            history_status_filter = gr.Dropdown(
+                                choices=[
+                                    "all",
+                                    "completed",
+                                    "running",
+                                    "pending",
+                                    "failed",
+                                    "cancelled",
+                                ],
+                                value="all",
+                                label="Status Filter",
+                                info="Filter runs by status",
+                            )
+
+                            history_date_filter = gr.Dropdown(
+                                choices=[
+                                    "all",
+                                    "today",
+                                    "yesterday",
+                                    "last_7_days",
+                                    "last_30_days",
+                                ],
+                                value="all",
+                                label="Date Range",
+                                info="Filter by creation date",
+                            )
+
+                            history_search = gr.Textbox(
+                                label="Search",
+                                placeholder="Search by prompt text or ID...",
+                                info="Search in prompt text or run ID",
+                            )
+
+                            history_limit = gr.Number(
+                                value=100,
+                                label="Max Results",
+                                minimum=10,
+                                maximum=500,
+                                info="Maximum number of runs to display",
+                            )
+
+                            history_refresh_btn = gr.Button(
+                                "🔄 Refresh History", variant="secondary", size="sm"
+                            )
+
+                        # Statistics Panel
+                        gr.Markdown("#### 📈 Statistics")
+                        with gr.Group(elem_classes=["detail-card"]):
+                            history_stats = gr.Markdown(
+                                value="Loading statistics...", elem_classes=["loading-skeleton"]
+                            )
+
+                    # Center: Run table with enhanced display
+                    with gr.Column(scale=3):
+                        gr.Markdown("#### 📋 Run Records")
+
+                        history_table = gr.Dataframe(
+                            headers=[
+                                "☑",
+                                "Run ID",
+                                "Prompt",
+                                "Status",
+                                "Duration",
+                                "Created",
+                                "Output",
+                            ],
+                            datatype=["bool", "str", "str", "str", "str", "str", "str"],
+                            interactive=True,
+                            col_count=(7, "fixed"),
+                            wrap=True,
+                            elem_classes=["prompts-table"],
+                            height=600,
+                        )
+
+                        # Batch operations
+                        with gr.Row(elem_classes=["batch-operation"]):
+                            history_select_all_btn = gr.Button(
+                                "☑ Select All", size="sm", variant="secondary"
+                            )
+                            history_clear_selection_btn = gr.Button(
+                                "☐ Clear Selection", size="sm", variant="secondary"
+                            )
+                            history_selection_count = gr.Markdown("**0** runs selected")
+                            history_delete_selected_btn = gr.Button(
+                                "🗑️ Delete Selected", size="sm", variant="stop", visible=False
+                            )
+
+                    # Right: Detailed run information
+                    with gr.Column(scale=2):
+                        with gr.Group(elem_classes=["detail-card"]):
+                            gr.Markdown("#### 📝 Run Details")
+
+                            with gr.Tabs():
+                                # General Info Tab
+                                with gr.Tab("General"):
+                                    history_run_id = gr.Textbox(
+                                        label="Run ID",
+                                        interactive=False,
+                                        elem_classes=["loading-skeleton"],
+                                    )
+
+                                    with gr.Row():
+                                        history_status = gr.Textbox(
+                                            label="Status", interactive=False, scale=1
+                                        )
+                                        history_duration = gr.Textbox(
+                                            label="Duration", interactive=False, scale=1
+                                        )
+
+                                    history_prompt_name = gr.Textbox(
+                                        label="Prompt Name", interactive=False
+                                    )
+
+                                    history_prompt_text = gr.Textbox(
+                                        label="Prompt Text", lines=4, interactive=False
+                                    )
+
+                                    with gr.Row():
+                                        history_created = gr.Textbox(
+                                            label="Created At", interactive=False, scale=1
+                                        )
+                                        history_completed = gr.Textbox(
+                                            label="Completed At", interactive=False, scale=1
+                                        )
+
+                                # Parameters Tab
+                                with gr.Tab("Parameters"):
+                                    history_weights = gr.JSON(
+                                        label="Control Weights", interactive=False
+                                    )
+
+                                    history_params = gr.JSON(
+                                        label="Inference Parameters", interactive=False
+                                    )
+
+                                # Logs Tab
+                                with gr.Tab("Logs"):
+                                    history_log_path = gr.Textbox(
+                                        label="Log File Path", interactive=False
+                                    )
+
+                                    history_log_content = gr.Textbox(
+                                        label="Log Output",
+                                        lines=15,
+                                        interactive=False,
+                                        show_copy_button=True,
+                                    )
+
+                                    history_load_logs_btn = gr.Button(
+                                        "📄 Load Full Logs", size="sm"
+                                    )
+
+                                # Output Tab
+                                with gr.Tab("Output"):
+                                    history_output_video = gr.Video(
+                                        label="Generated Output", height=300, autoplay=False
+                                    )
+
+                                    history_output_path = gr.Textbox(
+                                        label="Output Path", interactive=False
+                                    )
+
+                                    with gr.Row():
+                                        gr.Button(
+                                            "💾 Download", variant="primary", size="sm"
+                                        )  # TODO: Add download handler
+                                        gr.Button(
+                                            "🗑️ Delete Run", variant="stop", size="sm"
+                                        )  # TODO: Add delete handler
+
+            # ========================================
+            # Tab 5: Jobs & Queue (formerly Log Monitor)
+            # ========================================
+            with gr.Tab("📦 Jobs & Queue", id=5):
                 gr.Markdown("### Jobs, Queue & Log Monitoring")
                 gr.Markdown("Monitor active jobs, queue status, and view real-time logs")
 
@@ -1662,6 +1845,359 @@ def create_ui():
                                 scale=2,
                             )
                             gr.Button("🗑️ Clear Logs", size="sm", scale=1)
+
+        # ============================================
+        # Run History Functions
+        # ============================================
+
+        def load_run_history(status_filter, date_filter, search_query, limit):
+            """Load run history with filtering and search."""
+            try:
+                if not ops:
+                    return [], "No connection to backend"
+
+                # Get all runs
+                runs = ops.list_runs(
+                    status=status_filter if status_filter != "all" else None, limit=int(limit)
+                )
+
+                # Apply date filter
+                from datetime import datetime, timedelta, timezone
+
+                now = datetime.now(timezone.utc)
+
+                if date_filter == "today":
+                    cutoff = now - timedelta(days=1)
+                elif date_filter == "yesterday":
+                    cutoff = now - timedelta(days=2)
+                    end_cutoff = now - timedelta(days=1)
+                elif date_filter == "last_7_days":
+                    cutoff = now - timedelta(days=7)
+                elif date_filter == "last_30_days":
+                    cutoff = now - timedelta(days=30)
+                else:
+                    cutoff = None
+
+                if cutoff:
+                    filtered_runs = []
+                    for run in runs:
+                        created = run.get("created_at", "")
+                        if created:
+                            try:
+                                run_time = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                                if date_filter == "yesterday":
+                                    if cutoff <= run_time < end_cutoff:
+                                        filtered_runs.append(run)
+                                elif run_time >= cutoff:
+                                    filtered_runs.append(run)
+                            except Exception:
+                                pass  # Skip invalid date formats
+                    runs = filtered_runs
+
+                # Apply search filter
+                if search_query and search_query.strip():
+                    search_lower = search_query.lower()
+                    filtered_runs = []
+                    for run in runs:
+                        # Search in run ID
+                        if search_lower in run.get("id", "").lower():
+                            filtered_runs.append(run)
+                            continue
+
+                        # Search in prompt text
+                        prompt_id = run.get("prompt_id")
+                        if prompt_id:
+                            try:
+                                prompt = ops.get_prompt(prompt_id)
+                                if prompt and search_lower in prompt.get("prompt_text", "").lower():
+                                    filtered_runs.append(run)
+                            except Exception:
+                                pass  # Skip invalid date formats
+                    runs = filtered_runs
+
+                # Format table data
+                table_data = []
+                for run in runs:
+                    run_id = run.get("id", "")
+                    status = run.get("status", "unknown")
+                    created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+
+                    # Calculate duration for completed runs
+                    duration = "-"
+                    if status == "completed" and run.get("completed_at"):
+                        try:
+                            start = datetime.fromisoformat(
+                                run.get("created_at", "").replace("Z", "+00:00")
+                            )
+                            end = datetime.fromisoformat(
+                                run.get("completed_at", "").replace("Z", "+00:00")
+                            )
+                            delta = end - start
+                            minutes = int(delta.total_seconds() / 60)
+                            seconds = int(delta.total_seconds() % 60)
+                            duration = f"{minutes}m {seconds}s"
+                        except Exception:
+                            pass  # Skip invalid date formats
+
+                    # Get prompt name
+                    prompt_name = "-"
+                    prompt_id = run.get("prompt_id")
+                    if prompt_id:
+                        try:
+                            prompt = ops.get_prompt(prompt_id)
+                            if prompt:
+                                prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
+                                if len(prompt_name) > 30:
+                                    prompt_name = prompt_name[:27] + "..."
+                        except Exception:
+                            pass  # Skip invalid date formats
+
+                    # Check for output
+                    output_exists = "No"
+                    output_path = Path("outputs") / f"run_{run_id}" / "outputs" / "output.mp4"
+                    if output_path.exists():
+                        output_exists = "Yes"
+
+                    table_data.append(
+                        [
+                            False,  # Checkbox
+                            run_id,
+                            prompt_name,
+                            status,
+                            duration,
+                            created,
+                            output_exists,
+                        ]
+                    )
+
+                # Calculate statistics
+                total = len(runs)
+                completed = sum(1 for r in runs if r.get("status") == "completed")
+                running = sum(1 for r in runs if r.get("status") == "running")
+                pending = sum(1 for r in runs if r.get("status") == "pending")
+                failed = sum(1 for r in runs if r.get("status") == "failed")
+
+                stats_text = f"""**Total Runs:** {total}
+
+**Status Breakdown:**
+- ✅ Completed: {completed}
+- 🔄 Running: {running}
+- ⏳ Pending: {pending}
+- ❌ Failed: {failed}
+
+**Success Rate:** {(completed / total * 100) if total > 0 else 0:.1f}%
+"""
+
+                return table_data, stats_text
+
+            except Exception as e:
+                logger.error("Failed to load run history: {}", e)
+                return [], f"Error: {e}"
+
+        def select_run_from_history(evt: gr.SelectData, table_data):
+            """Handle run selection from history table."""
+            try:
+                if evt.index is None or not table_data:
+                    return [""] * 12 + [None, ""]
+
+                # Get selected row
+                row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
+
+                import pandas as pd
+
+                if isinstance(table_data, pd.DataFrame):
+                    row = table_data.iloc[row_idx]
+                    run_id = str(row.iloc[1]) if len(row) > 1 else ""
+                else:
+                    row = table_data[row_idx] if row_idx < len(table_data) else []
+                    run_id = str(row[1]) if len(row) > 1 else ""
+
+                if not run_id or not ops:
+                    return [""] * 12 + [None, ""]
+
+                # Get full run details
+                run = ops.get_run(run_id)
+                if not run:
+                    return [""] * 12 + [None, ""]
+
+                # Extract basic info
+                status = run.get("status", "unknown")
+                created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+                completed = run.get("completed_at", "")[:19] if run.get("completed_at") else "-"
+
+                # Calculate duration
+                duration = "-"
+                if status == "completed" and run.get("completed_at"):
+                    try:
+                        from datetime import datetime
+
+                        start = datetime.fromisoformat(
+                            run.get("created_at", "").replace("Z", "+00:00")
+                        )
+                        end = datetime.fromisoformat(
+                            run.get("completed_at", "").replace("Z", "+00:00")
+                        )
+                        delta = end - start
+                        minutes = int(delta.total_seconds() / 60)
+                        seconds = int(delta.total_seconds() % 60)
+                        duration = f"{minutes}m {seconds}s"
+                    except Exception:
+                        pass  # Skip invalid data
+
+                # Get prompt details
+                prompt_name = ""
+                prompt_text = ""
+                prompt_id = run.get("prompt_id")
+                if prompt_id:
+                    try:
+                        prompt = ops.get_prompt(prompt_id)
+                        if prompt:
+                            prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
+                            prompt_text = prompt.get("prompt_text", "")
+                    except Exception:
+                        pass  # Skip invalid data
+
+                # Get parameters
+                params = run.get("parameters", {})
+                weights = params.get("weights", {})
+                inference_params = {
+                    "num_steps": params.get("num_steps", 35),
+                    "guidance_scale": params.get("guidance_scale", 7.0),
+                    "seed": params.get("seed", 1),
+                    "fps": params.get("fps", 24),
+                    "sigma_max": params.get("sigma_max", 70.0),
+                    "blur_strength": params.get("blur_strength", "medium"),
+                    "canny_threshold": params.get("canny_threshold", "medium"),
+                }
+
+                # Get log path
+                log_path = run.get("log_path", "")
+                log_content = "Click 'Load Full Logs' to view log output"
+
+                # Get output path and video
+                output_path = ""
+                output_video = None
+                run_output_dir = Path("outputs") / f"run_{run_id}" / "outputs"
+                video_file = run_output_dir / "output.mp4"
+                if video_file.exists():
+                    output_path = str(video_file)
+                    output_video = str(video_file)
+
+                return [
+                    run_id,  # history_run_id
+                    status,  # history_status
+                    duration,  # history_duration
+                    prompt_name,  # history_prompt_name
+                    prompt_text,  # history_prompt_text
+                    created,  # history_created
+                    completed,  # history_completed
+                    weights,  # history_weights
+                    inference_params,  # history_params
+                    log_path,  # history_log_path
+                    log_content,  # history_log_content
+                    output_video,  # history_output_video
+                    output_path,  # history_output_path
+                ]
+
+            except Exception as e:
+                logger.error("Error selecting run from history: {}", e)
+                return [""] * 12 + [None, ""]
+
+        def load_run_logs(run_id):
+            """Load full log content for a run."""
+            try:
+                if not run_id or not ops:
+                    return "No run selected"
+
+                run = ops.get_run(run_id)
+                if not run:
+                    return "Run not found"
+
+                log_path = run.get("log_path", "")
+                if not log_path:
+                    return "No log path available for this run"
+
+                # Try to read log file
+                log_file = Path(log_path)
+                if log_file.exists():
+                    with open(log_file) as f:
+                        content = f.read()
+                        if content:
+                            return content
+                        else:
+                            return "Log file is empty"
+                else:
+                    return f"Log file not found: {log_path}"
+
+            except Exception as e:
+                logger.error("Error loading logs: {}", e)
+                return f"Error loading logs: {e}"
+
+        def update_history_selection_count(table_data):
+            """Update the selection count for history table."""
+            try:
+                if table_data is None:
+                    return "**0** runs selected", gr.update(visible=False)
+
+                import pandas as pd
+
+                if isinstance(table_data, pd.DataFrame):
+                    if not table_data.empty:
+                        first_col_values = (
+                            table_data.values[:, 0] if table_data.shape[1] > 0 else []
+                        )
+                        selected = sum(1 for val in first_col_values if val is True)
+                    else:
+                        selected = 0
+                else:
+                    selected = sum(1 for row in table_data if len(row) > 0 and row[0] is True)
+
+                count_text = f"**{selected}** run{'s' if selected != 1 else ''} selected"
+                show_delete = selected > 0
+
+                return count_text, gr.update(visible=show_delete)
+
+            except Exception as e:
+                logger.debug("Error counting selection: {}", e)
+                return "**0** runs selected", gr.update(visible=False)
+
+        def select_all_runs(table_data):
+            """Select all runs in the history table."""
+            if table_data is None:
+                return []
+
+            import pandas as pd
+
+            if isinstance(table_data, pd.DataFrame):
+                table_data = table_data.copy()
+                table_data.iloc[:, 0] = True
+                return table_data
+            else:
+                updated_data = []
+                for row in table_data:
+                    new_row = row.copy() if isinstance(row, list) else list(row)
+                    new_row[0] = True
+                    updated_data.append(new_row)
+                return updated_data
+
+        def clear_all_runs(table_data):
+            """Clear all selections in the history table."""
+            if table_data is None:
+                return []
+
+            import pandas as pd
+
+            if isinstance(table_data, pd.DataFrame):
+                table_data = table_data.copy()
+                table_data.iloc[:, 0] = False
+                return table_data
+            else:
+                updated_data = []
+                for row in table_data:
+                    new_row = row.copy() if isinstance(row, list) else list(row)
+                    new_row[0] = False
+                    updated_data.append(new_row)
+                return updated_data
 
         # ============================================
         # Event Handlers
@@ -2018,6 +2554,59 @@ def create_ui():
             outputs=[recent_runs_table],
         )
 
+        # Run History tab events
+        history_refresh_btn.click(
+            fn=load_run_history,
+            inputs=[history_status_filter, history_date_filter, history_search, history_limit],
+            outputs=[history_table, history_stats],
+        )
+
+        history_table.select(
+            fn=select_run_from_history,
+            inputs=[history_table],
+            outputs=[
+                history_run_id,
+                history_status,
+                history_duration,
+                history_prompt_name,
+                history_prompt_text,
+                history_created,
+                history_completed,
+                history_weights,
+                history_params,
+                history_log_path,
+                history_log_content,
+                history_output_video,
+                history_output_path,
+            ],
+        )
+
+        history_table.change(
+            fn=update_history_selection_count,
+            inputs=[history_table],
+            outputs=[history_selection_count, history_delete_selected_btn],
+        )
+
+        history_select_all_btn.click(
+            fn=select_all_runs, inputs=[history_table], outputs=[history_table]
+        ).then(
+            fn=update_history_selection_count,
+            inputs=[history_table],
+            outputs=[history_selection_count, history_delete_selected_btn],
+        )
+
+        history_clear_selection_btn.click(
+            fn=clear_all_runs, inputs=[history_table], outputs=[history_table]
+        ).then(
+            fn=update_history_selection_count,
+            inputs=[history_table],
+            outputs=[history_selection_count, history_delete_selected_btn],
+        )
+
+        history_load_logs_btn.click(
+            fn=load_run_logs, inputs=[history_run_id], outputs=[history_log_content]
+        )
+
         # Auto-load data on app start
         app.load(fn=load_input_gallery, inputs=[], outputs=[input_gallery]).then(
             fn=check_running_jobs, inputs=[], outputs=[running_jobs_display, job_status]
@@ -2029,6 +2618,10 @@ def create_ui():
             fn=lambda: load_ops_prompts(50),  # Load operations prompts
             inputs=[],
             outputs=[ops_prompts_table],
+        ).then(
+            fn=lambda: load_run_history("all", "all", "", 100),  # Load run history
+            inputs=[],
+            outputs=[history_table, history_stats],
         )
 
     return app

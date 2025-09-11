@@ -287,7 +287,7 @@ cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 ### Performance & Scale
 • Achieved 40-60% speedup through batch processing optimization
 
-• Managed concurrent operations on $100k+ GPU hardware
+• Managed concurrent operations on H100 GPUs
 
 • Built transaction-safe database operations with automatic rollback
 

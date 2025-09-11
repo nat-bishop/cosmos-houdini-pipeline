@@ -18,7 +18,11 @@ from cosmos_workflow.utils.logging import logger
 config = ConfigManager()
 
 # Initialize unified operations - using CosmosAPI like CLI does
-ops = CosmosAPI(config=config)
+# Skip initialization during testing
+if os.environ.get("COSMOS_TEST_MODE") != "true":
+    ops = CosmosAPI(config=config)
+else:
+    ops = None  # Mock for testing
 
 # Initialize log viewer (reusing existing component)
 log_viewer = LogViewer(max_lines=2000)
@@ -131,7 +135,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     info_parts = []
     info_parts.append(f"**Name:** {selected_dir['name']}")
     info_parts.append("")
-    info_parts.append(f"**Path:** {selected_dir['path']}")
+    info_parts.append(f"**Path:** `{selected_dir['path']}`")
     info_parts.append("")
     info_parts.append("**Resolution:** 1920x1080")  # TODO: Extract from video
     info_parts.append("")
@@ -174,6 +178,9 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         else None
     )
 
+    # Convert path to forward slashes for cross-platform compatibility in input field
+    video_dir_value = selected_dir["path"].replace("\\", "/")
+
     return (
         info_text,
         selected_dir["path"],  # Store the directory path
@@ -181,7 +188,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         depth_video,
         seg_video,
         gr.update(visible=True),
-        selected_dir["path"],  # Also return path for create_video_dir field
+        video_dir_value,  # Return normalized path for create_video_dir field
     )
 
 
@@ -325,6 +332,9 @@ def populate_from_input_dir(selected_dir_path):
 def load_ops_prompts(model_type="all", limit=50):
     """Load prompts for operations table with selection column."""
     try:
+        if not ops:
+            return []
+
         # Use CosmosAPI to get prompts
         if model_type == "all":
             prompts = ops.list_prompts(limit=limit)
@@ -338,13 +348,14 @@ def load_ops_prompts(model_type="all", limit=50):
             name = prompt.get("parameters", {}).get("name", "unnamed")
             model = prompt.get("model_type", "transfer")
             text = prompt.get("prompt_text", "")
+            created = prompt.get("created_at", "")[:19] if prompt.get("created_at") else ""
 
             # Truncate text for display
             if len(text) > 60:
                 text = text[:57] + "..."
 
-            # Add with selection checkbox (False by default)
-            table_data.append([False, prompt_id, name, model, text])
+            # Add with selection checkbox (False by default) and created date
+            table_data.append([False, prompt_id, name, model, text, created])
 
         return table_data
     except Exception as e:
@@ -356,7 +367,7 @@ def update_selection_count(dataframe_data):
     """Update the selection count based on checked rows."""
     try:
         if dataframe_data is None:
-            return "0 selected"
+            return "**0** prompts selected"
 
         # Handle both list and dataframe formats
         import pandas as pd
@@ -379,14 +390,14 @@ def update_selection_count(dataframe_data):
             try:
                 selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
             except Exception:
-                return "0 selected"
+                return "**0** prompts selected"
         else:
-            return "0 selected"
+            return "**0** prompts selected"
 
-        return f"{selected} selected"
+        return f"**{selected}** prompt{'s' if selected != 1 else ''} selected"
     except Exception as e:
         logger.debug("Error counting selection: %s", str(e))
-        return "0 selected"
+        return "**0** prompts selected"
 
 
 def select_all_prompts(dataframe_data):
@@ -439,11 +450,104 @@ def toggle_enhance_force_visibility(create_new):
     return gr.update(visible=not create_new)
 
 
+def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
+    """Handle row selection in prompts table to show details."""
+    try:
+        if dataframe_data is None or evt is None:
+            return ["", "", "", "", "", "", ""]
+
+        # Get the selected row index
+        row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
+
+        # Extract row data
+        import pandas as pd
+
+        if isinstance(dataframe_data, pd.DataFrame):
+            row = dataframe_data.iloc[row_idx]
+            # Columns: ["☑", "ID", "Name", "Model", "Prompt Text", "Created"]
+            prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
+        else:
+            row = dataframe_data[row_idx] if row_idx < len(dataframe_data) else []
+            prompt_id = str(row[1]) if len(row) > 1 else ""
+
+        if not prompt_id:
+            return ["", "", "", "", "", "", ""]
+
+        # Use the global ops (CosmosAPI) to get full prompt details
+        if ops:
+            prompt_details = ops.get_prompt(prompt_id)
+            if prompt_details:
+                name = prompt_details.get("parameters", {}).get("name", "unnamed")
+                model = prompt_details.get("model_type", "transfer")
+                prompt_text = prompt_details.get("prompt_text", "")
+                negative_prompt = prompt_details.get("parameters", {}).get("negative_prompt", "")
+                created = (
+                    prompt_details.get("created_at", "")[:19]
+                    if prompt_details.get("created_at")
+                    else ""
+                )
+
+                # Get video directory from inputs
+                inputs = prompt_details.get("inputs", {})
+                video_dir = (
+                    inputs.get("video", "").replace("/color.mp4", "") if inputs.get("video") else ""
+                )
+
+                return [prompt_id, name, model, prompt_text, negative_prompt, created, video_dir]
+
+        return ["", "", "", "", "", "", ""]
+
+    except Exception as e:
+        logger.error("Error selecting prompt row: %s", str(e))
+        return ["", "", "", "", "", "", ""]
+
+
 def get_queue_status():
-    """Get current queue status information."""
-    # In a real implementation, this would check actual queue status
-    # For now, we'll return a simple status
-    return "Queue: Ready | GPU: Available"
+    """Get current queue status information using CosmosAPI."""
+    try:
+        if ops:
+            # Get running and pending runs
+            running_runs = ops.list_runs(status="running", limit=10)
+            pending_runs = ops.list_runs(status="pending", limit=10)
+
+            running_count = len(running_runs)
+            pending_count = len(pending_runs)
+
+            if running_count > 0:
+                current_run = running_runs[0]
+                return (
+                    f"Running: {current_run.get('id', '')[:8]}... | Queue: {pending_count} pending"
+                )
+            elif pending_count > 0:
+                return f"Queue: {pending_count} pending | GPU: Ready"
+            else:
+                return "Queue: Empty | GPU: Available"
+        return "Queue: Status unavailable"
+    except Exception as e:
+        logger.error("Error getting queue status: %s", str(e))
+        return "Queue: Error getting status"
+
+
+def get_recent_runs(limit=5):
+    """Get recent runs for the Jobs tab."""
+    try:
+        if ops:
+            # Get most recent runs
+            runs = ops.list_runs(limit=limit)
+
+            # Format for table display
+            table_data = []
+            for run in runs[:limit]:
+                run_id = run.get("id", "")[:8]
+                status = run.get("status", "unknown")
+                created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+                table_data.append([run_id, status, created])
+
+            return table_data
+        return []
+    except Exception as e:
+        logger.error("Error getting recent runs: %s", str(e))
+        return []
 
 
 def run_inference_on_selected(
@@ -877,6 +981,99 @@ def create_ui():
 
     /* Status pulse animation */
     @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* Interactive table rows */
+    .prompts-table tr {
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .prompts-table tr:hover {
+        background: linear-gradient(90deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1)) !important;
+        transform: translateX(4px);
+    }
+
+    .prompts-table tr.selected {
+        background: rgba(102, 126, 234, 0.2) !important;
+        border-left: 3px solid #667eea !important;
+    }
+
+    /* Checkbox animations */
+    input[type="checkbox"] {
+        transition: all 0.2s !important;
+    }
+
+    input[type="checkbox"]:checked {
+        transform: scale(1.1);
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.5) !important;
+    }
+
+    /* Staggered animations for batch operations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .batch-operation {
+        animation: fadeInUp 0.3s ease-out;
+    }
+
+    /* Loading skeleton */
+    .loading-skeleton {
+        background: linear-gradient(90deg, var(--card-bg) 25%, rgba(102, 126, 234, 0.1) 50%, var(--card-bg) 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* Professional detail cards */
+    .detail-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 8px 0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .detail-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Split view layout */
+    .split-view {
+        display: flex;
+        gap: 16px;
+        height: calc(100vh - 200px);
+    }
+
+    .split-left {
+        flex: 1.5;
+        overflow-y: auto;
+    }
+
+    .split-right {
+        flex: 1;
+        overflow-y: auto;
+        border-left: 1px solid rgba(102, 126, 234, 0.2);
+        padding-left: 16px;
+    }
+
+    /* More CSS animations continues...
         0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
         70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
         100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
@@ -1002,97 +1199,119 @@ def create_ui():
                             create_status = gr.Markdown("")
 
             # ========================================
-            # Tab 2: Prompts (Phase 2 Implementation)
+            # Tab 2: UNIFIED Prompts & Operations (Merged)
             # ========================================
-            with gr.Tab("✏️ Prompts", id="prompts_tab"):
-                gr.Markdown("### Prompt Management")
-                gr.Markdown("Create and manage prompts for your video inputs")
+            with gr.Tab("🚀 Prompts", id=2, elem_classes=["prompts-tab"]):
+                gr.Markdown("### Prompt Management & Operations")
+                gr.Markdown("View, select, and execute operations on your prompts")
 
-                # Existing Prompts table (no longer has create form)
-                gr.Markdown("#### Existing Prompts")
+                with gr.Row(elem_classes=["split-view"]):
+                    # Left: Prompt selection table with enhanced interactivity
+                    with gr.Column(scale=3, elem_classes=["split-left"]):
+                        with gr.Group(elem_classes=["detail-card"]):
+                            gr.Markdown("#### 📋 Prompts Library")
 
-                with gr.Row():
-                    model_type_filter = gr.Dropdown(
-                        choices=[
-                            "all",
-                            "transfer",
-                            "upscale",
-                            "enhance",
-                            "reason",
-                            "predict",
-                        ],
-                        value="all",
-                        label="Model Type",
-                        scale=1,
-                    )
-                    limit_filter = gr.Number(
-                        value=50, label="Limit", minimum=1, maximum=500, scale=1
-                    )
-                    refresh_prompts_btn = gr.Button(
-                        "🔄 Refresh", variant="secondary", size="sm", scale=1
-                    )
+                            # Filter row with animations
+                            with gr.Row(elem_classes=["batch-operation"]):
+                                ops_model_filter = gr.Dropdown(
+                                    choices=[
+                                        "all",
+                                        "transfer",
+                                        "upscale",
+                                        "enhance",
+                                        "reason",
+                                        "predict",
+                                    ],
+                                    value="all",
+                                    label="Model Type",
+                                    scale=1,
+                                )
+                                ops_limit = gr.Number(
+                                    value=50,
+                                    label="Limit",
+                                    minimum=1,
+                                    maximum=500,
+                                    scale=1,
+                                )
+                                ops_refresh_btn = gr.Button(
+                                    "🔄 Refresh",
+                                    variant="secondary",
+                                    size="sm",
+                                    scale=1,
+                                )
 
-                prompts_table = gr.Dataframe(
-                    headers=["ID", "Name", "Model", "Prompt Text", "Created"],
-                    datatype=["str", "str", "str", "str", "str"],
-                    interactive=False,
-                    wrap=True,
-                )
-
-                gr.Textbox(label="Selected Prompt ID", interactive=False, visible=False)
-
-            # ========================================
-            # Tab 3: Operations
-            # ========================================
-            with gr.Tab("🚀 Operations", id=3):
-                gr.Markdown("### Run Operations")
-                gr.Markdown("Execute inference and enhancement operations on your prompts")
-
-                with gr.Row():
-                    # Left: Prompt selection table
-                    with gr.Column(scale=3):
-                        gr.Markdown("#### Select Prompts")
-
-                        # Filter row
-                        with gr.Row():
-                            ops_model_filter = gr.Dropdown(
-                                choices=["all", "transfer", "upscale", "enhance"],
-                                value="all",
-                                label="Model Type",
-                                scale=1,
-                            )
-                            ops_limit = gr.Number(
-                                value=50,
-                                label="Limit",
-                                minimum=1,
-                                maximum=500,
-                                scale=1,
-                            )
-                            ops_refresh_btn = gr.Button(
-                                "🔄 Refresh",
-                                variant="secondary",
-                                size="sm",
-                                scale=1,
+                            # Enhanced prompts table with selection
+                            ops_prompts_table = gr.Dataframe(
+                                headers=["☑", "ID", "Name", "Model", "Prompt Text", "Created"],
+                                datatype=["bool", "str", "str", "str", "str", "str"],
+                                interactive=True,  # Allow checkbox interaction
+                                col_count=(6, "fixed"),
+                                wrap=True,
+                                elem_classes=["prompts-table"],
                             )
 
-                        # Prompts table with selection
-                        ops_prompts_table = gr.Dataframe(
-                            headers=["Select", "ID", "Name", "Model", "Text"],
-                            datatype=["bool", "str", "str", "str", "str"],
-                            interactive=True,  # Allow checkbox interaction
-                            col_count=(5, "fixed"),
-                            wrap=True,
-                        )
+                            # Selection controls with visual feedback
+                            with gr.Row(elem_classes=["batch-operation"]):
+                                select_all_btn = gr.Button(
+                                    "☑ Select All", size="sm", variant="secondary"
+                                )
+                                clear_selection_btn = gr.Button(
+                                    "☐ Clear", size="sm", variant="secondary"
+                                )
+                                selection_count = gr.Markdown(
+                                    "**0** prompts selected", elem_classes=["selection-counter"]
+                                )
 
-                        # Selection controls
-                        with gr.Row():
-                            select_all_btn = gr.Button("Select All", size="sm")
-                            clear_selection_btn = gr.Button("Clear", size="sm")
-                            selection_count = gr.Markdown("0 selected")
+                    # Right: Split view for details and operations
+                    with gr.Column(scale=2, elem_classes=["split-right"]):
+                        # Prompt Details Section
+                        with gr.Group(elem_classes=["detail-card"], visible=True):
+                            gr.Markdown("#### 📝 Prompt Details")
 
-                    # Right: Operation controls
-                    with gr.Column(scale=2):
-                        gr.Markdown("#### Operation Controls")
+                            selected_prompt_id = gr.Textbox(
+                                label="Prompt ID",
+                                interactive=False,
+                                elem_classes=["loading-skeleton"],
+                            )
+
+                            with gr.Row():
+                                selected_prompt_name = gr.Textbox(
+                                    label="Name",
+                                    interactive=False,
+                                    scale=2,
+                                )
+                                selected_prompt_model = gr.Textbox(
+                                    label="Model Type",
+                                    interactive=False,
+                                    scale=1,
+                                )
+
+                            selected_prompt_text = gr.Textbox(
+                                label="Prompt Text",
+                                lines=3,
+                                interactive=False,
+                            )
+
+                            selected_prompt_negative = gr.Textbox(
+                                label="Negative Prompt",
+                                lines=2,
+                                interactive=False,
+                            )
+
+                            with gr.Row():
+                                selected_prompt_created = gr.Textbox(
+                                    label="Created",
+                                    interactive=False,
+                                    scale=1,
+                                )
+                                selected_prompt_video_dir = gr.Textbox(
+                                    label="Video Directory",
+                                    interactive=False,
+                                    scale=2,
+                                )
+
+                        # Operation Controls Section
+                        gr.Markdown("#### ⚡ Operation Controls")
 
                         # Tabs for different operations
                         with gr.Tabs():
@@ -1230,26 +1449,12 @@ def create_ui():
 
                                 enhance_status = gr.Markdown("")
 
-                        # Execution status
-                        gr.Markdown("#### Execution Status")
-                        with gr.Group():
-                            execution_status = gr.Textbox(
-                                label="Current Status",
-                                value="Idle",
-                                interactive=False,
-                            )
-                            queue_status = gr.Textbox(
-                                label="Queue Status",
-                                value="No jobs queued",
-                                interactive=False,
-                            )
-                            # Auto-refresh queue status
-                            queue_timer = gr.Timer(value=2.0, active=True)  # Update every 2 seconds
+                        # Removed execution status from here - moved to Jobs tab
 
             # ========================================
             # Tab 4: Outputs (Phase 4 Implementation)
             # ========================================
-            with gr.Tab("🎬 Outputs", id=4):
+            with gr.Tab("🎬 Outputs", id=3):
                 gr.Markdown("### Output Gallery")
                 gr.Markdown("View and download generated video outputs from completed runs")
 
@@ -1329,43 +1534,74 @@ def create_ui():
                                 )
 
             # ========================================
-            # Tab 5: Log Monitor (Existing functionality)
+            # Tab 4: Jobs & Queue (formerly Log Monitor)
             # ========================================
-            with gr.Tab("📊 Log Monitor", id=5):
-                gr.Markdown("### Real-time Log Monitoring")
+            with gr.Tab("📦 Jobs & Queue", id=4):
+                gr.Markdown("### Jobs, Queue & Log Monitoring")
+                gr.Markdown("Monitor active jobs, queue status, and view real-time logs")
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("#### Active Containers")
+                        # Queue Status Section
+                        gr.Markdown("#### 📦 Queue Status")
+                        with gr.Group():
+                            queue_status = gr.Textbox(
+                                label="Current Queue",
+                                value="Queue: Empty | GPU: Available",
+                                interactive=False,
+                            )
+                            execution_status = gr.Textbox(
+                                label="GPU Status",
+                                value="Idle",
+                                interactive=False,
+                            )
+                            # Auto-refresh queue status
+                            queue_timer = gr.Timer(value=2.0, active=True)
+
+                        # Active Jobs Section
+                        gr.Markdown("#### 🚀 Active Jobs")
                         running_jobs_display = gr.Textbox(
-                            label="Active Containers",
+                            label="Running Containers",
                             value="Checking for active containers...",
                             interactive=False,
                             lines=5,
                         )
-                        check_jobs_btn = gr.Button("🔍 Check Active Containers", size="sm")
+                        check_jobs_btn = gr.Button("🔄 Refresh Jobs", size="sm")
 
+                        # Recent Runs
+                        gr.Markdown("#### 📋 Recent Runs")
+                        recent_runs_table = gr.Dataframe(
+                            headers=["Run ID", "Status", "Started"],
+                            datatype=["str", "str", "str"],
+                            interactive=False,
+                            wrap=True,
+                        )
+
+                        # Log Streaming Controls
+                        gr.Markdown("#### 📊 Log Streaming")
                         job_status = gr.Textbox(
                             label="Stream Status",
                             value="Click 'Start Streaming' to begin",
                             interactive=False,
                         )
-
                         stream_btn = gr.Button("▶️ Start Streaming", variant="primary", size="sm")
 
-                        gr.Markdown("#### Log Statistics")
-                        gr.Textbox(
-                            label="Log Stats",
-                            value="Total: 0 | Errors: 0 | Warnings: 0",
-                            interactive=False,
-                        )
-
                     with gr.Column(scale=3):
-                        gr.Markdown("#### Log Output")
+                        gr.Markdown("#### 📝 Log Output")
                         log_display = gr.HTML(
                             value=log_viewer.get_html(),
                             elem_id="log_display",
                         )
+
+                        # Log Statistics at bottom
+                        with gr.Row():
+                            gr.Textbox(
+                                label="Log Statistics",
+                                value="Total: 0 | Errors: 0 | Warnings: 0",
+                                interactive=False,
+                                scale=2,
+                            )
+                            gr.Button("🗑️ Clear Logs", size="sm", scale=1)
 
         # ============================================
         # Event Handlers
@@ -1388,29 +1624,9 @@ def create_ui():
             ],
         )
 
-        # Auto-fill create prompt form when selecting an input
-        def fill_create_prompt_form(selected_info):
-            """Extract path from selected info and fill video directory."""
-            # The selected_info contains the path in the markdown
-            if selected_info and "Path:** `" in selected_info:
-                start = selected_info.find("Path:** `") + len("Path:** `")
-                end = selected_info.find("`", start)
-                if end > start:
-                    return selected_info[start:end]
-            return ""
+        # Removed redundant event handler - create_video_dir is already updated by input_gallery.select
 
-        # Connect input selection to create prompt form
-        selected_info.change(
-            fn=fill_create_prompt_form,
-            inputs=[selected_info],
-            outputs=[create_video_dir],
-        )
-
-        # Prompt management events
-        refresh_prompts_btn.click(
-            fn=list_prompts, inputs=[model_type_filter, limit_filter], outputs=[prompts_table]
-        )
-
+        # Create prompt button event (from Inputs tab)
         create_prompt_btn.click(
             fn=create_prompt,
             inputs=[
@@ -1421,18 +1637,23 @@ def create_ui():
                 create_model_type,
             ],
             outputs=[create_status],
-        ).then(fn=list_prompts, inputs=[model_type_filter, limit_filter], outputs=[prompts_table])
+        )
 
         # Load initial data will be done via app.load event
 
         # Output gallery events
         def load_outputs(status_filter, model_filter, limit):
-            """Load outputs from completed runs."""
+            """Load outputs from completed runs using CosmosAPI."""
             try:
-                # Get runs based on filter
+                if not ops:
+                    logger.warning("CosmosAPI not initialized")
+                    return [], []
+
+                # Use CosmosAPI to get runs
                 runs = ops.list_runs(
                     status=status_filter if status_filter != "all" else None, limit=int(limit)
                 )
+                logger.info("Found {} runs from CosmosAPI", len(runs))
 
                 # Filter by model type if specified
                 if model_filter != "all":
@@ -1444,52 +1665,160 @@ def create_ui():
 
                 for run in runs:
                     # Construct the path to the output video based on run ID
+                    # Run IDs are in format "rs_XXXXX" and directories are "run_rs_XXXXX"
                     run_id = run.get("id")
                     output_path = Path("outputs") / f"run_{run_id}" / "outputs" / "output.mp4"
+                    logger.debug("Checking for output at: {}", output_path)
 
                     if output_path.exists():
                         runs_with_outputs.append(run)
+
+                        # Get prompt text from the prompt if available
+                        prompt_text = "No prompt"
+                        prompt_id = run.get("prompt_id")
+                        if prompt_id:
+                            try:
+                                prompt = ops.get_prompt(prompt_id)
+                                if prompt:
+                                    prompt_text = prompt.get("prompt_text", "No prompt")
+                            except Exception as e:
+                                logger.debug(f"Could not get prompt {prompt_id}: {e}")
+                                prompt_text = "N/A"
+
                         # Add to gallery (path, label)
-                        prompt_text = run.get("prompt_text", "No prompt")[:50] + "..."
                         gallery_items.append(
-                            (str(output_path), f"Run {run['id'][:8]}: {prompt_text}")
+                            (str(output_path), f"Run {run['id'][:8]}: {prompt_text[:50]}...")
                         )
 
                 # Create table data
                 table_data = []
                 for run in runs_with_outputs[:10]:  # Limit table to 10 rows
+                    # Get prompt name
+                    prompt_name = "N/A"
+                    prompt_id = run.get("prompt_id")
+                    if prompt_id:
+                        try:
+                            prompt = ops.get_prompt(prompt_id)
+                            if prompt:
+                                prompt_name = prompt.get("parameters", {}).get(
+                                    "name", prompt.get("prompt_text", "N/A")[:30]
+                                )
+                                if len(prompt_name) > 30:
+                                    prompt_name = prompt_name[:30] + "..."
+                        except Exception as e:
+                            logger.debug(f"Could not get prompt {prompt_id}: {e}")
+                            prompt_name = "N/A"
+
                     table_data.append(
                         [
-                            run["id"][:12],
-                            run.get("prompt_text", "N/A")[:30] + "...",
+                            run["id"],  # Store full ID, Gradio will truncate display
+                            prompt_name,
                             run.get("status", "unknown"),
                             run.get("created_at", "N/A")[:19],
                         ]
                     )
 
+                logger.info(
+                    "Returning {} gallery items and {} table rows",
+                    len(gallery_items),
+                    len(table_data),
+                )
                 return gallery_items, table_data
 
             except Exception as e:
                 logger.error(f"Error loading outputs: {e}")
                 return [], []
 
-        def select_output(evt: gr.SelectData, gallery_data):
-            """Handle output selection from gallery."""
+        def select_output(evt: gr.SelectData, gallery_data, table_data):
+            """Handle output selection from gallery - show full run details."""
+            logger.info(
+                "select_output called - evt.index: {}, gallery_data: {}, table_data type: {}",
+                evt.index,
+                bool(gallery_data),
+                type(table_data),
+            )
             if evt.index is not None and gallery_data:
                 selected = gallery_data[evt.index]
                 video_path = selected[0] if isinstance(selected, tuple) else selected
+                logger.info("Selected output video: {}", video_path)
 
-                if Path(video_path).exists():
-                    # Get run info from path
-                    run_info = f"**Selected Output**\n\nPath: {video_path}\n"
+                # Get run_id from the table data at the same index
+                # Table data format: [run_id, prompt_name, status, created_at]
+                run_id = None
+                if table_data is not None and len(table_data) > 0 and evt.index < len(table_data):
+                    # table_data is a DataFrame, use iloc for positional indexing
+                    run_id = table_data.iloc[evt.index, 0]  # First column is run_id
+                    logger.info("Got run_id from table data: {}", run_id)
 
-                    return (
-                        gr.update(visible=True),  # Show details group
-                        run_info,  # Output info
-                        str(video_path),  # Video path for display (ensure it's a string)
-                        str(video_path),  # Store path for download (ensure it's a string)
-                    )
+                if not run_id and Path(video_path).exists():
+                    # Fallback: try to extract from path if it's not a temp file
+                    if "gradio" not in str(video_path).lower():
+                        path_parts = Path(video_path).parts
+                        for part in path_parts:
+                            if part.startswith("run_"):
+                                run_id = part[4:]  # Remove 'run_' prefix
+                                break
+                        logger.info("Extracted run_id from path: {}", run_id)
 
+                run_info = f"**Output Video**\n\nPath: {video_path}\n\n"
+
+                # Get full run details using CosmosAPI
+                if run_id and ops:
+                    logger.info("Fetching run with ID: {}", run_id)
+                    run = ops.get_run(run_id)
+                    logger.info("Got run data: {}", bool(run))
+                    if run:
+                        # Add run information
+                        run_info += "**Run Details**\n"
+                        run_info += f"- Run ID: {run.get('id', 'unknown')[:12]}\n"
+                        run_info += f"- Status: {run.get('status', 'unknown')}\n"
+                        run_info += f"- Created: {run.get('created_at', '')[:19]}\n"
+                        run_info += f"- Model: {run.get('model_type', 'transfer')}\n\n"
+
+                        # Get prompt information
+                        prompt_id = run.get("prompt_id")
+                        logger.info("Run has prompt_id: {}", prompt_id)
+                        if prompt_id:
+                            try:
+                                prompt = ops.get_prompt(prompt_id)
+                                logger.info("Got prompt data: {}", bool(prompt))
+                                if prompt:
+                                    run_info += "**Prompt Information**\n"
+                                    run_info += f"- Name: {prompt.get('parameters', {}).get('name', 'unnamed')}\n"
+                                    run_info += (
+                                        f"- Text: {prompt.get('prompt_text', '')[:100]}...\n\n"
+                                    )
+
+                                    # Get input video paths
+                                    inputs = prompt.get("inputs", {})
+                                    logger.info(
+                                        "Prompt has inputs: {}",
+                                        list(inputs.keys()) if inputs else "None",
+                                    )
+                                    if inputs:
+                                        run_info += "**Input Videos**\n"
+                                        if inputs.get("video"):
+                                            run_info += f"- Color: {inputs['video']}\n"
+                                        if inputs.get("depth"):
+                                            run_info += f"- Depth: {inputs['depth']}\n"
+                                        if inputs.get("seg"):
+                                            run_info += f"- Segmentation: {inputs['seg']}\n"
+                            except Exception as e:
+                                logger.error("Error getting prompt {}: {}", prompt_id, e)
+                                run_info += "**Prompt Information**\n"
+                                run_info += f"- Unable to load prompt details: {e}\n\n"
+
+                logger.info("Returning run_info with {} characters", len(run_info))
+                result = (
+                    gr.update(visible=True),  # Show details group
+                    run_info,  # Output info with full details
+                    str(video_path),  # Video path for display
+                    str(video_path),  # Store path for download
+                )
+                logger.info("Returning result tuple with {} items", len(result))
+                return result
+
+            logger.info("No valid selection, returning default values")
             return gr.update(visible=False), "Select an output", None, ""
 
         def download_output(output_path):
@@ -1506,7 +1835,7 @@ def create_ui():
 
         output_gallery.select(
             fn=select_output,
-            inputs=[output_gallery],
+            inputs=[output_gallery, outputs_table],
             outputs=[output_details_group, output_info, output_video, output_path_display],
         )
 
@@ -1529,6 +1858,21 @@ def create_ui():
         # Update selection count when table changes
         ops_prompts_table.change(
             fn=update_selection_count, inputs=[ops_prompts_table], outputs=[selection_count]
+        )
+
+        # Add row selection handler for prompt details
+        ops_prompts_table.select(
+            fn=on_prompt_row_select,
+            inputs=[ops_prompts_table],
+            outputs=[
+                selected_prompt_id,
+                selected_prompt_name,
+                selected_prompt_model,
+                selected_prompt_text,
+                selected_prompt_negative,
+                selected_prompt_created,
+                selected_prompt_video_dir,
+            ],
         )
 
         # Enhance tab - toggle force visibility
@@ -1591,6 +1935,10 @@ def create_ui():
             fn=get_queue_status,
             inputs=[],
             outputs=[queue_status],
+        ).then(
+            fn=get_recent_runs,
+            inputs=[],
+            outputs=[recent_runs_table],
         )
 
         # Auto-load data on app start
@@ -1600,10 +1948,6 @@ def create_ui():
             fn=load_outputs,
             inputs=[output_status_filter, output_model_filter, output_limit],
             outputs=[output_gallery, outputs_table],
-        ).then(
-            fn=lambda: list_prompts("all", 50),  # Provide default values
-            inputs=[],
-            outputs=[prompts_table],
         ).then(
             fn=lambda: load_ops_prompts("all", 50),  # Load operations prompts
             inputs=[],

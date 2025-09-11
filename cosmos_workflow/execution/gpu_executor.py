@@ -336,6 +336,7 @@ class GPUExecutor:
         self,
         run: dict[str, Any],
         prompt: dict[str, Any],
+        stream_output: bool = False,
     ) -> dict[str, Any]:
         """Execute a single run on the GPU synchronously.
 
@@ -419,7 +420,7 @@ class GPUExecutor:
                 inference_result = self.docker_executor.run_inference(
                     prompt_file=prompt_file,
                     run_id=run_id,
-                    stream_output=True,  # Enable streaming for CLI visibility
+                    stream_output=stream_output,  # Use parameter to control streaming
                 )
 
                 # Check the result status

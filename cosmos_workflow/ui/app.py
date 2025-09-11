@@ -481,6 +481,7 @@ def run_inference_on_selected(
             result = ops.quick_inference(
                 prompt_id=selected_ids[0],
                 weights=weights,
+                stream_output=False,  # Don't stream to console in UI
                 num_steps=int(steps),
                 guidance_scale=guidance,
                 seed=int(seed),

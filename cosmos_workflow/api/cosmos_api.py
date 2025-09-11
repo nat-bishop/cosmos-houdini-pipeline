@@ -557,6 +557,7 @@ class CosmosAPI:
         self,
         prompt_id: str,
         weights: dict[str, float] | None = None,
+        stream_output: bool = True,
         **kwargs,
     ) -> dict[str, Any]:
         """Run inference on a prompt - creates and executes run internally.
@@ -598,6 +599,7 @@ class CosmosAPI:
             result = self.orchestrator.execute_run(
                 run,
                 prompt,
+                stream_output=stream_output,
             )
 
             # Check if operation started in background

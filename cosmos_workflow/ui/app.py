@@ -710,31 +710,165 @@ def create_ui():
 
     # Custom CSS for 16:9 aspect ratio in galleries with larger thumbnails
     custom_css = """
+    /* Design System: Hierarchy, Contrast, Balance, Movement */
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --success-gradient: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+        --dark-bg: #1a1b26;
+        --card-bg: rgba(255, 255, 255, 0.02);
+        --border-glow: rgba(102, 126, 234, 0.5);
+    }
+
+    /* Animated header with gradient */
+    h1 {
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 2.5rem !important;
+        font-weight: 800 !important;
+        animation: gradientShift 6s ease infinite;
+    }
+
+    @keyframes gradientShift {
+        0%, 100% { filter: hue-rotate(0deg); }
+        50% { filter: hue-rotate(30deg); }
+    }
+
+    /* Card glassmorphism effects */
+    .gr-box, .gr-group {
+        background: var(--card-bg) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .gr-box:hover, .gr-group:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2) !important;
+        border-color: var(--border-glow) !important;
+    }
+
+    /* Button animations */
+    button {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+
+    button.primary, button[variant="primary"] {
+        background: var(--primary-gradient) !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+    }
+
+    button:hover {
+        transform: translateY(-2px) scale(1.02);
+    }
+
+    button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    button:hover::before {
+        left: 100%;
+    }
+
+    /* Gallery enhancements with hover effects */
     #input_gallery .thumbnail-item {
         aspect-ratio: 16 / 9 !important;
         object-fit: cover !important;
         min-height: 200px !important;
+        border-radius: 8px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border: 2px solid transparent !important;
     }
+
     #input_gallery video {
         aspect-ratio: 16 / 9 !important;
         object-fit: cover !important;
         width: 100% !important;
         height: auto !important;
         min-height: 200px !important;
+        border-radius: 8px !important;
     }
+
     #input_gallery .grid-container {
-        gap: 15px !important;
+        gap: 20px !important;
+        padding: 12px !important;
     }
+
     #output_gallery .thumbnail-item {
         aspect-ratio: 16 / 9 !important;
         object-fit: cover !important;
         min-height: 150px !important;
+        border-radius: 8px !important;
+        transition: all 0.3s !important;
     }
+
     #output_gallery video {
         aspect-ratio: 16 / 9 !important;
         object-fit: cover !important;
         width: 100% !important;
         height: auto !important;
+        border-radius: 8px !important;
+    }
+
+    .thumbnail-item:hover {
+        transform: scale(1.05);
+        border-color: var(--border-glow) !important;
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3) !important;
+    }
+
+    /* Tab styling */
+    .tab-nav button.selected {
+        background: var(--primary-gradient) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+    }
+
+    /* Table with hover effects */
+    .dataframe tbody tr {
+        transition: background 0.2s !important;
+    }
+
+    .dataframe tbody tr:hover {
+        background: rgba(102, 126, 234, 0.1) !important;
+    }
+
+    /* Progress animation */
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    /* Status pulse animation */
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Slider enhancements */
+    input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5) !important;
+    }
+
+    /* Focus states for accessibility */
+    *:focus {
+        outline: 2px solid var(--border-glow) !important;
+        outline-offset: 2px !important;
     }
     """
 

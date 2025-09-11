@@ -22,6 +22,10 @@ Physical AI models need diverse synthetic data for rare scenarios (destroyed bui
 
 ### 🎥 AI-Generated Result: Destroyed City Scene
 
+
+https://github.com/user-attachments/assets/ca96da3a-ef7a-4625-beda-ebeae7dcfb94
+
+
 *Cosmos AI output using my Houdini-generated synthetic inputs (color + depth + segmentation)*
 
 </div>

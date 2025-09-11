@@ -5,9 +5,13 @@
 ## 🎯 What This System Does
 
 • **Generates synthetic training data** using my custom Houdini tool that creates destroyed cities with perfect multimodal outputs (depth, segmentation, etc.)
+
 • **Orchestrates AI video generation** on remote H100 GPU clusters ($100k+ hardware) via SSH and Docker
+
 • **Manages complex workflows** from data creation → AI processing → output retrieval with database tracking
+
 • **Provides enterprise features** like batch processing (40% faster), real-time monitoring, and 4K upscaling
+
 • **Abstracts infrastructure complexity** behind a clean Python API and Gradio UI
 
 ## 📋 Why This Matters
@@ -97,8 +101,11 @@ results = api.batch_inference(
 I built a production-ready Houdini tool that generates the synthetic input data for Cosmos AI:
 
 • **Procedural city generation** - Randomized buildings with architectural details (fire escapes, facades)
+
 • **Destruction simulation** - Automated rigid body dynamics create realistic damage patterns
+
 • **Perfect multimodal outputs** - Pixel-perfect depth, segmentation, edge maps (no AI estimation errors)
+
 • **Rare scenario data** - Generates training data for edge cases like disasters and destroyed infrastructure
 
 <table>
@@ -106,16 +113,18 @@ I built a production-ready Houdini tool that generates the synthetic input data 
 <td width="50%">
 
 ### Rendered Building Output
-*NYC-style building with fire escape (Houdini render)*
-
 
 https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
+
+*NYC-style building with fire escape (Houdini render)*
 
 </td>
 <td width="50%">
 
 ### Houdini Node Network
+
 ![Houdini UI](docs/images/houdini-ui.jpg)
+
 *Procedural generation network in Houdini*
 
 </td>
@@ -129,20 +138,29 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 
 ### Infrastructure & Scale
 • **Remote GPU orchestration** - Manages H100 GPUs ($100k+ hardware) via SSH/Docker with zero downtime
+
 • **40-60% performance gains** - Batch inference reduces model loading overhead, processing 10 videos in 28min vs 50min sequential
+
 • **Lazy evaluation monitoring** - Novel pattern solving CLI lifecycle issues (runs don't get stuck as "running")
+
 • **Production reliability** - Automatic retry, graceful degradation, comprehensive error recovery
 
 ### Architecture & Code Quality
 • **Database-first design** - SQLAlchemy with proper migrations, no JSON file management
+
 • **Clean facade pattern** - Single `CosmosAPI` entry point abstracting 40+ internal modules
+
 • **Comprehensive testing** - 600+ tests with 80%+ coverage on critical paths
+
 • **Enterprise patterns** - Dependency injection, transaction safety, parameterized logging
 
 ### AI & Video Processing
 • **Multimodal pipeline** - Handles color, depth, segmentation, edge maps with weight control (0.0-1.0)
+
 • **Video-agnostic 4K upscaling** - Works with any video source, not just inference outputs
+
 • **Pixtral AI enhancement** - Automatic prompt improvement using vision-language models
+
 • **Real-time streaming** - Live log streaming from containers with theme-aware UI
 
 ## 🛠️ Tech Stack
@@ -156,16 +174,25 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 ## 🏗️ System Architecture
 
 ```
-Local Machine                           Remote GPU Server (H100)
-┌────────────────────────────┐       ┌────────────────────────────┐
-│  Gradio UI / CLI / Python  │       │  Docker Container          │
-│           ↓                 │       │  - Cosmos AI Model         │
-│     CosmosAPI (Facade)      │  SSH  │  - GPU Execution           │
-│           ↓                 │ ────> │  - Real-time Logs          │
-│  DataRepository | GPUExec   │ SFTP  │                            │
-│           ↓                 │ <──── │  Generated Videos          │
-│    SQLite Database          │       │  (output.mp4, 4K.mp4)      │
-└────────────────────────────┘       └────────────────────────────┘
+Local Machine                                    Remote GPU Server (H100)
+┌─────────────────────────────────────────┐     ┌────────────────────────────┐
+│       Gradio UI / CLI / Python API      │     │   Docker Container         │
+│                  ↓                       │     │   ┌──────────────────┐     │
+│  ┌═══════════════════════════════════┐  │     │   │ Cosmos AI Model  │     │
+│  ║       CosmosAPI (Facade)          ║  │     │   │ GPU Execution    │     │
+│  ║  Single entry point for all ops   ║  │ SSH │   │ Real-time Logs   │     │
+│  ╚═══════════════════════════════════╝  │ ───>│   └──────────────────┘     │
+│           ↓              ↓               │     │                            │
+│  ┌──────────────┐ ┌──────────────┐      │ SFTP│   Generated Videos:       │
+│  │DataRepository│ │ GPUExecutor  │      │ <───│   • output.mp4            │
+│  │(Database Ops)│ │(Orchestration)│      │     │   • upscaled_4K.mp4       │
+│  └──────────────┘ └──────────────┘      │     │                            │
+│           ↓              ↓               │     └────────────────────────────┘
+│  ┌──────────────────────────────┐       │
+│  │   SQLAlchemy + SQLite DB     │       │
+│  │   (Prompts, Runs, Metadata)  │       │
+│  └──────────────────────────────┘       │
+└─────────────────────────────────────────┘
 ```
 
 ## ✨ Core Features
@@ -243,23 +270,32 @@ cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 
 ### System Architecture
 • Designed facade pattern abstracting 40+ modules behind single API
+
 • Implemented database-first architecture with SQLAlchemy ORM
+
 • Created lazy evaluation pattern solving distributed system lifecycle issues
 
 ### Infrastructure & DevOps
 • Orchestrated remote GPU clusters via SSH/Docker automation
+
 • Built SFTP file transfer with integrity verification and retry logic
+
 • Implemented real-time log streaming from remote containers
 
 ### Performance & Scale
 • Achieved 40-60% speedup through batch processing optimization
+
 • Managed concurrent operations on $100k+ GPU hardware
+
 • Built transaction-safe database operations with automatic rollback
 
 ### Python & Software Engineering
 • Comprehensive type hints and Google-style docstrings
+
 • Context managers for resource management
+
 • Parameterized logging for production debugging
+
 • Clean separation of concerns across service layers
 
 ---

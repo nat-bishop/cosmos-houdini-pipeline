@@ -1,11 +1,19 @@
 # Cosmos Workflow System
 
-**Production-ready Python orchestration system for NVIDIA Cosmos AI video generation across distributed GPU clusters**
+**Production-style Python orchestration system for NVIDIA Cosmos AI video generation across remote GPU instances. I created Synthetic, multimodal data with my fully procedural destoryed city generator (created with Houdini) then augment the data with Cosmos Transfer for use in Physical AI. This tool manages the full end-to-end workflow through synthetic randomized data creation from Houdini, to prompt creation, to Cosmos Augmentation, to artifact retreival. Launches remote jobs into docker containers with fily sync and container lifecycle control. Fully featured Gradio UI and command line interface that supports batch inference, 4K upscaling, prompt enhancing, realtime log viewing, experiment data management and more.**
 
-## 🎬 Visual Showcase
+## 🎯 The Problem & Solution
+
+**Problem:** Orchestrating AI video generation across remote GPU clusters requires complex coordination of SSH connections, Docker containers, file transfers, and job scheduling. Using multimodal synthetic inputs (Omniverse, Houdini, ect.), adds more complexity.
+
+**Solution:** A full-stack Python system that abstracts this complexity behind a clean API, providing database persistence, real-time monitoring, and batch processing capabilities for production AI workflows.
 
 <div align="center">
 
+### Example multimodal Result using tool
+https://github.com/user-attachments/assets/d9670944-7518-4f0b-a58d-75ce4e901672
+
+## Gradio UI
 ### Advanced Operations Interface with Two-Column Layout
 
 ![Operations Interface](docs/images/inference.png)
@@ -20,6 +28,7 @@
 
 ![Prompt Creation](docs/images/prompt-creation.png)
 *Create prompts with AI enhancement using Pixtral model for improved descriptions*
+
 
 ### Results & Log Streaming
 
@@ -42,12 +51,6 @@
 
 </div>
 
-## 🎯 The Problem & Solution
-
-**Problem:** Orchestrating AI video generation across remote GPU clusters requires complex coordination of SSH connections, Docker containers, file transfers, and job scheduling.
-
-**Solution:** A full-stack Python system that abstracts this complexity behind a clean API, providing database persistence, real-time monitoring, and batch processing capabilities for production AI workflows.
-
 ## 🚀 Quick Demo
 
 ```python
@@ -68,6 +71,15 @@ results = api.batch_inference([
     "ps_001", "ps_002", "ps_003"
 ])
 ```
+
+## Houdini Procedural Generation
+- I authored a production ready procedural Houdini tool to randomly generate destroyed cities
+- Using synthetic data as input for Cosmos Transfer helps support synthetic data for rare situations
+- Can export variety of different pixel perfect control inputs (segemnetaion, spatiotemporal control, depth, edge, lidar, ect.)
+  - Avoids innacurate depth map/segmentation mask generation using AI
+- Features automated rigid body dynamics for the destruction simulation to create the damage to the buildings.
+**Example New York City building with fire escape generated with tool""
+https://github.com/user-attachments/assets/a78f251d-52b1-4764-b65c-19555e1f1a84
 
 ## 💪 Technical Achievements
 
@@ -96,7 +108,7 @@ results = api.batch_inference([
 
 ```
 ┌─────────────────────────────────────────────┐
-│        Web UI (Gradio) / CLI / API         │
+│           Web UI (Gradio) / CLI             │
 └─────────────────────────────────────────────┘
                       │
                       ▼
@@ -204,10 +216,6 @@ This project showcases proficiency in:
 - **API Design:** RESTful principles, consistent interfaces, comprehensive error handling
 - **Python Excellence:** Type hints, async operations, context managers, decorators
 - **Production Readiness:** Logging, monitoring, error recovery, performance optimization
-
-## 📄 License
-
-MIT License - See LICENSE file for details
 
 ---
 

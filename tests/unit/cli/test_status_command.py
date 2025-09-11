@@ -179,4 +179,6 @@ class TestStatusCommand:
         # Test behavior: command should execute successfully
         assert result.exit_code == 0
         # Test that some container info is displayed (don't be prescriptive about format)
-        assert "cosmos_verylongidthatshouldbeshortened" in result.output or "cont_xyz" in result.output
+        assert (
+            "cosmos_verylongidthatshouldbeshortened" in result.output or "cont_xyz" in result.output
+        )

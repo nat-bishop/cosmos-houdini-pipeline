@@ -63,23 +63,23 @@ class TestStreamContainerLogs:
     def test_stream_logs_generator_gradio_mode(self, ops, mock_ssh_manager):
         """Test that Gradio streaming method exists and yields log lines."""
         container_id = "abc123"
-        
+
         # Mock SSH client exec_command to return stdout with lines
         mock_stdout = MagicMock()
         mock_stdout.__iter__ = lambda self: iter([b"log line 1\n", b"log line 2\n"])
         mock_stderr = MagicMock()
         mock_stderr.__iter__ = lambda self: iter([])
-        
+
         mock_ssh_manager.ssh_client.exec_command.return_value = (
             MagicMock(),  # stdin
             mock_stdout,  # stdout
-            mock_stderr   # stderr
+            mock_stderr,  # stderr
         )
 
         # Test behavior: generator should yield log lines
         generator = ops.stream_logs_generator(container_id)
         lines = list(generator)
-        
+
         # Verify we got log lines (exact format may vary)
         assert len(lines) > 0
         # Just verify it yields something, don't be prescriptive about format
@@ -88,13 +88,13 @@ class TestStreamContainerLogs:
     def test_stream_logs_generator_handles_errors(self, ops, mock_ssh_manager):
         """Test that generator handles errors gracefully."""
         container_id = "abc123"
-        
+
         # Mock SSH client to raise an exception
         mock_ssh_manager.ssh_client.exec_command.side_effect = Exception("Connection lost")
 
         # Test behavior: generator should handle errors gracefully
         generator = ops.stream_logs_generator(container_id)
-        
+
         # Consuming the generator should not crash, even with errors
         try:
             lines = list(generator)
@@ -104,4 +104,3 @@ class TestStreamContainerLogs:
             # If it raises an exception, that's also acceptable
             # The key is it doesn't crash the program
             pass
-

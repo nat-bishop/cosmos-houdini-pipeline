@@ -1,9 +1,0 @@
-[
-  {
-    "name": "golden_hour_warmth",
-    "original_prompt": "Warm low-angle sunlight grazing facades; gentle rim light on metal trims and window mullions; long soft shadows; color separation between warm sunlit areas and cooler skylit normals; moderate contrast without clipping; textures read with pleasant micro-contrast.",
-    "upsampled_prompt": "The video features a series of frames that focus on the architectural details of a building's facade. The sunlight casts a warm glow on the building, highlighting the intricate patterns and textures of the windows and the surrounding structures. The windows are rectangular with a grid-like pattern, and the building's exterior is a mix of what appears to be stone and metal. The sunlight creates a contrast between the brightly lit areas and the shadows, emphasizing the depth and dimension of the building's features.",
-    "video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
-    "success": true
-  }
-]

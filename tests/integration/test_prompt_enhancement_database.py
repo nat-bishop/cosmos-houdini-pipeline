@@ -3,7 +3,7 @@
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,33 +19,47 @@ class TestPromptEnhancementDatabaseIntegration:
     @pytest.fixture
     def temp_db(self):
         """Create temporary database for testing."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            db_path = f.name
-
-        db = DatabaseConnection(db_path)
-        db.create_tables()
-        yield db
-
-        # Cleanup - properly close database before deleting file
-        try:
-            # Close all sessions
-            db.close_all_sessions()
-            # Dispose of the engine to release all connections
-            if hasattr(db, "engine"):
-                db.engine.dispose()
-        except Exception:
-            pass  # Ignore errors during cleanup
-
-        # Small delay for Windows file locking
+        import gc
         import time
 
-        time.sleep(0.1)
+        # Create temporary directory
+        tmpdir = tempfile.mkdtemp()
+        db_path = Path(tmpdir) / "test.db"
 
-        # Now try to delete the file
         try:
-            Path(db_path).unlink(missing_ok=True)
-        except PermissionError:
-            pass  # Ignore permission errors on Windows
+            db = DatabaseConnection(str(db_path))
+            db.create_tables()
+            yield db
+        finally:
+            # Aggressive cleanup for Windows file locking
+            try:
+                # Close all sessions
+                db.close_all_sessions()
+                # Dispose of the engine to release all connections
+                if hasattr(db, "engine"):
+                    db.engine.dispose()
+                # Force delete the db object
+                del db
+                # Force garbage collection
+                gc.collect()
+                # Wait for file handles to release
+                time.sleep(0.2)
+            except Exception:
+                pass
+
+            # Remove the temp directory
+            import shutil
+
+            for attempt in range(3):
+                try:
+                    shutil.rmtree(tmpdir, ignore_errors=False)
+                    break
+                except (PermissionError, OSError):
+                    if attempt < 2:
+                        time.sleep(0.5)
+                    else:
+                        # Last attempt - ignore errors
+                        shutil.rmtree(tmpdir, ignore_errors=True)
 
     @pytest.fixture
     def repository(self, temp_db):
@@ -74,14 +88,16 @@ class TestPromptEnhancementDatabaseIntegration:
     @pytest.fixture
     def api(self, repository, mock_orchestrator):
         """Create API with real repository and mock orchestrator."""
+        # Create a mock API instance without calling __init__
 
-        with patch("cosmos_workflow.api.cosmos_api.init_database"):
-            with patch("cosmos_workflow.api.cosmos_api.DataRepository"):
-                with patch("cosmos_workflow.api.cosmos_api.GPUExecutor"):
-                    api = CosmosAPI()
-                    api.service = repository
-                    api.orchestrator = mock_orchestrator
-                    return api
+        # Use object.__new__ to create instance without calling __init__
+        api = object.__new__(CosmosAPI)
+        # Manually set the attributes that __init__ would set
+        api.config = MagicMock()
+        api.service = repository
+        api.orchestrator = mock_orchestrator
+
+        return api
 
     def test_full_enhancement_workflow_with_database(self, api, repository):
         """Test complete enhancement workflow with database persistence."""

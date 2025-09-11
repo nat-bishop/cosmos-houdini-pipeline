@@ -58,7 +58,9 @@ class TestDockerExecutor:
         self.mock_ssh_manager.execute_command_success.return_value = None
 
         # Mock successful inference script execution (return 0 for success)
-        with patch.object(self.docker_executor, "_run_inference_script", return_value=0) as mock_run_script:
+        with patch.object(
+            self.docker_executor, "_run_inference_script", return_value=0
+        ) as mock_run_script:
             # Run inference
             result = self.docker_executor.run_inference(
                 self.test_prompt_file, run_id="test_run_001", num_gpu=2, cuda_devices="0,1"
@@ -88,7 +90,9 @@ class TestDockerExecutor:
         # Mock successful directory creation
         self.mock_ssh_manager.execute_command_success.return_value = None
 
-        with patch.object(self.docker_executor, "_run_inference_script", return_value=0) as mock_run_script:
+        with patch.object(
+            self.docker_executor, "_run_inference_script", return_value=0
+        ) as mock_run_script:
             # Run inference with custom parameters
             result = self.docker_executor.run_inference(
                 self.test_prompt_file, run_id="test_run_002", num_gpu=4, cuda_devices="0,1,2,3"
@@ -112,7 +116,9 @@ class TestDockerExecutor:
         # Mock successful directory creation
         self.mock_ssh_manager.execute_command_success.return_value = None
 
-        with patch.object(self.docker_executor, "_run_inference_script", return_value=0) as mock_run_script:
+        with patch.object(
+            self.docker_executor, "_run_inference_script", return_value=0
+        ) as mock_run_script:
             # Run inference with run_id
             result = self.docker_executor.run_inference(
                 self.test_prompt_file, run_id="test_run_123", num_gpu=1, cuda_devices="0"
@@ -134,7 +140,9 @@ class TestDockerExecutor:
         # Mock successful directory creation
         self.mock_ssh_manager.execute_command_success.return_value = None
 
-        with patch.object(self.docker_executor, "_run_inference_script", return_value=0) as mock_run_script:
+        with patch.object(
+            self.docker_executor, "_run_inference_script", return_value=0
+        ) as mock_run_script:
             # Mock script failure
             mock_run_script.side_effect = Exception("Inference failed")
 
@@ -179,10 +187,12 @@ class TestDockerExecutor:
             self.mock_ssh_manager.execute_command_success.return_value = None
 
             with patch.object(self.docker_executor, "_create_upscaler_spec"):
-                with patch.object(self.docker_executor, "_run_upscaling_script", return_value=0) as mock_run_script:
+                with patch.object(
+                    self.docker_executor, "_run_upscaling_script", return_value=0
+                ) as mock_run_script:
                     # Create a test video file path instead of prompt file
                     test_video_path = str(Path(self.temp_dir) / "test_video.mp4")
-                    
+
                     # Run upscaling with custom parameters (now expects video path)
                     result = self.docker_executor.run_upscaling(
                         test_video_path,  # Changed from prompt file to video path
@@ -207,7 +217,9 @@ class TestDockerExecutor:
         self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
         # Run inference script with run_id (may need stream_output parameter)
-        self.docker_executor._run_inference_script("test_prompt", "test_run_006", 2, "0,1", stream_output=False)
+        self.docker_executor._run_inference_script(
+            "test_prompt", "test_run_006", 2, "0,1", stream_output=False
+        )
 
         # Check behavior: Docker command was executed
         self.mock_ssh_manager.execute_command.assert_called_once()
@@ -235,10 +247,10 @@ class TestDockerExecutor:
         # Run upscaling script with run_id (signature changed - now needs video_path)
         self.docker_executor._run_upscaling_script(
             video_path="/workspace/test_video.mp4",
-            run_id="test_run_007", 
-            control_weight=0.6, 
-            num_gpu=2, 
-            cuda_devices="0,1"
+            run_id="test_run_007",
+            control_weight=0.6,
+            num_gpu=2,
+            cuda_devices="0,1",
         )
 
         # Check behavior: Docker command was executed

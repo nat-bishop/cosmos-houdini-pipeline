@@ -5,18 +5,17 @@ Implementation-agnostic - tests behavior, not storage mechanism.
 Upscaling operates on completed inference runs as separate operations.
 """
 
-from unittest.mock import MagicMock, patch
-import sys
-
-import pytest
 import click
+import pytest
 from click.testing import CliRunner
 
 from cosmos_workflow.cli import cli
 
+
 # Workaround for click.Exit not existing - mock it to act like sys.exit
 class ClickExit(SystemExit):
     pass
+
 
 click.Exit = ClickExit
 
@@ -34,7 +33,7 @@ class TestUpscaleCommand:
         # Simplified test - just verify the command syntax is recognized
         # Without all the complex mocking, we can't test full behavior
         result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123"])
-        
+
         # The command should at least be recognized (not return code 2 for invalid syntax)
         # Exit code 1 is acceptable (missing dependencies), but 2 means bad syntax
         assert result.exit_code != 2, "Command syntax not recognized"
@@ -54,7 +53,9 @@ class TestUpscaleCommand:
     def test_upscale_invalid_weight_range(self, runner):
         """Test upscale command validates weight range."""
         # Test weight too low
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123", "--weight", "-0.1"])
+        result = runner.invoke(
+            cli, ["upscale", "--from-run", "rs_inference123", "--weight", "-0.1"]
+        )
         assert result.exit_code != 0, "Should reject negative weight"
 
         # Test weight too high

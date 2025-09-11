@@ -68,9 +68,9 @@ class GPUExecutor:
     # ========== Format Conversion Helpers ==========
 
     # ========== Container Monitoring (REMOVED) ==========
-    # Background monitoring has been replaced by lazy sync via StatusChecker
-    # StatusChecker checks container status and downloads outputs when get_run() is called
-    # All monitoring functions have been removed in favor of lazy evaluation
+    # Background monitoring has been replaced by synchronous execution
+    # All operations now block until completion and return results immediately
+    # No polling or status checking is needed
 
     # ========== Single Run Execution ==========
 

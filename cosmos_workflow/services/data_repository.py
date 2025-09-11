@@ -14,7 +14,6 @@ from sqlalchemy.orm import joinedload
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.database.models import Prompt, Run
-from cosmos_workflow.execution.status_checker import StatusChecker
 from cosmos_workflow.utils.logging import logger
 
 # Supported AI model types
@@ -50,18 +49,6 @@ class DataRepository:
 
         self.db = db_connection
         self.config = config_manager
-        self.status_checker: StatusChecker | None = None
-
-    def initialize_status_checker(self):
-        """Initialize the StatusChecker for lazy status synchronization.
-
-        StatusChecker is now self-contained and creates its own services as needed.
-        """
-        if self.config is None:
-            raise ValueError("config_manager must be set before initializing status checker")
-
-        self.status_checker = StatusChecker(config_manager=self.config)
-        logger.info("StatusChecker initialized for lazy sync")
 
     def create_prompt(
         self,
@@ -279,14 +266,6 @@ class DataRepository:
                 return None
 
             run_dict = self._run_to_dict(run)
-
-            # Trigger lazy sync if status checker is available and run is running
-            if self.status_checker and run_dict.get("status") == "running":
-                try:
-                    run_dict = self.status_checker.sync_run_status(run_dict, self)
-                except Exception as e:
-                    logger.warning("Failed to sync run status for {}: {}", run_id, e)
-
             return run_dict
 
     def _run_to_dict(self, run: Run) -> dict[str, Any]:
@@ -581,17 +560,7 @@ class DataRepository:
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
                     }
 
-                    # Trigger lazy sync if status checker is available and run is running
-                    if self.status_checker and run_dict.get("status") == "running":
-                        try:
-                            run_dict = self.status_checker.sync_run_status(run_dict, self)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to sync run status for %s: %s", run_dict["id"], e
-                            )
-
-                    # Only include runs that match the requested status filter after sync
-                    # If we filtered by status and the run no longer matches, skip it
+                    # Only include runs that match the requested status filter
                     if status and run_dict.get("status") != status:
                         continue
 

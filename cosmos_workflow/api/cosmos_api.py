@@ -67,22 +67,7 @@ class CosmosAPI:
         self.service = DataRepository(db, config)
         self.orchestrator = GPUExecutor(config_manager=config, service=self.service)
 
-        # Initialize StatusChecker for lazy sync if GPU executor has services
-        self._initialize_status_checker()
-
         logger.info("CosmosAPI initialized")
-
-    def _initialize_status_checker(self):
-        """Initialize StatusChecker for lazy sync.
-
-        StatusChecker is now self-contained and creates its own services as needed.
-        """
-        try:
-            self.service.initialize_status_checker()
-            logger.info("StatusChecker initialized for lazy sync")
-        except Exception as e:
-            # StatusChecker is optional - system works without it
-            logger.debug("StatusChecker not initialized: {}", e)
 
     # ========== Prompt Operations ==========
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Comprehensive Gradio UI for Cosmos Workflow - Full Featured Application."""
 
+import atexit
 import os
+import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +22,25 @@ ops = CosmosAPI(config=config)
 
 # Initialize log viewer (reusing existing component)
 log_viewer = LogViewer(max_lines=2000)
+
+
+# Simple shutdown cleanup using existing methods
+def cleanup_on_shutdown(signum=None, frame=None):
+    """Kill containers on shutdown using existing CosmosAPI method."""
+    if signum:
+        logger.info("Shutting down gracefully...")
+    try:
+        result = ops.kill_containers()
+        if result["killed_count"] > 0:
+            logger.info("Killed {} container(s)", result["killed_count"])
+    except Exception as e:
+        logger.debug("Cleanup error (expected on shutdown): {}", e)
+
+
+# Register cleanup - reuse existing kill_containers() method
+atexit.register(cleanup_on_shutdown)
+signal.signal(signal.SIGINT, cleanup_on_shutdown)
+signal.signal(signal.SIGTERM, cleanup_on_shutdown)
 
 # Get paths from config
 local_config = config.get_local_config()

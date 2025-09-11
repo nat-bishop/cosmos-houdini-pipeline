@@ -6,7 +6,7 @@
 
 • **Generates synthetic training data** using my custom Houdini tool that creates destroyed cities with perfect multimodal outputs (depth, segmentation, etc.)
 
-• **Orchestrates AI video generation** on remote H100 GPU clusters ($100k+ hardware) via SSH and Docker
+• **Orchestrates AI video generation** on remote H100 GPU instances via SSH and Docker
 
 • **Manages complex workflows** from data creation → AI processing → output retrieval with database tracking
 
@@ -141,22 +141,20 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 ## 💪 Technical Achievements
 
 ### Infrastructure & Scale
-• **Remote GPU orchestration** - Manages H100 GPUs ($100k+ hardware) via SSH/Docker with zero downtime
+• **Remote GPU orchestration** - Manages GPUs (H100, H200, ect.) via SSH/Docker with zero downtime
 
-• **40-60% performance gains** - Batch inference reduces model loading overhead, processing 10 videos in 28min vs 50min sequential
+• **40-60% performance gains** - Batch inference reduces model loading overhead, processing 10 videos in 50min vs 90min sequential
 
 • **Lazy evaluation monitoring** - Novel pattern solving CLI lifecycle issues (runs don't get stuck as "running")
 
 • **Production reliability** - Automatic retry, graceful degradation, comprehensive error recovery
 
 ### Architecture & Code Quality
-• **Database-first design** - SQLAlchemy with proper migrations, no JSON file management
-
-• **Clean facade pattern** - Single `CosmosAPI` entry point abstracting 40+ internal modules
+• **Database-first design** - SQLAlchemy database systen, no JSON file management
 
 • **Comprehensive testing** - 600+ tests with 80%+ coverage on critical paths
 
-• **Enterprise patterns** - Dependency injection, transaction safety, parameterized logging
+• **Enterprise patterns** - Dependency injection, parameterized logging
 
 ### AI & Video Processing
 • **Multimodal pipeline** - Handles color, depth, segmentation, edge maps with weight control (0.0-1.0)
@@ -165,13 +163,13 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 
 • **Pixtral AI enhancement** - Automatic prompt improvement using vision-language models
 
-• **Real-time streaming** - Live log streaming from containers with theme-aware UI
+• **Real-time streaming** - Live log streaming from containers with gradio GUI + CLI
 
 ## 🛠️ Tech Stack
 
 **Core:** Python 3.10+ • SQLAlchemy 2.0 • Gradio 4.0
 **Infrastructure:** Docker • SSH (Paramiko) • SFTP
-**AI/ML:** NVIDIA Cosmos • Pixtral • Houdini (procedural generation)
+**AI/ML:** NVIDIA Cosmos • KEYbert • Houdini (procedural generation)
 **Testing:** Pytest • Ruff • MyPy • 80%+ coverage
 **Scale:** H100 GPUs • Batch processing • Real-time streaming
 
@@ -181,21 +179,21 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 Local Machine                                    Remote GPU Server (H100)
 ┌─────────────────────────────────────────┐     ┌────────────────────────────┐
 │       Gradio UI / CLI / Python API      │     │   Docker Container         │
-│                  ↓                       │     │   ┌──────────────────┐     │
+│                  ↓                      │     │   ┌──────────────────┐     │
 │  ┌═══════════════════════════════════┐  │     │   │ Cosmos AI Model  │     │
 │  ║       CosmosAPI (Facade)          ║  │     │   │ GPU Execution    │     │
-│  ║  Single entry point for all ops   ║  │ SSH │   │ Real-time Logs   │     │
+│  ║                                   ║  │ SSH │   │ Real-time Logs   │     │
 │  ╚═══════════════════════════════════╝  │ ───>│   └──────────────────┘     │
-│           ↓              ↓               │     │                            │
-│  ┌──────────────┐ ┌──────────────┐      │ SFTP│   Generated Videos:       │
-│  │DataRepository│ │ GPUExecutor  │      │ <───│   • output.mp4            │
-│  │(Database Ops)│ │(Orchestration)│      │     │   • upscaled_4K.mp4       │
-│  └──────────────┘ └──────────────┘      │     │                            │
-│           ↓              ↓               │     └────────────────────────────┘
-│  ┌──────────────────────────────┐       │
-│  │   SQLAlchemy + SQLite DB     │       │
-│  │   (Prompts, Runs, Metadata)  │       │
-│  └──────────────────────────────┘       │
+│           ↓              ↓              │     │                            │
+│  ┌──────────────┐    ┌───────────────┐  │ SFTP│   Generated Videos:        │
+│  │DataRepository│    │ GPUExecutor   │  │ <───│   • output.mp4             │
+│  │(Database Ops)│    │(Orchestration)│  │     │   • upscaled_4K.mp4        │
+│  └──────────────┘    └───────────────┘  │     │                            │
+│           ↓              ↓              │     └────────────────────────────┘
+│  ┌───────────────────────────────────┐  │
+│  │     SQLAlchemy + SQLite DB        │  │
+│  │     (Prompts, Runs, Metadata)     │  │
+│  └───────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```
 

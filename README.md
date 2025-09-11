@@ -79,7 +79,12 @@ results = api.batch_inference([
   - Avoids innacurate depth map/segmentation mask generation using AI
 - Features automated rigid body dynamics for the destruction simulation to create the damage to the buildings.
 **Example New York City building with fire escape generated with tool""
-https://github.com/user-attachments/assets/a78f251d-52b1-4764-b65c-19555e1f1a84
+
+
+
+https://github.com/user-attachments/assets/1879a244-e9c7-4871-bc02-825f6b6a498d
+
+
 
 ## 💪 Technical Achievements
 

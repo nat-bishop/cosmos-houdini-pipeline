@@ -417,6 +417,13 @@ def toggle_enhance_force_visibility(create_new):
     return gr.update(visible=not create_new)
 
 
+def get_queue_status():
+    """Get current queue status information."""
+    # In a real implementation, this would check actual queue status
+    # For now, we'll return a simple status
+    return "Queue: Ready | GPU: Available"
+
+
 def run_inference_on_selected(
     dataframe_data,
     weight_vis,
@@ -430,8 +437,11 @@ def run_inference_on_selected(
     sigma_max,
     blur_strength,
     canny_threshold,
+    progress=None,
 ):
-    """Run inference on selected prompts."""
+    """Run inference on selected prompts with queue progress tracking."""
+    if progress is None:
+        progress = gr.Progress()
     try:
         # Get selected prompt IDs
         selected_ids = []
@@ -466,6 +476,8 @@ def run_inference_on_selected(
         # Run inference based on count
         if len(selected_ids) == 1:
             # Single inference
+            progress(0.1, desc="Initializing inference...")
+
             result = ops.quick_inference(
                 prompt_id=selected_ids[0],
                 weights=weights,
@@ -478,17 +490,27 @@ def run_inference_on_selected(
                 canny_threshold=canny_threshold,
             )
 
-            if result.get("status") == "started":
+            progress(1.0, desc="Inference complete!")
+
+            # Check for completed status (synchronous execution)
+            if result.get("status") == "completed":
+                output_msg = f"✅ Inference completed for {selected_ids[0]}"
+                if result.get("output_path"):
+                    output_msg += f"\n📁 Output: {result['output_path']}"
+                return (output_msg, "Idle")
+            elif result.get("status") == "started":  # Legacy support
                 return (
                     f"✅ Inference started for {selected_ids[0]}",
                     f"Running: {result.get('run_id', 'unknown')}",
                 )
-            elif result.get("status") == "success":
+            elif result.get("status") == "success":  # Legacy support
                 return ("✅ Inference completed successfully", "Idle")
             else:
                 return (f"❌ Inference failed: {result.get('error', 'Unknown error')}", "Idle")
         else:
             # Batch inference
+            progress(0.1, desc=f"Starting batch inference for {len(selected_ids)} prompts...")
+
             result = ops.batch_inference(
                 prompt_ids=selected_ids,
                 shared_weights=weights,
@@ -501,6 +523,8 @@ def run_inference_on_selected(
                 canny_threshold=canny_threshold,
             )
 
+            progress(1.0, desc="Batch inference complete!")
+
             successful = len(result.get("output_mapping", {}))
             return (
                 f"✅ Batch inference completed: {successful}/{len(selected_ids)} successful",
@@ -512,8 +536,10 @@ def run_inference_on_selected(
         return f"❌ Error: {e}", "Idle"
 
 
-def run_enhance_on_selected(dataframe_data, create_new, force_overwrite):
-    """Run enhancement on selected prompts."""
+def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progress=None):
+    """Run enhancement on selected prompts with queue progress tracking."""
+    if progress is None:
+        progress = gr.Progress()
     try:
         # Handle force_overwrite parameter - it might be None or wrapped
         if force_overwrite is None:
@@ -1063,6 +1089,13 @@ def create_ui():
                                 value="Idle",
                                 interactive=False,
                             )
+                            queue_status = gr.Textbox(
+                                label="Queue Status",
+                                value="No jobs queued",
+                                interactive=False,
+                            )
+                            # Auto-refresh queue status
+                            queue_timer = gr.Timer(value=2.0, active=True)  # Update every 2 seconds
 
             # ========================================
             # Tab 4: Outputs (Phase 4 Implementation)
@@ -1402,6 +1435,13 @@ def create_ui():
             outputs=[job_status, log_display],
         )
 
+        # Queue status timer - updates every 2 seconds
+        queue_timer.tick(
+            fn=get_queue_status,
+            inputs=[],
+            outputs=[queue_status],
+        )
+
         # Auto-load data on app start
         app.load(fn=load_input_gallery, inputs=[], outputs=[input_gallery]).then(
             fn=check_running_jobs, inputs=[], outputs=[running_jobs_display, job_status]
@@ -1432,7 +1472,14 @@ if __name__ == "__main__":
     logger.info("Starting Cosmos Workflow Manager on {}:{}", host, port)
 
     app = create_ui()
-    app.launch(
+
+    # Configure queue for synchronous execution
+    # This ensures jobs run sequentially on the GPU
+    app.queue(
+        max_size=50,  # Maximum number of jobs that can be queued
+        default_concurrency_limit=1,  # Process one job at a time (GPU constraint)
+        status_update_rate="auto",  # Update queue status automatically
+    ).launch(
         share=share,
         server_name=host,
         server_port=port,

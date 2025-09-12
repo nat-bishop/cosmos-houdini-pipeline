@@ -150,8 +150,8 @@ def ui(port, host, share, reload, watch):
         # Path to the app module
         app_path = Path(__file__).parent.parent / "ui" / "app.py"
 
-        # Build the command
-        cmd = ["gradio", str(app_path)]
+        # Build the command - explicitly specify the demo
+        cmd = ["gradio", "cosmos_workflow.ui.app", "demo"]
 
         # Add watch directories
         for watch_dir in watch_dirs:

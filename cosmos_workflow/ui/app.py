@@ -1096,7 +1096,7 @@ def create_ui():
                             ops_prompts_table = gr.Dataframe(
                                 headers=["☑", "ID", "Name", "Prompt Text", "Created"],
                                 datatype=["bool", "str", "str", "str", "str"],
-                                interactive=True,  # Allow checkbox interaction
+                                interactive=False,  # Disable drag-and-drop to fix clicking issues
                                 col_count=(5, "fixed"),
                                 wrap=True,
                                 elem_classes=["prompts-table"],

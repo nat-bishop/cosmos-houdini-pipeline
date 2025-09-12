@@ -1133,7 +1133,7 @@ def create_ui():
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:
-                logger.info("Connecting runs_table.select with %d outputs", len(outputs))
+                logger.info("Connecting runs_table.select with %s outputs", len(outputs))
                 components["runs_table"].select(
                     fn=on_runs_table_select,
                     inputs=[components["runs_table"]],
@@ -1207,14 +1207,23 @@ def create_ui():
             logger.warning("Missing components for initial load: %s", missing)
         
         if initial_outputs:
-            logger.info("Setting up initial data load with %d outputs", len(initial_outputs))
+            logger.info("Setting up initial data load with %s outputs", len(initial_outputs))
+            def load_initial_data():
+                """Load initial data efficiently."""
+                gallery_data = load_input_gallery()
+                prompts_data = load_ops_prompts(50)
+                # Only call check_running_jobs once
+                if ops:
+                    jobs_result = check_running_jobs()
+                    jobs_display = jobs_result[0]
+                    job_status = jobs_result[1]
+                else:
+                    jobs_display = "No containers"
+                    job_status = "Not connected"
+                return gallery_data, prompts_data, jobs_display, job_status
+            
             app.load(
-                fn=lambda: (
-                    load_input_gallery(),
-                    load_ops_prompts(50),
-                    check_running_jobs()[0] if ops else "No containers",
-                    check_running_jobs()[1] if ops else "Not connected",
-                ),
+                fn=load_initial_data,
                 outputs=initial_outputs,
             )
         else:

@@ -147,37 +147,37 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     """Handle input selection from gallery with real video metadata extraction."""
     if evt.index is None:
         return (
-            "",  # selected_dir_path
+            gr.update(value=""),  # selected_dir_path
             gr.update(visible=False),  # preview_group (compatibility)
             gr.update(visible=False),  # input_tabs_group
-            "",  # input_name
-            "",  # input_path
-            "",  # input_created
-            "",  # input_resolution
-            "",  # input_duration
-            "",  # input_fps
-            "",  # input_codec
-            "",  # input_files
-            [],  # video_preview_gallery
-            "",  # create_video_dir
+            gr.update(value=""),  # input_name
+            gr.update(value=""),  # input_path
+            gr.update(value=""),  # input_created
+            gr.update(value=""),  # input_resolution
+            gr.update(value=""),  # input_duration
+            gr.update(value=""),  # input_fps
+            gr.update(value=""),  # input_codec
+            gr.update(value=""),  # input_files
+            gr.update(value=[]),  # video_preview_gallery
+            gr.update(value=""),  # create_video_dir
         )
 
     directories = get_input_directories()
     if evt.index >= len(directories):
         return (
-            "",  # selected_dir_path
+            gr.update(value=""),  # selected_dir_path
             gr.update(visible=False),  # preview_group (compatibility)
             gr.update(visible=False),  # input_tabs_group
-            "",  # input_name
-            "",  # input_path
-            "",  # input_created
-            "",  # input_resolution
-            "",  # input_duration
-            "",  # input_fps
-            "",  # input_codec
-            "",  # input_files
-            [],  # video_preview_gallery
-            "",  # create_video_dir
+            gr.update(value=""),  # input_name
+            gr.update(value=""),  # input_path
+            gr.update(value=""),  # input_created
+            gr.update(value=""),  # input_resolution
+            gr.update(value=""),  # input_duration
+            gr.update(value=""),  # input_fps
+            gr.update(value=""),  # input_codec
+            gr.update(value=""),  # input_files
+            gr.update(value=[]),  # video_preview_gallery
+            gr.update(value=""),  # create_video_dir
         )
 
     selected_dir = directories[evt.index]
@@ -244,19 +244,19 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     video_dir_value = selected_dir["path"].replace("\\", "/")
 
     return (
-        selected_dir["path"],  # selected_dir_path
+        gr.update(value=selected_dir["path"]),  # selected_dir_path
         gr.update(visible=False),  # preview_group (compatibility)
         gr.update(visible=True),  # input_tabs_group
-        name,  # input_name
-        path,  # input_path
-        created_time,  # input_created
-        resolution_text,  # input_resolution
-        duration_text,  # input_duration
-        fps_text,  # input_fps
-        codec_text,  # input_codec
-        files_text,  # input_files
-        video_gallery_items,  # video_preview_gallery
-        video_dir_value,  # create_video_dir (auto-fill)
+        gr.update(value=name),  # input_name
+        gr.update(value=path),  # input_path
+        gr.update(value=created_time),  # input_created
+        gr.update(value=resolution_text),  # input_resolution
+        gr.update(value=duration_text),  # input_duration
+        gr.update(value=fps_text),  # input_fps
+        gr.update(value=codec_text),  # input_codec
+        gr.update(value=files_text),  # input_files
+        gr.update(value=video_gallery_items),  # video_preview_gallery
+        gr.update(value=video_dir_value),  # create_video_dir (auto-fill)
     )
 
 
@@ -491,11 +491,24 @@ def toggle_enhance_force_visibility(create_new):
 def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
     """Handle row selection in prompts table to show details."""
     try:
+        logger.info("on_prompt_row_select called with evt.index: %s", evt.index if evt else "None")
+
         if dataframe_data is None or evt is None:
-            return ["", "", "", "", "", "", ""]
+            logger.warning("on_prompt_row_select: dataframe_data or evt is None")
+            # Return gr.update() objects to force UI refresh
+            return [
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=False),
+            ]
 
         # Get the selected row index
         row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
+        logger.info("Selected row index: %s", row_idx)
 
         # Extract row data
         import pandas as pd
@@ -508,8 +521,18 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
             row = dataframe_data[row_idx] if row_idx < len(dataframe_data) else []
             prompt_id = str(row[1]) if len(row) > 1 else ""
 
+        logger.info("Selected prompt_id: %s", prompt_id)
+
         if not prompt_id:
-            return ["", "", "", "", "", False]
+            return [
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=""),
+                gr.update(value=False),
+            ]
 
         # Use the global ops (CosmosAPI) to get full prompt details
         if ops:
@@ -531,13 +554,48 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                     inputs.get("video", "").replace("/color.mp4", "") if inputs.get("video") else ""
                 )
 
-                return [prompt_id, name, prompt_text, negative_prompt, created, video_dir, enhanced]
+                logger.info(
+                    "Returning prompt details: id=%s, name=%s, enhanced=%s",
+                    prompt_id,
+                    name,
+                    enhanced,
+                )
+                # Return gr.update() objects to force UI refresh
+                return [
+                    gr.update(value=prompt_id),
+                    gr.update(value=name),
+                    gr.update(value=prompt_text),
+                    gr.update(value=negative_prompt),
+                    gr.update(value=created),
+                    gr.update(value=video_dir),
+                    gr.update(value=enhanced),
+                ]
 
-        return ["", "", "", "", "", False]
+        logger.warning("No prompt details found for %s", prompt_id)
+        return [
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=False),
+        ]
 
     except Exception as e:
         logger.error("Error selecting prompt row: %s", str(e))
-        return ["", "", "", "", "", False]
+        import traceback
+
+        logger.error("Traceback: %s", traceback.format_exc())
+        return [
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=""),
+            gr.update(value=False),
+        ]
 
 
 def get_queue_status():
@@ -1096,7 +1154,7 @@ def create_ui():
                             ops_prompts_table = gr.Dataframe(
                                 headers=["☑", "ID", "Name", "Prompt Text", "Created"],
                                 datatype=["bool", "str", "str", "str", "str"],
-                                interactive=False,  # Disable drag-and-drop to fix clicking issues
+                                interactive=True,  # Must be True for select event to work
                                 col_count=(5, "fixed"),
                                 wrap=True,
                                 elem_classes=["prompts-table"],
@@ -1827,11 +1885,39 @@ def create_ui():
                 import pandas as pd
 
                 if evt.index is None or table_data is None:
-                    return [""] * 11 + [None, ""]
+                    return [
+                        gr.update(value=""),  # history_run_id
+                        gr.update(value=""),  # history_status
+                        gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_prompt_name
+                        gr.update(value=""),  # history_prompt_text
+                        gr.update(value=""),  # history_created
+                        gr.update(value=""),  # history_completed
+                        gr.update(value={}),  # history_weights
+                        gr.update(value={}),  # history_params
+                        gr.update(value=""),  # history_log_path
+                        gr.update(value=""),  # history_log_content
+                        gr.update(value=None),  # history_output_video
+                        gr.update(value=""),  # history_output_path
+                    ]
 
                 # Check if table_data is empty DataFrame
                 if isinstance(table_data, pd.DataFrame) and table_data.empty:
-                    return [""] * 11 + [None, ""]
+                    return [
+                        gr.update(value=""),  # history_run_id
+                        gr.update(value=""),  # history_status
+                        gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_prompt_name
+                        gr.update(value=""),  # history_prompt_text
+                        gr.update(value=""),  # history_created
+                        gr.update(value=""),  # history_completed
+                        gr.update(value={}),  # history_weights
+                        gr.update(value={}),  # history_params
+                        gr.update(value=""),  # history_log_path
+                        gr.update(value=""),  # history_log_content
+                        gr.update(value=None),  # history_output_video
+                        gr.update(value=""),  # history_output_path
+                    ]
 
                 # Get selected row
                 row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
@@ -1844,12 +1930,40 @@ def create_ui():
                     run_id = str(row[1]) if len(row) > 1 else ""
 
                 if not run_id or not ops:
-                    return [""] * 11 + [None, ""]
+                    return [
+                        gr.update(value=""),  # history_run_id
+                        gr.update(value=""),  # history_status
+                        gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_prompt_name
+                        gr.update(value=""),  # history_prompt_text
+                        gr.update(value=""),  # history_created
+                        gr.update(value=""),  # history_completed
+                        gr.update(value={}),  # history_weights
+                        gr.update(value={}),  # history_params
+                        gr.update(value=""),  # history_log_path
+                        gr.update(value=""),  # history_log_content
+                        gr.update(value=None),  # history_output_video
+                        gr.update(value=""),  # history_output_path
+                    ]
 
                 # Get full run details
                 run = ops.get_run(run_id)
                 if not run:
-                    return [""] * 11 + [None, ""]
+                    return [
+                        gr.update(value=""),  # history_run_id
+                        gr.update(value=""),  # history_status
+                        gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_prompt_name
+                        gr.update(value=""),  # history_prompt_text
+                        gr.update(value=""),  # history_created
+                        gr.update(value=""),  # history_completed
+                        gr.update(value={}),  # history_weights
+                        gr.update(value={}),  # history_params
+                        gr.update(value=""),  # history_log_path
+                        gr.update(value=""),  # history_log_content
+                        gr.update(value=None),  # history_output_video
+                        gr.update(value=""),  # history_output_path
+                    ]
 
                 # Extract basic info
                 status = run.get("status", "unknown")
@@ -1915,24 +2029,38 @@ def create_ui():
                     output_video = str(video_file)
 
                 return [
-                    run_id,  # history_run_id
-                    status,  # history_status
-                    duration,  # history_duration
-                    prompt_name,  # history_prompt_name
-                    prompt_text,  # history_prompt_text
-                    created,  # history_created
-                    completed,  # history_completed
-                    weights,  # history_weights
-                    inference_params,  # history_params
-                    log_path,  # history_log_path
-                    log_content,  # history_log_content
-                    output_video,  # history_output_video
-                    output_path,  # history_output_path
+                    gr.update(value=run_id),  # history_run_id
+                    gr.update(value=status),  # history_status
+                    gr.update(value=duration),  # history_duration
+                    gr.update(value=prompt_name),  # history_prompt_name
+                    gr.update(value=prompt_text),  # history_prompt_text
+                    gr.update(value=created),  # history_created
+                    gr.update(value=completed),  # history_completed
+                    gr.update(value=weights),  # history_weights
+                    gr.update(value=inference_params),  # history_params
+                    gr.update(value=log_path),  # history_log_path
+                    gr.update(value=log_content),  # history_log_content
+                    gr.update(value=output_video),  # history_output_video
+                    gr.update(value=output_path),  # history_output_path
                 ]
 
             except Exception as e:
                 logger.error("Error selecting run from history: {}", e)
-                return [""] * 11 + [None, ""]
+                return [
+                    gr.update(value=""),  # history_run_id
+                    gr.update(value=""),  # history_status
+                    gr.update(value=""),  # history_duration
+                    gr.update(value=""),  # history_prompt_name
+                    gr.update(value=""),  # history_prompt_text
+                    gr.update(value=""),  # history_created
+                    gr.update(value=""),  # history_completed
+                    gr.update(value=""),  # history_weights
+                    gr.update(value=""),  # history_params
+                    gr.update(value=""),  # history_log_path
+                    gr.update(value=""),  # history_log_content
+                    gr.update(value=None),  # history_output_video
+                    gr.update(value=""),  # history_output_path
+                ]
 
         def load_run_logs(run_id):
             """Load full log content for a run."""

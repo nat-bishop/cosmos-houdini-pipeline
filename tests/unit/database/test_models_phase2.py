@@ -25,7 +25,6 @@ class TestPhase2RunModelUpdates:
         """Create a sample prompt for testing."""
         prompt = Prompt(
             id="ps_test123",
-            model_type="transfer",
             prompt_text="Test prompt",
             inputs={"video": "/path/to/video.mp4"},
             parameters={"num_steps": 10},

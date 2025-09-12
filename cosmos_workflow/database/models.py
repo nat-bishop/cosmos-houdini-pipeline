@@ -30,7 +30,6 @@ class Prompt(Base):
 
     # Core fields common to all AI models
     id = Column(String, primary_key=True)
-    model_type = Column(String, nullable=False, default="transfer")  # Temporary, will be removed
     prompt_text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -59,7 +58,7 @@ class Prompt(Base):
             raise ValueError(f"{key} cannot be None")
         return value
 
-    @validates("model_type", "prompt_text")
+    @validates("prompt_text")
     def validate_required_fields(self, key, value):
         """Validate that required string fields are not empty.
 
@@ -78,7 +77,7 @@ class Prompt(Base):
         return value
 
     def __repr__(self):
-        return f"<Prompt(id={self.id}, model={self.model_type}, text={self.prompt_text[:50]}...)>"
+        return f"<Prompt(id={self.id}, text={self.prompt_text[:50]}...)>"
 
 
 class Run(Base):

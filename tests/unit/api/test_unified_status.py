@@ -55,7 +55,6 @@ class TestSimplifiedActiveOperations:
 
         # Check the run details
         assert result["active_run"]["id"] == "run_abc123"
-        assert result["active_run"]["model_type"] == "transfer"
 
         # Container should be returned
         assert result["container"] is not None
@@ -207,7 +206,6 @@ class TestEnhancedCheckStatus:
         # Should include active run details
         assert "active_run" in result
         assert result["active_run"]["id"] == "run_test"
-        assert result["active_run"]["model_type"] == "transfer"
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")

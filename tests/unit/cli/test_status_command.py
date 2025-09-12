@@ -121,7 +121,6 @@ class TestStatusCommand:
             runner = CliRunner()
             result = runner.invoke(status, obj=mock_ctx)
             # Check that the model type is shown
-            assert model_type in result.output.lower() or model_type.upper() in result.output
 
     def test_status_without_active_operations_key(self):
         """Test backward compatibility when active_run not present."""

@@ -76,7 +76,6 @@ class TestDatabaseConnection:
             # Should be able to query
             prompt = Prompt(
                 id="ps_test",
-                model_type="transfer",  # Temporary until model_type is removed from DB
                 prompt_text="test",
                 inputs={},
                 parameters={},
@@ -100,7 +99,6 @@ class TestDatabaseConnection:
             with conn.get_session() as session:
                 prompt = Prompt(
                     id="ps_rollback",
-                    model_type="transfer",  # Temporary until model_type is removed from DB
                     prompt_text="test",
                     inputs={},
                     parameters={},
@@ -124,7 +122,6 @@ class TestDatabaseConnection:
         with conn.get_session() as session1:
             prompt = Prompt(
                 id="ps_multi",
-                model_type="transfer",  # Temporary until removed from DB
                 prompt_text="test",
                 inputs={},
                 parameters={},
@@ -150,7 +147,6 @@ class TestDatabaseConnection:
             with conn1.get_session() as session:
                 prompt = Prompt(
                     id="ps_persist",
-                    model_type="transfer",  # Temporary until removed from DB
                     prompt_text="persistent",
                     inputs={},
                     parameters={},
@@ -294,7 +290,6 @@ class TestDatabaseHelpers:
             with conn1.get_session() as session:
                 prompt = Prompt(
                     id="ps_1",
-                    model_type="transfer",  # Temporary until removed from DB
                     prompt_text="test1",
                     inputs={},
                     parameters={},
@@ -346,7 +341,6 @@ class TestDatabaseTransactions:
             # Start implicit transaction
             prompt = Prompt(
                 id="ps_commit",
-                model_type="transfer",  # Temporary until removed from DB
                 prompt_text="test",
                 inputs={},
                 parameters={},
@@ -356,7 +350,6 @@ class TestDatabaseTransactions:
             run = Run(
                 id="rs_commit",
                 prompt_id=prompt.id,
-                model_type="transfer",
                 status="pending",
                 execution_config={},
                 outputs={},
@@ -378,7 +371,6 @@ class TestDatabaseTransactions:
             with connection.get_session() as session:
                 prompt = Prompt(
                     id="ps_rollback",
-                    model_type="transfer",  # Temporary until model_type is removed from DB
                     prompt_text="test",
                     inputs={},
                     parameters={},
@@ -400,7 +392,6 @@ class TestDatabaseTransactions:
         with connection.get_session() as outer_session:
             prompt = Prompt(
                 id="ps_outer",
-                model_type="transfer",  # Temporary until removed from DB
                 prompt_text="outer",
                 inputs={},
                 parameters={},
@@ -413,7 +404,6 @@ class TestDatabaseTransactions:
                 run = Run(
                     id="rs_inner",
                     prompt_id=prompt.id,
-                    model_type="transfer",
                     status="pending",
                     execution_config={},
                     outputs={},
@@ -442,7 +432,6 @@ class TestDatabaseConcurrency:
             with conn.get_session() as session1:
                 prompt1 = Prompt(
                     id="ps_concurrent_1",
-                    model_type="transfer",  # Temporary until removed from DB
                     prompt_text="test1",
                     inputs={},
                     parameters={},
@@ -453,7 +442,6 @@ class TestDatabaseConcurrency:
             with conn.get_session() as session2:
                 prompt2 = Prompt(
                     id="ps_concurrent_2",
-                    model_type="transfer",  # Temporary until removed from DB
                     prompt_text="test2",
                     inputs={},
                     parameters={},
@@ -478,7 +466,6 @@ class TestDatabaseConcurrency:
         with conn.get_session() as session:
             prompt = Prompt(
                 id="ps_isolation",
-                model_type="transfer",  # Temporary until removed from DB
                 prompt_text="initial",
                 inputs={},
                 parameters={},

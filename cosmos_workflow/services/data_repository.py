@@ -89,7 +89,6 @@ class DataRepository:
         with self.db.get_session() as session:
             prompt = Prompt(
                 id=prompt_id,
-                model_type="transfer",  # Temporary until database column is removed
                 prompt_text=prompt_text,
                 inputs=inputs,
                 parameters=parameters,
@@ -742,7 +741,6 @@ class DataRepository:
         result["prompt"] = {
             "id": prompt_data["id"],
             "prompt_text": prompt_data["prompt_text"],
-            "model_type": prompt_data["model_type"],
         }
 
         # Extract runs info
@@ -1402,7 +1400,6 @@ class DataRepository:
             return [
                 {
                     "id": p.id,
-                    "model_type": p.model_type,
                     "prompt_text": p.prompt_text,
                     "inputs": p.inputs,
                     "parameters": p.parameters,

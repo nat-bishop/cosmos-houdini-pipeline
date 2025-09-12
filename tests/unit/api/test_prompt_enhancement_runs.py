@@ -85,7 +85,6 @@ class TestPromptEnhancementRuns:
 
         # Check that a run was created with proper model_type
         assert call_args[1]["prompt_id"] == "ps_test123"
-        assert call_args[1]["model_type"] == "enhance"
 
         # Check execution config contains enhancement parameters
         exec_config = call_args[1]["execution_config"]

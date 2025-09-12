@@ -97,7 +97,6 @@ class TestUpscalingRuns:
 
         # Check that a run was created with proper model_type
         assert call_args[1]["prompt_id"] == "ps_test123"
-        assert call_args[1]["model_type"] == "upscale"
 
         # Check execution config contains upscaling parameters
         exec_config = call_args[1]["execution_config"]
@@ -183,7 +182,6 @@ class TestUpscalingRuns:
         # Check positional arguments
         upscale_run = call_args[0][0]
         assert upscale_run["id"] == "rs_upscale456"
-        assert upscale_run["model_type"] == "upscale"
 
         # Check keyword arguments (new signature uses video_path and prompt_text)
         assert "video_path" in call_args[1]

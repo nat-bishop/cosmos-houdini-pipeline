@@ -139,7 +139,9 @@ class TestWorkflowServiceCreateRun:
         svc, prompt_id = service
 
         result = svc.create_run(
-            prompt_id=prompt_id, execution_config={"gpu_node": "node1", "weights": "v1.0"}
+            prompt_id=prompt_id, 
+            model_type="transfer",
+            execution_config={"gpu_node": "node1", "weights": "v1.0"}
         )
 
         assert result["prompt_id"] == prompt_id
@@ -158,6 +160,7 @@ class TestWorkflowServiceCreateRun:
 
         result = svc.create_run(
             prompt_id=prompt_id,
+            model_type="transfer",
             execution_config={"gpu_node": "node2"},
             metadata={"user": "test_user", "priority": "high"},
         )
@@ -170,21 +173,21 @@ class TestWorkflowServiceCreateRun:
         svc, _ = service
 
         with pytest.raises(ValueError, match="Prompt not found"):
-            svc.create_run(prompt_id="invalid_id", execution_config={"gpu_node": "node1"})
+            svc.create_run(prompt_id="invalid_id", model_type="transfer", execution_config={"gpu_node": "node1"})
 
     def test_create_run_none_prompt_id(self, service):
         """Test that None prompt_id raises error."""
         svc, _ = service
 
         with pytest.raises(ValueError, match="prompt_id is required"):
-            svc.create_run(prompt_id=None, execution_config={"gpu_node": "node1"})
+            svc.create_run(prompt_id=None, model_type="transfer", execution_config={"gpu_node": "node1"})
 
     def test_create_run_none_execution_config(self, service):
         """Test that None execution_config raises error."""
         svc, prompt_id = service
 
         with pytest.raises(ValueError, match="execution_config cannot be None"):
-            svc.create_run(prompt_id=prompt_id, execution_config=None)
+            svc.create_run(prompt_id=prompt_id, model_type="transfer", execution_config=None)
 
 
 class TestWorkflowServiceGetPrompt:
@@ -272,10 +275,11 @@ class TestWorkflowServiceGetRun:
             parameters={"num_steps": 30},
         )
 
-        run1 = service.create_run(prompt_id=prompt["id"], execution_config={"gpu_node": "node1"})
+        run1 = service.create_run(prompt_id=prompt["id"], model_type="transfer", execution_config={"gpu_node": "node1"})
 
         run2 = service.create_run(
             prompt_id=prompt["id"],
+            model_type="transfer",
             execution_config={"gpu_node": "node2"},
             metadata={"user": "alice"},
         )
@@ -346,6 +350,7 @@ class TestWorkflowServiceTransactions:
         with pytest.raises(ValueError):
             service.create_run(
                 prompt_id=prompt["id"],
+                model_type="transfer",
                 execution_config=None,  # This will cause an error
             )
 

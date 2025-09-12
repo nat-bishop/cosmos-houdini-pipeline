@@ -36,6 +36,7 @@ class TestWorkflowServiceUpdateRunStatus:
         """Create a sample run for testing."""
         return service.create_run(
             prompt_id=sample_prompt["id"],
+            model_type="transfer",
             execution_config={"weights": {"vis": 0.25}},
             metadata={"test": True},
         )
@@ -149,6 +150,7 @@ class TestWorkflowServiceUpdateRun:
         """Create a sample run for testing."""
         return service.create_run(
             prompt_id=sample_prompt["id"],
+            model_type="transfer",
             execution_config={"weights": {"vis": 0.25}},
             metadata={},
         )
@@ -279,9 +281,9 @@ class TestWorkflowServiceEnhancementSupport:
         # Create a run for the enhancement prompt
         result = service.create_run(
             prompt_id=prompt["id"],
+            model_type="enhance",
             execution_config={"model": "pixtral", "type": "enhance"},
             metadata={"source": "test"},
-            model_type="enhance",  # Explicitly specify model type for enhancement run
         )
 
         # Verify the run was created with correct model type
@@ -306,6 +308,7 @@ class TestWorkflowServiceEnhancementSupport:
         # Create enhancement run
         run = service.create_run(
             prompt_id=prompt["id"],
+            model_type="enhance",
             execution_config={"model": "pixtral"},
         )
 

@@ -48,7 +48,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="Test prompt 1",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -58,7 +57,6 @@ class TestWorkflowServiceQueries:
             ),
             MagicMock(
                 id="ps_002",
-                model_type="transfer",
                 prompt_text="Test prompt 2",
                 created_at=datetime.now() - timedelta(hours=1),
                 updated_at=datetime.now() - timedelta(hours=1),
@@ -125,7 +123,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now() - timedelta(minutes=10),
@@ -137,7 +134,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_002",
                 prompt_id="ps_002",
-                model_type="transfer",
                 status="running",
                 created_at=datetime.now() - timedelta(hours=1),
                 started_at=datetime.now() - timedelta(hours=1),
@@ -171,7 +167,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -203,7 +198,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_specific",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -254,7 +248,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="cyberpunk city transformation",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -264,7 +257,6 @@ class TestWorkflowServiceQueries:
             ),
             MagicMock(
                 id="ps_002",
-                model_type="transfer",
                 prompt_text="futuristic cyberpunk scene",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -318,7 +310,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="CYBERPUNK CITY",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -348,7 +339,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -360,7 +350,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_002",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="failed",
                 created_at=datetime.now() - timedelta(hours=1),
                 started_at=datetime.now() - timedelta(hours=1),
@@ -373,7 +362,6 @@ class TestWorkflowServiceQueries:
 
         mock_prompt = MagicMock(
             id="ps_001",
-            model_type="transfer",
             prompt_text="Test prompt",
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -422,7 +410,6 @@ class TestWorkflowServiceQueries:
         # Arrange
         mock_prompt = MagicMock(
             id="ps_001",
-            model_type="transfer",
             prompt_text="Test prompt",
             created_at=datetime.now(),
             updated_at=datetime.now(),

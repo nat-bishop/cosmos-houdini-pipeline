@@ -33,12 +33,14 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [ ] Test file paths in JSONL match upload locations (integration test)
 - [ ] Commit changes
 
-### ⬜ Step 3: Fix Batch Output Handling
-**File:** `cosmos_workflow/execution/gpu_executor.py` (`_split_batch_outputs` method)
-- [ ] Update to handle NVIDIA naming: `video_000.mp4`, `video_001.mp4`, etc.
-- [ ] Map sequential output files to run IDs
-- [ ] Add fallback for unexpected naming patterns
-- [ ] Test output mapping with multiple runs
+### ✅ Step 3: Fix Batch Output Handling
+**File:** `cosmos_workflow/execution/gpu_executor.py` (`_split_batch_outputs` method, lines 658-717)
+- [x] Updated to handle NVIDIA naming: `video_000.mp4`, `video_001.mp4`, etc.
+- [x] Map sequential output files to run IDs with proper index matching
+- [x] Keep fallback for unexpected naming patterns (sequential and run_id based)
+- [x] Added comprehensive logging for debugging
+- [x] Created unit tests in `tests/unit/execution/test_batch_output_mapping.py`
+- [x] All 5 test scenarios pass (sequential, fallback, missing, run_id, mixed)
 - [ ] Commit changes
 
 ### ⬜ Step 4: Download to Individual Run Directories

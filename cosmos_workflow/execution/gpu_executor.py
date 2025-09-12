@@ -656,17 +656,28 @@ class GPUExecutor:
             run_id = run_dict["id"]
 
             # Try to find matching output file
-            # Look for files with index or run_id in name
+            # NVIDIA batch inference outputs: video_000.mp4, video_001.mp4, etc.
             matched_file = None
             for output_file in output_files:
                 if output_file in used_files:
                     continue  # Skip already matched files
 
                 file_name = Path(output_file).name
-                # Check if file contains run_id or index
-                if run_id in file_name or f"_{i:03d}_" in file_name or f"_{i}_" in file_name:
+                # Check for NVIDIA sequential naming pattern: video_XXX.mp4
+                # Also keep support for run_id in case of custom naming
+                if (
+                    file_name == f"video_{i:03d}.mp4"  # NVIDIA standard: video_000.mp4
+                    or file_name == f"video_{i}.mp4"  # Fallback: video_0.mp4
+                    or run_id in file_name  # Custom: contains run_id
+                ):
                     matched_file = output_file
                     used_files.add(output_file)
+                    logger.info(
+                        "Matched output {} to run {} (index {})",
+                        file_name,
+                        run_id,
+                        i,
+                    )
                     break
 
             if matched_file:
@@ -681,12 +692,22 @@ class GPUExecutor:
                 if available_files:
                     matched_file = available_files[0]
                     used_files.add(matched_file)
+                    logger.warning(
+                        "No pattern match for run {}, using fallback file: {}",
+                        run_id,
+                        Path(matched_file).name,
+                    )
                     output_mapping[run_id] = {
                         "remote_path": matched_file,
                         "batch_index": i,
                         "status": "assumed",
                     }
                 else:
+                    logger.error(
+                        "No output file found for run {} (index {})",
+                        run_id,
+                        i,
+                    )
                     output_mapping[run_id] = {
                         "remote_path": None,
                         "batch_index": i,

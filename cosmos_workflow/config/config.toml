@@ -3,7 +3,7 @@
 # ===== Remote instance =====
 [remote]
 user = "ubuntu"
-host = "209.20.156.243"  # <-- change this when the IP changes
+host = "192.222.52.57"  # <-- change this when the IP changes
 port = 22
 ssh_key = "~/.ssh/LambdaSSHkey.pem"
 
@@ -42,6 +42,7 @@ stream_logs = 86400  # 24 hours for log streaming
 port = 7860  # Default Gradio port
 host = "0.0.0.0"  # Bind to all interfaces for SSH tunnel access
 share = false  # Don't create public Gradio share links
+refresh_interval = 5  # Auto-refresh interval in seconds (2-30)
 
 # ===== Environment variable overrides =====
 # These can be set via environment variables to override the defaults above

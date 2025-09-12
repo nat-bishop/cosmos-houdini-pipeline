@@ -27,6 +27,12 @@ ssh_key = "~/.ssh/your-key.pem"
 
 [paths]
 remote_dir = "/path/to/cosmos-transfer1"
+
+[ui]
+port = 7860              # Gradio UI port
+host = "0.0.0.0"         # Bind to all interfaces
+share = false            # Don't create public Gradio share links
+refresh_interval = 5     # Auto-refresh interval in seconds (2-30)
 ```
 
 ### Remote GPU Setup

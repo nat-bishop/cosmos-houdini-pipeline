@@ -1111,6 +1111,10 @@ def create_ui():
     }
     """
 
+    # Get refresh interval from config
+    ui_config = config._config_data.get("ui", {})
+    default_refresh_interval = ui_config.get("refresh_interval", 5)
+
     with gr.Blocks(title="Cosmos Workflow Manager", css=custom_css) as app:
         gr.Markdown("# 🌌 Cosmos Workflow Manager")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
@@ -1138,7 +1142,7 @@ def create_ui():
                     refresh_interval = gr.Slider(
                         minimum=2,
                         maximum=30,
-                        value=5,
+                        value=default_refresh_interval,
                         step=1,
                         label="Interval (s)",
                         container=False,
@@ -1151,7 +1155,7 @@ def create_ui():
                     )
 
         # Global timer for auto-refresh
-        global_refresh_timer = gr.Timer(value=5.0, active=True)
+        global_refresh_timer = gr.Timer(value=float(default_refresh_interval), active=True)
 
         with gr.Tabs():
             # ========================================

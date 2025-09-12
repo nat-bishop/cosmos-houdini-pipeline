@@ -202,10 +202,10 @@ def on_input_select(evt: gr.SelectData, gallery_data):
             metadata = extract_video_metadata(color_path)
 
     # Format metadata as plain text values
-    resolution_text = metadata['resolution']
-    duration_text = metadata['duration']
-    fps_text = metadata['fps']
-    codec_text = metadata['codec']
+    resolution_text = metadata["resolution"]
+    duration_text = metadata["duration"]
+    fps_text = metadata["fps"]
+    codec_text = metadata["codec"]
 
     # Get creation time from directory
     dir_stat = os.stat(selected_dir["path"])
@@ -1019,8 +1019,7 @@ def create_ui():
                                         object_fit="cover",
                                         elem_id="video_preview_gallery",
                                         show_label=False,
-                                        allow_preview=True,
-                                        preview=True,
+                                        allow_preview=False,
                                     )
 
                             # Create Prompt Tab
@@ -1825,13 +1824,17 @@ def create_ui():
         def select_run_from_history(evt: gr.SelectData, table_data):
             """Handle run selection from history table."""
             try:
-                if evt.index is None or not table_data:
+                import pandas as pd
+
+                if evt.index is None or table_data is None:
+                    return [""] * 11 + [None, ""]
+
+                # Check if table_data is empty DataFrame
+                if isinstance(table_data, pd.DataFrame) and table_data.empty:
                     return [""] * 11 + [None, ""]
 
                 # Get selected row
-                row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
-
-                import pandas as pd
+                row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
 
                 if isinstance(table_data, pd.DataFrame):
                     row = table_data.iloc[row_idx]
@@ -1928,7 +1931,7 @@ def create_ui():
                 ]
 
             except Exception as e:
-                logger.error("Error selecting run from history: %s", str(e))
+                logger.error("Error selecting run from history: {}", e)
                 return [""] * 11 + [None, ""]
 
         def load_run_logs(run_id):

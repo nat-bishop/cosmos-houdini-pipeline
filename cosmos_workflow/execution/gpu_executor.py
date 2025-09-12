@@ -569,18 +569,13 @@ class GPUExecutor:
         batch_dir = Path("outputs") / batch_name
         batch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Prepare batch data using the helper method
-        batch_data = []
-        for run_dict, prompt_dict in runs_and_prompts:
-            # For batch, each item needs the spec format from nvidia_format
-            spec = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
-            # Add the run ID for batch tracking
-            spec["name"] = run_dict["id"]
-            batch_data.append(spec)
+        # Prepare batch data using the JSONL format for batch inference
+        # Use the batch-specific format with control_overrides structure
+        batch_lines = nvidia_format.to_cosmos_batch_inference_jsonl(runs_and_prompts)
 
-        # Create batch file
-        batch_file = batch_dir / "batch.json"
-        self.json_handler.write_json(batch_data, batch_file)
+        # Create batch JSONL file (not JSON array)
+        batch_file = batch_dir / "batch.jsonl"
+        nvidia_format.write_batch_jsonl(batch_lines, batch_file)
 
         # Execute batch on GPU
         try:

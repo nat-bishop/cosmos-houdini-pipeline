@@ -352,51 +352,6 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
         return f"❌ Error creating prompt: {e}"
 
 
-def get_prompt_details(prompt_id):
-    """Get detailed information about a specific prompt."""
-    try:
-        if not prompt_id:
-            return "No prompt selected"
-
-        prompt = ops.get_prompt(prompt_id)
-        if not prompt:
-            return f"Prompt {prompt_id} not found"
-
-        # Format detailed view
-        details = f"**Prompt ID:** {prompt['id']}\n"
-        details += f"**Name:** {prompt.get('parameters', {}).get('name', 'unnamed')}\n"
-        # Model type removed - prompts don't have model types
-        details += f"**Created:** {prompt.get('created_at', 'unknown')}\n\n"
-
-        details += "**Prompt Text:**\n"
-        details += f"{prompt.get('prompt_text', '')}\n\n"
-
-        negative = prompt.get("parameters", {}).get("negative_prompt")
-        if negative:
-            details += "**Negative Prompt:**\n"
-            details += f"{negative}\n\n"
-
-        inputs = prompt.get("inputs", {})
-        if inputs:
-            details += "**Input Files:**\n"
-            if inputs.get("video"):
-                details += f"- Color: {inputs['video']}\n"
-            if inputs.get("depth"):
-                details += f"- Depth: {inputs['depth']}\n"
-            if inputs.get("seg"):
-                details += f"- Segmentation: {inputs['seg']}\n"
-
-        return details
-    except Exception as e:
-        logger.error("Failed to get prompt details: {}", e)
-        return f"Error getting prompt details: {e}"
-
-
-def populate_from_input_dir(selected_dir_path):
-    """Populate the video directory field from selected input."""
-    if selected_dir_path:
-        return selected_dir_path
-    return ""
 
 
 # ============================================================================
@@ -847,29 +802,6 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
         return f"❌ Error: {e}", "Idle"
 
 
-def list_prompts_for_input(video_dir):
-    """List prompts associated with a specific input directory."""
-    try:
-        all_prompts = ops.list_prompts(limit=100)
-
-        if not video_dir:
-            return all_prompts
-
-        # Filter prompts that use this video directory
-        video_path = Path(video_dir)
-        filtered = []
-
-        for prompt in all_prompts:
-            inputs = prompt.get("inputs", {})
-            if inputs.get("video"):
-                prompt_video_path = Path(inputs["video"]).parent
-                if prompt_video_path == video_path:
-                    filtered.append(prompt)
-
-        return filtered
-    except Exception as e:
-        logger.error("Failed to filter prompts for input: {}", e)
-        return []
 
 
 # ============================================================================
@@ -1722,11 +1654,6 @@ def create_ui():
                                 scale=2,
                             )
                             gr.Button("🗑️ Clear Logs", size="sm", scale=1)
-
-            # ============================================
-            # Run History Functions
-            # ============================================
-            # REMOVED: load_run_history function - was used by old Run History tab
 
         # ============================================
         # Event Handlers

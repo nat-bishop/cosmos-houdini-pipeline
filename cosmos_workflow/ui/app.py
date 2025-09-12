@@ -1604,6 +1604,9 @@ def create_ui():
                                         history_duration = gr.Textbox(
                                             label="Duration", interactive=False, scale=1
                                         )
+                                        history_run_type = gr.Textbox(
+                                            label="Run Type", interactive=False, scale=1
+                                        )
 
                                     history_prompt_name = gr.Textbox(
                                         label="Prompt Name", interactive=False
@@ -1623,9 +1626,23 @@ def create_ui():
 
                                 # Parameters Tab
                                 with gr.Tab("Parameters"):
-                                    history_weights = gr.JSON(label="Control Weights")
+                                    gr.Markdown("#### Control Weights")
+                                    with gr.Row():
+                                        history_weight_vis = gr.Textbox(
+                                            label="Visual", interactive=False, scale=1
+                                        )
+                                        history_weight_edge = gr.Textbox(
+                                            label="Edge", interactive=False, scale=1
+                                        )
+                                        history_weight_depth = gr.Textbox(
+                                            label="Depth", interactive=False, scale=1
+                                        )
+                                        history_weight_seg = gr.Textbox(
+                                            label="Segmentation", interactive=False, scale=1
+                                        )
 
-                                    history_params = gr.JSON(label="Inference Parameters")
+                                    gr.Markdown("#### Inference Parameters")
+                                    history_params = gr.JSON(label="", container=False)
 
                                 # Logs Tab
                                 with gr.Tab("Logs"):
@@ -1890,11 +1907,15 @@ def create_ui():
                         gr.update(value=""),  # history_run_id
                         gr.update(value=""),  # history_status
                         gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_run_type
                         gr.update(value=""),  # history_prompt_name
                         gr.update(value=""),  # history_prompt_text
                         gr.update(value=""),  # history_created
                         gr.update(value=""),  # history_completed
-                        gr.update(value={}),  # history_weights
+                        gr.update(value=""),  # history_weight_vis
+                        gr.update(value=""),  # history_weight_edge
+                        gr.update(value=""),  # history_weight_depth
+                        gr.update(value=""),  # history_weight_seg
                         gr.update(value={}),  # history_params
                         gr.update(value=""),  # history_log_path
                         gr.update(value=""),  # history_log_content
@@ -1908,11 +1929,15 @@ def create_ui():
                         gr.update(value=""),  # history_run_id
                         gr.update(value=""),  # history_status
                         gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_run_type
                         gr.update(value=""),  # history_prompt_name
                         gr.update(value=""),  # history_prompt_text
                         gr.update(value=""),  # history_created
                         gr.update(value=""),  # history_completed
-                        gr.update(value={}),  # history_weights
+                        gr.update(value=""),  # history_weight_vis
+                        gr.update(value=""),  # history_weight_edge
+                        gr.update(value=""),  # history_weight_depth
+                        gr.update(value=""),  # history_weight_seg
                         gr.update(value={}),  # history_params
                         gr.update(value=""),  # history_log_path
                         gr.update(value=""),  # history_log_content
@@ -1935,11 +1960,15 @@ def create_ui():
                         gr.update(value=""),  # history_run_id
                         gr.update(value=""),  # history_status
                         gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_run_type
                         gr.update(value=""),  # history_prompt_name
                         gr.update(value=""),  # history_prompt_text
                         gr.update(value=""),  # history_created
                         gr.update(value=""),  # history_completed
-                        gr.update(value={}),  # history_weights
+                        gr.update(value=""),  # history_weight_vis
+                        gr.update(value=""),  # history_weight_edge
+                        gr.update(value=""),  # history_weight_depth
+                        gr.update(value=""),  # history_weight_seg
                         gr.update(value={}),  # history_params
                         gr.update(value=""),  # history_log_path
                         gr.update(value=""),  # history_log_content
@@ -1954,11 +1983,15 @@ def create_ui():
                         gr.update(value=""),  # history_run_id
                         gr.update(value=""),  # history_status
                         gr.update(value=""),  # history_duration
+                        gr.update(value=""),  # history_run_type
                         gr.update(value=""),  # history_prompt_name
                         gr.update(value=""),  # history_prompt_text
                         gr.update(value=""),  # history_created
                         gr.update(value=""),  # history_completed
-                        gr.update(value={}),  # history_weights
+                        gr.update(value=""),  # history_weight_vis
+                        gr.update(value=""),  # history_weight_edge
+                        gr.update(value=""),  # history_weight_depth
+                        gr.update(value=""),  # history_weight_seg
                         gr.update(value={}),  # history_params
                         gr.update(value=""),  # history_log_path
                         gr.update(value=""),  # history_log_content
@@ -1968,6 +2001,7 @@ def create_ui():
 
                 # Extract basic info
                 status = run.get("status", "unknown")
+                run_type = run.get("model_type", "unknown").title()  # Get run type and capitalize
                 created = run.get("created_at", "")[:19] if run.get("created_at") else ""
                 completed = run.get("completed_at", "")[:19] if run.get("completed_at") else "-"
 
@@ -2006,6 +2040,13 @@ def create_ui():
                 # Get parameters
                 params = run.get("parameters", {})
                 weights = params.get("weights", {})
+
+                # Extract individual weight values
+                weight_vis = str(weights.get("vis", ""))
+                weight_edge = str(weights.get("edge", ""))
+                weight_depth = str(weights.get("depth", ""))
+                weight_seg = str(weights.get("seg", ""))
+
                 inference_params = {
                     "num_steps": params.get("num_steps", 35),
                     "guidance_scale": params.get("guidance_scale", 7.0),
@@ -2033,11 +2074,15 @@ def create_ui():
                     gr.update(value=run_id),  # history_run_id
                     gr.update(value=status),  # history_status
                     gr.update(value=duration),  # history_duration
+                    gr.update(value=run_type),  # history_run_type (NEW)
                     gr.update(value=prompt_name),  # history_prompt_name
                     gr.update(value=prompt_text),  # history_prompt_text
                     gr.update(value=created),  # history_created
                     gr.update(value=completed),  # history_completed
-                    gr.update(value=weights),  # history_weights
+                    gr.update(value=weight_vis),  # history_weight_vis (NEW)
+                    gr.update(value=weight_edge),  # history_weight_edge (NEW)
+                    gr.update(value=weight_depth),  # history_weight_depth (NEW)
+                    gr.update(value=weight_seg),  # history_weight_seg (NEW)
                     gr.update(value=inference_params),  # history_params
                     gr.update(value=log_path),  # history_log_path
                     gr.update(value=log_content),  # history_log_content
@@ -2051,11 +2096,15 @@ def create_ui():
                     gr.update(value=""),  # history_run_id
                     gr.update(value=""),  # history_status
                     gr.update(value=""),  # history_duration
+                    gr.update(value=""),  # history_run_type
                     gr.update(value=""),  # history_prompt_name
                     gr.update(value=""),  # history_prompt_text
                     gr.update(value=""),  # history_created
                     gr.update(value=""),  # history_completed
-                    gr.update(value=""),  # history_weights
+                    gr.update(value=""),  # history_weight_vis
+                    gr.update(value=""),  # history_weight_edge
+                    gr.update(value=""),  # history_weight_depth
+                    gr.update(value=""),  # history_weight_seg
                     gr.update(value=""),  # history_params
                     gr.update(value=""),  # history_log_path
                     gr.update(value=""),  # history_log_content
@@ -2604,11 +2653,15 @@ def create_ui():
                 history_run_id,
                 history_status,
                 history_duration,
+                history_run_type,  # NEW
                 history_prompt_name,
                 history_prompt_text,
                 history_created,
                 history_completed,
-                history_weights,
+                history_weight_vis,  # NEW
+                history_weight_edge,  # NEW
+                history_weight_depth,  # NEW
+                history_weight_seg,  # NEW
                 history_params,
                 history_log_path,
                 history_log_content,

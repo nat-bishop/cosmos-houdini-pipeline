@@ -1098,7 +1098,11 @@ def create_ui():
 # ============================================================================
 # Application Entry Point
 # ============================================================================
+# For Gradio auto-reload CLI compatibility
+# ============================================================================
+
+# Create the demo variable that Gradio CLI expects
+demo = create_ui()
 
 if __name__ == "__main__":
-    app = create_ui()
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860)

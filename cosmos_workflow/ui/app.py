@@ -46,6 +46,15 @@ from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
+from cosmos_workflow.ui.tabs.runs_handlers import (
+    load_runs_data,
+    on_runs_table_select,
+    load_run_logs,
+    select_all_runs,
+    clear_runs_selection,
+    delete_selected_runs,
+    update_runs_selection_info,
+)
 from cosmos_workflow.utils.logging import logger
 
 # Load configuration
@@ -1077,6 +1086,94 @@ def create_ui():
                     inputs=inputs,
                     outputs=outputs,
                 )
+
+        # Runs Tab Events
+        # Runs filters - trigger data reload
+        if all(k in components for k in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]):
+            filter_inputs = [
+                components["runs_status_filter"],
+                components["runs_date_filter"],
+                components["runs_search"],
+                components["runs_limit"],
+            ]
+            filter_outputs = get_components("runs_gallery", "runs_table", "runs_stats")
+            if filter_outputs:
+                for filter_component in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]:
+                    components[filter_component].change(
+                        fn=load_runs_data,
+                        inputs=filter_inputs,
+                        outputs=filter_outputs,
+                    )
+
+        # Runs table selection
+        if "runs_table" in components:
+            outputs = get_components(
+                "runs_details_group",
+                "runs_output_video",
+                "runs_input_videos",
+                "runs_prompt_text",
+                "runs_visual_weight",
+                "runs_edge_weight",
+                "runs_depth_weight",
+                "runs_segmentation_weight",
+                "runs_info_id",
+                "runs_info_prompt_id",
+                "runs_info_status",
+                "runs_info_duration",
+                "runs_info_type",
+                "runs_info_prompt_name",
+                "runs_info_created",
+                "runs_info_completed",
+                "runs_params_json",
+                "runs_log_path",
+                "runs_log_output",
+            )
+            if outputs:
+                components["runs_table"].select(
+                    fn=on_runs_table_select,
+                    inputs=[components["runs_table"]],
+                    outputs=outputs,
+                )
+
+            # Update selection info when table changes
+            if "runs_selected_info" in components:
+                components["runs_table"].change(
+                    fn=update_runs_selection_info,
+                    inputs=[components["runs_table"]],
+                    outputs=[components["runs_selected_info"]],
+                )
+
+        # Batch operations
+        if "runs_select_all_btn" in components and "runs_table" in components:
+            components["runs_select_all_btn"].click(
+                fn=select_all_runs,
+                inputs=[components["runs_table"]],
+                outputs=[components["runs_table"]],
+            )
+
+        if "runs_clear_selection_btn" in components and "runs_table" in components:
+            components["runs_clear_selection_btn"].click(
+                fn=clear_runs_selection,
+                inputs=[components["runs_table"]],
+                outputs=[components["runs_table"]],
+            )
+
+        if "runs_delete_selected_btn" in components and "runs_table" in components:
+            delete_outputs = get_components("runs_table", "runs_selected_info")
+            if delete_outputs:
+                components["runs_delete_selected_btn"].click(
+                    fn=delete_selected_runs,
+                    inputs=[components["runs_table"]],
+                    outputs=delete_outputs,
+                )
+
+        # Load logs button
+        if all(k in components for k in ["runs_load_logs_btn", "runs_log_path", "runs_log_output"]):
+            components["runs_load_logs_btn"].click(
+                fn=load_run_logs,
+                inputs=[components["runs_log_path"]],
+                outputs=[components["runs_log_output"]],
+            )
 
         # Jobs & Queue Tab Events
         if "stream_btn" in components:

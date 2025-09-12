@@ -118,7 +118,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData = None):
     """Handle selection of a run from the table."""
     try:
         if not evt or table_data is None:
-            return [gr.update(visible=False)] + [gr.update()] * 19
+            return [gr.update(visible=False)] + [gr.update()] * 20
 
         # Import here to avoid circular dependency
         from cosmos_workflow.ui.app import ops
@@ -134,12 +134,12 @@ def on_runs_table_select(table_data, evt: gr.SelectData = None):
             run_id = table_data[row_idx][1] if row_idx < len(table_data) else None
 
         if not run_id or not ops:
-            return [gr.update(visible=False)] + [gr.update()] * 19
+            return [gr.update(visible=False)] + [gr.update()] * 20
 
         # Get full run details
         run_details = ops.get_run(run_id)
         if not run_details:
-            return [gr.update(visible=False)] + [gr.update()] * 19
+            return [gr.update(visible=False)] + [gr.update()] * 20
 
         # Extract details
         output_video = run_details.get("output_path", "")
@@ -183,13 +183,15 @@ def on_runs_table_select(table_data, evt: gr.SelectData = None):
 
         return [
             gr.update(visible=True),  # runs_details_group
-            gr.update(value=output_video if Path(output_video).exists() else None),  # runs_output_video
+            gr.update(value=run_id),  # runs_detail_id (hidden)
+            gr.update(value=run_details.get("status", "")),  # runs_detail_status (hidden)
             gr.update(value=input_videos),  # runs_input_videos
-            gr.update(value=prompt_text),  # runs_prompt_text
+            gr.update(value=output_video if Path(output_video).exists() else None),  # runs_output_video
             gr.update(value=weights.get("vis", 0)),  # runs_visual_weight
             gr.update(value=weights.get("edge", 0)),  # runs_edge_weight
             gr.update(value=weights.get("depth", 0)),  # runs_depth_weight
             gr.update(value=weights.get("seg", 0)),  # runs_segmentation_weight
+            gr.update(value=prompt_text),  # runs_prompt_text
             gr.update(value=run_id),  # runs_info_id
             gr.update(value=run_details.get("prompt_id", "")),  # runs_info_prompt_id
             gr.update(value=run_details.get("status", "")),  # runs_info_status
@@ -205,7 +207,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData = None):
 
     except Exception as e:
         logger.error("Error selecting run: %s", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 19
+        return [gr.update(visible=False)] + [gr.update()] * 20
 
 
 def load_run_logs(log_path):

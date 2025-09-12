@@ -1110,13 +1110,15 @@ def create_ui():
         if "runs_table" in components:
             runs_output_keys = [
                 "runs_details_group",
-                "runs_output_video",
+                "runs_detail_id",
+                "runs_detail_status", 
                 "runs_input_videos",
-                "runs_prompt_text",
+                "runs_output_video",
                 "runs_visual_weight",
                 "runs_edge_weight",
                 "runs_depth_weight",
                 "runs_segmentation_weight",
+                "runs_prompt_text",
                 "runs_info_id",
                 "runs_info_prompt_id",
                 "runs_info_status",

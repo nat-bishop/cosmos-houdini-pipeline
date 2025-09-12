@@ -1108,7 +1108,7 @@ def create_ui():
 
         # Runs table selection
         if "runs_table" in components:
-            outputs = get_components(
+            runs_output_keys = [
                 "runs_details_group",
                 "runs_output_video",
                 "runs_input_videos",
@@ -1128,13 +1128,18 @@ def create_ui():
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",
-            )
+            ]
+            outputs = get_components(*runs_output_keys)
             if outputs:
+                logger.info("Connecting runs_table.select with %d outputs", len(outputs))
                 components["runs_table"].select(
                     fn=on_runs_table_select,
                     inputs=[components["runs_table"]],
                     outputs=outputs,
                 )
+            else:
+                missing_runs = [k for k in runs_output_keys if k not in components]
+                logger.warning("Missing components for runs table select: %s", missing_runs)
 
             # Update selection info when table changes
             if "runs_selected_info" in components:

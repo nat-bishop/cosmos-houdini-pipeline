@@ -437,7 +437,7 @@ def update_selection_count(dataframe_data):
 
         return f"**{selected}** prompt{'s' if selected != 1 else ''} selected"
     except Exception as e:
-        logger.debug("Error counting selection: %s", str(e))
+        logger.debug("Error counting selection: {}", str(e))
         return "**0** prompts selected"
 
 
@@ -472,7 +472,7 @@ def toggle_enhance_force_visibility(create_new):
 def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
     """Handle row selection in prompts table to show details."""
     try:
-        logger.info("on_prompt_row_select called with evt.index: %s", evt.index if evt else "None")
+        logger.info("on_prompt_row_select called with evt.index: {}", evt.index if evt else "None")
 
         if dataframe_data is None or evt is None:
             logger.warning("on_prompt_row_select: dataframe_data or evt is None")
@@ -489,7 +489,7 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
 
         # Get the selected row index
         row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
-        logger.info("Selected row index: %s", row_idx)
+        logger.info("Selected row index: {}", row_idx)
 
         # Extract row data
         import pandas as pd
@@ -502,7 +502,7 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
             row = dataframe_data[row_idx] if row_idx < len(dataframe_data) else []
             prompt_id = str(row[1]) if len(row) > 1 else ""
 
-        logger.info("Selected prompt_id: %s", prompt_id)
+        logger.info("Selected prompt_id: {}", prompt_id)
 
         if not prompt_id:
             return [
@@ -552,7 +552,7 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                     gr.update(value=enhanced),
                 ]
 
-        logger.warning("No prompt details found for %s", prompt_id)
+        logger.warning("No prompt details found for {}", prompt_id)
         return [
             gr.update(value=""),
             gr.update(value=""),
@@ -564,10 +564,10 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
         ]
 
     except Exception as e:
-        logger.error("Error selecting prompt row: %s", str(e))
+        logger.error("Error selecting prompt row: {}", str(e))
         import traceback
 
-        logger.error("Traceback: %s", traceback.format_exc())
+        logger.error("Traceback: {}", traceback.format_exc())
         return [
             gr.update(value=""),
             gr.update(value=""),
@@ -601,7 +601,7 @@ def get_queue_status():
                 return "Queue: Empty | GPU: Available"
         return "Queue: Status unavailable"
     except Exception as e:
-        logger.error("Error getting queue status: %s", str(e))
+        logger.error("Error getting queue status: {}", str(e))
         return "Queue: Error getting status"
 
 
@@ -623,7 +623,7 @@ def get_recent_runs(limit=5):
             return table_data
         return []
     except Exception as e:
-        logger.error("Error getting recent runs: %s", str(e))
+        logger.error("Error getting recent runs: {}", str(e))
         return []
 
 
@@ -951,7 +951,7 @@ def create_ui():
                     jobs_data[1],  # job_status
                 )
             except Exception as e:
-                logger.error("Error during global refresh: %s", str(e))
+                logger.error("Error during global refresh: {}", str(e))
                 return (
                     "❌ Error - Check logs",
                     [],
@@ -1133,7 +1133,7 @@ def create_ui():
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:
-                logger.info("Connecting runs_table.select with %s outputs", len(outputs))
+                logger.info("Connecting runs_table.select with {} outputs", len(outputs))
                 components["runs_table"].select(
                     fn=on_runs_table_select,
                     inputs=[components["runs_table"]],
@@ -1141,7 +1141,7 @@ def create_ui():
                 )
             else:
                 missing_runs = [k for k in runs_output_keys if k not in components]
-                logger.warning("Missing components for runs table select: %s", missing_runs)
+                logger.warning("Missing components for runs table select: {}", missing_runs)
 
             # Update selection info when table changes
             if "runs_selected_info" in components:
@@ -1204,10 +1204,10 @@ def create_ui():
         required_components = ["input_gallery", "ops_prompts_table", "running_jobs_display", "job_status"]
         missing = [k for k in required_components if k not in components]
         if missing:
-            logger.warning("Missing components for initial load: %s", missing)
+            logger.warning("Missing components for initial load: {}", missing)
         
         if initial_outputs:
-            logger.info("Setting up initial data load with %s outputs", len(initial_outputs))
+            logger.info("Setting up initial data load with {} outputs", len(initial_outputs))
             def load_initial_data():
                 """Load initial data efficiently."""
                 gallery_data = load_input_gallery()
@@ -1238,8 +1238,18 @@ def create_ui():
 # For Gradio auto-reload CLI compatibility
 # ============================================================================
 
+# Lazy initialization to avoid creating UI on every import
+_demo = None
+
+def get_demo():
+    """Get or create the demo instance."""
+    global _demo
+    if _demo is None:
+        _demo = create_ui()
+    return _demo
+
 # Create the demo variable that Gradio CLI expects
-demo = create_ui()
+demo = get_demo()
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7860)

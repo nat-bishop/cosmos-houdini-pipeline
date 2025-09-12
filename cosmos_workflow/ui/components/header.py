@@ -9,23 +9,23 @@ import gradio as gr
 
 def create_header_ui(config):
     """Create the header UI with status and refresh controls.
-    
+
     Args:
         config: ConfigManager instance for getting UI config
-        
+
     Returns:
         dict: Dictionary of UI components
     """
     # Get refresh interval from config
     ui_config = config._config_data.get("ui", {})
     default_refresh_interval = ui_config.get("refresh_interval", 5)
-    
+
     components = {}
-    
+
     # Title and description
     gr.Markdown("# 🌌 Cosmos Workflow Manager v1.2")
     gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
-    
+
     # Global Refresh Control Panel
     with gr.Row():
         with gr.Column(scale=3):
@@ -60,11 +60,10 @@ def create_header_ui(config):
                     variant="secondary",
                     size="sm",
                 )
-    
+
     # Global timer for auto-refresh
     components["global_refresh_timer"] = gr.Timer(
-        value=float(default_refresh_interval), 
-        active=True
+        value=float(default_refresh_interval), active=True
     )
-    
+
     return components

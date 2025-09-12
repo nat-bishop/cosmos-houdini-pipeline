@@ -10,19 +10,19 @@ import gradio as gr
 
 def create_inputs_tab_ui(config):
     """Create the Inputs tab UI components.
-    
+
     Args:
         config: ConfigManager instance for configuration
-        
+
     Returns:
         dict: Dictionary of all UI components for event binding
     """
     components = {}
-    
+
     with gr.Tab("📁 Inputs", id=1) as components["inputs_tab"]:
         gr.Markdown("### Input Video Browser")
         gr.Markdown("Browse input videos and create prompts directly")
-        
+
         with gr.Row():
             # Left: Gallery of inputs - MUCH LARGER (2x the right panel)
             with gr.Column(scale=2):
@@ -38,16 +38,16 @@ def create_inputs_tab_ui(config):
                     allow_preview=False,
                     interactive=False,  # Prevent uploads
                 )
-            
+
             # Right: Input Details with tabs
             with gr.Column(scale=1):
                 # Hidden field to store selected directory path
                 components["selected_dir_path"] = gr.Textbox(visible=False)
-                
+
                 # Keep preview_group for compatibility but hidden
                 with gr.Group(visible=False) as components["preview_group"]:
                     pass
-                
+
                 # Tabs for Input Details and Create Prompt
                 with gr.Tabs(visible=False) as components["input_tabs_group"]:
                     # Input Details Tab
@@ -55,52 +55,52 @@ def create_inputs_tab_ui(config):
                         with gr.Group(elem_classes=["detail-card"]):
                             # File information section
                             gr.Markdown("#### 📂 File Information")
-                            
+
                             components["input_name"] = gr.Textbox(
                                 label="Name",
                                 interactive=False,
                             )
-                            
+
                             components["input_path"] = gr.Textbox(
                                 label="Path",
                                 interactive=False,
                             )
-                            
+
                             components["input_created"] = gr.Textbox(
                                 label="Created",
                                 interactive=False,
                             )
-                            
+
                             # Video metadata as regular textboxes
                             components["input_resolution"] = gr.Textbox(
                                 label="Resolution",
                                 interactive=False,
                             )
-                            
+
                             components["input_duration"] = gr.Textbox(
                                 label="Duration",
                                 interactive=False,
                             )
-                            
+
                             with gr.Row():
                                 components["input_fps"] = gr.Textbox(
                                     label="FPS",
                                     interactive=False,
                                     scale=1,
                                 )
-                                
+
                                 components["input_codec"] = gr.Textbox(
                                     label="Codec",
                                     interactive=False,
                                     scale=1,
                                 )
-                            
+
                             components["input_files"] = gr.Textbox(
                                 label="Available Control Inputs",
                                 lines=3,
                                 interactive=False,
                             )
-                            
+
                             # Video previews at the bottom
                             gr.Markdown("#### 🎬 Video Previews")
                             components["video_preview_gallery"] = gr.Gallery(
@@ -113,7 +113,7 @@ def create_inputs_tab_ui(config):
                                 allow_preview=True,  # Allow clicking to preview
                                 container=False,  # Remove extra container padding
                             )
-                    
+
                     # Create Prompt Tab
                     with gr.Tab("✨ Create Prompt"):
                         with gr.Group(elem_classes=["detail-card"]):
@@ -123,20 +123,20 @@ def create_inputs_tab_ui(config):
                                 placeholder="Auto-filled when selecting an input",
                                 info="Must contain color.mp4",
                             )
-                            
+
                             components["create_prompt_text"] = gr.Textbox(
                                 label="Prompt Text",
                                 placeholder="Enter your prompt description here...",
                                 lines=3,
                                 max_lines=10,
                             )
-                            
+
                             components["create_name"] = gr.Textbox(
                                 label="Name (Optional)",
                                 placeholder="Leave empty for auto-generated name",
                                 info="A descriptive name for this prompt",
                             )
-                            
+
                             # Get default negative prompt from config
                             default_negative = (
                                 config._config_data.get("generation", {})
@@ -146,18 +146,18 @@ def create_inputs_tab_ui(config):
                                 )
                                 .strip()
                             )
-                            
+
                             components["create_negative"] = gr.Textbox(
                                 label="Negative Prompt",
                                 value=default_negative,  # Pre-fill with default
                                 lines=3,
                                 info="Edit to customize or leave as default",
                             )
-                            
+
                             components["create_prompt_btn"] = gr.Button(
                                 "✨ Create Prompt", variant="primary", size="lg"
                             )
-                            
+
                             components["create_status"] = gr.Markdown("")
-    
+
     return components

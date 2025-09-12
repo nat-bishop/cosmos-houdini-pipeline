@@ -1,5 +1,6 @@
 """Styling and theming for the Cosmos Workflow Manager UI."""
 
+
 def get_custom_css():
     """Return the custom CSS for the Gradio interface."""
     return """
@@ -256,5 +257,108 @@ def get_custom_css():
     *:focus {
         outline: 2px solid var(--border-glow) !important;
         outline-offset: 2px !important;
+    }
+
+    /* Unified Input Details Card Styling */
+    .unified-input-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%) !important;
+        border: 2px solid rgba(102, 126, 234, 0.3) !important;
+        border-radius: 16px !important;
+        padding: 20px !important;
+        animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Video Preview Grid */
+    .video-preview-grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 12px !important;
+        margin-top: 16px !important;
+    }
+
+    .video-preview-card {
+        position: relative;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        background: rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        cursor: pointer;
+    }
+
+    .video-preview-card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4) !important;
+        z-index: 10;
+    }
+
+    .video-preview-label {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        z-index: 1;
+    }
+
+    /* Metadata badges */
+    .metadata-badge {
+        display: inline-block;
+        background: var(--primary-gradient);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 4px;
+        animation: badgePulse 2s infinite;
+    }
+
+    @keyframes badgePulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    /* Loading skeleton animation */
+    .loading-skeleton {
+        background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+    /* Input details typography hierarchy */
+    .input-title {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 12px !important;
+    }
+
+    .input-subtitle {
+        font-size: 0.9rem !important;
+        color: rgba(255, 255, 255, 0.6) !important;
+        margin-bottom: 16px !important;
     }
     """

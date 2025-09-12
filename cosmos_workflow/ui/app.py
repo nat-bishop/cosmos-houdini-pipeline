@@ -33,21 +33,11 @@ import gradio as gr
 
 from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.config import ConfigManager
+from cosmos_workflow.ui.helpers import (
+    extract_video_metadata,
+)
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.ui.styles import get_custom_css
-from cosmos_workflow.ui.helpers import (
-    format_timestamp,
-    format_duration,
-    truncate_text,
-    get_file_info,
-    format_file_size,
-    extract_video_metadata,
-    parse_table_selection,
-    create_status_message,
-    validate_video_directory,
-    get_multimodal_inputs,
-    format_run_status,
-)
 from cosmos_workflow.utils.logging import logger
 
 # Load configuration
@@ -154,20 +144,24 @@ def load_input_gallery():
 
 
 def on_input_select(evt: gr.SelectData, gallery_data):
-    """Handle input selection from gallery."""
+    """Handle input selection from gallery with real video metadata extraction."""
     if evt.index is None:
         return (
             gr.update(visible=False),  # input_details_group
-            "",  # input_name
-            "",  # input_path
-            "",  # input_resolution
-            "",  # input_duration
-            "",  # input_created
-            "",  # input_files
-            "",  # selected_dir_path
             "",  # color_preview
             "",  # depth_preview
             "",  # seg_preview
+            gr.update(
+                value="<span class='metadata-badge'>Resolution: -</span>"
+            ),  # input_resolution
+            gr.update(value="<span class='metadata-badge'>Duration: -</span>"),  # input_duration
+            gr.update(value="<span class='metadata-badge'>FPS: -</span>"),  # input_fps
+            gr.update(value="<span class='metadata-badge'>Codec: -</span>"),  # input_codec
+            "",  # input_name
+            "",  # input_path
+            "",  # input_created
+            "",  # input_files
+            "",  # selected_dir_path
             gr.update(visible=False),  # preview_group
             "",  # create_video_dir
         )
@@ -176,16 +170,20 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     if evt.index >= len(directories):
         return (
             gr.update(visible=False),  # input_details_group
-            "",  # input_name
-            "",  # input_path
-            "",  # input_resolution
-            "",  # input_duration
-            "",  # input_created
-            "",  # input_files
-            "",  # selected_dir_path
             "",  # color_preview
             "",  # depth_preview
             "",  # seg_preview
+            gr.update(
+                value="<span class='metadata-badge'>Resolution: -</span>"
+            ),  # input_resolution
+            gr.update(value="<span class='metadata-badge'>Duration: -</span>"),  # input_duration
+            gr.update(value="<span class='metadata-badge'>FPS: -</span>"),  # input_fps
+            gr.update(value="<span class='metadata-badge'>Codec: -</span>"),  # input_codec
+            "",  # input_name
+            "",  # input_path
+            "",  # input_created
+            "",  # input_files
+            "",  # selected_dir_path
             gr.update(visible=False),  # preview_group
             "",  # create_video_dir
         )
@@ -198,8 +196,24 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     # Extract individual field values
     name = selected_dir["name"]
     path = selected_dir["path"]
-    resolution = "1920x1080"  # TODO: Extract from video
-    duration = "120 frames (5.0 seconds @ 24fps)"  # TODO: Extract from video
+
+    # Extract real video metadata from color video
+    metadata = {
+        "resolution": "Unknown",
+        "duration": "Unknown",
+        "fps": "Unknown",
+        "codec": "Unknown",
+    }
+    if selected_dir["has_color"]:
+        color_path = Path(selected_dir["path"]) / "color.mp4"
+        if color_path.exists():
+            metadata = extract_video_metadata(color_path)
+
+    # Format metadata as HTML badges with animations
+    resolution_badge = f"<span class='metadata-badge'>📐 {metadata['resolution']}</span>"
+    duration_badge = f"<span class='metadata-badge'>⏱️ {metadata['duration']}</span>"
+    fps_badge = f"<span class='metadata-badge'>🎬 {metadata['fps']} FPS</span>"
+    codec_badge = f"<span class='metadata-badge'>🎥 {metadata['codec']}</span>"
 
     # Get creation time from directory
     dir_stat = os.stat(selected_dir["path"])
@@ -207,18 +221,18 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         "%Y-%m-%d %H:%M:%S"
     )
 
-    # Format file list
+    # Format file list with better descriptions
     files_list = []
     for file_info in selected_dir["files"]:
         size_mb = file_info["size"] / (1024 * 1024)
         file_type = ""
         if "color" in file_info["name"]:
-            file_type = " (RGB)"
+            file_type = " 🎨 RGB"
         elif "depth" in file_info["name"]:
-            file_type = " (Depth Map)"
+            file_type = " 🏔️ Depth"
         elif "segmentation" in file_info["name"]:
-            file_type = " (Semantic Segmentation)"
-        files_list.append(f"{file_info['name']}{file_type} ({size_mb:.2f} MB)")
+            file_type = " 🧩 Segmentation"
+        files_list.append(f"• {file_info['name']}{file_type} ({size_mb:.1f} MB)")
 
     files_text = "\n".join(files_list)
 
@@ -240,17 +254,19 @@ def on_input_select(evt: gr.SelectData, gallery_data):
 
     return (
         gr.update(visible=True),  # input_details_group
-        name,  # input_name
-        path,  # input_path
-        resolution,  # input_resolution
-        duration,  # input_duration
-        created_time,  # input_created
-        files_text,  # input_files
-        selected_dir["path"],  # selected_dir_path
         color_video,  # color_preview
         depth_video,  # depth_preview
         seg_video,  # seg_preview
-        gr.update(visible=True),  # preview_group
+        gr.update(value=resolution_badge),  # input_resolution (HTML badge)
+        gr.update(value=duration_badge),  # input_duration (HTML badge)
+        gr.update(value=fps_badge),  # input_fps (HTML badge)
+        gr.update(value=codec_badge),  # input_codec (HTML badge)
+        name,  # input_name
+        path,  # input_path
+        created_time,  # input_created
+        files_text,  # input_files
+        selected_dir["path"],  # selected_dir_path
+        gr.update(visible=False),  # preview_group (kept for compatibility)
         video_dir_value,  # create_video_dir (auto-fill)
     )
 
@@ -943,14 +959,67 @@ def create_ui():
 
                         # Individual refresh button removed - using global refresh
 
-                    # Right: Selected input details (smaller)
+                    # Right: UNIFIED Input Details & Video Previews
                     with gr.Column(scale=1):
-                        # Input Details Section with structured fields
+                        # Unified Input Details Card with Video Previews
                         with gr.Group(
-                            elem_classes=["detail-card"], visible=False
+                            elem_classes=["unified-input-card"], visible=False
                         ) as input_details_group:
-                            gr.Markdown("#### 📁 Input Details")
+                            # Title section with visual hierarchy
+                            gr.HTML(
+                                """<div class="input-title">📁 Input Details & Previews</div>
+                                <div class="input-subtitle">Comprehensive view of your selected input</div>"""
+                            )
 
+                            # Video previews at the top (most important)
+                            gr.Markdown("##### 🎬 Video Previews")
+                            with gr.Row(elem_classes=["video-preview-grid"]):
+                                with gr.Column(scale=1):
+                                    gr.HTML('<div class="video-preview-label">Color (RGB)</div>')
+                                    color_preview = gr.Video(
+                                        height=150,
+                                        autoplay=True,
+                                        elem_classes=["video-preview-card"],
+                                    )
+                                with gr.Column(scale=1):
+                                    gr.HTML('<div class="video-preview-label">Depth Map</div>')
+                                    depth_preview = gr.Video(
+                                        height=150,
+                                        autoplay=True,
+                                        elem_classes=["video-preview-card"],
+                                    )
+                                with gr.Column(scale=1):
+                                    gr.HTML('<div class="video-preview-label">Segmentation</div>')
+                                    seg_preview = gr.Video(
+                                        height=150,
+                                        autoplay=True,
+                                        elem_classes=["video-preview-card"],
+                                    )
+
+                            # Metadata section with badges
+                            gr.Markdown("##### 📊 Video Metadata")
+                            with gr.Row():
+                                input_resolution = gr.HTML(
+                                    elem_classes=["metadata-badge"],
+                                    value="<span class='metadata-badge'>Resolution: Loading...</span>",
+                                )
+                                input_duration = gr.HTML(
+                                    elem_classes=["metadata-badge"],
+                                    value="<span class='metadata-badge'>Duration: Loading...</span>",
+                                )
+
+                            with gr.Row():
+                                input_fps = gr.HTML(
+                                    elem_classes=["metadata-badge"],
+                                    value="<span class='metadata-badge'>FPS: Loading...</span>",
+                                )
+                                input_codec = gr.HTML(
+                                    elem_classes=["metadata-badge"],
+                                    value="<span class='metadata-badge'>Codec: Loading...</span>",
+                                )
+
+                            # File information
+                            gr.Markdown("##### 📂 File Information")
                             input_name = gr.Textbox(
                                 label="Name",
                                 interactive=False,
@@ -960,47 +1029,28 @@ def create_ui():
                             input_path = gr.Textbox(
                                 label="Path",
                                 interactive=False,
+                                elem_classes=["loading-skeleton"],
                             )
-
-                            with gr.Row():
-                                input_resolution = gr.Textbox(
-                                    label="Resolution",
-                                    interactive=False,
-                                    scale=1,
-                                )
-                                input_duration = gr.Textbox(
-                                    label="Duration",
-                                    interactive=False,
-                                    scale=2,
-                                )
 
                             input_created = gr.Textbox(
                                 label="Created",
                                 interactive=False,
+                                elem_classes=["loading-skeleton"],
                             )
 
                             input_files = gr.Textbox(
-                                label="Multimodal Control Inputs",
+                                label="Available Control Inputs",
                                 lines=3,
                                 interactive=False,
+                                elem_classes=["loading-skeleton"],
                             )
 
                         # Hidden field to store selected directory path
                         selected_dir_path = gr.Textbox(visible=False)
 
+                        # Keep preview_group for compatibility but hidden
                         with gr.Group(visible=False) as preview_group:
-                            gr.Markdown("#### Video Previews")
-
-                            # Use tabs for cleaner video preview layout
-                            with gr.Tabs():
-                                with gr.Tab("Color (RGB)"):
-                                    color_preview = gr.Video(height=300, autoplay=False)
-
-                                with gr.Tab("Depth Map"):
-                                    depth_preview = gr.Video(height=300, autoplay=False)
-
-                                with gr.Tab("Segmentation"):
-                                    seg_preview = gr.Video(height=300, autoplay=False)
+                            pass
 
                         # Create Prompt Section (moved from Prompts tab)
                         gr.Markdown("#### Create New Prompt")
@@ -1545,13 +1595,9 @@ def create_ui():
 
                                 # Parameters Tab
                                 with gr.Tab("Parameters"):
-                                    history_weights = gr.JSON(
-                                        label="Control Weights"
-                                    )
+                                    history_weights = gr.JSON(label="Control Weights")
 
-                                    history_params = gr.JSON(
-                                        label="Inference Parameters"
-                                    )
+                                    history_params = gr.JSON(label="Inference Parameters")
 
                                 # Logs Tab
                                 with gr.Tab("Logs"):
@@ -2045,7 +2091,7 @@ def create_ui():
             except Exception as e:
                 logger.error("Error during global refresh: %s", str(e))
                 return (
-                    f"❌ Error: {str(e)}",
+                    f"❌ Error: {e!s}",
                     gr.Gallery(),
                     gr.Dataframe(),
                     gr.Gallery(),
@@ -2111,16 +2157,18 @@ def create_ui():
             inputs=[input_gallery],
             outputs=[
                 input_details_group,
-                input_name,
-                input_path,
-                input_resolution,
-                input_duration,
-                input_created,
-                input_files,
-                selected_dir_path,
                 color_preview,
                 depth_preview,
                 seg_preview,
+                input_resolution,  # HTML badge
+                input_duration,  # HTML badge
+                input_fps,  # HTML badge
+                input_codec,  # HTML badge
+                input_name,
+                input_path,
+                input_created,
+                input_files,
+                selected_dir_path,
                 preview_group,
                 create_video_dir,  # Auto-fill the video directory in create prompt form
             ],

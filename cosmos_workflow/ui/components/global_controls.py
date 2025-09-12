@@ -1,7 +1,8 @@
 """Global controls component for the Cosmos Workflow Manager UI."""
 
-import gradio as gr
 from datetime import datetime
+
+import gradio as gr
 
 from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.utils.logging import logger
@@ -61,17 +62,13 @@ def create_global_controls(config: ConfigManager):
 
     # Global timer for auto-refresh
     components["global_refresh_timer"] = gr.Timer(
-        value=float(default_refresh_interval),
-        active=True
+        value=float(default_refresh_interval), active=True
     )
 
     return components
 
 
-def setup_global_refresh_handlers(
-    components: dict,
-    data_loading_functions: dict
-) -> None:
+def setup_global_refresh_handlers(components: dict, data_loading_functions: dict) -> None:
     """Set up event handlers for global refresh controls.
 
     Args:
@@ -99,22 +96,18 @@ def setup_global_refresh_handlers(
 
         except Exception as e:
             logger.error("Error during global refresh: %s", str(e))
-            return {"status": f"❌ Error: {str(e)}"}
+            return {"status": f"❌ Error: {e!s}"}
 
     # Connect timer to refresh function
     if "global_refresh_timer" in components:
         components["global_refresh_timer"].tick(
-            fn=global_refresh_all,
-            inputs=[],
-            outputs=list(components.values())
+            fn=global_refresh_all, inputs=[], outputs=list(components.values())
         )
 
     # Manual refresh button
     if "manual_refresh_btn" in components:
         components["manual_refresh_btn"].click(
-            fn=global_refresh_all,
-            inputs=[],
-            outputs=list(components.values())
+            fn=global_refresh_all, inputs=[], outputs=list(components.values())
         )
 
     # Auto-refresh toggle

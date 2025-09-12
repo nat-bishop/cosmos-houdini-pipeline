@@ -1115,6 +1115,44 @@ def create_ui():
         gr.Markdown("# 🌌 Cosmos Workflow Manager")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
 
+        # Global Refresh Control Panel
+        with gr.Row():
+            with gr.Column(scale=3):
+                # Status indicators
+                refresh_status = gr.Textbox(
+                    label="System Status",
+                    value="✅ Connected | Last refresh: Never",
+                    interactive=False,
+                    container=False,
+                    elem_classes=["status-indicator"],
+                )
+            with gr.Column(scale=1):
+                # Auto-refresh controls
+                with gr.Row():
+                    auto_refresh_enabled = gr.Checkbox(
+                        label="Auto-refresh",
+                        value=True,
+                        container=False,
+                        elem_classes=["auto-refresh-toggle"],
+                    )
+                    refresh_interval = gr.Slider(
+                        minimum=2,
+                        maximum=30,
+                        value=5,
+                        step=1,
+                        label="Interval (s)",
+                        container=False,
+                        visible=True,
+                    )
+                    manual_refresh_btn = gr.Button(
+                        "🔄 Refresh Now",
+                        variant="secondary",
+                        size="sm",
+                    )
+
+        # Global timer for auto-refresh
+        global_refresh_timer = gr.Timer(value=5.0, active=True)
+
         with gr.Tabs():
             # ========================================
             # Tab 1: Inputs Browser with Create Prompt
@@ -1139,9 +1177,7 @@ def create_ui():
                             interactive=False,  # Prevent uploads
                         )
 
-                        refresh_inputs_btn = gr.Button(
-                            "🔄 Refresh Inputs", variant="secondary", size="sm"
-                        )
+                        # Individual refresh button removed - using global refresh
 
                     # Right: Selected input details (smaller)
                     with gr.Column(scale=1):
@@ -1271,12 +1307,7 @@ def create_ui():
                                     maximum=500,
                                     scale=1,
                                 )
-                                ops_refresh_btn = gr.Button(
-                                    "🔄 Refresh",
-                                    variant="secondary",
-                                    size="sm",
-                                    scale=1,
-                                )
+                                # Individual refresh button removed - using global refresh
 
                             # Enhanced prompts table with selection
                             ops_prompts_table = gr.Dataframe(
@@ -1521,9 +1552,7 @@ def create_ui():
                                 info="Number of outputs to display",
                             )
 
-                            refresh_outputs_btn = gr.Button(
-                                "🔄 Refresh Outputs", variant="secondary", size="sm"
-                            )
+                            # Individual refresh button removed - using global refresh
 
                         gr.Markdown("#### Recent Outputs")
                         outputs_table = gr.Dataframe(
@@ -1669,9 +1698,7 @@ def create_ui():
                                 info="Maximum number of runs to display",
                             )
 
-                            history_refresh_btn = gr.Button(
-                                "🔄 Refresh History", variant="secondary", size="sm"
-                            )
+                            # Individual refresh button removed - using global refresh
 
                         # Statistics Panel
                         gr.Markdown("#### 📈 Statistics")
@@ -1695,11 +1722,10 @@ def create_ui():
                                 "Output",
                             ],
                             datatype=["bool", "str", "str", "str", "str", "str", "str"],
-                            interactive=True,
+                            interactive=False,  # Set to False to enable proper row selection
                             col_count=(7, "fixed"),
                             wrap=True,
                             elem_classes=["prompts-table"],
-                            height=600,
                         )
 
                         # Batch operations
@@ -1756,11 +1782,11 @@ def create_ui():
                                 # Parameters Tab
                                 with gr.Tab("Parameters"):
                                     history_weights = gr.JSON(
-                                        label="Control Weights", interactive=False
+                                        label="Control Weights"
                                     )
 
                                     history_params = gr.JSON(
-                                        label="Inference Parameters", interactive=False
+                                        label="Inference Parameters"
                                     )
 
                                 # Logs Tab
@@ -1831,7 +1857,7 @@ def create_ui():
                             interactive=False,
                             lines=5,
                         )
-                        check_jobs_btn = gr.Button("🔄 Refresh Jobs", size="sm")
+                        # Individual refresh button removed - using global refresh
 
                         # Recent Runs
                         gr.Markdown("#### 📋 Recent Runs")
@@ -2020,7 +2046,7 @@ def create_ui():
             """Handle run selection from history table."""
             try:
                 if evt.index is None or not table_data:
-                    return [""] * 12 + [None, ""]
+                    return [""] * 11 + [None, ""]
 
                 # Get selected row
                 row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
@@ -2035,12 +2061,12 @@ def create_ui():
                     run_id = str(row[1]) if len(row) > 1 else ""
 
                 if not run_id or not ops:
-                    return [""] * 12 + [None, ""]
+                    return [""] * 11 + [None, ""]
 
                 # Get full run details
                 run = ops.get_run(run_id)
                 if not run:
-                    return [""] * 12 + [None, ""]
+                    return [""] * 11 + [None, ""]
 
                 # Extract basic info
                 status = run.get("status", "unknown")
@@ -2122,8 +2148,8 @@ def create_ui():
                 ]
 
             except Exception as e:
-                logger.error("Error selecting run from history: {}", e)
-                return [""] * 12 + [None, ""]
+                logger.error("Error selecting run from history: %s", str(e))
+                return [""] * 11 + [None, ""]
 
         def load_run_logs(run_id):
             """Load full log content for a run."""
@@ -2225,9 +2251,97 @@ def create_ui():
         # Event Handlers
         # ============================================
 
-        # Input browser events
-        refresh_inputs_btn.click(fn=load_input_gallery, inputs=[], outputs=[input_gallery])
+        # Global refresh function
+        def global_refresh_all():
+            """Refresh all data across all tabs."""
+            from datetime import datetime
 
+            try:
+                # Get current status
+                status = f"✅ Connected | Last refresh: {datetime.now().strftime('%H:%M:%S')}"
+
+                # Load all data
+                inputs_data = load_input_gallery()
+                prompts_data = load_ops_prompts(50)
+                outputs_data = load_outputs("all", "all", 50)
+                history_data = load_run_history("all", "all", "", 100)
+                jobs_data = check_running_jobs()
+
+                return (
+                    status,  # refresh_status
+                    inputs_data,  # input_gallery
+                    prompts_data,  # ops_prompts_table
+                    outputs_data[0],  # output_gallery
+                    outputs_data[1],  # outputs_table
+                    history_data[0],  # history_table
+                    history_data[1],  # history_stats
+                    jobs_data[0],  # running_jobs_display
+                    jobs_data[1],  # job_status
+                )
+            except Exception as e:
+                logger.error("Error during global refresh: %s", str(e))
+                return (
+                    f"❌ Error: {str(e)}",
+                    gr.Gallery(),
+                    gr.Dataframe(),
+                    gr.Gallery(),
+                    gr.Dataframe(),
+                    gr.Dataframe(),
+                    gr.Textbox(),
+                    gr.Textbox(),
+                    gr.Textbox(),
+                )
+
+        # Global refresh controls
+        # Connect timer to refresh function
+        global_refresh_timer.tick(
+            fn=global_refresh_all,
+            inputs=[],
+            outputs=[
+                refresh_status,
+                input_gallery,
+                ops_prompts_table,
+                output_gallery,
+                outputs_table,
+                history_table,
+                history_stats,
+                running_jobs_display,
+                job_status,
+            ],
+        )
+
+        # Manual refresh button
+        manual_refresh_btn.click(
+            fn=global_refresh_all,
+            inputs=[],
+            outputs=[
+                refresh_status,
+                input_gallery,
+                ops_prompts_table,
+                output_gallery,
+                outputs_table,
+                history_table,
+                history_stats,
+                running_jobs_display,
+                job_status,
+            ],
+        )
+
+        # Auto-refresh toggle
+        auto_refresh_enabled.change(
+            fn=lambda enabled: gr.Timer(active=enabled),
+            inputs=[auto_refresh_enabled],
+            outputs=[global_refresh_timer],
+        )
+
+        # Refresh interval change
+        refresh_interval.change(
+            fn=lambda interval: gr.Timer(value=interval, active=True),
+            inputs=[refresh_interval],
+            outputs=[global_refresh_timer],
+        )
+
+        # Input browser events
         input_gallery.select(
             fn=on_input_select,
             inputs=[input_gallery],
@@ -2456,11 +2570,7 @@ def create_ui():
                 return output_path
             return None
 
-        refresh_outputs_btn.click(
-            fn=load_outputs,
-            inputs=[output_status_filter, output_model_filter, output_limit],
-            outputs=[output_gallery, outputs_table],
-        )
+        # refresh_outputs_btn.click removed - using global refresh
 
         output_gallery.select(
             fn=select_output,
@@ -2483,7 +2593,7 @@ def create_ui():
         # Download functionality will be handled through the video component itself
 
         # Operations tab events
-        ops_refresh_btn.click(fn=load_ops_prompts, inputs=[ops_limit], outputs=[ops_prompts_table])
+        # ops_refresh_btn.click removed - using global refresh
 
         # Selection controls
         clear_selection_btn.click(
@@ -2553,11 +2663,7 @@ def create_ui():
         )
 
         # Log monitor events (existing)
-        check_jobs_btn.click(
-            fn=check_running_jobs,
-            inputs=[],
-            outputs=[running_jobs_display, job_status],
-        )
+        # check_jobs_btn.click removed - using global refresh
 
         stream_btn.click(
             fn=start_log_streaming,
@@ -2577,11 +2683,7 @@ def create_ui():
         )
 
         # Run History tab events
-        history_refresh_btn.click(
-            fn=load_run_history,
-            inputs=[history_status_filter, history_date_filter, history_search, history_limit],
-            outputs=[history_table, history_stats],
-        )
+        # history_refresh_btn.click removed - using global refresh
 
         history_table.select(
             fn=select_run_from_history,

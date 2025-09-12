@@ -26,6 +26,7 @@ workflow management system from input preparation to output generation.
 import atexit
 import os
 import signal
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -79,8 +80,6 @@ def cleanup_on_shutdown(signum=None, frame=None):
 # Register cleanup - reuse existing kill_containers() method
 atexit.register(cleanup_on_shutdown)
 # Only register signal handlers in main thread
-import threading
-
 if threading.current_thread() is threading.main_thread():
     signal.signal(signal.SIGINT, cleanup_on_shutdown)
     signal.signal(signal.SIGTERM, cleanup_on_shutdown)
@@ -1654,307 +1653,6 @@ def create_ui():
                                                 runs_load_logs_btn = gr.Button("📄 Load Full Logs")
                                                 gr.Button("📋 Copy Logs")
 
-            with gr.Tab("🎬 Outputs (OLD)", id=30, visible=False):
-                gr.Markdown("### Output Gallery")
-                gr.Markdown("View and download generated video outputs from completed runs")
-
-                with gr.Row():
-                    # Left: Filters and run list
-                    with gr.Column(scale=1):
-                        gr.Markdown("#### Filter Options")
-
-                        with gr.Group():
-                            output_status_filter = gr.Dropdown(
-                                choices=["completed", "all"],
-                                value="completed",
-                                label="Run Status",
-                                info="Filter by run status",
-                            )
-
-                            output_model_filter = gr.Dropdown(
-                                choices=["all", "transfer", "upscale"],
-                                value="all",
-                                label="Model Type",
-                                info="Filter by model type",
-                            )
-
-                            output_limit = gr.Number(
-                                value=20,
-                                label="Limit",
-                                minimum=1,
-                                maximum=100,
-                                info="Number of outputs to display",
-                            )
-
-                            # Individual refresh button removed - using global refresh
-
-                        gr.Markdown("#### Recent Outputs")
-                        outputs_table = gr.Dataframe(
-                            headers=["Run ID", "Prompt", "Status", "Created"],
-                            datatype=["str", "str", "str", "str"],
-                            interactive=False,
-                            wrap=True,
-                        )
-
-                    # Right: Video gallery and details
-                    with gr.Column(scale=2):
-                        gr.Markdown("#### Generated Videos")
-
-                        output_gallery = gr.Gallery(
-                            label="Output Videos",
-                            show_label=False,
-                            elem_id="output_gallery",
-                            columns=3,
-                            rows=2,
-                            object_fit="contain",
-                            height=400,
-                            preview=False,
-                            allow_preview=False,
-                            interactive=False,  # Prevent uploads - this is output only
-                        )
-
-                        # Selected output details
-                        with gr.Group(
-                            visible=False, elem_classes=["detail-card"]
-                        ) as output_details_group:
-                            gr.Markdown("#### 🎬 Output Details")
-
-                            # Structured output fields matching Prompt Details style
-                            output_run_id = gr.Textbox(
-                                label="Run ID",
-                                interactive=False,
-                                elem_classes=["loading-skeleton"],
-                            )
-
-                            with gr.Row():
-                                output_status = gr.Textbox(
-                                    label="Status",
-                                    interactive=False,
-                                    scale=1,
-                                )
-                                output_created = gr.Textbox(
-                                    label="Created",
-                                    interactive=False,
-                                    scale=3,
-                                )
-
-                            output_prompt_name = gr.Textbox(
-                                label="Prompt Name",
-                                interactive=False,
-                            )
-
-                            output_prompt_text = gr.Textbox(
-                                label="Prompt Text",
-                                lines=3,
-                                interactive=False,
-                            )
-
-                            gr.Markdown("#### Input Videos")
-                            with gr.Row(equal_height=True):
-                                # Create dynamic video components for various control types
-                                # Support up to 6 input videos (color + 5 controls)
-                                output_input_videos = []
-                                for _i in range(6):
-                                    video = gr.Video(
-                                        label="Input",
-                                        height=180,  # Consistent height for all inputs
-                                        autoplay=False,
-                                        visible=False,
-                                    )
-                                    output_input_videos.append(video)
-
-                            with gr.Row():
-                                output_video = gr.Video(
-                                    label="Generated Video", height=350, autoplay=False
-                                )
-
-                            with gr.Row():
-                                gr.Button("💾 Download Video", variant="primary", size="sm")
-
-                                output_path_display = gr.Textbox(
-                                    label="Output Path", interactive=False, visible=False
-                                )
-
-            # ========================================
-            # Tab 4: Run History - Comprehensive Run Management
-            # ========================================
-            with gr.Tab("📊 Run History (OLD)", id=40, visible=False):
-                gr.Markdown("### Comprehensive Run History & Management")
-                gr.Markdown("View, filter, and manage all runs with detailed information")
-
-                with gr.Row():
-                    # Left: Filters and controls
-                    with gr.Column(scale=1):
-                        gr.Markdown("#### 🔍 Filter Options")
-
-                        with gr.Group(elem_classes=["detail-card"]):
-                            gr.Dropdown(
-                                choices=[
-                                    "all",
-                                    "completed",
-                                    "running",
-                                    "pending",
-                                    "failed",
-                                    "cancelled",
-                                ],
-                                value="all",
-                                label="Status Filter",
-                                info="Filter runs by status",
-                            )
-
-                            gr.Dropdown(
-                                choices=[
-                                    "all",
-                                    "today",
-                                    "yesterday",
-                                    "last_7_days",
-                                    "last_30_days",
-                                ],
-                                value="all",
-                                label="Date Range",
-                                info="Filter by creation date",
-                            )
-
-                            gr.Textbox(
-                                label="Search",
-                                placeholder="Search by prompt text or ID...",
-                                info="Search in prompt text or run ID",
-                            )
-
-                            gr.Number(
-                                value=100,
-                                label="Max Results",
-                                minimum=10,
-                                maximum=500,
-                                info="Maximum number of runs to display",
-                            )
-
-                            # Individual refresh button removed - using global refresh
-
-                        # Statistics Panel
-                        gr.Markdown("#### 📈 Statistics")
-                        with gr.Group(elem_classes=["detail-card"]):
-                            history_stats = gr.Markdown(
-                                value="Loading statistics...", elem_classes=["loading-skeleton"]
-                            )
-
-                    # Center: Run table with enhanced display
-                    with gr.Column(scale=3):
-                        gr.Markdown("#### 📋 Run Records")
-
-                        history_table = gr.Dataframe(
-                            headers=[
-                                "☑",
-                                "Run ID",
-                                "Prompt",
-                                "Status",
-                                "Duration",
-                                "Created",
-                                "Output",
-                            ],
-                            datatype=["bool", "str", "str", "str", "str", "str", "str"],
-                            interactive=False,  # Set to False to enable proper row selection
-                            col_count=(7, "fixed"),
-                            wrap=True,
-                            elem_classes=["prompts-table"],
-                        )
-
-                        # Batch operations
-                        with gr.Row(elem_classes=["batch-operation"]):
-                            history_select_all_btn = gr.Button(
-                                "☑ Select All", size="sm", variant="secondary"
-                            )
-                            history_clear_selection_btn = gr.Button(
-                                "☐ Clear Selection", size="sm", variant="secondary"
-                            )
-                            history_selection_count = gr.Markdown("**0** runs selected")
-                            history_delete_selected_btn = gr.Button(
-                                "🗑️ Delete Selected", size="sm", variant="stop", visible=False
-                            )
-
-                    # Right: Detailed run information
-                    with gr.Column(scale=2):
-                        with gr.Group(elem_classes=["detail-card"]):
-                            gr.Markdown("#### 📝 Run Details")
-
-                            with gr.Tabs():
-                                # General Info Tab
-                                with gr.Tab("General"):
-                                    history_run_id = gr.Textbox(
-                                        label="Run ID",
-                                        interactive=False,
-                                        elem_classes=["loading-skeleton"],
-                                    )
-
-                                    with gr.Row():
-                                        history_status = gr.Textbox(
-                                            label="Status", interactive=False, scale=1
-                                        )
-                                        history_duration = gr.Textbox(
-                                            label="Duration", interactive=False, scale=1
-                                        )
-                                        history_run_type = gr.Textbox(
-                                            label="Run Type", interactive=False, scale=1
-                                        )
-
-                                    history_prompt_name = gr.Textbox(
-                                        label="Prompt Name", interactive=False
-                                    )
-
-                                    history_prompt_text = gr.Textbox(
-                                        label="Prompt Text", lines=4, interactive=False
-                                    )
-
-                                    with gr.Row():
-                                        history_created = gr.Textbox(
-                                            label="Created At", interactive=False, scale=1
-                                        )
-                                        history_completed = gr.Textbox(
-                                            label="Completed At", interactive=False, scale=1
-                                        )
-
-                                # Parameters Tab
-                                with gr.Tab("Parameters"):
-                                    gr.Markdown("#### Execution Configuration")
-                                    history_execution_config = gr.JSON(
-                                        label="", container=False, elem_classes=["json-display"]
-                                    )
-
-                                # Logs Tab
-                                with gr.Tab("Logs"):
-                                    history_log_path = gr.Textbox(
-                                        label="Log File Path", interactive=False
-                                    )
-
-                                    history_log_content = gr.Textbox(
-                                        label="Log Output",
-                                        lines=15,
-                                        interactive=False,
-                                        show_copy_button=True,
-                                    )
-
-                                    history_load_logs_btn = gr.Button(
-                                        "📄 Load Full Logs", size="sm"
-                                    )
-
-                                # Output Tab
-                                with gr.Tab("Output"):
-                                    history_output_video = gr.Video(
-                                        label="Generated Video", height=400, autoplay=False
-                                    )
-
-                                    history_output_path = gr.Textbox(
-                                        label="Output Path", interactive=False
-                                    )
-
-                                    with gr.Row():
-                                        gr.Button(
-                                            "💾 Download", variant="primary", size="sm"
-                                        )  # TODO: Add download handler
-                                        gr.Button(
-                                            "🗑️ Delete Run", variant="stop", size="sm"
-                                        )  # TODO: Add delete handler
-
             # ========================================
             # Tab 5: Jobs & Queue (formerly Log Monitor)
             # ========================================
@@ -2025,462 +1723,10 @@ def create_ui():
                             )
                             gr.Button("🗑️ Clear Logs", size="sm", scale=1)
 
-        # ============================================
-        # Run History Functions
-        # ============================================
-
-        def load_run_history(status_filter, date_filter, search_query, limit):
-            """Load run history with filtering and search."""
-            try:
-                if not ops:
-                    return [], "No connection to backend"
-
-                # Get all runs
-                runs = ops.list_runs(
-                    status=status_filter if status_filter != "all" else None, limit=int(limit)
-                )
-
-                # Apply date filter
-                from datetime import datetime, timedelta, timezone
-
-                now = datetime.now(timezone.utc)
-
-                if date_filter == "today":
-                    cutoff = now - timedelta(days=1)
-                elif date_filter == "yesterday":
-                    cutoff = now - timedelta(days=2)
-                    end_cutoff = now - timedelta(days=1)
-                elif date_filter == "last_7_days":
-                    cutoff = now - timedelta(days=7)
-                elif date_filter == "last_30_days":
-                    cutoff = now - timedelta(days=30)
-                else:
-                    cutoff = None
-
-                if cutoff:
-                    filtered_runs = []
-                    for run in runs:
-                        created = run.get("created_at", "")
-                        if created:
-                            try:
-                                run_time = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                                if date_filter == "yesterday":
-                                    if cutoff <= run_time < end_cutoff:
-                                        filtered_runs.append(run)
-                                elif run_time >= cutoff:
-                                    filtered_runs.append(run)
-                            except Exception:
-                                pass  # Skip invalid date formats
-                    runs = filtered_runs
-
-                # Apply search filter
-                if search_query and search_query.strip():
-                    search_lower = search_query.lower()
-                    filtered_runs = []
-                    for run in runs:
-                        # Search in run ID
-                        if search_lower in run.get("id", "").lower():
-                            filtered_runs.append(run)
-                            continue
-
-                        # Search in prompt text
-                        prompt_id = run.get("prompt_id")
-                        if prompt_id:
-                            try:
-                                prompt = ops.get_prompt(prompt_id)
-                                if prompt and search_lower in prompt.get("prompt_text", "").lower():
-                                    filtered_runs.append(run)
-                            except Exception:
-                                pass  # Skip invalid date formats
-                    runs = filtered_runs
-
-                # Format table data
-                table_data = []
-                for run in runs:
-                    run_id = run.get("id", "")
-                    status = run.get("status", "unknown")
-                    created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-
-                    # Calculate duration for completed runs
-                    duration = "-"
-                    if status == "completed" and run.get("completed_at"):
-                        try:
-                            start = datetime.fromisoformat(
-                                run.get("created_at", "").replace("Z", "+00:00")
-                            )
-                            end = datetime.fromisoformat(
-                                run.get("completed_at", "").replace("Z", "+00:00")
-                            )
-                            delta = end - start
-                            minutes = int(delta.total_seconds() / 60)
-                            seconds = int(delta.total_seconds() % 60)
-                            duration = f"{minutes}m {seconds}s"
-                        except Exception:
-                            pass  # Skip invalid date formats
-
-                    # Get prompt name
-                    prompt_name = "-"
-                    prompt_id = run.get("prompt_id")
-                    if prompt_id:
-                        try:
-                            prompt = ops.get_prompt(prompt_id)
-                            if prompt:
-                                prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
-                                if len(prompt_name) > 30:
-                                    prompt_name = prompt_name[:27] + "..."
-                        except Exception:
-                            pass  # Skip invalid date formats
-
-                    # Check for output
-                    output_exists = "No"
-                    output_path = Path("outputs") / f"run_{run_id}" / "outputs" / "output.mp4"
-                    if output_path.exists():
-                        output_exists = "Yes"
-
-                    table_data.append(
-                        [
-                            False,  # Checkbox
-                            run_id,
-                            prompt_name,
-                            status,
-                            duration,
-                            created,
-                            output_exists,
-                        ]
-                    )
-
-                # Calculate statistics
-                total = len(runs)
-                completed = sum(1 for r in runs if r.get("status") == "completed")
-                running = sum(1 for r in runs if r.get("status") == "running")
-                pending = sum(1 for r in runs if r.get("status") == "pending")
-                failed = sum(1 for r in runs if r.get("status") == "failed")
-
-                stats_text = f"""**Total Runs:** {total}
-
-**Status Breakdown:**
-- ✅ Completed: {completed}
-- 🔄 Running: {running}
-- ⏳ Pending: {pending}
-- ❌ Failed: {failed}
-
-**Success Rate:** {(completed / total * 100) if total > 0 else 0:.1f}%
-"""
-
-                return table_data, stats_text
-
-            except Exception as e:
-                logger.error("Failed to load run history: {}", e)
-                return [], f"Error: {e}"
-
-        def get_input_videos_for_run(run_id, ops):
-            """Get all input videos used for a run, including auto-generated controls.
-
-            Returns:
-                dict: Dictionary with control names as keys and video paths as values
-            """
-            import json
-
-            inputs = {}
-
-            try:
-                # Get the run and prompt data
-                run = ops.get_run(run_id)
-                if not run:
-                    return inputs
-
-                prompt_id = run.get("prompt_id")
-                if not prompt_id:
-                    return inputs
-
-                prompt = ops.get_prompt(prompt_id)
-                if not prompt:
-                    return inputs
-
-                # Get original video directory from prompt
-                video_path = prompt.get("inputs", {}).get("video", "")
-                if video_path:
-                    original_video_dir = Path(video_path).parent
-                    color_path = original_video_dir / "color.mp4"
-                    if color_path.exists():
-                        inputs["color"] = str(color_path)
-
-                # Check for spec.json (available immediately) to determine which controls were used
-                spec_path = Path("outputs") / f"run_{run_id}" / "inputs" / "spec.json"
-                if spec_path.exists():
-                    with open(spec_path) as f:
-                        prompt_spec = json.load(f)
-
-                    # Check all control types dynamically (not just hardcoded ones)
-                    # Common control types: edge, depth, seg, vis, normal, etc.
-                    for key, value in prompt_spec.items():
-                        # Skip non-control keys
-                        if not isinstance(value, dict) or "control_weight" not in value:
-                            continue
-
-                        control = key
-                        control_config = value
-                        weight = control_config.get("control_weight", 0)
-
-                        if weight > 0:
-                            # Check if input was provided or auto-generated
-                            if "input_control" in control_config:
-                                # Use original input
-                                # Map control name to file name (seg -> segmentation, others stay same)
-                                if control == "seg":
-                                    control_file = original_video_dir / "segmentation.mp4"
-                                else:
-                                    control_file = original_video_dir / f"{control}.mp4"
-
-                                if control_file.exists():
-                                    inputs[control] = str(control_file)
-                            else:
-                                # Use auto-generated control
-                                generated_path = (
-                                    Path("outputs")
-                                    / f"run_{run_id}"
-                                    / "outputs"
-                                    / f"{control}_input_control.mp4"
-                                )
-                                if generated_path.exists():
-                                    inputs[control] = str(generated_path)
-
-            except Exception as e:
-                logger.error("Error getting input videos for run {}: {}", run_id, e)
-
-            return inputs
-
-        def select_run_from_history(evt: gr.SelectData, table_data):
-            """Handle run selection from history table."""
-            try:
-                import pandas as pd
-
-                # Helper to create empty returns
-                def empty_return():
-                    return [
-                        gr.update(value=""),  # history_run_id
-                        gr.update(value=""),  # history_status
-                        gr.update(value=""),  # history_duration
-                        gr.update(value=""),  # history_run_type
-                        gr.update(value=""),  # history_prompt_name
-                        gr.update(value=""),  # history_prompt_text
-                        gr.update(value=""),  # history_created
-                        gr.update(value=""),  # history_completed
-                        gr.update(value={}),  # history_execution_config
-                        gr.update(value=""),  # history_log_path
-                        gr.update(value=""),  # history_log_content
-                        gr.update(value=None),  # history_output_video
-                        gr.update(value=""),  # history_output_path
-                    ]
-
-                if evt.index is None or table_data is None:
-                    return empty_return()
-
-                # Check if table_data is empty DataFrame
-                if isinstance(table_data, pd.DataFrame) and table_data.empty:
-                    return empty_return()
-
-                # Get selected row
-                row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
-
-                if isinstance(table_data, pd.DataFrame):
-                    row = table_data.iloc[row_idx]
-                    run_id = str(row.iloc[1]) if len(row) > 1 else ""
-                else:
-                    row = table_data[row_idx] if row_idx < len(table_data) else []
-                    run_id = str(row[1]) if len(row) > 1 else ""
-
-                if not run_id or not ops:
-                    return empty_return()
-
-                # Get full run details
-                run = ops.get_run(run_id)
-                if not run:
-                    return empty_return()
-
-                # Extract basic info
-                status = run.get("status", "unknown")
-                run_type = run.get("model_type", "unknown").title()  # Get run type and capitalize
-                created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-                completed = run.get("completed_at", "")[:19] if run.get("completed_at") else "-"
-
-                # Calculate duration
-                duration = "-"
-                if status == "completed" and run.get("completed_at"):
-                    try:
-                        from datetime import datetime
-
-                        start = datetime.fromisoformat(
-                            run.get("created_at", "").replace("Z", "+00:00")
-                        )
-                        end = datetime.fromisoformat(
-                            run.get("completed_at", "").replace("Z", "+00:00")
-                        )
-                        delta = end - start
-                        minutes = int(delta.total_seconds() / 60)
-                        seconds = int(delta.total_seconds() % 60)
-                        duration = f"{minutes}m {seconds}s"
-                    except Exception:
-                        pass  # Skip invalid data
-
-                # Get prompt details
-                prompt_name = ""
-                prompt_text = ""
-                prompt_id = run.get("prompt_id")
-                if prompt_id:
-                    try:
-                        prompt = ops.get_prompt(prompt_id)
-                        if prompt:
-                            prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
-                            prompt_text = prompt.get("prompt_text", "")
-                    except Exception:
-                        pass  # Skip invalid data
-
-                # Get execution config directly from run
-                execution_config = run.get("execution_config", {})
-
-                # Get log path
-                log_path = run.get("log_path", "")
-                log_content = "Click 'Load Full Logs' to view log output"
-
-                # Get output path and video
-                output_path = ""
-                output_video = None
-                run_output_dir = Path("outputs") / f"run_{run_id}" / "outputs"
-                video_file = run_output_dir / "output.mp4"
-                if video_file.exists():
-                    output_path = str(video_file)
-                    output_video = str(video_file)
-
-                return [
-                    gr.update(value=run_id),  # history_run_id
-                    gr.update(value=status),  # history_status
-                    gr.update(value=duration),  # history_duration
-                    gr.update(value=run_type),  # history_run_type
-                    gr.update(value=prompt_name),  # history_prompt_name
-                    gr.update(value=prompt_text),  # history_prompt_text
-                    gr.update(value=created),  # history_created
-                    gr.update(value=completed),  # history_completed
-                    gr.update(value=execution_config),  # history_execution_config
-                    gr.update(value=log_path),  # history_log_path
-                    gr.update(value=log_content),  # history_log_content
-                    gr.update(value=output_video),  # history_output_video
-                    gr.update(value=output_path),  # history_output_path
-                ]
-
-            except Exception as e:
-                logger.error("Error selecting run from history: {}", e)
-                return [
-                    gr.update(value=""),  # history_run_id
-                    gr.update(value=""),  # history_status
-                    gr.update(value=""),  # history_duration
-                    gr.update(value=""),  # history_run_type
-                    gr.update(value=""),  # history_prompt_name
-                    gr.update(value=""),  # history_prompt_text
-                    gr.update(value=""),  # history_created
-                    gr.update(value=""),  # history_completed
-                    gr.update(value={}),  # history_execution_config
-                    gr.update(value=""),  # history_log_path
-                    gr.update(value=""),  # history_log_content
-                    gr.update(value=None),  # history_output_video
-                    gr.update(value=""),  # history_output_path
-                ]
-
-        def load_run_logs(run_id):
-            """Load full log content for a run."""
-            try:
-                if not run_id or not ops:
-                    return "No run selected"
-
-                run = ops.get_run(run_id)
-                if not run:
-                    return "Run not found"
-
-                log_path = run.get("log_path", "")
-                if not log_path:
-                    return "No log path available for this run"
-
-                # Try to read log file
-                log_file = Path(log_path)
-                if log_file.exists():
-                    with open(log_file) as f:
-                        content = f.read()
-                        if content:
-                            return content
-                        else:
-                            return "Log file is empty"
-                else:
-                    return f"Log file not found: {log_path}"
-
-            except Exception as e:
-                logger.error("Error loading logs: {}", e)
-                return f"Error loading logs: {e}"
-
-        def update_history_selection_count(table_data):
-            """Update the selection count for history table."""
-            try:
-                if table_data is None:
-                    return "**0** runs selected", gr.update(visible=False)
-
-                import pandas as pd
-
-                if isinstance(table_data, pd.DataFrame):
-                    if not table_data.empty:
-                        first_col_values = (
-                            table_data.values[:, 0] if table_data.shape[1] > 0 else []
-                        )
-                        selected = sum(1 for val in first_col_values if val is True)
-                    else:
-                        selected = 0
-                else:
-                    selected = sum(1 for row in table_data if len(row) > 0 and row[0] is True)
-
-                count_text = f"**{selected}** run{'s' if selected != 1 else ''} selected"
-                show_delete = selected > 0
-
-                return count_text, gr.update(visible=show_delete)
-
-            except Exception as e:
-                logger.debug("Error counting selection: {}", e)
-                return "**0** runs selected", gr.update(visible=False)
-
-        def select_all_runs(table_data):
-            """Select all runs in the history table."""
-            if table_data is None:
-                return []
-
-            import pandas as pd
-
-            if isinstance(table_data, pd.DataFrame):
-                table_data = table_data.copy()
-                table_data.iloc[:, 0] = True
-                return table_data
-            else:
-                updated_data = []
-                for row in table_data:
-                    new_row = row.copy() if isinstance(row, list) else list(row)
-                    new_row[0] = True
-                    updated_data.append(new_row)
-                return updated_data
-
-        def clear_all_runs(table_data):
-            """Clear all selections in the history table."""
-            if table_data is None:
-                return []
-
-            import pandas as pd
-
-            if isinstance(table_data, pd.DataFrame):
-                table_data = table_data.copy()
-                table_data.iloc[:, 0] = False
-                return table_data
-            else:
-                updated_data = []
-                for row in table_data:
-                    new_row = row.copy() if isinstance(row, list) else list(row)
-                    new_row[0] = False
-                    updated_data.append(new_row)
-                return updated_data
+            # ============================================
+            # Run History Functions
+            # ============================================
+            # REMOVED: load_run_history function - was used by old Run History tab
 
         # ============================================
         # Event Handlers
@@ -2493,7 +1739,7 @@ def create_ui():
 
             try:
                 # Get current status
-                status = f"✅ Connected | Last refresh: {datetime.now().strftime('%H:%M:%S')}"
+                status = f"✅ Connected | Last refresh: {datetime.now(timezone.utc).strftime('%H:%M:%S')}"
 
                 # Load all data
                 inputs_data = load_input_gallery()
@@ -2624,7 +1870,7 @@ def create_ui():
                             created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
                         else:
                             created = now
-                    except:
+                    except Exception:
                         created = now
 
                     # Apply date filter
@@ -2693,7 +1939,7 @@ def create_ui():
                             minutes = int(duration_delta.total_seconds() / 60)
                             seconds = int(duration_delta.total_seconds() % 60)
                             duration = f"{minutes}m {seconds}s"
-                    except:
+                    except Exception:
                         pass
 
                     # Format dates
@@ -3004,21 +2250,34 @@ def create_ui():
                                 video_path_stripped = video_path.strip()
 
                                 # Skip if it's just the project root or problematic paths
-                                if video_path_stripped in [
+                                # Check against known problematic paths WITHOUT calling Path.cwd()
+                                problematic_paths = [
                                     ".",
                                     "",
                                     "F:\\Art\\cosmos-houdini-experiments",
                                     "F:/Art/cosmos-houdini-experiments",
+                                    "f:\\art\\cosmos-houdini-experiments",  # lowercase variant
+                                    "f:/art/cosmos-houdini-experiments",
+                                ]
+
+                                if video_path_stripped.lower() in [
+                                    p.lower() for p in problematic_paths
                                 ]:
                                     logger.debug(
-                                        f"Skipping problematic path: '{video_path_stripped}'"
+                                        f"Skipping problematic path: '{video_path_stripped}' (matches project root)"
                                     )
                                 else:
-                                    # Convert to Path object
-                                    video_path_obj = Path(video_path_stripped)
+                                    # Convert to Path object (wrap in try-catch for permission errors)
+                                    try:
+                                        video_path_obj = Path(video_path_stripped)
+                                    except (PermissionError, OSError) as e:
+                                        logger.warning(
+                                            f"Could not create Path object from '{video_path_stripped}': {e}"
+                                        )
+                                        video_path_obj = None
 
                                     # Make absolute if relative (safer approach)
-                                    if not video_path_obj.is_absolute():
+                                    if video_path_obj and not video_path_obj.is_absolute():
                                         try:
                                             # Try to resolve, but catch any permission errors
                                             video_path_obj = video_path_obj.resolve(strict=False)
@@ -3031,28 +2290,55 @@ def create_ui():
 
                                     if video_path_obj:
                                         # Check if this is a file path (not just a directory)
-                                        if video_path_obj.is_file():
+                                        # Wrap in try-catch as these calls can trigger permission errors on Windows
+                                        try:
+                                            is_file = video_path_obj.is_file()
+                                            is_dir = video_path_obj.is_dir()
+                                        except (PermissionError, OSError) as e:
+                                            logger.warning(
+                                                f"Could not check if path is file/dir '{video_path_obj}': {e}"
+                                            )
+                                            is_file = False
+                                            is_dir = False
+
+                                        if is_file:
                                             # Get the directory containing the videos
                                             video_dir = video_path_obj.parent
-                                            if video_dir.exists() and video_dir.is_dir():
-                                                # Collect color, depth, and segmentation videos from input directory
-                                                for video_file in sorted(video_dir.glob("*.mp4")):
+                                            try:
+                                                if video_dir.exists() and video_dir.is_dir():
+                                                    # Collect color, depth, and segmentation videos from input directory
+                                                    for video_file in sorted(
+                                                        video_dir.glob("*.mp4")
+                                                    ):
+                                                        if video_file.is_file():
+                                                            input_videos.append(
+                                                                str(video_file.resolve())
+                                                            )
+                                                    logger.info(
+                                                        f"Found {len(input_videos)} videos in {video_dir}"
+                                                    )
+                                                else:
+                                                    logger.warning(
+                                                        f"Video directory does not exist: {video_dir}"
+                                                    )
+                                            except (PermissionError, OSError) as e:
+                                                logger.warning(
+                                                    f"Error accessing video directory: {e}"
+                                                )
+                                        elif is_dir:
+                                            # If it's a directory, look for videos directly in it
+                                            try:
+                                                for video_file in sorted(
+                                                    video_path_obj.glob("*.mp4")
+                                                ):
                                                     if video_file.is_file():
                                                         input_videos.append(
                                                             str(video_file.resolve())
                                                         )
-                                                logger.info(
-                                                    f"Found {len(input_videos)} videos in {video_dir}"
-                                                )
-                                            else:
+                                            except (PermissionError, OSError) as e:
                                                 logger.warning(
-                                                    f"Video directory does not exist: {video_dir}"
+                                                    f"Error scanning directory for videos: {e}"
                                                 )
-                                        elif video_path_obj.is_dir():
-                                            # If it's a directory, look for videos directly in it
-                                            for video_file in sorted(video_path_obj.glob("*.mp4")):
-                                                if video_file.is_file():
-                                                    input_videos.append(str(video_file.resolve()))
                                             logger.info(
                                                 f"Found {len(input_videos)} videos in directory {video_path_obj}"
                                             )
@@ -3091,7 +2377,7 @@ def create_ui():
                         with open(log_path) as f:
                             lines = f.readlines()
                             log_content = "".join(lines[-15:])
-                    except:
+                    except Exception:
                         log_content = "Error reading log file"
 
                 # Format dates
@@ -3120,7 +2406,7 @@ def create_ui():
                         minutes = int(duration_delta.total_seconds() / 60)
                         seconds = int(duration_delta.total_seconds() % 60)
                         duration = f"{minutes}m {seconds}s"
-                except:
+                except Exception:
                     pass
 
                 # Construct the actual output video path
@@ -3260,239 +2546,8 @@ def create_ui():
                 return f"Error reading log: {e!s}"
 
         # Output gallery events
-        def load_outputs(status_filter, model_filter, limit):
-            """Load outputs from completed runs using CosmosAPI."""
-            try:
-                if not ops:
-                    logger.warning("CosmosAPI not initialized")
-                    return [], []
-
-                # Use CosmosAPI to get runs
-                runs = ops.list_runs(
-                    status=status_filter if status_filter != "all" else None, limit=int(limit)
-                )
-                logger.info("Found {} runs from CosmosAPI", len(runs))
-
-                # Filter by model type if specified
-                if model_filter != "all":
-                    runs = [r for r in runs if r.get("model_type") == model_filter]
-
-                # Filter runs with video outputs
-                runs_with_outputs = []
-                gallery_items = []
-
-                for run in runs:
-                    # Construct the path to the output video based on run ID
-                    # Run IDs are in format "rs_XXXXX" and directories are "run_rs_XXXXX"
-                    run_id = run.get("id")
-                    output_path = Path("outputs") / f"run_{run_id}" / "outputs" / "output.mp4"
-                    logger.debug("Checking for output at: {}", output_path)
-
-                    if output_path.exists():
-                        runs_with_outputs.append(run)
-
-                        # Get prompt text from the prompt if available
-                        prompt_text = "No prompt"
-                        prompt_id = run.get("prompt_id")
-                        if prompt_id:
-                            try:
-                                prompt = ops.get_prompt(prompt_id)
-                                if prompt:
-                                    prompt_text = prompt.get("prompt_text", "No prompt")
-                            except Exception as e:
-                                logger.debug(f"Could not get prompt {prompt_id}: {e}")
-                                prompt_text = "N/A"
-
-                        # Add to gallery (path, label)
-                        gallery_items.append(
-                            (str(output_path), f"Run {run['id'][:8]}: {prompt_text[:50]}...")
-                        )
-
-                # Create table data
-                table_data = []
-                for run in runs_with_outputs[:10]:  # Limit table to 10 rows
-                    # Get prompt name
-                    prompt_name = "N/A"
-                    prompt_id = run.get("prompt_id")
-                    if prompt_id:
-                        try:
-                            prompt = ops.get_prompt(prompt_id)
-                            if prompt:
-                                prompt_name = prompt.get("parameters", {}).get(
-                                    "name", prompt.get("prompt_text", "N/A")[:30]
-                                )
-                                if len(prompt_name) > 30:
-                                    prompt_name = prompt_name[:30] + "..."
-                        except Exception as e:
-                            logger.debug(f"Could not get prompt {prompt_id}: {e}")
-                            prompt_name = "N/A"
-
-                    table_data.append(
-                        [
-                            run["id"],  # Store full ID, Gradio will truncate display
-                            prompt_name,
-                            run.get("status", "unknown"),
-                            run.get("created_at", "N/A")[:19],
-                        ]
-                    )
-
-                logger.info(
-                    "Returning {} gallery items and {} table rows",
-                    len(gallery_items),
-                    len(table_data),
-                )
-                return gallery_items, table_data
-
-            except Exception as e:
-                logger.error(f"Error loading outputs: {e}")
-                return [], []
-
-        def select_output(evt: gr.SelectData, gallery_data, table_data):
-            """Handle output selection from gallery - show full run details."""
-            logger.info(
-                "select_output called - evt.index: {}, gallery_data: {}, table_data type: {}",
-                evt.index,
-                bool(gallery_data),
-                type(table_data),
-            )
-            if evt.index is not None and gallery_data:
-                selected = gallery_data[evt.index]
-                video_path = selected[0] if isinstance(selected, tuple) else selected
-                logger.info("Selected output video: {}", video_path)
-
-                # Get run_id from the table data at the same index
-                # Table data format: [run_id, prompt_name, status, created_at]
-                run_id = None
-                if table_data is not None and len(table_data) > 0 and evt.index < len(table_data):
-                    # table_data is a DataFrame, use iloc for positional indexing
-                    run_id = table_data.iloc[evt.index, 0]  # First column is run_id
-                    logger.info("Got run_id from table data: {}", run_id)
-
-                if not run_id and Path(video_path).exists():
-                    # Fallback: try to extract from path if it's not a temp file
-                    if "gradio" not in str(video_path).lower():
-                        path_parts = Path(video_path).parts
-                        for part in path_parts:
-                            if part.startswith("run_"):
-                                run_id = part[4:]  # Remove 'run_' prefix
-                                break
-                        logger.info("Extracted run_id from path: {}", run_id)
-
-                # Initialize variables for structured fields
-                run = None
-                prompt = None
-                prompt_id = None
-
-                # Get full run details using CosmosAPI
-                if run_id and ops:
-                    logger.info("Fetching run with ID: {}", run_id)
-                    run = ops.get_run(run_id)
-                    logger.info("Got run data: {}", bool(run))
-                    if run:
-                        prompt_id = run.get("prompt_id")
-
-                        # Get prompt details if available
-                        if prompt_id:
-                            try:
-                                prompt = ops.get_prompt(prompt_id)
-                                if prompt:
-                                    prompt.get("inputs", {})
-                            except Exception as e:
-                                logger.error("Error getting prompt {}: {}", prompt_id, e)
-
-                # Extract details for structured fields
-                run_id_text = run.get("id", "unknown") if run else ""
-                status_text = run.get("status", "unknown") if run else ""
-                created_text = run.get("created_at", "")[:19] if run else ""
-
-                prompt_name_text = (
-                    prompt.get("parameters", {}).get("name", "unnamed") if prompt else ""
-                )
-                prompt_text_full = prompt.get("prompt_text", "") if prompt else ""
-
-                # Get input videos for this run using our helper function
-                input_videos = get_input_videos_for_run(run_id, ops) if run_id else {}
-
-                # Prepare updates for dynamic video components
-                video_updates = []
-
-                # Sort input videos to ensure consistent ordering (color first, then alphabetical)
-                sorted_videos = []
-                if "color" in input_videos:
-                    sorted_videos.append(("Color", input_videos["color"]))
-
-                for key in sorted(input_videos.keys()):
-                    if key != "color":
-                        # Capitalize control names for display
-                        label = key.capitalize()
-                        if key == "seg":
-                            label = "Segmentation"
-                        sorted_videos.append((label + " Control", input_videos[key]))
-
-                # Create updates for up to 6 video components
-                for i in range(6):
-                    if i < len(sorted_videos):
-                        label, path = sorted_videos[i]
-                        video_updates.append(gr.update(value=path, label=label, visible=True))
-                    else:
-                        video_updates.append(gr.update(value=None, visible=False))
-
-                return (
-                    gr.update(visible=True),  # output_details_group
-                    run_id_text,  # output_run_id
-                    status_text,  # output_status
-                    created_text,  # output_created
-                    prompt_name_text,  # output_prompt_name
-                    prompt_text_full,  # output_prompt_text
-                    *video_updates,  # Dynamic input videos (up to 6)
-                    str(video_path),  # output_video
-                    str(video_path),  # output_path_display
-                )
-
-            logger.info("No valid selection, returning default values")
-            # Create empty video updates for 6 components
-            empty_video_updates = [gr.update(value=None, visible=False) for _ in range(6)]
-            return (
-                gr.update(visible=False),  # output_details_group
-                "",  # output_run_id
-                "",  # output_status
-                "",  # output_created
-                "",  # output_prompt_name
-                "",  # output_prompt_text
-                *empty_video_updates,  # Dynamic input videos (up to 6)
-                None,  # output_video
-                "",  # output_path_display
-            )
-
-        def download_output(output_path):
-            """Prepare output for download."""
-            if output_path and Path(output_path).exists():
-                return output_path
-            return None
-
-        # refresh_outputs_btn.click removed - using global refresh
-
-        # OLD TAB EVENT HANDLERS - COMMENTED OUT FOR REMOVAL
-        # output_gallery.select(
-        #     fn=select_output,
-        #     inputs=[output_gallery, outputs_table],
-        #     outputs=[
-        #         output_details_group,
-        #         output_run_id,
-        #         output_status,
-        #         output_created,
-        #         output_prompt_name,
-        #         output_prompt_text,
-        #         *output_input_videos,  # Dynamic input videos (up to 6)
-        #         output_video,
-        #         output_path_display,
-        #     ],
-        # )
-
-        # Download functionality will be handled through the video component itself
 
         # Operations tab events
-        # ops_refresh_btn.click removed - using global refresh
 
         # Selection controls
         clear_selection_btn.click(
@@ -3580,55 +2635,6 @@ def create_ui():
             inputs=[],
             outputs=[recent_runs_table],
         )
-
-        #         # Run History tab events
-        #         # history_refresh_btn.click removed - using global refresh
-        #
-        #         history_table.select(
-        #             fn=select_run_from_history,
-        #             inputs=[history_table],
-        #             outputs=[
-        #                 history_run_id,
-        #                 history_status,
-        #                 history_duration,
-        #                 history_run_type,
-        #                 history_prompt_name,
-        #                 history_prompt_text,
-        #                 history_created,
-        #                 history_completed,
-        #                 history_execution_config,
-        #                 history_log_path,
-        #                 history_log_content,
-        #                 history_output_video,
-        #                 history_output_path,
-        #             ],
-        #         )
-        #
-        #         history_table.change(
-        #             fn=update_history_selection_count,
-        #             inputs=[history_table],
-        #             outputs=[history_selection_count, history_delete_selected_btn],
-        #         )
-        #
-        #         history_select_all_btn.click(
-        #             fn=select_all_runs, inputs=[history_table], outputs=[history_table]
-        #         ).then(
-        #             fn=update_history_selection_count,
-        #             inputs=[history_table],
-        #             outputs=[history_selection_count, history_delete_selected_btn],
-        #         )
-        #
-        #         history_clear_selection_btn.click(
-        #             fn=clear_all_runs, inputs=[history_table], outputs=[history_table]
-        #         ).then(
-        #             fn=update_history_selection_count,
-        #             inputs=[history_table],
-        #             outputs=[history_selection_count, history_delete_selected_btn],
-        #         )
-        #
-        #         history_load_logs_btn.click(
-        #             fn=load_run_logs, inputs=[history_run_id], outputs=[history_log_content]
-        #         )
 
         # ========================================
         # Unified Runs Tab Event Connections

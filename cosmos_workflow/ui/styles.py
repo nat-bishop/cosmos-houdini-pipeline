@@ -361,4 +361,33 @@ def get_custom_css():
         color: rgba(255, 255, 255, 0.6) !important;
         margin-bottom: 16px !important;
     }
+    
+    /* Video preview gallery with 16:9 aspect ratio */
+    #video_preview_gallery .thumbnail-item {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        min-height: 120px !important;
+        border-radius: 8px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border: 2px solid transparent !important;
+    }
+    
+    #video_preview_gallery video {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        width: 100% !important;
+        height: auto !important;
+        border-radius: 8px !important;
+    }
+    
+    #video_preview_gallery .grid-container {
+        gap: 12px !important;
+        padding: 8px !important;
+    }
+    
+    #video_preview_gallery .thumbnail-item:hover {
+        transform: scale(1.03);
+        border-color: var(--border-glow) !important;
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3) !important;
+    }
     """

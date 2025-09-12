@@ -158,9 +158,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
             "",  # input_fps
             "",  # input_codec
             "",  # input_files
-            "",  # color_preview
-            "",  # depth_preview
-            "",  # seg_preview
+            [],  # video_preview_gallery
             "",  # create_video_dir
         )
 
@@ -178,9 +176,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
             "",  # input_fps
             "",  # input_codec
             "",  # input_files
-            "",  # color_preview
-            "",  # depth_preview
-            "",  # seg_preview
+            [],  # video_preview_gallery
             "",  # create_video_dir
         )
 
@@ -232,18 +228,17 @@ def on_input_select(evt: gr.SelectData, gallery_data):
 
     files_text = "\n".join(files_list)
 
-    # Load videos for preview
-    color_video = (
-        str(Path(selected_dir["path"]) / "color.mp4") if selected_dir["has_color"] else None
-    )
-    depth_video = (
-        str(Path(selected_dir["path"]) / "depth.mp4") if selected_dir["has_depth"] else None
-    )
-    seg_video = (
-        str(Path(selected_dir["path"]) / "segmentation.mp4")
-        if selected_dir["has_segmentation"]
-        else None
-    )
+    # Load videos for preview gallery
+    video_gallery_items = []
+    if selected_dir["has_color"]:
+        color_path = str(Path(selected_dir["path"]) / "color.mp4")
+        video_gallery_items.append((color_path, "Color (RGB)"))
+    if selected_dir["has_depth"]:
+        depth_path = str(Path(selected_dir["path"]) / "depth.mp4")
+        video_gallery_items.append((depth_path, "Depth Map"))
+    if selected_dir["has_segmentation"]:
+        seg_path = str(Path(selected_dir["path"]) / "segmentation.mp4")
+        video_gallery_items.append((seg_path, "Segmentation"))
 
     # Convert path to forward slashes for cross-platform compatibility in input field
     video_dir_value = selected_dir["path"].replace("\\", "/")
@@ -260,9 +255,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         fps_text,  # input_fps
         codec_text,  # input_codec
         files_text,  # input_files
-        color_video,  # color_preview
-        depth_video,  # depth_preview
-        seg_video,  # seg_preview
+        video_gallery_items,  # video_preview_gallery
         video_dir_value,  # create_video_dir (auto-fill)
     )
 
@@ -1019,31 +1012,16 @@ def create_ui():
 
                                     # Video previews at the bottom
                                     gr.Markdown("#### 🎬 Video Previews")
-                                    with gr.Row():
-                                        with gr.Column(scale=1):
-                                            gr.Markdown("**Color (RGB)**")
-                                            color_preview = gr.Video(
-                                                height=180,
-                                                autoplay=False,
-                                                elem_classes=["video-preview-container"],
-                                                show_label=False,
-                                            )
-                                        with gr.Column(scale=1):
-                                            gr.Markdown("**Depth Map**")
-                                            depth_preview = gr.Video(
-                                                height=180,
-                                                autoplay=False,
-                                                elem_classes=["video-preview-container"],
-                                                show_label=False,
-                                            )
-                                        with gr.Column(scale=1):
-                                            gr.Markdown("**Segmentation**")
-                                            seg_preview = gr.Video(
-                                                height=180,
-                                                autoplay=False,
-                                                elem_classes=["video-preview-container"],
-                                                show_label=False,
-                                            )
+                                    video_preview_gallery = gr.Gallery(
+                                        label="Available Videos",
+                                        columns=3,
+                                        height="auto",
+                                        object_fit="cover",
+                                        elem_id="video_preview_gallery",
+                                        show_label=False,
+                                        allow_preview=True,
+                                        preview=True,
+                                    )
 
                             # Create Prompt Tab
                             with gr.Tab("✨ Create Prompt"):
@@ -2159,9 +2137,7 @@ def create_ui():
                 input_fps,  # Now plain text
                 input_codec,  # Now plain text
                 input_files,
-                color_preview,
-                depth_preview,
-                seg_preview,
+                video_preview_gallery,
                 create_video_dir,  # Auto-fill the video directory in create prompt form
             ],
         )

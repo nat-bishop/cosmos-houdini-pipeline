@@ -94,7 +94,12 @@ class DockerExecutor:
 
             # Run inference synchronously and get exit code
             exit_code = self._run_inference_script(
-                prompt_name, run_id, num_gpu, cuda_devices, stream_output=stream_output
+                prompt_name,
+                run_id,
+                num_gpu,
+                cuda_devices,
+                stream_output=stream_output,
+                run_logger=run_logger,
             )
 
             if exit_code == 0:
@@ -209,6 +214,7 @@ class DockerExecutor:
                 num_gpu,
                 cuda_devices,
                 stream_output=stream_output,
+                run_logger=run_logger,
             )
 
             if exit_code == 0:
@@ -260,12 +266,12 @@ class DockerExecutor:
         """
         # Setup run-specific logger (consistent with inference)
         if run_id:
-            logger = get_run_logger(
+            run_logger = get_run_logger(
                 run_id, f"prompt_enhancement_{batch_filename.split('.')[0]}"
             )
             local_log_path = get_log_path("enhancement", f"run_{run_id}", run_id)
         else:
-            logger = logger
+            run_logger = logger
             local_log_path = None
 
         run_logger.info("Running prompt enhancement for batch {}", batch_filename)
@@ -373,12 +379,24 @@ class DockerExecutor:
         num_gpu: int,
         cuda_devices: str,
         stream_output: bool = False,
+        run_logger=None,
     ) -> int:
         """Run inference using the bash script synchronously.
+
+        Args:
+            prompt_name: Name of the prompt
+            run_id: Run ID for tracking
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs
+            stream_output: Whether to stream output
+            run_logger: Optional logger instance for run-specific logging
 
         Returns:
             Exit code from the docker container (0 for success, non-zero for failure)
         """
+        # Use provided logger or fall back to global logger
+        if run_logger is None:
+            run_logger = logger
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -424,12 +442,25 @@ class DockerExecutor:
         num_gpu: int,
         cuda_devices: str,
         stream_output: bool = False,
+        run_logger=None,
     ) -> int:
         """Run upscaling using the bash script synchronously.
+
+        Args:
+            video_path: Path to video file
+            run_id: Run ID for tracking
+            control_weight: Control weight for upscaling
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs
+            stream_output: Whether to stream output
+            run_logger: Optional logger instance for run-specific logging
 
         Returns:
             Exit code from the docker container (0 for success, non-zero for failure)
         """
+        # Use provided logger or fall back to global logger
+        if run_logger is None:
+            run_logger = logger
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")

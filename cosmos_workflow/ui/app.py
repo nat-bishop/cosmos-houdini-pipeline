@@ -1073,11 +1073,12 @@ def create_ui():
                                     video_preview_gallery = gr.Gallery(
                                         label="Available Videos",
                                         columns=3,
-                                        height="auto",
-                                        object_fit="cover",
+                                        height=200,  # Fixed height to prevent excess space
+                                        object_fit="contain",  # Changed to contain to fit videos properly
                                         elem_id="video_preview_gallery",
                                         show_label=False,
-                                        allow_preview=False,
+                                        allow_preview=True,  # Allow clicking to preview
+                                        container=False,  # Remove extra container padding
                                     )
 
                             # Create Prompt Tab

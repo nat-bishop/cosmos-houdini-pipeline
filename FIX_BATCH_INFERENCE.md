@@ -16,13 +16,14 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [x] Commit all current changes
 - [x] Create this implementation checklist
 
-### ⬜ Step 1: Fix Batch File Format
+### ✅ Step 1: Fix Batch File Format
 **File:** `cosmos_workflow/execution/gpu_executor.py` (lines 572-583)
-- [ ] Replace `to_cosmos_inference_json()` with `to_cosmos_batch_inference_jsonl()`
-- [ ] Change file extension from `.json` to `.jsonl`
-- [ ] Use `write_batch_jsonl()` instead of `json_handler.write_json()`
-- [ ] Test JSONL format matches NVIDIA spec
-- [ ] Commit changes
+- [x] Replace `to_cosmos_inference_json()` with `to_cosmos_batch_inference_jsonl()`
+- [x] Change file extension from `.json` to `.jsonl`
+- [x] Use `write_batch_jsonl()` instead of `json_handler.write_json()`
+- [x] Test JSONL format matches NVIDIA spec
+- [x] Create unit tests in `tests/unit/execution/test_batch_format.py`
+- [x] Commit changes
 
 ### ⬜ Step 2: Fix Upload Path
 **File:** `cosmos_workflow/execution/gpu_executor.py` (line 592)

@@ -25,12 +25,12 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [x] Create unit tests in `tests/unit/execution/test_batch_format.py`
 - [x] Commit changes
 
-### ⬜ Step 2: Fix Upload Path
-**File:** `cosmos_workflow/execution/gpu_executor.py` (line 592)
-- [ ] Change upload path from `{remote_batch_dir}/inputs` to `{remote_config.remote_dir}/inputs/batches`
-- [ ] Ensure batch file goes to correct location for batch_inference.sh
-- [ ] Verify videos upload to `inputs/videos/`
-- [ ] Test file paths in JSONL match upload locations
+### ✅ Step 2: Fix Upload Path
+**File:** `cosmos_workflow/execution/gpu_executor.py` (lines 587-597)
+- [x] Changed batch upload path to `{remote_config.remote_dir}/inputs/batches`
+- [x] Fixed video upload to `{remote_config.remote_dir}/runs/{run_id}/inputs/videos`
+- [x] Both paths now match what batch_inference.sh and JSONL format expect
+- [ ] Test file paths in JSONL match upload locations (integration test)
 - [ ] Commit changes
 
 ### ⬜ Step 3: Fix Batch Output Handling

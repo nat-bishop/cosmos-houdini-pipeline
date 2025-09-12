@@ -582,17 +582,18 @@ class GPUExecutor:
             with self.ssh_manager:
                 # Upload batch file and videos
                 remote_config = self.config_manager.get_remote_config()
-                remote_batch_dir = f"{remote_config.remote_dir}/batches/{batch_name}"
 
-                self.file_transfer.upload_file(batch_file, f"{remote_batch_dir}/inputs")
+                # Upload batch file to inputs/batches/ as expected by batch_inference.sh
+                remote_batch_location = f"{remote_config.remote_dir}/inputs/batches"
+                self.file_transfer.upload_file(batch_file, remote_batch_location)
 
-                # Upload any videos
-                for _, prompt_dict in runs_and_prompts:
+                # Upload any videos to run-specific paths as expected by JSONL format
+                for run_id, prompt_dict in runs_and_prompts:
                     video_path = prompt_dict.get("inputs", {}).get("video")
                     if video_path and Path(video_path).exists():
-                        self.file_transfer.upload_file(
-                            Path(video_path), f"{remote_batch_dir}/inputs/videos"
-                        )
+                        # Upload to runs/{run_id}/inputs/videos/ as referenced in JSONL
+                        remote_video_dir = f"{remote_config.remote_dir}/runs/{run_id}/inputs/videos"
+                        self.file_transfer.upload_file(Path(video_path), remote_video_dir)
 
                 # Run batch inference
                 batch_result = self.docker_executor.run_batch_inference(

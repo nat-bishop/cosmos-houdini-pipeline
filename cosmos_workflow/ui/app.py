@@ -884,6 +884,15 @@ def create_ui():
     # Initialize component registry
     components = {}
 
+    # Helper to safely get component lists
+    def get_components(*keys):
+        """Get a list of components, skipping any that don't exist."""
+        result = []
+        for key in keys:
+            if key in components:
+                result.append(components[key])
+        return result if result else None
+
     with gr.Blocks(title="Cosmos Workflow Manager", css=custom_css) as app:
         # Create header with refresh controls
         header_components = create_header_ui(config)
@@ -946,11 +955,11 @@ def create_ui():
             components["global_refresh_timer"].tick(
                 fn=global_refresh_all,
                 outputs=[
-                    components.get("refresh_status"),
-                    components.get("input_gallery"),
-                    components.get("ops_prompts_table"),
-                    components.get("running_jobs_display"),
-                    components.get("job_status"),
+                    components["refresh_status"],
+                    components["input_gallery"],
+                    components["ops_prompts_table"],
+                    components["running_jobs_display"],
+                    components["job_status"],
                 ],
             )
 
@@ -958,11 +967,11 @@ def create_ui():
             components["manual_refresh_btn"].click(
                 fn=global_refresh_all,
                 outputs=[
-                    components.get("refresh_status"),
-                    components.get("input_gallery"),
-                    components.get("ops_prompts_table"),
-                    components.get("running_jobs_display"),
-                    components.get("job_status"),
+                    components["refresh_status"],
+                    components["input_gallery"],
+                    components["ops_prompts_table"],
+                    components["running_jobs_display"],
+                    components["job_status"],
                 ],
             )
 
@@ -972,19 +981,19 @@ def create_ui():
                 fn=on_input_select,
                 inputs=[components["input_gallery"]],
                 outputs=[
-                    components.get("selected_dir_path"),
-                    components.get("preview_group"),
-                    components.get("input_tabs_group"),
-                    components.get("input_name"),
-                    components.get("input_path"),
-                    components.get("input_created"),
-                    components.get("input_resolution"),
-                    components.get("input_duration"),
-                    components.get("input_fps"),
-                    components.get("input_codec"),
-                    components.get("input_files"),
-                    components.get("video_preview_gallery"),
-                    components.get("create_video_dir"),
+                    components["selected_dir_path"],
+                    components["preview_group"],
+                    components["input_tabs_group"],
+                    components["input_name"],
+                    components["input_path"],
+                    components["input_created"],
+                    components["input_resolution"],
+                    components["input_duration"],
+                    components["input_fps"],
+                    components["input_codec"],
+                    components["input_files"],
+                    components["video_preview_gallery"],
+                    components["create_video_dir"],
                 ],
             )
 
@@ -992,35 +1001,38 @@ def create_ui():
             components["create_prompt_btn"].click(
                 fn=create_prompt,
                 inputs=[
-                    components.get("create_prompt_text"),
-                    components.get("create_video_dir"),
-                    components.get("create_name"),
-                    components.get("create_negative"),
+                    components["create_prompt_text"],
+                    components["create_video_dir"],
+                    components["create_name"],
+                    components["create_negative"],
                 ],
-                outputs=[components.get("create_status")],
+                outputs=[components["create_status"]],
             )
 
         # Prompts Tab Events
         if "ops_prompts_table" in components:
-            components["ops_prompts_table"].select(
-                fn=on_prompt_row_select,
-                inputs=[components["ops_prompts_table"]],
-                outputs=[
-                    components.get("selected_prompt_id"),
-                    components.get("selected_prompt_name"),
-                    components.get("selected_prompt_text"),
-                    components.get("selected_prompt_negative"),
-                    components.get("selected_prompt_created"),
-                    components.get("selected_prompt_video_dir"),
-                    components.get("selected_prompt_enhanced"),
-                ],
+            outputs = get_components(
+                "selected_prompt_id",
+                "selected_prompt_name",
+                "selected_prompt_text",
+                "selected_prompt_negative",
+                "selected_prompt_created",
+                "selected_prompt_video_dir",
+                "selected_prompt_enhanced",
             )
+            if outputs:
+                components["ops_prompts_table"].select(
+                    fn=on_prompt_row_select,
+                    inputs=[components["ops_prompts_table"]],
+                    outputs=outputs,
+                )
 
-            components["ops_prompts_table"].change(
-                fn=update_selection_count,
-                inputs=[components["ops_prompts_table"]],
-                outputs=[components.get("selection_count")],
-            )
+            if "selection_count" in components:
+                components["ops_prompts_table"].change(
+                    fn=update_selection_count,
+                    inputs=[components["ops_prompts_table"]],
+                    outputs=[components["selection_count"]],
+                )
 
         if "clear_selection_btn" in components:
             components["clear_selection_btn"].click(
@@ -1029,68 +1041,69 @@ def create_ui():
                 outputs=[components["ops_prompts_table"]],
             )
 
-        if "run_inference_btn" in components:
-            components["run_inference_btn"].click(
-                fn=run_inference_on_selected,
-                inputs=[
-                    components.get("ops_prompts_table"),
-                    components.get("weight_vis"),
-                    components.get("weight_edge"),
-                    components.get("weight_depth"),
-                    components.get("weight_seg"),
-                    components.get("inf_steps"),
-                    components.get("inf_guidance"),
-                    components.get("inf_seed"),
-                    components.get("inf_fps"),
-                    components.get("inf_sigma_max"),
-                    components.get("inf_blur_strength"),
-                    components.get("inf_canny_threshold"),
-                ],
-                outputs=[
-                    components.get("inference_status"),
-                    components.get("execution_status", gr.Textbox()),
-                ],
+        if "run_inference_btn" in components and "ops_prompts_table" in components:
+            inputs = get_components(
+                "ops_prompts_table",
+                "weight_vis",
+                "weight_edge",
+                "weight_depth",
+                "weight_seg",
+                "inf_steps",
+                "inf_guidance",
+                "inf_seed",
+                "inf_fps",
+                "inf_sigma_max",
+                "inf_blur_strength",
+                "inf_canny_threshold",
             )
+            outputs = get_components("inference_status")
+            if inputs and outputs:
+                components["run_inference_btn"].click(
+                    fn=run_inference_on_selected,
+                    inputs=inputs,
+                    outputs=outputs,
+                )
 
         if "run_enhance_btn" in components:
-            components["run_enhance_btn"].click(
-                fn=run_enhance_on_selected,
-                inputs=[
-                    components.get("ops_prompts_table"),
-                    components.get("enhance_create_new"),
-                    components.get("enhance_force"),
-                ],
-                outputs=[
-                    components.get("enhance_status"),
-                    components.get("execution_status", gr.Textbox()),
-                ],
+            inputs = get_components(
+                "ops_prompts_table",
+                "enhance_create_new",
+                "enhance_force",
             )
+            outputs = get_components("enhance_status")
+            if inputs and outputs:
+                components["run_enhance_btn"].click(
+                    fn=run_enhance_on_selected,
+                    inputs=inputs,
+                    outputs=outputs,
+                )
 
         # Jobs & Queue Tab Events
         if "stream_btn" in components:
-            components["stream_btn"].click(
-                fn=start_log_streaming,
-                outputs=[
-                    components.get("job_status"),
-                    components.get("log_display"),
-                ],
-            )
+            outputs = get_components("job_status", "log_display")
+            if outputs:
+                components["stream_btn"].click(
+                    fn=start_log_streaming,
+                    outputs=outputs,
+                )
 
         # Load initial data
-        app.load(
-            fn=lambda: (
-                load_input_gallery(),
-                load_ops_prompts(50),
-                check_running_jobs()[0] if ops else "No containers",
-                check_running_jobs()[1] if ops else "Not connected",
-            ),
-            outputs=[
-                components.get("input_gallery"),
-                components.get("ops_prompts_table"),
-                components.get("running_jobs_display"),
-                components.get("job_status"),
-            ],
+        initial_outputs = get_components(
+            "input_gallery",
+            "ops_prompts_table",
+            "running_jobs_display",
+            "job_status",
         )
+        if initial_outputs:
+            app.load(
+                fn=lambda: (
+                    load_input_gallery(),
+                    load_ops_prompts(50),
+                    check_running_jobs()[0] if ops else "No containers",
+                    check_running_jobs()[1] if ops else "Not connected",
+                ),
+                outputs=initial_outputs,
+            )
 
     return app
 

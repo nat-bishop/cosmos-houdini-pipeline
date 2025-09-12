@@ -147,44 +147,40 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     """Handle input selection from gallery with real video metadata extraction."""
     if evt.index is None:
         return (
-            gr.update(visible=False),  # input_details_group
-            "",  # color_preview
-            "",  # depth_preview
-            "",  # seg_preview
-            gr.update(
-                value="<span class='metadata-badge'>Resolution: -</span>"
-            ),  # input_resolution
-            gr.update(value="<span class='metadata-badge'>Duration: -</span>"),  # input_duration
-            gr.update(value="<span class='metadata-badge'>FPS: -</span>"),  # input_fps
-            gr.update(value="<span class='metadata-badge'>Codec: -</span>"),  # input_codec
+            "",  # selected_dir_path
+            gr.update(visible=False),  # preview_group (compatibility)
+            gr.update(visible=False),  # input_tabs_group
             "",  # input_name
             "",  # input_path
             "",  # input_created
+            "",  # input_resolution
+            "",  # input_duration
+            "",  # input_fps
+            "",  # input_codec
             "",  # input_files
-            "",  # selected_dir_path
-            gr.update(visible=False),  # preview_group
+            "",  # color_preview
+            "",  # depth_preview
+            "",  # seg_preview
             "",  # create_video_dir
         )
 
     directories = get_input_directories()
     if evt.index >= len(directories):
         return (
-            gr.update(visible=False),  # input_details_group
-            "",  # color_preview
-            "",  # depth_preview
-            "",  # seg_preview
-            gr.update(
-                value="<span class='metadata-badge'>Resolution: -</span>"
-            ),  # input_resolution
-            gr.update(value="<span class='metadata-badge'>Duration: -</span>"),  # input_duration
-            gr.update(value="<span class='metadata-badge'>FPS: -</span>"),  # input_fps
-            gr.update(value="<span class='metadata-badge'>Codec: -</span>"),  # input_codec
+            "",  # selected_dir_path
+            gr.update(visible=False),  # preview_group (compatibility)
+            gr.update(visible=False),  # input_tabs_group
             "",  # input_name
             "",  # input_path
             "",  # input_created
+            "",  # input_resolution
+            "",  # input_duration
+            "",  # input_fps
+            "",  # input_codec
             "",  # input_files
-            "",  # selected_dir_path
-            gr.update(visible=False),  # preview_group
+            "",  # color_preview
+            "",  # depth_preview
+            "",  # seg_preview
             "",  # create_video_dir
         )
 
@@ -209,11 +205,11 @@ def on_input_select(evt: gr.SelectData, gallery_data):
         if color_path.exists():
             metadata = extract_video_metadata(color_path)
 
-    # Format metadata as HTML badges with animations
-    resolution_badge = f"<span class='metadata-badge'>📐 {metadata['resolution']}</span>"
-    duration_badge = f"<span class='metadata-badge'>⏱️ {metadata['duration']}</span>"
-    fps_badge = f"<span class='metadata-badge'>🎬 {metadata['fps']} FPS</span>"
-    codec_badge = f"<span class='metadata-badge'>🎥 {metadata['codec']}</span>"
+    # Format metadata as plain text values
+    resolution_text = metadata['resolution']
+    duration_text = metadata['duration']
+    fps_text = metadata['fps']
+    codec_text = metadata['codec']
 
     # Get creation time from directory
     dir_stat = os.stat(selected_dir["path"])
@@ -253,20 +249,20 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     video_dir_value = selected_dir["path"].replace("\\", "/")
 
     return (
-        gr.update(visible=True),  # input_details_group
-        color_video,  # color_preview
-        depth_video,  # depth_preview
-        seg_video,  # seg_preview
-        gr.update(value=resolution_badge),  # input_resolution (HTML badge)
-        gr.update(value=duration_badge),  # input_duration (HTML badge)
-        gr.update(value=fps_badge),  # input_fps (HTML badge)
-        gr.update(value=codec_badge),  # input_codec (HTML badge)
+        selected_dir["path"],  # selected_dir_path
+        gr.update(visible=False),  # preview_group (compatibility)
+        gr.update(visible=True),  # input_tabs_group
         name,  # input_name
         path,  # input_path
         created_time,  # input_created
+        resolution_text,  # input_resolution
+        duration_text,  # input_duration
+        fps_text,  # input_fps
+        codec_text,  # input_codec
         files_text,  # input_files
-        selected_dir["path"],  # selected_dir_path
-        gr.update(visible=False),  # preview_group (kept for compatibility)
+        color_video,  # color_preview
+        depth_video,  # depth_preview
+        seg_video,  # seg_preview
         video_dir_value,  # create_video_dir (auto-fill)
     )
 
@@ -959,92 +955,8 @@ def create_ui():
 
                         # Individual refresh button removed - using global refresh
 
-                    # Right: UNIFIED Input Details & Video Previews
+                    # Right: Input Details with tabs
                     with gr.Column(scale=1):
-                        # Unified Input Details Card with Video Previews
-                        with gr.Group(
-                            elem_classes=["unified-input-card"], visible=False
-                        ) as input_details_group:
-                            # Title section with visual hierarchy
-                            gr.HTML(
-                                """<div class="input-title">📁 Input Details & Previews</div>
-                                <div class="input-subtitle">Comprehensive view of your selected input</div>"""
-                            )
-
-                            # Video previews at the top (most important)
-                            gr.Markdown("##### 🎬 Video Previews")
-                            with gr.Row(elem_classes=["video-preview-grid"]):
-                                with gr.Column(scale=1):
-                                    gr.HTML('<div class="video-preview-label">Color (RGB)</div>')
-                                    color_preview = gr.Video(
-                                        height=150,
-                                        autoplay=True,
-                                        elem_classes=["video-preview-card"],
-                                    )
-                                with gr.Column(scale=1):
-                                    gr.HTML('<div class="video-preview-label">Depth Map</div>')
-                                    depth_preview = gr.Video(
-                                        height=150,
-                                        autoplay=True,
-                                        elem_classes=["video-preview-card"],
-                                    )
-                                with gr.Column(scale=1):
-                                    gr.HTML('<div class="video-preview-label">Segmentation</div>')
-                                    seg_preview = gr.Video(
-                                        height=150,
-                                        autoplay=True,
-                                        elem_classes=["video-preview-card"],
-                                    )
-
-                            # Metadata section with badges
-                            gr.Markdown("##### 📊 Video Metadata")
-                            with gr.Row():
-                                input_resolution = gr.HTML(
-                                    elem_classes=["metadata-badge"],
-                                    value="<span class='metadata-badge'>Resolution: Loading...</span>",
-                                )
-                                input_duration = gr.HTML(
-                                    elem_classes=["metadata-badge"],
-                                    value="<span class='metadata-badge'>Duration: Loading...</span>",
-                                )
-
-                            with gr.Row():
-                                input_fps = gr.HTML(
-                                    elem_classes=["metadata-badge"],
-                                    value="<span class='metadata-badge'>FPS: Loading...</span>",
-                                )
-                                input_codec = gr.HTML(
-                                    elem_classes=["metadata-badge"],
-                                    value="<span class='metadata-badge'>Codec: Loading...</span>",
-                                )
-
-                            # File information
-                            gr.Markdown("##### 📂 File Information")
-                            input_name = gr.Textbox(
-                                label="Name",
-                                interactive=False,
-                                elem_classes=["loading-skeleton"],
-                            )
-
-                            input_path = gr.Textbox(
-                                label="Path",
-                                interactive=False,
-                                elem_classes=["loading-skeleton"],
-                            )
-
-                            input_created = gr.Textbox(
-                                label="Created",
-                                interactive=False,
-                                elem_classes=["loading-skeleton"],
-                            )
-
-                            input_files = gr.Textbox(
-                                label="Available Control Inputs",
-                                lines=3,
-                                interactive=False,
-                                elem_classes=["loading-skeleton"],
-                            )
-
                         # Hidden field to store selected directory path
                         selected_dir_path = gr.Textbox(visible=False)
 
@@ -1052,52 +964,132 @@ def create_ui():
                         with gr.Group(visible=False) as preview_group:
                             pass
 
-                        # Create Prompt Section (moved from Prompts tab)
-                        gr.Markdown("#### Create New Prompt")
+                        # Tabs for Input Details and Create Prompt
+                        with gr.Tabs(visible=False) as input_tabs_group:
+                            # Input Details Tab
+                            with gr.Tab("📁 Input Details"):
+                                with gr.Group(elem_classes=["detail-card"]):
+                                    # File information section
+                                    gr.Markdown("#### 📂 File Information")
 
-                        with gr.Group():
-                            # Video Directory at the top for easy access
-                            create_video_dir = gr.Textbox(
-                                label="Video Directory",
-                                placeholder="Auto-filled when selecting an input",
-                                info="Must contain color.mp4",
-                            )
+                                    input_name = gr.Textbox(
+                                        label="Name",
+                                        interactive=False,
+                                    )
 
-                            create_prompt_text = gr.Textbox(
-                                label="Prompt Text",
-                                placeholder="Enter your prompt description here...",
-                                lines=3,
-                                max_lines=10,
-                            )
+                                    input_path = gr.Textbox(
+                                        label="Path",
+                                        interactive=False,
+                                    )
 
-                            create_name = gr.Textbox(
-                                label="Name (Optional)",
-                                placeholder="Leave empty for auto-generated name",
-                                info="A descriptive name for this prompt",
-                            )
+                                    input_created = gr.Textbox(
+                                        label="Created",
+                                        interactive=False,
+                                    )
 
-                            # Get default negative prompt from config
-                            default_negative = (
-                                config._config_data.get("generation", {})
-                                .get(
-                                    "negative_prompt",
-                                    "The video captures a game playing, with bad crappy graphics...",
-                                )
-                                .strip()
-                            )
+                                    # Video metadata as regular textboxes
+                                    input_resolution = gr.Textbox(
+                                        label="Resolution",
+                                        interactive=False,
+                                    )
 
-                            create_negative = gr.Textbox(
-                                label="Negative Prompt",
-                                value=default_negative,  # Pre-fill with default
-                                lines=3,
-                                info="Edit to customize or leave as default",
-                            )
+                                    input_duration = gr.Textbox(
+                                        label="Duration",
+                                        interactive=False,
+                                    )
 
-                            create_prompt_btn = gr.Button(
-                                "✨ Create Prompt", variant="primary", size="lg"
-                            )
+                                    with gr.Row():
+                                        input_fps = gr.Textbox(
+                                            label="FPS",
+                                            interactive=False,
+                                            scale=1,
+                                        )
 
-                            create_status = gr.Markdown("")
+                                        input_codec = gr.Textbox(
+                                            label="Codec",
+                                            interactive=False,
+                                            scale=1,
+                                        )
+
+                                    input_files = gr.Textbox(
+                                        label="Available Control Inputs",
+                                        lines=3,
+                                        interactive=False,
+                                    )
+
+                                    # Video previews at the bottom
+                                    gr.Markdown("#### 🎬 Video Previews")
+                                    with gr.Row():
+                                        with gr.Column(scale=1):
+                                            gr.Markdown("**Color (RGB)**")
+                                            color_preview = gr.Video(
+                                                height=180,
+                                                autoplay=False,
+                                                elem_classes=["video-preview-container"],
+                                                show_label=False,
+                                            )
+                                        with gr.Column(scale=1):
+                                            gr.Markdown("**Depth Map**")
+                                            depth_preview = gr.Video(
+                                                height=180,
+                                                autoplay=False,
+                                                elem_classes=["video-preview-container"],
+                                                show_label=False,
+                                            )
+                                        with gr.Column(scale=1):
+                                            gr.Markdown("**Segmentation**")
+                                            seg_preview = gr.Video(
+                                                height=180,
+                                                autoplay=False,
+                                                elem_classes=["video-preview-container"],
+                                                show_label=False,
+                                            )
+
+                            # Create Prompt Tab
+                            with gr.Tab("✨ Create Prompt"):
+                                with gr.Group(elem_classes=["detail-card"]):
+                                    # Video Directory at the top for easy access
+                                    create_video_dir = gr.Textbox(
+                                        label="Video Directory",
+                                        placeholder="Auto-filled when selecting an input",
+                                        info="Must contain color.mp4",
+                                    )
+
+                                    create_prompt_text = gr.Textbox(
+                                        label="Prompt Text",
+                                        placeholder="Enter your prompt description here...",
+                                        lines=3,
+                                        max_lines=10,
+                                    )
+
+                                    create_name = gr.Textbox(
+                                        label="Name (Optional)",
+                                        placeholder="Leave empty for auto-generated name",
+                                        info="A descriptive name for this prompt",
+                                    )
+
+                                    # Get default negative prompt from config
+                                    default_negative = (
+                                        config._config_data.get("generation", {})
+                                        .get(
+                                            "negative_prompt",
+                                            "The video captures a game playing, with bad crappy graphics...",
+                                        )
+                                        .strip()
+                                    )
+
+                                    create_negative = gr.Textbox(
+                                        label="Negative Prompt",
+                                        value=default_negative,  # Pre-fill with default
+                                        lines=3,
+                                        info="Edit to customize or leave as default",
+                                    )
+
+                                    create_prompt_btn = gr.Button(
+                                        "✨ Create Prompt", variant="primary", size="lg"
+                                    )
+
+                                    create_status = gr.Markdown("")
 
             # ========================================
             # Tab 2: UNIFIED Prompts & Operations (Merged)
@@ -2156,20 +2148,20 @@ def create_ui():
             fn=on_input_select,
             inputs=[input_gallery],
             outputs=[
-                input_details_group,
-                color_preview,
-                depth_preview,
-                seg_preview,
-                input_resolution,  # HTML badge
-                input_duration,  # HTML badge
-                input_fps,  # HTML badge
-                input_codec,  # HTML badge
+                selected_dir_path,
+                preview_group,
+                input_tabs_group,  # The tabs container
                 input_name,
                 input_path,
                 input_created,
+                input_resolution,  # Now plain text
+                input_duration,  # Now plain text
+                input_fps,  # Now plain text
+                input_codec,  # Now plain text
                 input_files,
-                selected_dir_path,
-                preview_group,
+                color_preview,
+                depth_preview,
+                seg_preview,
                 create_video_dir,  # Auto-fill the video directory in create prompt form
             ],
         )

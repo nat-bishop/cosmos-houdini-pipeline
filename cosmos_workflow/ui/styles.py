@@ -315,34 +315,34 @@ def get_custom_css():
         z-index: 1;
     }
 
-    /* Metadata badges */
-    .metadata-badge {
-        display: inline-block;
-        background: var(--primary-gradient);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin: 4px;
-        animation: badgePulse 2s infinite;
+    /* Video preview container fix - remove scrollbar */
+    .video-preview-container {
+        overflow: hidden !important;
     }
 
-    @keyframes badgePulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
+    .video-preview-container video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
     }
 
-    /* Loading skeleton animation */
-    .loading-skeleton {
-        background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
-        background-size: 200% 100%;
-        animation: shimmer 1.5s infinite;
+    /* Remove scroll indicators from video components */
+    div[class*="video"] {
+        overflow: hidden !important;
     }
 
-    @keyframes shimmer {
-        0% { background-position: -200% 0; }
-        100% { background-position: 200% 0; }
+    /* Consistent textbox styling matching prompts tab */
+    .detail-card input[type="text"],
+    .detail-card textarea {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        color: white !important;
+    }
+
+    .detail-card input[type="text"]:focus,
+    .detail-card textarea:focus {
+        border-color: var(--border-glow) !important;
+        background: rgba(255, 255, 255, 0.08) !important;
     }
 
     /* Input details typography hierarchy */

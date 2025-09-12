@@ -607,14 +607,18 @@ class GPUExecutor:
                 # Split outputs to individual run directories
                 output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
 
-                # Download outputs for each run
+                # Download outputs for each run from batch output directory
                 for run_dict, _ in runs_and_prompts:
                     run_id = run_dict["id"]
-                    if run_id in output_mapping and output_mapping[run_id]["status"] == "found":
-                        run_dir = Path("outputs") / f"run_{run_id}"
-                        run_dir.mkdir(parents=True, exist_ok=True)
-                        # Download this run's output
-                        self._download_outputs(run_id, run_dir)
+                    if run_id in output_mapping:
+                        mapping_info = output_mapping[run_id]
+                        if mapping_info["status"] in ["found", "assumed"]:
+                            # Download from batch output to individual run directory
+                            self._download_batch_output_for_run(
+                                run_id=run_id,
+                                remote_batch_output=mapping_info["remote_path"],
+                                batch_name=batch_name,
+                            )
 
                 return {
                     "status": "success",
@@ -715,6 +719,66 @@ class GPUExecutor:
                     }
 
         return output_mapping
+
+    def _download_batch_output_for_run(
+        self,
+        run_id: str,
+        remote_batch_output: str,
+        batch_name: str,
+    ) -> None:
+        """Download batch output file to individual run directory.
+
+        Args:
+            run_id: The run ID
+            remote_batch_output: Remote path to the batch output file (e.g., video_000.mp4)
+            batch_name: Name of the batch for logging
+        """
+        # Create local run directory structure first (outside try block)
+        # Note: run_id already includes "run_" prefix (e.g., "run_123")
+        local_run_dir = Path("outputs") / run_id
+        local_run_dir.mkdir(parents=True, exist_ok=True)
+
+        outputs_dir = local_run_dir / "outputs"
+        outputs_dir.mkdir(exist_ok=True)
+
+        logs_dir = local_run_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+
+        try:
+            # Download the batch output file and rename to standard name
+            local_output_file = outputs_dir / "output.mp4"
+
+            logger.info(
+                "Downloading batch output for run {}: {} -> {}",
+                run_id,
+                remote_batch_output,
+                local_output_file,
+            )
+
+            self.file_transfer.download_file(remote_batch_output, str(local_output_file))
+            logger.info("Downloaded output for run {} to {}", run_id, local_output_file)
+
+            # Also download the shared batch log to this run's directory
+            remote_config = self.config_manager.get_remote_config()
+            remote_batch_log = f"{remote_config.remote_dir}/outputs/{batch_name}/batch.log"
+            local_batch_log = logs_dir / "batch.log"
+
+            try:
+                self.file_transfer.download_file(remote_batch_log, str(local_batch_log))
+                logger.info("Downloaded batch log for run {}", run_id)
+            except Exception as e:
+                # Batch log might not exist, which is okay
+                logger.debug("Could not download batch log for run {}: {}", run_id, e)
+
+        except Exception as e:
+            logger.error(
+                "Failed to download batch output for run {}: {}",
+                run_id,
+                e,
+            )
+            # Create an error marker file so UI knows something went wrong
+            error_file = outputs_dir / "download_error.txt"
+            error_file.write_text(f"Failed to download output: {e}")
 
     # ========== Upsampling Methods ==========
 

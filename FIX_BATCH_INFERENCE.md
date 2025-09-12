@@ -43,12 +43,17 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [x] All 5 test scenarios pass (sequential, fallback, missing, run_id, mixed)
 - [ ] Commit changes
 
-### ⬜ Step 4: Download to Individual Run Directories
-**File:** `cosmos_workflow/execution/gpu_executor.py` (lines 615-621)
-- [ ] Download from batch output directory to individual `outputs/run_{run_id}/`
-- [ ] Rename batch outputs (`video_XXX.mp4`) to standard name (`output.mp4`)
-- [ ] Ensure proper directory structure for each run
-- [ ] Test Gradio can find outputs in expected locations
+### ✅ Step 4: Download to Individual Run Directories
+**File:** `cosmos_workflow/execution/gpu_executor.py` (lines 610-621, 723-780)
+- [x] Created `_download_batch_output_for_run()` method to handle downloads
+- [x] Download from batch output directory to individual `outputs/run_{run_id}/`
+- [x] Rename batch outputs (`video_XXX.mp4`) to standard name (`output.mp4`)
+- [x] Ensure proper directory structure for each run (outputs/, logs/)
+- [x] Also copy shared batch log to each run's logs directory
+- [x] Handle errors gracefully with error marker files
+- [x] Created comprehensive unit tests in `tests/unit/execution/test_batch_download.py`
+- [x] All 3 test scenarios pass (normal, missing log, download failure)
+- [ ] Test Gradio can find outputs in expected locations (integration test)
 - [ ] Commit changes
 
 ### ⬜ Step 5: Handle Shared Batch Log

@@ -34,5 +34,8 @@
       "Read(./secrets/**)"
     ],
     "ask": []
+  },
+  "env":{
+    "DISABLE_AUTOUPDATER": "1"
   }
 }

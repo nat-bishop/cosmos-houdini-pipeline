@@ -167,6 +167,7 @@ class DataRepository:
                 execution_config=execution_config,
                 outputs={},  # Empty initially
                 run_metadata=metadata,
+                log_path=f"outputs/run_{run_id}/logs/{run_id}.log",  # Set log path at creation
             )
             session.add(run)
             session.flush()  # Flush to get created_at populated
@@ -181,6 +182,7 @@ class DataRepository:
                 "outputs": run.outputs,
                 "metadata": run.run_metadata,
                 "created_at": run.created_at.isoformat(),
+                "log_path": run.log_path,  # Include log path in result
             }
 
             session.commit()
@@ -434,9 +436,7 @@ class DataRepository:
         unique_id = str(uuid.uuid4()).replace("-", "")[:32]
         return f"rs_{unique_id}"
 
-    def list_prompts(
-        self, limit: int = 50, offset: int = 0
-    ) -> list[dict[str, Any]]:
+    def list_prompts(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         """List prompts with pagination.
 
         Args:
@@ -446,9 +446,7 @@ class DataRepository:
         Returns:
             List of prompt dictionaries
         """
-        logger.debug(
-            "Listing prompts with limit=%s, offset=%s", limit, offset
-        )
+        logger.debug("Listing prompts with limit=%s, offset=%s", limit, offset)
 
         try:
             with self.db.get_session() as session:

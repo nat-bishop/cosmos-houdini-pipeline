@@ -1457,22 +1457,19 @@ def create_ui():
                                 interactive=False,
                             )
 
-                            with gr.Row():
-                                output_input_color = gr.Textbox(
-                                    label="Input Color Video",
-                                    interactive=False,
-                                    scale=1,
-                                )
-                                output_input_depth = gr.Textbox(
-                                    label="Input Depth Video",
-                                    interactive=False,
-                                    scale=1,
-                                )
-                                output_input_seg = gr.Textbox(
-                                    label="Input Segmentation Video",
-                                    interactive=False,
-                                    scale=1,
-                                )
+                            gr.Markdown("#### Input Videos")
+                            with gr.Row(equal_height=True):
+                                # Create dynamic video components for various control types
+                                # Support up to 6 input videos (color + 5 controls)
+                                output_input_videos = []
+                                for i in range(6):
+                                    video = gr.Video(
+                                        label="Input",
+                                        height=180,  # Consistent height for all inputs
+                                        autoplay=False,
+                                        visible=False,
+                                    )
+                                    output_input_videos.append(video)
 
                             with gr.Row():
                                 output_video = gr.Video(
@@ -1626,23 +1623,10 @@ def create_ui():
 
                                 # Parameters Tab
                                 with gr.Tab("Parameters"):
-                                    gr.Markdown("#### Control Weights")
-                                    with gr.Row():
-                                        history_weight_vis = gr.Textbox(
-                                            label="Visual", interactive=False, scale=1
-                                        )
-                                        history_weight_edge = gr.Textbox(
-                                            label="Edge", interactive=False, scale=1
-                                        )
-                                        history_weight_depth = gr.Textbox(
-                                            label="Depth", interactive=False, scale=1
-                                        )
-                                        history_weight_seg = gr.Textbox(
-                                            label="Segmentation", interactive=False, scale=1
-                                        )
-
-                                    gr.Markdown("#### Inference Parameters")
-                                    history_params = gr.JSON(label="", container=False)
+                                    gr.Markdown("#### Execution Configuration")
+                                    history_execution_config = gr.JSON(
+                                        label="", container=False, elem_classes=["json-display"]
+                                    )
 
                                 # Logs Tab
                                 with gr.Tab("Logs"):
@@ -1664,7 +1648,7 @@ def create_ui():
                                 # Output Tab
                                 with gr.Tab("Output"):
                                     history_output_video = gr.Video(
-                                        label="Generated Output", height=300, autoplay=False
+                                        label="Generated Video", height=400, autoplay=False
                                     )
 
                                     history_output_path = gr.Textbox(
@@ -1897,12 +1881,90 @@ def create_ui():
                 logger.error("Failed to load run history: {}", e)
                 return [], f"Error: {e}"
 
+        def get_input_videos_for_run(run_id, ops):
+            """Get all input videos used for a run, including auto-generated controls.
+
+            Returns:
+                dict: Dictionary with control names as keys and video paths as values
+            """
+            import json
+
+            inputs = {}
+
+            try:
+                # Get the run and prompt data
+                run = ops.get_run(run_id)
+                if not run:
+                    return inputs
+
+                prompt_id = run.get("prompt_id")
+                if not prompt_id:
+                    return inputs
+
+                prompt = ops.get_prompt(prompt_id)
+                if not prompt:
+                    return inputs
+
+                # Get original video directory from prompt
+                video_path = prompt.get("inputs", {}).get("video", "")
+                if video_path:
+                    original_video_dir = Path(video_path).parent
+                    color_path = original_video_dir / "color.mp4"
+                    if color_path.exists():
+                        inputs["color"] = str(color_path)
+
+                # Check for spec.json (available immediately) to determine which controls were used
+                spec_path = Path("outputs") / f"run_{run_id}" / "inputs" / "spec.json"
+                if spec_path.exists():
+                    with open(spec_path) as f:
+                        prompt_spec = json.load(f)
+
+                    # Check all control types dynamically (not just hardcoded ones)
+                    # Common control types: edge, depth, seg, vis, normal, etc.
+                    for key, value in prompt_spec.items():
+                        # Skip non-control keys
+                        if not isinstance(value, dict) or "control_weight" not in value:
+                            continue
+
+                        control = key
+                        control_config = value
+                        weight = control_config.get("control_weight", 0)
+
+                        if weight > 0:
+                            # Check if input was provided or auto-generated
+                            if "input_control" in control_config:
+                                # Use original input
+                                # Map control name to file name (seg -> segmentation, others stay same)
+                                if control == "seg":
+                                    control_file = original_video_dir / "segmentation.mp4"
+                                else:
+                                    control_file = original_video_dir / f"{control}.mp4"
+
+                                if control_file.exists():
+                                    inputs[control] = str(control_file)
+                            else:
+                                # Use auto-generated control
+                                generated_path = (
+                                    Path("outputs")
+                                    / f"run_{run_id}"
+                                    / "outputs"
+                                    / f"{control}_input_control.mp4"
+                                )
+                                if generated_path.exists():
+                                    inputs[control] = str(generated_path)
+
+            except Exception as e:
+                logger.error("Error getting input videos for run {}: {}", run_id, e)
+
+            return inputs
+
         def select_run_from_history(evt: gr.SelectData, table_data):
             """Handle run selection from history table."""
             try:
                 import pandas as pd
 
-                if evt.index is None or table_data is None:
+                # Helper to create empty returns
+                def empty_return():
                     return [
                         gr.update(value=""),  # history_run_id
                         gr.update(value=""),  # history_status
@@ -1912,38 +1974,19 @@ def create_ui():
                         gr.update(value=""),  # history_prompt_text
                         gr.update(value=""),  # history_created
                         gr.update(value=""),  # history_completed
-                        gr.update(value=""),  # history_weight_vis
-                        gr.update(value=""),  # history_weight_edge
-                        gr.update(value=""),  # history_weight_depth
-                        gr.update(value=""),  # history_weight_seg
-                        gr.update(value={}),  # history_params
+                        gr.update(value={}),  # history_execution_config
                         gr.update(value=""),  # history_log_path
                         gr.update(value=""),  # history_log_content
                         gr.update(value=None),  # history_output_video
                         gr.update(value=""),  # history_output_path
                     ]
 
+                if evt.index is None or table_data is None:
+                    return empty_return()
+
                 # Check if table_data is empty DataFrame
                 if isinstance(table_data, pd.DataFrame) and table_data.empty:
-                    return [
-                        gr.update(value=""),  # history_run_id
-                        gr.update(value=""),  # history_status
-                        gr.update(value=""),  # history_duration
-                        gr.update(value=""),  # history_run_type
-                        gr.update(value=""),  # history_prompt_name
-                        gr.update(value=""),  # history_prompt_text
-                        gr.update(value=""),  # history_created
-                        gr.update(value=""),  # history_completed
-                        gr.update(value=""),  # history_weight_vis
-                        gr.update(value=""),  # history_weight_edge
-                        gr.update(value=""),  # history_weight_depth
-                        gr.update(value=""),  # history_weight_seg
-                        gr.update(value={}),  # history_params
-                        gr.update(value=""),  # history_log_path
-                        gr.update(value=""),  # history_log_content
-                        gr.update(value=None),  # history_output_video
-                        gr.update(value=""),  # history_output_path
-                    ]
+                    return empty_return()
 
                 # Get selected row
                 row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
@@ -1956,48 +1999,12 @@ def create_ui():
                     run_id = str(row[1]) if len(row) > 1 else ""
 
                 if not run_id or not ops:
-                    return [
-                        gr.update(value=""),  # history_run_id
-                        gr.update(value=""),  # history_status
-                        gr.update(value=""),  # history_duration
-                        gr.update(value=""),  # history_run_type
-                        gr.update(value=""),  # history_prompt_name
-                        gr.update(value=""),  # history_prompt_text
-                        gr.update(value=""),  # history_created
-                        gr.update(value=""),  # history_completed
-                        gr.update(value=""),  # history_weight_vis
-                        gr.update(value=""),  # history_weight_edge
-                        gr.update(value=""),  # history_weight_depth
-                        gr.update(value=""),  # history_weight_seg
-                        gr.update(value={}),  # history_params
-                        gr.update(value=""),  # history_log_path
-                        gr.update(value=""),  # history_log_content
-                        gr.update(value=None),  # history_output_video
-                        gr.update(value=""),  # history_output_path
-                    ]
+                    return empty_return()
 
                 # Get full run details
                 run = ops.get_run(run_id)
                 if not run:
-                    return [
-                        gr.update(value=""),  # history_run_id
-                        gr.update(value=""),  # history_status
-                        gr.update(value=""),  # history_duration
-                        gr.update(value=""),  # history_run_type
-                        gr.update(value=""),  # history_prompt_name
-                        gr.update(value=""),  # history_prompt_text
-                        gr.update(value=""),  # history_created
-                        gr.update(value=""),  # history_completed
-                        gr.update(value=""),  # history_weight_vis
-                        gr.update(value=""),  # history_weight_edge
-                        gr.update(value=""),  # history_weight_depth
-                        gr.update(value=""),  # history_weight_seg
-                        gr.update(value={}),  # history_params
-                        gr.update(value=""),  # history_log_path
-                        gr.update(value=""),  # history_log_content
-                        gr.update(value=None),  # history_output_video
-                        gr.update(value=""),  # history_output_path
-                    ]
+                    return empty_return()
 
                 # Extract basic info
                 status = run.get("status", "unknown")
@@ -2037,25 +2044,8 @@ def create_ui():
                     except Exception:
                         pass  # Skip invalid data
 
-                # Get parameters
-                params = run.get("parameters", {})
-                weights = params.get("weights", {})
-
-                # Extract individual weight values
-                weight_vis = str(weights.get("vis", ""))
-                weight_edge = str(weights.get("edge", ""))
-                weight_depth = str(weights.get("depth", ""))
-                weight_seg = str(weights.get("seg", ""))
-
-                inference_params = {
-                    "num_steps": params.get("num_steps", 35),
-                    "guidance_scale": params.get("guidance_scale", 7.0),
-                    "seed": params.get("seed", 1),
-                    "fps": params.get("fps", 24),
-                    "sigma_max": params.get("sigma_max", 70.0),
-                    "blur_strength": params.get("blur_strength", "medium"),
-                    "canny_threshold": params.get("canny_threshold", "medium"),
-                }
+                # Get execution config directly from run
+                execution_config = run.get("execution_config", {})
 
                 # Get log path
                 log_path = run.get("log_path", "")
@@ -2074,16 +2064,12 @@ def create_ui():
                     gr.update(value=run_id),  # history_run_id
                     gr.update(value=status),  # history_status
                     gr.update(value=duration),  # history_duration
-                    gr.update(value=run_type),  # history_run_type (NEW)
+                    gr.update(value=run_type),  # history_run_type
                     gr.update(value=prompt_name),  # history_prompt_name
                     gr.update(value=prompt_text),  # history_prompt_text
                     gr.update(value=created),  # history_created
                     gr.update(value=completed),  # history_completed
-                    gr.update(value=weight_vis),  # history_weight_vis (NEW)
-                    gr.update(value=weight_edge),  # history_weight_edge (NEW)
-                    gr.update(value=weight_depth),  # history_weight_depth (NEW)
-                    gr.update(value=weight_seg),  # history_weight_seg (NEW)
-                    gr.update(value=inference_params),  # history_params
+                    gr.update(value=execution_config),  # history_execution_config
                     gr.update(value=log_path),  # history_log_path
                     gr.update(value=log_content),  # history_log_content
                     gr.update(value=output_video),  # history_output_video
@@ -2101,11 +2087,7 @@ def create_ui():
                     gr.update(value=""),  # history_prompt_text
                     gr.update(value=""),  # history_created
                     gr.update(value=""),  # history_completed
-                    gr.update(value=""),  # history_weight_vis
-                    gr.update(value=""),  # history_weight_edge
-                    gr.update(value=""),  # history_weight_depth
-                    gr.update(value=""),  # history_weight_seg
-                    gr.update(value=""),  # history_params
+                    gr.update(value={}),  # history_execution_config
                     gr.update(value=""),  # history_log_path
                     gr.update(value=""),  # history_log_content
                     gr.update(value=None),  # history_output_video
@@ -2491,10 +2473,32 @@ def create_ui():
                 )
                 prompt_text_full = prompt.get("prompt_text", "") if prompt else ""
 
-                # Input paths
-                color_path = inputs.get("video", "") if inputs else ""
-                depth_path = inputs.get("depth", "") if inputs else ""
-                seg_path = inputs.get("seg", "") if inputs else ""
+                # Get input videos for this run using our helper function
+                input_videos = get_input_videos_for_run(run_id, ops) if run_id else {}
+
+                # Prepare updates for dynamic video components
+                video_updates = []
+
+                # Sort input videos to ensure consistent ordering (color first, then alphabetical)
+                sorted_videos = []
+                if "color" in input_videos:
+                    sorted_videos.append(("Color", input_videos["color"]))
+
+                for key in sorted(input_videos.keys()):
+                    if key != "color":
+                        # Capitalize control names for display
+                        label = key.capitalize()
+                        if key == "seg":
+                            label = "Segmentation"
+                        sorted_videos.append((label + " Control", input_videos[key]))
+
+                # Create updates for up to 6 video components
+                for i in range(6):
+                    if i < len(sorted_videos):
+                        label, path = sorted_videos[i]
+                        video_updates.append(gr.update(value=path, label=label, visible=True))
+                    else:
+                        video_updates.append(gr.update(value=None, visible=False))
 
                 return (
                     gr.update(visible=True),  # output_details_group
@@ -2503,14 +2507,14 @@ def create_ui():
                     created_text,  # output_created
                     prompt_name_text,  # output_prompt_name
                     prompt_text_full,  # output_prompt_text
-                    color_path,  # output_input_color
-                    depth_path,  # output_input_depth
-                    seg_path,  # output_input_seg
+                    *video_updates,  # Dynamic input videos (up to 6)
                     str(video_path),  # output_video
                     str(video_path),  # output_path_display
                 )
 
             logger.info("No valid selection, returning default values")
+            # Create empty video updates for 6 components
+            empty_video_updates = [gr.update(value=None, visible=False) for _ in range(6)]
             return (
                 gr.update(visible=False),  # output_details_group
                 "",  # output_run_id
@@ -2518,9 +2522,7 @@ def create_ui():
                 "",  # output_created
                 "",  # output_prompt_name
                 "",  # output_prompt_text
-                "",  # output_input_color
-                "",  # output_input_depth
-                "",  # output_input_seg
+                *empty_video_updates,  # Dynamic input videos (up to 6)
                 None,  # output_video
                 "",  # output_path_display
             )
@@ -2543,9 +2545,7 @@ def create_ui():
                 output_created,
                 output_prompt_name,
                 output_prompt_text,
-                output_input_color,
-                output_input_depth,
-                output_input_seg,
+                *output_input_videos,  # Dynamic input videos (up to 6)
                 output_video,
                 output_path_display,
             ],
@@ -2653,16 +2653,12 @@ def create_ui():
                 history_run_id,
                 history_status,
                 history_duration,
-                history_run_type,  # NEW
+                history_run_type,
                 history_prompt_name,
                 history_prompt_text,
                 history_created,
                 history_completed,
-                history_weight_vis,  # NEW
-                history_weight_edge,  # NEW
-                history_weight_depth,  # NEW
-                history_weight_seg,  # NEW
-                history_params,
+                history_execution_config,
                 history_log_path,
                 history_log_content,
                 history_output_video,

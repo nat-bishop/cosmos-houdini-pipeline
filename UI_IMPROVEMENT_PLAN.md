@@ -1,26 +1,17 @@
 # UI Improvement Implementation Plan
 
-## ✅ Completed Features
-
-### 1. 🎨 Input Details Section Redesign [COMPLETED]
-- ✅ Implemented tabbed layout for Input Details and Create Prompt
-- ✅ Integrated video metadata into File Information section
-- ✅ Created video preview gallery with 16:9 aspect ratio
-- ✅ Applied consistent styling matching Prompts tab
-- ✅ Removed distracting animations per user feedback
-- ✅ Fixed video preview scrolling glitches
-
 ---
 
-## 📋 Remaining Features to Implement
+## 📋Features to Implement
 
-### 2. 🎬 Improve Output Details Visualization
+### 1. 🎬 Improve Output Details Visualization
 **Priority: HIGH**
 **Estimated Time: 2-3 hours**
 **Location:** `cosmos_workflow/ui/app.py` (lines 1500-1580)
 
 #### Objectives:
 - Create an impressive output visualization showcasing the generation process
+-
 - Fix prompt text cutoff issues
 - Show visual flow from inputs to output
 
@@ -31,7 +22,7 @@
    - Display full prompt text with proper formatting
 
 2. **Input Thumbnails Display**
-   - Show all three input videos (color, depth, segmentation) as small thumbnails
+   - Show all input videos (color, depth, segmentation, edge control) as small thumbnails. Do not show videos which have a control_weight of 0 (check how you got control weight for Run History -> Run Details -> Parameters)
    - Arrange in horizontal row above output video
    - Add hover effects to enlarge thumbnails
 
@@ -72,7 +63,7 @@
 
 ---
 
-### 3. 🗑️ Add Deletion Features with Confirmations
+### 2. 🗑️ Add Deletion Features with Confirmations
 **Priority: HIGH**
 **Estimated Time: 3-4 hours**
 **Location:** Multiple files
@@ -129,7 +120,7 @@
 
 ---
 
-### 4. 📊 Reorganize Jobs & Queue Tab
+### 3. 📊 Reorganize Jobs & Queue Tab
 **Priority: MEDIUM**
 **Estimated Time: 3-4 hours**
 **Location:** `cosmos_workflow/ui/app.py` (lines 1850-1900)
@@ -192,7 +183,7 @@
 
 ---
 
-### 5. 🔍 Implement Advanced Filtering and Search
+### 4. 🔍 Implement Advanced Filtering and Search
 **Priority: MEDIUM**
 **Estimated Time: 2-3 hours**
 **Location:** Multiple locations in `app.py`
@@ -262,40 +253,19 @@
 
 ---
 
-## 🎯 Implementation Strategy
-
-### Phase 1: Core Functionality (Week 1)
-1. **Day 1-2:** Output Details Visualization
-2. **Day 3-4:** Deletion Features
-3. **Day 5:** Testing and Bug Fixes
-
-### Phase 2: Enhanced Features (Week 2)
-1. **Day 6-7:** Jobs & Queue Dashboard
-2. **Day 8-9:** Advanced Filtering
-3. **Day 10:** Polish and Optimization
-
-### Development Workflow
-1. Create feature branch
-2. Implement feature
-3. Test with Playwright
-4. Get user feedback
-5. Make adjustments
-6. Commit with descriptive message
-7. Move to next feature
-
 ### Testing Protocol
 ```python
 # After each feature:
-1. Manual testing of all interactions
-2. Playwright automated tests
-3. Cross-browser verification (Chrome, Firefox, Edge)
-4. Performance testing with large datasets
-5. Accessibility audit
+Comprehensive manual testing of all interactions with playwright
 ```
 
 ---
 
 ## 🎨 Design Guidelines
+Include as many relevant features and interactions as possible
+Add thoughtful details like hover states, transitions, and micro-interactions
+Create an impressive demonstration showcasing web development capabilities
+Apply design principles: hierarchy, contrast, balance, and movement
 
 ### Visual Consistency
 - **Color Palette:**
@@ -321,15 +291,8 @@
 
 ## 📊 Success Metrics
 
-### Performance Targets
-- Page load: < 2 seconds
-- Filter application: < 100ms
-- Search results: < 200ms
-- Animation FPS: 60fps
-
 ### User Experience Goals
 - Zero accidental deletions
-- All actions reversible/undoable
 - Clear visual feedback for every action
 - Intuitive navigation without documentation
 
@@ -341,44 +304,10 @@
 
 ---
 
-## 🚀 Bonus Features (If Time Permits)
-
-1. **Keyboard Shortcuts**
-   - `Ctrl+D` - Delete selected
-   - `Ctrl+F` - Focus search
-   - `Ctrl+R` - Refresh data
-   - `Esc` - Close modals
-
-2. **Theme System**
-   - Dark/Light mode toggle
-   - Custom color themes
-   - System preference detection
-
-3. **Export Capabilities**
-   - Export filtered data as CSV
-   - Generate PDF reports
-   - Share links for filtered views
-
-4. **Accessibility**
-   - ARIA labels
-   - Keyboard navigation
-   - Screen reader support
-   - High contrast mode
-
-5. **Advanced Analytics**
-   - Generation time trends
-   - Success rate charts
-   - Resource utilization graphs
-   - Cost tracking (if applicable)
-
----
 
 ## 📝 Notes
 
 - Prioritize user safety (confirmations, undo)
-- Focus on smooth animations and transitions
-- Ensure mobile responsiveness where possible
 - Document any API changes needed
-- Keep backward compatibility
 
 **Remember:** Each feature should be impressive enough to showcase in a portfolio while being practical and user-friendly.

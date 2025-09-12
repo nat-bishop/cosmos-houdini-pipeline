@@ -85,12 +85,12 @@ class DockerExecutor:
         try:
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: {}", remote_log_path)
+            logger.info("Remote log path: {}", remote_log_path)
 
             # Execute inference using bash script
-            run_logger.info("Starting inference on GPU. This may take several minutes...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching inference in background...")
+            logger.info("Starting inference on GPU. This may take several minutes...")
+            logger.info("Use 'cosmos status --stream' to monitor progress")
+            logger.info("Launching inference in background...")
 
             # Run inference synchronously and get exit code
             exit_code = self._run_inference_script(
@@ -98,7 +98,7 @@ class DockerExecutor:
             )
 
             if exit_code == 0:
-                run_logger.info("Inference completed successfully for {}", prompt_name)
+                logger.info("Inference completed successfully for {}", prompt_name)
                 return {
                     "status": "completed",
                     "exit_code": exit_code,
@@ -106,7 +106,7 @@ class DockerExecutor:
                     "prompt_name": prompt_name,
                 }
             else:
-                run_logger.error("Inference failed with exit code {}", exit_code)
+                logger.error("Inference failed with exit code {}", exit_code)
                 return {
                     "status": "failed",
                     "exit_code": exit_code,
@@ -116,7 +116,7 @@ class DockerExecutor:
                 }
 
         except Exception as e:
-            run_logger.error("Inference failed for {}: {}", prompt_name, e)
+            logger.error("Inference failed for {}: {}", prompt_name, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_upscaling(
@@ -158,7 +158,7 @@ class DockerExecutor:
         run_logger = get_run_logger(run_id, f"upscale_{video_name}")
         run_logger.info("Running upscaling for video {} with weight {}", video_path, control_weight)
         if prompt:
-            run_logger.info("Using prompt: {}", prompt[:100])
+            logger.info("Using prompt: {}", prompt[:100])
 
         # Setup local log path
         local_log_path = get_log_path("upscaling", f"run_{run_id}", run_id)
@@ -194,12 +194,12 @@ class DockerExecutor:
 
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: {}", remote_log_path)
+            logger.info("Remote log path: {}", remote_log_path)
 
             # Execute upscaling using bash script
-            run_logger.info("Starting upscaling on GPU. This may take several minutes...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching upscaling in background...")
+            logger.info("Starting upscaling on GPU. This may take several minutes...")
+            logger.info("Use 'cosmos status --stream' to monitor progress")
+            logger.info("Launching upscaling in background...")
 
             # Run upscaling synchronously and get exit code
             exit_code = self._run_upscaling_script(
@@ -212,7 +212,7 @@ class DockerExecutor:
             )
 
             if exit_code == 0:
-                run_logger.info("Upscaling completed successfully for video {}", video_name)
+                logger.info("Upscaling completed successfully for video {}", video_name)
                 return {
                     "status": "completed",
                     "exit_code": exit_code,
@@ -220,7 +220,7 @@ class DockerExecutor:
                     "video_path": video_path,
                 }
             else:
-                run_logger.error("Upscaling failed with exit code {}", exit_code)
+                logger.error("Upscaling failed with exit code {}", exit_code)
                 return {
                     "status": "failed",
                     "exit_code": exit_code,
@@ -230,7 +230,7 @@ class DockerExecutor:
                 }
 
         except Exception as e:
-            run_logger.error("Upscaling failed for video {}: {}", video_path, e)
+            logger.error("Upscaling failed for video {}: {}", video_path, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
@@ -260,12 +260,12 @@ class DockerExecutor:
         """
         # Setup run-specific logger (consistent with inference)
         if run_id:
-            run_logger = get_run_logger(
+            logger = get_run_logger(
                 run_id, f"prompt_enhancement_{batch_filename.split('.')[0]}"
             )
             local_log_path = get_log_path("enhancement", f"run_{run_id}", run_id)
         else:
-            run_logger = logger
+            logger = logger
             local_log_path = None
 
         run_logger.info("Running prompt enhancement for batch {}", batch_filename)
@@ -332,7 +332,7 @@ class DockerExecutor:
             command = builder.build()
 
             # Run synchronously (blocking)
-            run_logger.info("Starting prompt enhancement on GPU...")
+            logger.info("Starting prompt enhancement on GPU...")
 
             # Execute and wait for completion
             exit_code, stdout, stderr = self.ssh_manager.execute_command(
@@ -341,7 +341,7 @@ class DockerExecutor:
                 stream_output=True,  # Stream output for CLI
             )
 
-            run_logger.info("Prompt enhancement completed with exit code %d", exit_code)
+            logger.info("Prompt enhancement completed with exit code %d", exit_code)
 
             if exit_code == 0:
                 return {
@@ -359,7 +359,7 @@ class DockerExecutor:
                 }
 
         except Exception as e:
-            run_logger.error("Prompt enhancement launch failed: {}", e)
+            logger.error("Prompt enhancement launch failed: {}", e)
             return {
                 "status": "failed",
                 "error": str(e),
@@ -403,6 +403,15 @@ class DockerExecutor:
             timeout=self.docker_timeout,  # Use configured timeout
             stream_output=stream_output,
         )
+
+        # Log Docker startup failures to unified log
+        if exit_code != 0:
+            logger.error("Docker container failed with exit code {}", exit_code)
+            logger.error("Command: {}", command)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+            if stdout and not stream_output:  # Don't duplicate if already streamed
+                logger.info("STDOUT: {}", stdout)
 
         logger.info("Inference completed with exit code %d", exit_code)
         return exit_code
@@ -452,6 +461,15 @@ class DockerExecutor:
             timeout=self.docker_timeout,  # Use configured timeout
             stream_output=stream_output,
         )
+
+        # Log Docker startup failures to unified log
+        if exit_code != 0:
+            logger.error("Docker container failed with exit code {}", exit_code)
+            logger.error("Command: {}", command)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+            if stdout and not stream_output:  # Don't duplicate if already streamed
+                logger.info("STDOUT: {}", stdout)
 
         logger.info("Upscaling completed with exit code %d", exit_code)
         return exit_code

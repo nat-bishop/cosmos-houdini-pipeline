@@ -19,7 +19,8 @@ Run the following documentation updates in parallel:
 - CHANGELOG.md (mandatory for EVERY change)
 - README.md (if user-facing changes)
 - docs/API.md (if API/CLI/database changes)
-- UI_GUIDE.md (if UI/interface changes)
+- docs/UI_GUIDE.md (if UI/interface changes)
+- docs/DEVELOPMENT.md (if development process changes)
 - ROADMAP.md (if completing features)
 - Docstrings (for modified functions)
 
@@ -45,7 +46,7 @@ Run the following documentation updates in parallel:
    - Development environment requirements
    - Code style or convention changes
 
-5. **UI_GUIDE.md** - Update for UI/interface changes:
+5. **docs/UI_GUIDE.md** - Update for UI/interface changes:
    - Tab functionality and navigation changes
    - New UI components or features
    - Design system updates (CSS, animations)
@@ -84,7 +85,7 @@ Run the following documentation updates in parallel:
 - **API changes** → docs/API.md + CHANGELOG.md + docstrings
 - **Database changes** → docs/API.md (database schema section) + CHANGELOG.md
 - **New features** → README.md (if user-facing) + docs/API.md (technical details) + CHANGELOG.md + check ROADMAP.md
-- **UI/Interface changes** → UI_GUIDE.md (operational guide) + README.md (screenshots if impressive) + CHANGELOG.md
+- **UI/Interface changes** → docs/UI_GUIDE.md (operational guide) + README.md (screenshots if impressive) + CHANGELOG.md
 - **Config changes** → README.md (configuration section) + CHANGELOG.md
 - **Breaking changes** → CHANGELOG.md with BREAKING CHANGE note + README.md + docs/API.md
 - **Performance improvements** → docs/API.md (if significant) + CHANGELOG.md
@@ -96,7 +97,7 @@ Run the following documentation updates in parallel:
 - CHANGELOG.md is ALWAYS updated for ANY change (no exceptions)
 - README.md only for user-visible changes (commands, config, features)
 - docs/API.md for all technical/implementation details
-- UI_GUIDE.md for all UI/interface operational documentation
+- docs/UI_GUIDE.md for all UI/interface operational documentation
 - docs/DEVELOPMENT.md only for changes to development process
 - ROADMAP.md only to check off completed items (never add or modify)
 

@@ -127,13 +127,19 @@ class TestDatabaseWorkflow:
         )
 
         # Create multiple runs for first prompt
-        run1 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 1}, model_type="transfer")
+        run1 = test_service.create_run(
+            prompt_id=prompt1["id"], execution_config={"seed": 1}, model_type="transfer"
+        )
         test_service.update_run_status(run1["id"], "completed")
 
-        run2 = test_service.create_run(prompt_id=prompt1["id"], execution_config={"seed": 2}, model_type="transfer")
+        run2 = test_service.create_run(
+            prompt_id=prompt1["id"], execution_config={"seed": 2}, model_type="transfer"
+        )
         test_service.update_run_status(run2["id"], "failed")
 
-        test_service.create_run(prompt_id=prompt2["id"], execution_config={"seed": 3}, model_type="reason")
+        test_service.create_run(
+            prompt_id=prompt2["id"], execution_config={"seed": 3}, model_type="reason"
+        )
 
         # Query all prompts
         all_prompts = test_service.list_prompts()
@@ -209,7 +215,9 @@ class TestDatabaseWorkflow:
         runs = []
         for prompt in prompts[:3]:  # Only create runs for first 3
             run = test_service.create_run(
-                prompt_id=prompt["id"], execution_config={"seed": prompt["id"]}, model_type="transfer"
+                prompt_id=prompt["id"],
+                execution_config={"seed": prompt["id"]},
+                model_type="transfer",
             )
             runs.append(run)
 
@@ -239,7 +247,9 @@ class TestDatabaseWorkflow:
         )
 
         # Create failing run
-        run = test_service.create_run(prompt_id=prompt["id"], execution_config={"will_fail": True}, model_type="transfer")
+        run = test_service.create_run(
+            prompt_id=prompt["id"], execution_config={"will_fail": True}, model_type="transfer"
+        )
 
         # Fail the run
         test_service.update_run(run["id"], outputs={"error": "GPU out of memory"})
@@ -281,7 +291,9 @@ class TestDatabaseWorkflow:
             )
 
             run = test_service.create_run(
-                prompt_id=prompt["id"], execution_config={"thread_index": index}, model_type="transfer"
+                prompt_id=prompt["id"],
+                execution_config={"thread_index": index},
+                model_type="transfer",
             )
 
             test_service.update_run_status(run["id"], "completed")

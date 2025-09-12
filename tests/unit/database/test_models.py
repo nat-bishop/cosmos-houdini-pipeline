@@ -116,7 +116,6 @@ class TestPromptModel:
             session.add(prompt)
             session.commit()
 
-
     def test_prompt_timestamp_auto_set(self, session: Session):
         """Test that created_at is automatically set."""
         before = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -266,7 +265,7 @@ class TestRunModel:
             Run(
                 id=f"rs_{i}",
                 prompt_id=sample_prompt.id,
-                    status=status,
+                status=status,
                 execution_config={},
                 outputs={},
                 run_metadata={},
@@ -299,7 +298,7 @@ class TestRunModel:
             Run(
                 id=f"rs_rel_{i}",
                 prompt_id=prompt.id,
-                    status="pending",
+                status="pending",
                 execution_config={},
                 outputs={},
                 run_metadata={},
@@ -328,7 +327,7 @@ class TestModelValidation:
         with pytest.raises(ValueError, match="inputs cannot be None"):
             Prompt(
                 id="ps_invalid",
-                    prompt_text="test",
+                prompt_text="test",
                 inputs=None,
                 parameters={},
             )
@@ -336,7 +335,7 @@ class TestModelValidation:
         with pytest.raises(ValueError, match="parameters cannot be None"):
             Prompt(
                 id="ps_invalid",
-                    prompt_text="test",
+                prompt_text="test",
                 inputs={},
                 parameters=None,
             )
@@ -344,9 +343,7 @@ class TestModelValidation:
     def test_prompt_rejects_empty_required_fields(self):
         """Test that Prompt rejects empty required fields."""
         with pytest.raises(ValueError, match="prompt_text cannot be None or empty"):
-            Prompt(
-                id="ps_invalid", prompt_text="   ", inputs={}, parameters={}
-            )
+            Prompt(id="ps_invalid", prompt_text="   ", inputs={}, parameters={})
 
     def test_run_validates_required_fields(self):
         """Test that Run validates required fields."""
@@ -354,7 +351,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
-                    status="pending",
+                status="pending",
                 execution_config=None,
                 outputs={},
                 run_metadata={},
@@ -364,7 +361,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
-                    status="",
+                status="",
                 execution_config={},
                 outputs={},
                 run_metadata={},
@@ -444,7 +441,7 @@ class TestDatabaseIntegration:
             run = Run(
                 id=f"rs_multi_{i}",
                 prompt_id=prompt.id,
-                    status=status,
+                status=status,
                 execution_config={"attempt": i + 1},
                 outputs={},
                 run_metadata={},

@@ -350,7 +350,7 @@ class TestEnhancementQueries:
         # Create multiple enhanced prompts
         for i in range(5):
             prompt = repository.create_prompt(
-                    prompt_text=f"Prompt {i}",
+                prompt_text=f"Prompt {i}",
                 inputs={},
                 parameters={},
             )

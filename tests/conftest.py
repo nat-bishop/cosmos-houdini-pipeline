@@ -148,49 +148,44 @@ def mock_ai_generator():
 @pytest.fixture
 def mock_cosmos_api_for_cli():
     """Create a mock CosmosAPI for CLI tests that doesn't touch the real database.
-    
+
     This fixture ensures CLI tests don't create real database entries or output directories.
     """
     mock_api = Mock()
-    
+
     # Mock the create_prompt method
     def mock_create_prompt(**kwargs):
-        prompt_text = kwargs.get('prompt_text', 'test')
-        name = kwargs.get('name', None)
+        prompt_text = kwargs.get("prompt_text", "test")
+        name = kwargs.get("name", None)
         if not name:
             # Auto-generate name from prompt text (mimic real behavior)
-            name = prompt_text[:20].replace(' ', '_').lower()
-        
+            name = prompt_text[:20].replace(" ", "_").lower()
+
         return {
-            'id': f'ps_test_{hash(prompt_text) % 10000:04d}',
-            'prompt_text': prompt_text,
-            'parameters': {
-                'name': name,
-                'negative_prompt': kwargs.get('negative_prompt', '')
-            },
-            'inputs': {
-                'video': str(kwargs.get('video_dir', ''))
-            }
+            "id": f"ps_test_{hash(prompt_text) % 10000:04d}",
+            "prompt_text": prompt_text,
+            "parameters": {"name": name, "negative_prompt": kwargs.get("negative_prompt", "")},
+            "inputs": {"video": str(kwargs.get("video_dir", ""))},
         }
-    
+
     # Mock other common methods
     mock_api.create_prompt = Mock(side_effect=mock_create_prompt)
-    mock_api.get_prompt = Mock(return_value={'id': 'ps_test_0001', 'prompt_text': 'test'})
+    mock_api.get_prompt = Mock(return_value={"id": "ps_test_0001", "prompt_text": "test"})
     mock_api.list_prompts = Mock(return_value=[])
     mock_api.list_runs = Mock(return_value=[])
-    mock_api.create_run = Mock(return_value={'id': 'rs_test_0001', 'status': 'pending'})
-    mock_api.get_run = Mock(return_value={'id': 'rs_test_0001', 'status': 'completed'})
-    
+    mock_api.create_run = Mock(return_value={"id": "rs_test_0001", "status": "pending"})
+    mock_api.get_run = Mock(return_value={"id": "rs_test_0001", "status": "completed"})
+
     return mock_api
 
 
 @pytest.fixture
 def mock_cli_context(mock_cosmos_api_for_cli):
     """Automatically patch CosmosAPI for CLI tests.
-    
+
     Use this fixture in CLI test files to ensure they use the mocked API.
     """
-    with patch('cosmos_workflow.api.CosmosAPI') as mock_class:
+    with patch("cosmos_workflow.api.CosmosAPI") as mock_class:
         mock_class.return_value = mock_cosmos_api_for_cli
         yield mock_cosmos_api_for_cli
 

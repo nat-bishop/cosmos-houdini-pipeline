@@ -18,7 +18,7 @@ from cosmos_workflow.cli import cli
 @pytest.mark.usefixtures("mock_cli_context")
 class TestCreatePromptCommand:
     """Test the 'cosmos create prompt' command behavior.
-    
+
     Uses mock_cli_context fixture to ensure no real database operations.
     """
 
@@ -54,13 +54,13 @@ class TestCreatePromptCommand:
         assert "cyberpunk" in result.output.lower()
         # Should display the video path used
         assert str(test_video_dir) in result.output or "color.mp4" in result.output
-        
+
         # Verify the mock was called correctly
         mock_cli_context.create_prompt.assert_called_once_with(
             prompt_text="cyberpunk city at night",
             video_dir=str(test_video_dir),  # CLI converts Path to string
             name=None,
-            negative_prompt=None
+            negative_prompt=None,
         )
 
     def test_create_prompt_with_name(self, runner, test_video_dir, mock_cli_context):
@@ -80,13 +80,13 @@ class TestCreatePromptCommand:
         assert result.exit_code == 0
         assert "Prompt created successfully!" in result.output
         assert "my_custom_prompt" in result.output
-        
+
         # Verify the mock was called with custom name
         mock_cli_context.create_prompt.assert_called_once_with(
             prompt_text="futuristic scene",
             video_dir=str(test_video_dir),  # CLI converts Path to string
             name="my_custom_prompt",
-            negative_prompt=None
+            negative_prompt=None,
         )
 
     def test_create_prompt_with_negative(self, runner, test_video_dir, mock_cli_context):
@@ -107,13 +107,13 @@ class TestCreatePromptCommand:
         assert result.exit_code == 0
         assert "Prompt created successfully!" in result.output
         # The negative prompt should be stored (though not necessarily displayed)
-        
+
         # Verify the mock was called with negative prompt
         mock_cli_context.create_prompt.assert_called_once_with(
             prompt_text="beautiful landscape",
             video_dir=str(test_video_dir),  # CLI converts Path to string
             name=None,
-            negative_prompt=custom_negative
+            negative_prompt=custom_negative,
         )
 
     def test_create_prompt_missing_video_dir(self, runner, mock_cli_context):
@@ -123,7 +123,7 @@ class TestCreatePromptCommand:
         assert result.exit_code != 0
         # Should have an error message
         assert "error" in result.output.lower() or "not found" in result.output.lower()
-        
+
         # Mock should not have been called since validation failed
         mock_cli_context.create_prompt.assert_not_called()
 
@@ -131,7 +131,7 @@ class TestCreatePromptCommand:
         """Test that missing required color.mp4 file causes error."""
         # Mock the API to raise an error for missing files
         mock_cli_context.create_prompt.side_effect = FileNotFoundError("color.mp4 not found")
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             video_dir = Path(tmpdir) / "incomplete_videos"
             video_dir.mkdir()
@@ -148,12 +148,12 @@ class TestCreatePromptCommand:
         # Reset the mock to default behavior
         mock_cli_context.create_prompt.side_effect = None
         mock_cli_context.create_prompt.return_value = {
-            'id': 'ps_test_color_only',
-            'prompt_text': 'test prompt',
-            'parameters': {'name': 'test_prompt'},
-            'inputs': {'video': 'test_video_dir'}
+            "id": "ps_test_color_only",
+            "prompt_text": "test prompt",
+            "parameters": {"name": "test_prompt"},
+            "inputs": {"video": "test_video_dir"},
         }
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             video_dir = Path(tmpdir) / "color_only_videos"
             video_dir.mkdir()
@@ -165,7 +165,7 @@ class TestCreatePromptCommand:
             # Should succeed with only color.mp4
             assert result.exit_code == 0
             assert "successfully" in result.output.lower()
-            
+
             # Verify the mock was called
             mock_cli_context.create_prompt.assert_called_once()
 
@@ -179,13 +179,13 @@ class TestCreatePromptCommand:
         assert "Prompt created successfully!" in result.output
         # Should show some generated name (not the full prompt text)
         # Name generation might truncate or simplify the prompt
-        
+
         # Verify the mock was called without a name (auto-generated)
         mock_cli_context.create_prompt.assert_called_once_with(
             prompt_text="epic cyberpunk transformation scene",
             video_dir=str(test_video_dir),  # CLI converts Path to string
             name=None,
-            negative_prompt=None
+            negative_prompt=None,
         )
 
 
@@ -231,7 +231,7 @@ class TestCLIIntegration:
 
             # Reset the mock call count
             mock_cli_context.create_prompt.reset_mock()
-            
+
             # Run with verbose
             result_verbose = runner.invoke(
                 cli, ["--verbose", "create", "prompt", "test", str(video_dir)]

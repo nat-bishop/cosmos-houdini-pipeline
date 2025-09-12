@@ -509,14 +509,25 @@ class GPUExecutor:
 
         # Also download the log file
         remote_log = f"{remote_output_dir}/run.log"
-        local_log = logs_dir / "remote_run.log"
+        docker_log_path = outputs_dir / "run.log"  # Keep in outputs as backup
         try:
-            self.file_transfer.download_file(remote_log, str(local_log))
-            logger.info("Downloaded remote log to {}", local_log)
+            self.file_transfer.download_file(remote_log, str(docker_log_path))
+            logger.info("Downloaded Docker log to {}", docker_log_path)
+
+            # Append to unified log
+            unified_log = logs_dir / f"{run_id}.log"
+            if docker_log_path.exists() and unified_log.exists():
+                with open(unified_log, "a") as unified:
+                    unified.write("\n" + "=" * 60 + "\n")
+                    unified.write("=== DOCKER EXECUTION LOGS ===\n")
+                    unified.write("=" * 60 + "\n\n")
+                    with open(docker_log_path) as docker:
+                        unified.write(docker.read())
+                logger.info("Appended Docker logs to unified log")
         except FileNotFoundError:
             logger.warning("Remote log not found: {}", remote_log)
         except Exception as e:
-            logger.error("Failed to download log: {}", e)
+            logger.error("Failed to download/append log: {}", e)
 
         return local_file
 

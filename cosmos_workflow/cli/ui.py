@@ -24,10 +24,7 @@ def kill_process_on_port(port: int) -> bool:
     try:
         # Find PIDs using the port
         result = subprocess.run(
-            f"netstat -ano | findstr :{port}",
-            shell=True,
-            capture_output=True,
-            text=True
+            f"netstat -ano | findstr :{port}", shell=True, capture_output=True, text=True
         )
 
         if not result.stdout:
@@ -35,7 +32,7 @@ def kill_process_on_port(port: int) -> bool:
 
         # Extract unique PIDs
         pids = set()
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             parts = line.split()
             if len(parts) >= 5 and f":{port}" in parts[1]:
                 pid = parts[-1]
@@ -49,10 +46,7 @@ def kill_process_on_port(port: int) -> bool:
             click.echo(f"  Terminating process {pid}...")
 
             kill_result = subprocess.run(
-                f"taskkill /F /PID {pid}",
-                shell=True,
-                capture_output=True,
-                text=True
+                f"taskkill /F /PID {pid}", shell=True, capture_output=True, text=True
             )
 
             if "SUCCESS" in kill_result.stdout:
@@ -118,7 +112,9 @@ def ui(port, host, share):
             time.sleep(1)  # Brief pause to ensure port is released
         else:
             click.echo(f"Warning: Could not automatically free port {port}")
-            click.echo("Please manually close any existing UI instances or use a different port with --port")
+            click.echo(
+                "Please manually close any existing UI instances or use a different port with --port"
+            )
             logger.warning("Could not automatically free port %s", port)
             return
 

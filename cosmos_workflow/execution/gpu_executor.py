@@ -760,7 +760,8 @@ class GPUExecutor:
 
             # Also download the shared batch log to this run's directory
             remote_config = self.config_manager.get_remote_config()
-            remote_batch_log = f"{remote_config.remote_dir}/outputs/{batch_name}/batch.log"
+            # The batch script saves log as batch_run.log in the batch output directory
+            remote_batch_log = f"{remote_config.remote_dir}/outputs/{batch_name}/batch_run.log"
             local_batch_log = logs_dir / "batch.log"
 
             try:
@@ -769,6 +770,13 @@ class GPUExecutor:
             except Exception as e:
                 # Batch log might not exist, which is okay
                 logger.debug("Could not download batch log for run {}: {}", run_id, e)
+
+            # Also create a run.log file that references the batch log for compatibility
+            run_log = logs_dir / "run.log"
+            run_log.write_text(
+                f"This run was executed as part of batch: {batch_name}\n"
+                f"See batch.log for execution details.\n"
+            )
 
         except Exception as e:
             logger.error(

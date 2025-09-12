@@ -56,12 +56,15 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [ ] Test Gradio can find outputs in expected locations (integration test)
 - [ ] Commit changes
 
-### ⬜ Step 5: Handle Shared Batch Log
-**File:** `cosmos_workflow/execution/gpu_executor.py` (after batch completion)
-- [ ] Copy batch log to each individual run directory
-- [ ] Name as `logs/batch.log` in each run directory
-- [ ] Ensure log viewer can access logs
-- [ ] Test log availability in UI
+### ✅ Step 5: Handle Shared Batch Log
+**File:** `cosmos_workflow/execution/gpu_executor.py` (lines 761-779)
+- [x] Copy batch log (`batch_run.log`) to each individual run directory
+- [x] Name as `logs/batch.log` in each run directory
+- [x] Create `logs/run.log` file that references the batch for UI compatibility
+- [x] Handle missing batch log gracefully (doesn't fail the download)
+- [x] Updated tests to verify both batch.log and run.log creation
+- [x] All tests pass
+- [ ] Test log availability in UI (integration test)
 - [ ] Commit changes
 
 ### ⬜ Step 6: Add Minimal Batch Tracking (Optional)

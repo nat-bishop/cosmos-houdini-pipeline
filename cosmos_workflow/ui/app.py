@@ -1360,7 +1360,253 @@ def create_ui():
                         # Removed execution status from here - moved to Jobs tab
 
             # ========================================
-            # Tab 4: Outputs (Phase 4 Implementation)
+            # Tab 3: Unified Runs (Merged Outputs + Run History)
+            # ========================================
+            with gr.Tab("🎬 Runs", id=3):
+                gr.Markdown("### Run Management Center")
+                gr.Markdown("View, filter, and manage all runs with generated outputs and detailed information")
+
+                with gr.Row():
+                    # Left: Filters and Statistics
+                    with gr.Column(scale=1):
+                        gr.Markdown("#### 🔍 Filter Options")
+                        
+                        with gr.Group(elem_classes=["detail-card"]):
+                            runs_status_filter = gr.Dropdown(
+                                choices=[
+                                    "all",
+                                    "completed",
+                                    "running", 
+                                    "pending",
+                                    "failed",
+                                    "cancelled",
+                                ],
+                                value="all",
+                                label="Status Filter",
+                                info="Filter runs by status",
+                            )
+                            
+                            runs_date_filter = gr.Dropdown(
+                                choices=[
+                                    "all",
+                                    "today",
+                                    "yesterday",
+                                    "last_7_days",
+                                    "last_30_days",
+                                ],
+                                value="all",
+                                label="Date Range",
+                                info="Filter by creation date",
+                            )
+                            
+                            runs_search = gr.Textbox(
+                                label="Search",
+                                placeholder="Search by prompt text or ID...",
+                                info="Search in prompt text or run ID",
+                            )
+                            
+                            runs_limit = gr.Number(
+                                value=50,
+                                label="Max Results",
+                                minimum=10,
+                                maximum=200,
+                                info="Maximum number of runs to display",
+                            )
+
+                        gr.Markdown("#### 📊 Statistics")
+                        with gr.Group(elem_classes=["detail-card"]):
+                            runs_stats = gr.Markdown("Loading statistics...")
+
+                    # Right: Gallery and Table tabs
+                    with gr.Column(scale=3):
+                        with gr.Tabs():
+                            # Generated Videos tab
+                            with gr.Tab("Generated Videos"):
+                                runs_gallery = gr.Gallery(
+                                    label="Output Videos",
+                                    show_label=False,
+                                    elem_id="runs_gallery",
+                                    columns=3,
+                                    rows=2,
+                                    height=600,
+                                    object_fit="contain",
+                                    allow_preview=True,
+                                    show_download_button=True,
+                                )
+
+                            # Run Records tab
+                            with gr.Tab("Run Records"):
+                                # Batch operations
+                                with gr.Row():
+                                    runs_select_all_btn = gr.Button("☑ Select All", size="sm")
+                                    runs_clear_selection_btn = gr.Button("☐ Clear Selection", size="sm")
+                                    runs_delete_selected_btn = gr.Button(
+                                        "🗑️ Delete Selected",
+                                        size="sm",
+                                        variant="stop",
+                                    )
+                                    runs_selected_info = gr.Markdown("0 runs selected")
+
+                                runs_table = gr.Dataframe(
+                                    headers=[
+                                        "Select",
+                                        "Run ID",
+                                        "Status",
+                                        "Prompt",
+                                        "Duration",
+                                        "Created",
+                                        "Completed",
+                                    ],
+                                    datatype=["bool", "str", "str", "str", "str", "str", "str"],
+                                    interactive=True,
+                                    max_height=600,
+                                    elem_classes=["run-history-table"],
+                                )
+
+                # Run Details Section (Hidden initially)
+                with gr.Group(visible=False, elem_classes=["detail-card"]) as runs_details_group:
+                    gr.Markdown("### 📋 Run Details")
+                    
+                    with gr.Tabs():
+                        # Main Tab - Day-to-day essentials
+                        with gr.Tab("Main"):
+                            with gr.Row():
+                                runs_detail_id = gr.Textbox(
+                                    label="Run ID",
+                                    interactive=False,
+                                    scale=1,
+                                )
+                                runs_detail_status = gr.Textbox(
+                                    label="Status",
+                                    interactive=False,
+                                    scale=1,
+                                )
+
+                            # Input Videos
+                            gr.Markdown("#### Input Videos")
+                            with gr.Row():
+                                runs_input_videos = gr.Gallery(
+                                    label="Input Frames",
+                                    show_label=False,
+                                    columns=6,
+                                    rows=1,
+                                    height=150,
+                                    object_fit="contain",
+                                    allow_preview=True,
+                                )
+
+                            # Generated Output
+                            gr.Markdown("#### Generated Output")
+                            runs_output_video = gr.Video(
+                                label="Output Video",
+                                show_label=False,
+                                autoplay=True,
+                                loop=True,
+                                height=400,
+                            )
+                            runs_download_btn = gr.Button("📥 Download Output", variant="primary")
+
+                            # Control Weights
+                            gr.Markdown("#### Control Weights")
+                            with gr.Row():
+                                runs_visual_weight = gr.Number(
+                                    label="Visual",
+                                    value=0,
+                                    interactive=False,
+                                )
+                                runs_edge_weight = gr.Number(
+                                    label="Edge",
+                                    value=0,
+                                    interactive=False,
+                                )
+                                runs_depth_weight = gr.Number(
+                                    label="Depth",
+                                    value=0,
+                                    interactive=False,
+                                )
+                                runs_segmentation_weight = gr.Number(
+                                    label="Segmentation",
+                                    value=0,
+                                    interactive=False,
+                                )
+
+                            # Full Prompt
+                            gr.Markdown("#### Full Prompt")
+                            runs_prompt_text = gr.Textbox(
+                                label="Prompt Text",
+                                show_label=False,
+                                lines=3,
+                                max_lines=10,
+                                interactive=False,
+                            )
+
+                        # Info Tab - Run metadata
+                        with gr.Tab("Info"):
+                            with gr.Row():
+                                runs_info_id = gr.Textbox(
+                                    label="Run ID",
+                                    interactive=False,
+                                )
+                                runs_info_prompt_id = gr.Textbox(
+                                    label="Prompt ID",
+                                    interactive=False,
+                                )
+
+                            with gr.Row():
+                                runs_info_status = gr.Textbox(
+                                    label="Status",
+                                    interactive=False,
+                                )
+                                runs_info_duration = gr.Textbox(
+                                    label="Duration",
+                                    interactive=False,
+                                )
+                                runs_info_type = gr.Textbox(
+                                    label="Run Type",
+                                    interactive=False,
+                                )
+
+                            runs_info_prompt_name = gr.Textbox(
+                                label="Prompt Name",
+                                interactive=False,
+                            )
+
+                            with gr.Row():
+                                runs_info_created = gr.Textbox(
+                                    label="Created",
+                                    interactive=False,
+                                )
+                                runs_info_completed = gr.Textbox(
+                                    label="Completed",
+                                    interactive=False,
+                                )
+
+                        # Parameters Tab
+                        with gr.Tab("Parameters"):
+                            gr.Markdown("#### Execution Configuration")
+                            runs_params_json = gr.JSON(
+                                label="Inference Parameters",
+                                show_label=False,
+                            )
+
+                        # Logs Tab
+                        with gr.Tab("Logs"):
+                            runs_log_path = gr.Textbox(
+                                label="Log File Path",
+                                interactive=False,
+                            )
+                            runs_log_output = gr.Code(
+                                label="Log Output (Last 15 Lines)",
+                                language="shell",
+                                lines=15,
+                                interactive=False,
+                            )
+                            with gr.Row():
+                                runs_load_logs_btn = gr.Button("📄 Load Full Logs")
+                                runs_copy_logs_btn = gr.Button("📋 Copy Logs")
+
+            # ========================================
+            # Tab 4: Outputs (OLD - Phase 4 Implementation)
             # ========================================
             with gr.Tab("🎬 Outputs", id=3):
                 gr.Markdown("### Output Gallery")

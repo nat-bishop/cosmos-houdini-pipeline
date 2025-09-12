@@ -54,11 +54,16 @@ class TestBatchDownload:
                     str(Path("outputs/run_123/outputs/output.mp4")),
                 )
 
-                # Second call should be for the batch log
+                # Second call should be for the batch log (batch_run.log from batch output)
                 assert calls[1] == call(
-                    "/workspace/outputs/batch_20241206/batch.log",
+                    "/workspace/outputs/batch_20241206/batch_run.log",
                     str(Path("outputs/run_123/logs/batch.log")),
                 )
+
+                # Verify run.log was created with reference to batch
+                run_log = Path("outputs/run_123/logs/run.log")
+                assert run_log.exists()
+                assert "batch_20241206" in run_log.read_text()
 
             finally:
                 os.chdir(original_cwd)
@@ -106,6 +111,11 @@ class TestBatchDownload:
 
                 # Verify directories were still created
                 assert Path("outputs/run_456").exists()
+
+                # Verify run.log was still created even without batch log
+                run_log = Path("outputs/run_456/logs/run.log")
+                assert run_log.exists()
+                assert "batch_xyz" in run_log.read_text()
 
             finally:
                 os.chdir(original_cwd)

@@ -67,12 +67,14 @@ Fix batch inference to properly handle multiple prompts efficiently while mainta
 - [ ] Test log availability in UI (integration test)
 - [ ] Commit changes
 
-### ⬜ Step 6: Add Minimal Batch Tracking (Optional)
-**File:** `cosmos_workflow/api/cosmos_api.py` (line 680)
-- [ ] Add `batch_id` to execution_config for debugging
-- [ ] Add `batch_size` to execution_config
-- [ ] Ensure metadata doesn't break existing code
-- [ ] Verify UI ignores these fields gracefully
+### ✅ Step 6: Add Minimal Batch Tracking (Optional)
+**File:** `cosmos_workflow/api/cosmos_api.py` (lines 503-511, 684-687)
+- [x] Add `batch_id` to execution_config for batch runs only
+- [x] Use UUID4-based unique ID generation (same pattern as prompts/runs)
+- [x] Single runs don't get batch_id (remains null/absent)
+- [x] JSON column handles optional field automatically (no migration needed)
+- [x] Created unit tests to verify batch_id format and uniqueness
+- [x] All tests pass
 - [ ] Commit changes
 
 ## Testing Checklist

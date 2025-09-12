@@ -1370,13 +1370,13 @@ def create_ui():
                     # Left: Filters and Statistics
                     with gr.Column(scale=1):
                         gr.Markdown("#### 🔍 Filter Options")
-                        
+
                         with gr.Group(elem_classes=["detail-card"]):
                             runs_status_filter = gr.Dropdown(
                                 choices=[
                                     "all",
                                     "completed",
-                                    "running", 
+                                    "running",
                                     "pending",
                                     "failed",
                                     "cancelled",
@@ -1385,7 +1385,7 @@ def create_ui():
                                 label="Status Filter",
                                 info="Filter runs by status",
                             )
-                            
+
                             runs_date_filter = gr.Dropdown(
                                 choices=[
                                     "all",
@@ -1398,13 +1398,13 @@ def create_ui():
                                 label="Date Range",
                                 info="Filter by creation date",
                             )
-                            
+
                             runs_search = gr.Textbox(
                                 label="Search",
                                 placeholder="Search by prompt text or ID...",
                                 info="Search in prompt text or run ID",
                             )
-                            
+
                             runs_limit = gr.Number(
                                 value=50,
                                 label="Max Results",
@@ -1466,7 +1466,7 @@ def create_ui():
                 # Run Details Section (Hidden initially)
                 with gr.Group(visible=False, elem_classes=["detail-card"]) as runs_details_group:
                     gr.Markdown("### 📋 Run Details")
-                    
+
                     with gr.Tabs():
                         # Main Tab - Day-to-day essentials
                         with gr.Tab("Main"):
@@ -1608,7 +1608,7 @@ def create_ui():
             # ========================================
             # Tab 4: Outputs (OLD - Phase 4 Implementation)
             # ========================================
-            with gr.Tab("🎬 Outputs", id=3):
+            with gr.Tab("🎬 Outputs (OLD)", id=30):
                 gr.Markdown("### Output Gallery")
                 gr.Markdown("View and download generated video outputs from completed runs")
 
@@ -1732,7 +1732,7 @@ def create_ui():
             # ========================================
             # Tab 4: Run History - Comprehensive Run Management
             # ========================================
-            with gr.Tab("📊 Run History", id=4):
+            with gr.Tab("📊 Run History (OLD)", id=40):
                 gr.Markdown("### Comprehensive Run History & Management")
                 gr.Markdown("View, filter, and manage all runs with detailed information")
 

@@ -17,6 +17,7 @@ Example:
     result = ops.quick_inference(prompt["id"])
 """
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -499,6 +500,17 @@ class CosmosAPI:
         return prompt
 
     @staticmethod
+    def _generate_batch_id() -> str:
+        """Generate unique ID for a batch using UUID4.
+
+        Returns:
+            Unique ID string starting with 'batch_'
+        """
+        # Use UUID4 for guaranteed uniqueness (same pattern as prompts/runs)
+        unique_id = str(uuid.uuid4()).replace("-", "")[:16]  # Shorter than prompts/runs
+        return f"batch_{unique_id}"
+
+    @staticmethod
     def _build_execution_config(
         weights: dict[str, float] | None = None,
         num_steps: int = 35,
@@ -585,7 +597,7 @@ class CosmosAPI:
         # Validate prompt exists
         prompt = self._validate_prompt(prompt_id)
 
-        # Build execution config
+        # Build execution config (no batch_id for single runs)
         execution_config = self._build_execution_config(weights=weights, **kwargs)
 
         # Create run directly with service
@@ -679,6 +691,11 @@ class CosmosAPI:
 
         # Build execution config once for all prompts
         execution_config = self._build_execution_config(weights=shared_weights, **kwargs)
+
+        # Generate unique batch_id for tracking using UUID4 (similar to prompt/run IDs)
+        batch_id = self._generate_batch_id()
+        execution_config["batch_id"] = batch_id
+        logger.info("Created batch {} for {} prompts", batch_id, len(prompt_ids))
 
         # Create runs for all prompts
         runs_and_prompts = []

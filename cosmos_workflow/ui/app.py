@@ -900,7 +900,8 @@ def create_ui():
         for key in keys:
             if key in components:
                 result.append(components[key])
-        return result if result else None
+        # Return the list if we have all requested components
+        return result if len(result) == len(keys) else None
 
     with gr.Blocks(title="Cosmos Workflow Manager", css=custom_css) as app:
         # Create header with refresh controls
@@ -1191,7 +1192,15 @@ def create_ui():
             "running_jobs_display",
             "job_status",
         )
+        
+        # Debug: Check which components are missing
+        required_components = ["input_gallery", "ops_prompts_table", "running_jobs_display", "job_status"]
+        missing = [k for k in required_components if k not in components]
+        if missing:
+            logger.warning("Missing components for initial load: %s", missing)
+        
         if initial_outputs:
+            logger.info("Setting up initial data load with %d outputs", len(initial_outputs))
             app.load(
                 fn=lambda: (
                     load_input_gallery(),
@@ -1201,6 +1210,8 @@ def create_ui():
                 ),
                 outputs=initial_outputs,
             )
+        else:
+            logger.warning("Could not set up initial data load - missing components")
 
     return app
 

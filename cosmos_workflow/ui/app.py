@@ -59,6 +59,15 @@ def cleanup_on_shutdown(signum=None, frame=None):
     """Kill containers on shutdown using existing CosmosAPI method."""
     if signum:
         logger.info("Shutting down gracefully...")
+
+    # Check config to see if we should cleanup containers
+    ui_config = config.get_ui_config()
+    should_cleanup = ui_config.get("cleanup_containers_on_exit", False)
+
+    if not should_cleanup:
+        logger.info("Container cleanup disabled in config - leaving containers running")
+        return
+
     try:
         result = ops.kill_containers()
         if result["killed_count"] > 0:
@@ -69,8 +78,12 @@ def cleanup_on_shutdown(signum=None, frame=None):
 
 # Register cleanup - reuse existing kill_containers() method
 atexit.register(cleanup_on_shutdown)
-signal.signal(signal.SIGINT, cleanup_on_shutdown)
-signal.signal(signal.SIGTERM, cleanup_on_shutdown)
+# Only register signal handlers in main thread
+import threading
+
+if threading.current_thread() is threading.main_thread():
+    signal.signal(signal.SIGINT, cleanup_on_shutdown)
+    signal.signal(signal.SIGTERM, cleanup_on_shutdown)
 
 # Get paths from config
 local_config = config.get_local_config()
@@ -939,7 +952,7 @@ def create_ui():
     default_refresh_interval = ui_config.get("refresh_interval", 5)
 
     with gr.Blocks(title="Cosmos Workflow Manager", css=custom_css) as app:
-        gr.Markdown("# 🌌 Cosmos Workflow Manager")
+        gr.Markdown("# 🌌 Cosmos Workflow Manager v1.2")
         gr.Markdown("Comprehensive UI for managing Cosmos Transfer workflows")
 
         # Global Refresh Control Panel
@@ -1428,14 +1441,17 @@ def create_ui():
                                     elem_id="runs_gallery",
                                     columns=3,
                                     rows=2,
-                                    height=600,
+                                    height=400,
                                     object_fit="contain",
-                                    allow_preview=True,
+                                    preview=False,  # Disable preview popup
+                                    allow_preview=False,  # Disable click to expand
                                     show_download_button=True,
+                                    interactive=False,  # Read-only gallery
                                 )
 
                             # Run Records tab
                             with gr.Tab("Run Records"):
+                                # Table with batch operations at the top
                                 # Batch operations
                                 with gr.Row():
                                     runs_select_all_btn = gr.Button("☑ Select All", size="sm")
@@ -1459,151 +1475,168 @@ def create_ui():
                                     ],
                                     datatype=["bool", "str", "str", "str", "str", "str", "str"],
                                     interactive=True,
-                                    max_height=600,
+                                    max_height=400,  # Reduced height since details are below
                                     elem_classes=["run-history-table"],
                                 )
 
-                # Run Details Section (Hidden initially)
-                with gr.Group(visible=False, elem_classes=["detail-card"]) as runs_details_group:
-                    gr.Markdown("### 📋 Run Details")
+                                # Run Details below the table for better visibility
+                                with gr.Group(visible=False, elem_classes=["detail-card"]) as runs_details_group:
+                                            gr.Markdown("### 📋 Run Details")
 
-                    with gr.Tabs():
-                        # Main Tab - Day-to-day essentials
-                        with gr.Tab("Main"):
-                            with gr.Row():
-                                runs_detail_id = gr.Textbox(
-                                    label="Run ID",
-                                    interactive=False,
-                                    scale=1,
-                                )
-                                runs_detail_status = gr.Textbox(
-                                    label="Status",
-                                    interactive=False,
-                                    scale=1,
-                                )
+                                            with gr.Tabs():
+                                                # Main Tab - Day-to-day essentials
+                                                with gr.Tab("Main"):
+                                                    # Generated Output at the top
+                                                    gr.Markdown("#### Generated Output")
+                                                    runs_output_video = gr.Video(
+                                                        label="Output Video",
+                                                        show_label=False,
+                                                        autoplay=True,
+                                                        loop=True,
+                                                        height=500,
+                                                    )
 
-                            # Input Videos
-                            gr.Markdown("#### Input Videos")
-                            with gr.Row():
-                                runs_input_videos = gr.Gallery(
-                                    label="Input Frames",
-                                    show_label=False,
-                                    columns=6,
-                                    rows=1,
-                                    height=150,
-                                    object_fit="contain",
-                                    allow_preview=True,
-                                )
+                                                    # Input Videos with control weights
+                                                    gr.Markdown("#### Input Videos & Control Weights")
 
-                            # Generated Output
-                            gr.Markdown("#### Generated Output")
-                            runs_output_video = gr.Video(
-                                label="Output Video",
-                                show_label=False,
-                                autoplay=True,
-                                loop=True,
-                                height=400,
-                            )
-                            runs_download_btn = gr.Button("📥 Download Output", variant="primary")
+                                                    # Control weights in a single row with compact layout
+                                                    with gr.Row(equal_height=True):
+                                                        with gr.Column(scale=1, min_width=120):
+                                                            gr.Markdown("**Color/Visual**", elem_classes=["compact-label"])
+                                                            runs_visual_weight = gr.Slider(
+                                                                minimum=0,
+                                                                maximum=1,
+                                                                step=0.1,
+                                                                value=0,
+                                                                interactive=False,
+                                                                show_label=False,
+                                                                elem_classes=["compact-slider"],
+                                                            )
+                                                        with gr.Column(scale=1, min_width=120):
+                                                            gr.Markdown("**Edge**", elem_classes=["compact-label"])
+                                                            runs_edge_weight = gr.Slider(
+                                                                minimum=0,
+                                                                maximum=1,
+                                                                step=0.1,
+                                                                value=0,
+                                                                interactive=False,
+                                                                show_label=False,
+                                                                elem_classes=["compact-slider"],
+                                                            )
+                                                        with gr.Column(scale=1, min_width=120):
+                                                            gr.Markdown("**Depth**", elem_classes=["compact-label"])
+                                                            runs_depth_weight = gr.Slider(
+                                                                minimum=0,
+                                                                maximum=1,
+                                                                step=0.1,
+                                                                value=0,
+                                                                interactive=False,
+                                                                show_label=False,
+                                                                elem_classes=["compact-slider"],
+                                                            )
+                                                        with gr.Column(scale=1, min_width=120):
+                                                            gr.Markdown("**Segmentation**", elem_classes=["compact-label"])
+                                                            runs_segmentation_weight = gr.Slider(
+                                                                minimum=0,
+                                                                maximum=1,
+                                                                step=0.1,
+                                                                value=0,
+                                                                interactive=False,
+                                                                show_label=False,
+                                                                elem_classes=["compact-slider"],
+                                                            )
 
-                            # Control Weights
-                            gr.Markdown("#### Control Weights")
-                            with gr.Row():
-                                runs_visual_weight = gr.Number(
-                                    label="Visual",
-                                    value=0,
-                                    interactive=False,
-                                )
-                                runs_edge_weight = gr.Number(
-                                    label="Edge",
-                                    value=0,
-                                    interactive=False,
-                                )
-                                runs_depth_weight = gr.Number(
-                                    label="Depth",
-                                    value=0,
-                                    interactive=False,
-                                )
-                                runs_segmentation_weight = gr.Number(
-                                    label="Segmentation",
-                                    value=0,
-                                    interactive=False,
-                                )
+                                                    # Input video gallery - 4 columns to show all videos in one row
+                                                    runs_input_videos = gr.Gallery(
+                                                        label="Input Frames",
+                                                        show_label=False,
+                                                        columns=4,  # 4 columns for all videos
+                                                        rows=1,
+                                                        height=200,
+                                                        object_fit="contain",
+                                                        allow_preview=True,
+                                                        container=True,  # Enable container for proper layout
+                                                        elem_classes=["input-videos-gallery"],
+                                                    )
 
-                            # Full Prompt
-                            gr.Markdown("#### Full Prompt")
-                            runs_prompt_text = gr.Textbox(
-                                label="Prompt Text",
-                                show_label=False,
-                                lines=3,
-                                max_lines=10,
-                                interactive=False,
-                            )
+                                                    # Full Prompt
+                                                    gr.Markdown("#### Full Prompt")
+                                                    runs_prompt_text = gr.Textbox(
+                                                        label="Prompt Text",
+                                                        show_label=False,
+                                                        lines=4,
+                                                        max_lines=10,
+                                                        interactive=False,
+                                                    )
 
-                        # Info Tab - Run metadata
-                        with gr.Tab("Info"):
-                            with gr.Row():
-                                runs_info_id = gr.Textbox(
-                                    label="Run ID",
-                                    interactive=False,
-                                )
-                                runs_info_prompt_id = gr.Textbox(
-                                    label="Prompt ID",
-                                    interactive=False,
-                                )
+                                                    # Hidden components to maintain interface compatibility
+                                                    runs_detail_id = gr.Textbox(visible=False)
+                                                    runs_detail_status = gr.Textbox(visible=False)
 
-                            with gr.Row():
-                                runs_info_status = gr.Textbox(
-                                    label="Status",
-                                    interactive=False,
-                                )
-                                runs_info_duration = gr.Textbox(
-                                    label="Duration",
-                                    interactive=False,
-                                )
-                                runs_info_type = gr.Textbox(
-                                    label="Run Type",
-                                    interactive=False,
-                                )
+                                                # Info Tab - Run metadata
+                                                with gr.Tab("Info"):
+                                                    with gr.Row():
+                                                        runs_info_id = gr.Textbox(
+                                                            label="Run ID",
+                                                            interactive=False,
+                                                        )
+                                                        runs_info_prompt_id = gr.Textbox(
+                                                            label="Prompt ID",
+                                                            interactive=False,
+                                                        )
 
-                            runs_info_prompt_name = gr.Textbox(
-                                label="Prompt Name",
-                                interactive=False,
-                            )
+                                                    with gr.Row():
+                                                        runs_info_status = gr.Textbox(
+                                                            label="Status",
+                                                            interactive=False,
+                                                        )
+                                                        runs_info_duration = gr.Textbox(
+                                                            label="Duration",
+                                                            interactive=False,
+                                                        )
+                                                        runs_info_type = gr.Textbox(
+                                                            label="Run Type",
+                                                            interactive=False,
+                                                        )
 
-                            with gr.Row():
-                                runs_info_created = gr.Textbox(
-                                    label="Created",
-                                    interactive=False,
-                                )
-                                runs_info_completed = gr.Textbox(
-                                    label="Completed",
-                                    interactive=False,
-                                )
+                                                    runs_info_prompt_name = gr.Textbox(
+                                                        label="Prompt Name",
+                                                        interactive=False,
+                                                    )
 
-                        # Parameters Tab
-                        with gr.Tab("Parameters"):
-                            gr.Markdown("#### Execution Configuration")
-                            runs_params_json = gr.JSON(
-                                label="Inference Parameters",
-                                show_label=False,
-                            )
+                                                    with gr.Row():
+                                                        runs_info_created = gr.Textbox(
+                                                            label="Created",
+                                                            interactive=False,
+                                                        )
+                                                        runs_info_completed = gr.Textbox(
+                                                            label="Completed",
+                                                            interactive=False,
+                                                        )
 
-                        # Logs Tab
-                        with gr.Tab("Logs"):
-                            runs_log_path = gr.Textbox(
-                                label="Log File Path",
-                                interactive=False,
-                            )
-                            runs_log_output = gr.Code(
-                                label="Log Output (Last 15 Lines)",
-                                language="shell",
-                                lines=15,
-                                interactive=False,
-                            )
-                            with gr.Row():
-                                runs_load_logs_btn = gr.Button("📄 Load Full Logs")
-                                runs_copy_logs_btn = gr.Button("📋 Copy Logs")
+                                                # Parameters Tab
+                                                with gr.Tab("Parameters"):
+                                                    gr.Markdown("#### Execution Configuration")
+                                                    runs_params_json = gr.JSON(
+                                                        label="Inference Parameters",
+                                                        show_label=False,
+                                                    )
+
+                                                # Logs Tab
+                                                with gr.Tab("Logs"):
+                                                    runs_log_path = gr.Textbox(
+                                                        label="Log File Path",
+                                                        interactive=False,
+                                                    )
+                                                    runs_log_output = gr.Code(
+                                                        label="Log Output (Last 15 Lines)",
+                                                        language="shell",
+                                                        lines=15,
+                                                        interactive=False,
+                                                    )
+                                                    with gr.Row():
+                                                        runs_load_logs_btn = gr.Button("📄 Load Full Logs")
+                                                        runs_copy_logs_btn = gr.Button("📋 Copy Logs")
 
             # ========================================
             # Tab 4: Outputs (OLD - Phase 4 Implementation)
@@ -2567,6 +2600,448 @@ def create_ui():
 
         # Load initial data will be done via app.load event
 
+        # ========================================
+        # Unified Runs Tab Event Handlers
+        # ========================================
+        def load_runs_data(status_filter, date_filter, search_text, limit):
+            """Load runs data for both gallery and table with filtering."""
+            try:
+                if not ops:
+                    logger.warning("CosmosAPI not initialized")
+                    return [], [], "No data available"
+
+                # Query runs with status filter
+                all_runs = ops.list_runs(
+                    status=None if status_filter == "all" else status_filter,
+                    limit=int(limit)
+                )
+
+                # Apply date filter
+                from datetime import datetime, timedelta, timezone
+                now = datetime.now(timezone.utc)
+                filtered_runs = []
+
+                for run in all_runs:
+                    # Parse run creation date
+                    try:
+                        created_str = run.get("created_at", "")
+                        if created_str:
+                            created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                        else:
+                            created = now
+                    except:
+                        created = now
+
+                    # Apply date filter
+                    if date_filter == "today":
+                        if created.date() == now.date():
+                            filtered_runs.append(run)
+                    elif date_filter == "yesterday":
+                        yesterday = now - timedelta(days=1)
+                        if created.date() == yesterday.date():
+                            filtered_runs.append(run)
+                    elif date_filter == "last_7_days":
+                        seven_days_ago = now - timedelta(days=7)
+                        if created >= seven_days_ago:
+                            filtered_runs.append(run)
+                    elif date_filter == "last_30_days":
+                        thirty_days_ago = now - timedelta(days=30)
+                        if created >= thirty_days_ago:
+                            filtered_runs.append(run)
+                    else:  # all
+                        filtered_runs.append(run)
+
+                # Apply text search
+                if search_text:
+                    search_lower = search_text.lower()
+                    filtered_runs = [
+                        run for run in filtered_runs
+                        if search_lower in run.get("id", "").lower()
+                        or search_lower in run.get("prompt_text", "").lower()
+                    ]
+
+                # Build gallery data (only completed runs with output files)
+                gallery_data = []
+                for run in filtered_runs:
+                    if run.get("status") == "completed":
+                        # Check if run has outputs.files array
+                        if run.get("outputs") and run["outputs"].get("files"):
+                            # Look for output.mp4 in the files list
+                            for file_path in run["outputs"]["files"]:
+                                if "output.mp4" in file_path and "edge_input_control" not in file_path:
+                                    output_path = Path(file_path)
+                                    if output_path.exists() and output_path.is_file():
+                                        gallery_data.append((str(output_path), run["id"]))
+                                        logger.debug("Added video to gallery: %s", output_path)
+                                    else:
+                                        logger.debug("Skipping non-existent file: %s", output_path)
+                                    break
+
+                # Build table data (all filtered runs)
+                table_data = []
+                for run in filtered_runs:
+                    # Calculate duration
+                    duration = "N/A"
+                    try:
+                        if run.get("completed_at") and run.get("created_at"):
+                            created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                            completed = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
+                            duration_delta = completed - created
+                            minutes = int(duration_delta.total_seconds() / 60)
+                            seconds = int(duration_delta.total_seconds() % 60)
+                            duration = f"{minutes}m {seconds}s"
+                    except:
+                        pass
+
+                    # Format dates
+                    created_str = run.get("created_at", "")[:19].replace("T", " ") if run.get("created_at") else ""
+                    completed_str = run.get("completed_at", "")[:19].replace("T", " ") if run.get("completed_at") else ""
+
+                    table_data.append([
+                        False,  # Checkbox
+                        run.get("id", ""),
+                        run.get("status", ""),
+                        run.get("prompt_text", "")[:50] + "..." if len(run.get("prompt_text", "")) > 50 else run.get("prompt_text", ""),
+                        duration,
+                        created_str,
+                        completed_str
+                    ])
+
+                # Calculate statistics
+                total = len(filtered_runs)
+                by_status = {}
+                for run in filtered_runs:
+                    status = run.get("status", "unknown")
+                    by_status[status] = by_status.get(status, 0) + 1
+
+                completed = by_status.get("completed", 0)
+                success_rate = f"{(completed / total * 100):.1f}%" if total > 0 else "N/A"
+
+                stats_md = f"""
+                **Total Runs:** {total}
+                **Success Rate:** {success_rate}
+
+                **By Status:**
+                - ✅ Completed: {by_status.get("completed", 0)}
+                - 🔄 Running: {by_status.get("running", 0)}
+                - ⏳ Pending: {by_status.get("pending", 0)}
+                - ❌ Failed: {by_status.get("failed", 0)}
+                - 🚫 Cancelled: {by_status.get("cancelled", 0)}
+                """
+
+                logger.info(f"Found {total} runs from CosmosAPI")
+                logger.info(f"Returning {len(gallery_data)} gallery items and {len(table_data)} table rows")
+
+                return gallery_data, table_data, stats_md
+
+            except Exception as e:
+                logger.error("Error loading runs data: %s", e)
+                return [], [], f"Error loading data: {e!s}"
+
+        def handle_gallery_selection(evt: gr.SelectData):
+            """Handle selection from gallery and update all detail fields."""
+            try:
+                if not ops or evt.value is None:
+                    return (
+                        gr.update(visible=False),  # runs_details_group
+                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values)
+                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        {},  # Parameters tab (1 value)
+                        "", ""  # Logs tab (2 values)
+                    )
+
+                # Gallery value is (path, label) tuple
+                # Label format is "Run {run_id}: {prompt_text}..."
+                label = evt.value.get("caption", "") if isinstance(evt.value, dict) else evt.value[1] if isinstance(evt.value, tuple) else ""
+
+                # Extract run ID from label
+                if label.startswith("Run "):
+                    run_id_part = label[4:].split(":")[0]
+                    # Full run ID is in the gallery data
+                    run_id = "rs_" + run_id_part if not run_id_part.startswith("rs_") else run_id_part
+                else:
+                    # Fallback: try to extract from the label directly
+                    run_id = label
+
+                logger.info(f"Selected run ID from gallery: {run_id}")
+
+                # Create a fake SelectData event for handle_run_selection
+                fake_evt = gr.SelectData(index=[0], value=None, target=None)
+                # Create fake table data with the run_id
+                fake_table_data = [["", run_id]]
+
+                return handle_run_selection(fake_evt, fake_table_data)
+
+            except Exception as e:
+                logger.error("Error handling gallery selection: %s", e)
+                return (
+                    gr.update(visible=False),  # runs_details_group
+                    "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values)
+                    "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                    {},  # Parameters tab (1 value)
+                    "", ""  # Logs tab (2 values)
+                )
+
+        def handle_run_selection(evt: gr.SelectData, table_data=None):
+            """Handle selection from table and update all detail fields."""
+            try:
+                import pandas as pd
+
+                if not ops:
+                    return (
+                        gr.update(visible=False),  # runs_details_group
+                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
+                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        {},  # Parameters tab (1 value)
+                        "", ""  # Logs tab (2 values)
+                    )
+
+                # Get run ID from table selection
+                if evt.index is None or table_data is None:
+                    return (
+                        gr.update(visible=False),  # runs_details_group
+                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
+                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        {},  # Parameters tab (1 value)
+                        "", ""  # Logs tab (2 values)
+                    )
+
+                # Get run_id from the selected row (column 1 is Run ID)
+                if isinstance(table_data, pd.DataFrame):
+                    if table_data.empty or evt.index[0] >= len(table_data):
+                        return (
+                            gr.update(visible=False),  # runs_details_group
+                            "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
+                            "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                            {},  # Parameters tab (1 value)
+                            "", ""  # Logs tab (2 values)
+                        )
+                    run_id = table_data.iloc[evt.index[0], 1]  # Column 1 is Run ID
+                else:
+                    # Fallback for list data
+                    run_id = table_data[evt.index[0]][1] if evt.index[0] < len(table_data) else None
+
+                if not run_id:
+                    return (
+                        gr.update(visible=False),  # runs_details_group
+                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
+                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        {},  # Parameters tab (1 value)
+                        "", ""  # Logs tab (2 values)
+                    )
+
+                logger.info(f"Selected run ID from table: {run_id}")
+
+                # Fetch full run details
+                run = ops.get_run(run_id)
+                if not run:
+                    return (
+                        gr.update(visible=False),  # runs_details_group
+                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
+                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        {},  # Parameters tab (1 value)
+                        "", ""  # Logs tab (2 values)
+                    )
+
+                # Extract control weights from execution_config.weights
+                control_weights = run.get("execution_config", {}).get("weights", {})
+
+                # Gather input videos and prompt text from the prompt
+                input_videos = []
+                prompt_text = ""
+                prompt_id = run.get("prompt_id")
+
+                if prompt_id:
+                    prompt = ops.get_prompt(prompt_id)
+                    if prompt:
+                        # Get the prompt text
+                        prompt_text = prompt.get("prompt_text", "")
+                        video_path = prompt.get("inputs", {}).get("video", "")
+                        if video_path and video_path.strip():  # Check for non-empty path
+                            # Convert relative path to absolute if needed
+                            video_path_obj = Path(video_path)
+                            if not video_path_obj.is_absolute():
+                                video_path_obj = Path.cwd() / video_path_obj
+
+                            # Get the directory containing the videos
+                            video_dir = video_path_obj.parent
+                            if video_dir.exists() and video_dir.is_dir():
+                                # Collect color, depth, and segmentation videos from input directory
+                                for video_file in sorted(video_dir.glob("*.mp4")):
+                                    if video_file.is_file():
+                                        input_videos.append(str(video_file.resolve()))
+                                logger.info(f"Found {len(input_videos)} videos in {video_dir}")
+                            else:
+                                logger.warning(f"Video directory does not exist: {video_dir}")
+
+                # Add edge control video from outputs if it exists
+                if run.get("outputs") and run["outputs"].get("files"):
+                    for file_path in run["outputs"]["files"]:
+                        if "edge_input_control.mp4" in file_path:
+                            # Insert edge video after color (position 1)
+                            if len(input_videos) >= 1:
+                                input_videos.insert(1, file_path)
+                            else:
+                                input_videos.append(file_path)
+                            logger.info(f"Added edge control video: {file_path}")
+                            break
+
+                logger.info(f"Input videos for Gallery: {input_videos}")
+
+                # Read last 15 lines of log
+                log_content = ""
+                log_path_str = run.get("log_path", "")
+                if log_path_str:
+                    log_path = Path(log_path_str)
+                else:
+                    log_path = Path("")
+
+                if log_path_str and log_path.exists():
+                    try:
+                        with open(log_path) as f:
+                            lines = f.readlines()
+                            log_content = "".join(lines[-15:])
+                    except:
+                        log_content = "Error reading log file"
+
+                # Format dates
+                created_str = run.get("created_at", "")[:19].replace("T", " ") if run.get("created_at") else ""
+                completed_str = run.get("completed_at", "")[:19].replace("T", " ") if run.get("completed_at") else ""
+
+                # Calculate duration
+                duration = "N/A"
+                try:
+                    if run.get("completed_at") and run.get("created_at"):
+                        from datetime import datetime
+                        created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                        completed = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
+                        duration_delta = completed - created
+                        minutes = int(duration_delta.total_seconds() / 60)
+                        seconds = int(duration_delta.total_seconds() % 60)
+                        duration = f"{minutes}m {seconds}s"
+                except:
+                    pass
+
+                # Construct the actual output video path
+                output_video = None
+                # Check if run has outputs.files array
+                if run.get("outputs") and run["outputs"].get("files"):
+                    # Look for output.mp4 in the files list
+                    for file_path in run["outputs"]["files"]:
+                        if "output.mp4" in file_path and "edge_input_control" not in file_path:
+                            # Convert Windows path to forward slashes for Gradio
+                            output_video = file_path.replace("\\", "/")
+                            logger.info("Found output video path: %s", output_video)
+                            # Verify the file exists
+                            if not Path(file_path).exists():
+                                logger.warning("Output video file does not exist: %s", file_path)
+                                output_video = None
+                            break
+
+                # Return updates for ALL detail fields as a tuple in the correct order
+                return (
+                    gr.update(visible=True),  # runs_details_group
+                    # Main tab
+                    run.get("id", ""),  # runs_detail_id
+                    run.get("status", ""),  # runs_detail_status
+                    input_videos,  # runs_input_videos
+                    output_video,  # runs_output_video
+                    control_weights.get("vis", 0),  # runs_visual_weight
+                    control_weights.get("edge", 0),  # runs_edge_weight
+                    control_weights.get("depth", 0),  # runs_depth_weight
+                    control_weights.get("seg", 0),  # runs_segmentation_weight
+                    prompt_text,  # runs_prompt_text
+                    # Info tab
+                    run.get("id", ""),  # runs_info_id
+                    run.get("prompt_id", ""),  # runs_info_prompt_id
+                    run.get("status", ""),  # runs_info_status
+                    duration,  # runs_info_duration
+                    run.get("run_type", "inference"),  # runs_info_type
+                    run.get("prompt_name", ""),  # runs_info_prompt_name
+                    created_str,  # runs_info_created
+                    completed_str,  # runs_info_completed
+                    # Parameters tab
+                    run.get("execution_config", {}),  # runs_params_json
+                    # Logs tab
+                    log_path_str,  # runs_log_path
+                    log_content  # runs_log_output
+                )
+
+            except Exception as e:
+                logger.error("Error handling run selection: %s", str(e))
+                # Return empty values for all outputs
+                return (
+                    gr.update(visible=False),  # runs_details_group
+                    "", "", [], "", 0, 0, 0, 0, "",  # Main tab (9 values)
+                    "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                    {},  # Parameters tab (1 value)
+                    "", ""  # Logs tab (2 values)
+                )
+
+        def update_runs_selection_info(dataframe):
+            """Update the selected runs count."""
+            if dataframe is None or len(dataframe) == 0:
+                return "0 runs selected"
+
+            selected_count = sum(1 for row in dataframe if row[0])  # Count checked rows
+            return f"{selected_count} runs selected"
+
+        def select_all_runs(dataframe):
+            """Select all runs in the table."""
+            if dataframe is None or len(dataframe) == 0:
+                return dataframe
+
+            # Set all checkboxes to True
+            updated = [[True] + row[1:] for row in dataframe]
+            return updated
+
+        def clear_runs_selection(dataframe):
+            """Clear all selections in the table."""
+            if dataframe is None or len(dataframe) == 0:
+                return dataframe
+
+            # Set all checkboxes to False
+            updated = [[False] + row[1:] for row in dataframe]
+            return updated
+
+        def delete_selected_runs(dataframe):
+            """Delete selected runs."""
+            try:
+                if not ops or dataframe is None or len(dataframe) == 0:
+                    return gr.update(), "No runs to delete"
+
+                # Get selected run IDs
+                selected_ids = [row[1] for row in dataframe if row[0]]
+
+                if not selected_ids:
+                    return gr.update(), "No runs selected"
+
+                # Delete each run
+                deleted_count = 0
+                for run_id in selected_ids:
+                    try:
+                        ops.delete_run(run_id)
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.error("Error deleting run %s: %s", run_id, e)
+
+                return gr.update(), f"Deleted {deleted_count} runs"
+
+            except Exception as e:
+                logger.error("Error deleting runs: %s", e)
+                return gr.update(), f"Error: {e!s}"
+
+        def load_full_logs(log_path):
+            """Load full log file content."""
+            try:
+                path = Path(log_path)
+                if path.exists():
+                    with open(path) as f:
+                        return f.read()
+                return "Log file not found"
+            except Exception as e:
+                return f"Error reading log: {e!s}"
+
         # Output gallery events
         def load_outputs(status_filter, model_filter, limit):
             """Load outputs from completed runs using CosmosAPI."""
@@ -2938,6 +3413,137 @@ def create_ui():
             fn=load_run_logs, inputs=[history_run_id], outputs=[history_log_content]
         )
 
+        # ========================================
+        # Unified Runs Tab Event Connections
+        # ========================================
+
+        # Connect filters to load data
+        runs_status_filter.change(
+            fn=load_runs_data,
+            inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
+            outputs=[runs_gallery, runs_table, runs_stats]
+        )
+
+        runs_date_filter.change(
+            fn=load_runs_data,
+            inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
+            outputs=[runs_gallery, runs_table, runs_stats]
+        )
+
+        runs_search.change(
+            fn=load_runs_data,
+            inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
+            outputs=[runs_gallery, runs_table, runs_stats]
+        )
+
+        runs_limit.change(
+            fn=load_runs_data,
+            inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
+            outputs=[runs_gallery, runs_table, runs_stats]
+        )
+
+        # Gallery selection
+        runs_gallery.select(
+            fn=handle_gallery_selection,
+            inputs=[],
+            outputs=[
+                runs_details_group,
+                # Main tab
+                runs_detail_id,
+                runs_detail_status,
+                runs_input_videos,
+                runs_output_video,
+                runs_visual_weight,
+                runs_edge_weight,
+                runs_depth_weight,
+                runs_segmentation_weight,
+                runs_prompt_text,
+                # Info tab
+                runs_info_id,
+                runs_info_prompt_id,
+                runs_info_status,
+                runs_info_duration,
+                runs_info_type,
+                runs_info_prompt_name,
+                runs_info_created,
+                runs_info_completed,
+                # Parameters tab
+                runs_params_json,
+                # Logs tab
+                runs_log_path,
+                runs_log_output
+            ]
+        )
+
+        # Table selection
+        runs_table.select(
+            fn=handle_run_selection,
+            inputs=[runs_table],
+            outputs=[
+                runs_details_group,
+                # Main tab
+                runs_detail_id,
+                runs_detail_status,
+                runs_input_videos,
+                runs_output_video,
+                runs_visual_weight,
+                runs_edge_weight,
+                runs_depth_weight,
+                runs_segmentation_weight,
+                runs_prompt_text,
+                # Info tab
+                runs_info_id,
+                runs_info_prompt_id,
+                runs_info_status,
+                runs_info_duration,
+                runs_info_type,
+                runs_info_prompt_name,
+                runs_info_created,
+                runs_info_completed,
+                # Parameters tab
+                runs_params_json,
+                # Logs tab
+                runs_log_path,
+                runs_log_output
+            ]
+        )
+
+        # Table batch operations
+        runs_select_all_btn.click(
+            fn=select_all_runs,
+            inputs=[runs_table],
+            outputs=[runs_table]
+        )
+
+        runs_clear_selection_btn.click(
+            fn=clear_runs_selection,
+            inputs=[runs_table],
+            outputs=[runs_table]
+        )
+
+        runs_table.change(
+            fn=update_runs_selection_info,
+            inputs=[runs_table],
+            outputs=[runs_selected_info]
+        )
+
+        runs_delete_selected_btn.click(
+            fn=delete_selected_runs,
+            inputs=[runs_table],
+            outputs=[runs_table, runs_selected_info]
+        ).then(
+            fn=load_runs_data,
+            inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
+            outputs=[runs_gallery, runs_table, runs_stats]
+        )
+
+        # Load full logs button
+        runs_load_logs_btn.click(
+            fn=load_full_logs,
+            inputs=[runs_log_path],
+            outputs=[runs_log_output]
+        )
+
         # Auto-load data on app start
         app.load(fn=load_input_gallery, inputs=[], outputs=[input_gallery]).then(
             fn=check_running_jobs, inputs=[], outputs=[running_jobs_display, job_status]
@@ -2953,10 +3559,17 @@ def create_ui():
             fn=lambda: load_run_history("all", "all", "", 100),  # Load run history
             inputs=[],
             outputs=[history_table, history_stats],
+        ).then(
+            fn=lambda: load_runs_data("all", "all", "", 50),  # Load runs for unified tab
+            inputs=[],
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
     return app
 
+
+# Create demo at module level for gradio CLI auto-reload
+demo = create_ui()
 
 if __name__ == "__main__":
     # Get UI configuration from config.toml
@@ -2967,7 +3580,7 @@ if __name__ == "__main__":
 
     logger.info("Starting Cosmos Workflow Manager on {}:{}", host, port)
 
-    app = create_ui()
+    app = demo
 
     # Configure queue for synchronous execution
     # This ensures jobs run sequentially on the GPU
@@ -2981,4 +3594,5 @@ if __name__ == "__main__":
         server_port=port,
         show_error=True,
         inbrowser=True,  # Auto-open browser
+        allowed_paths=["inputs/", "outputs/"],  # Allow serving video files
     )

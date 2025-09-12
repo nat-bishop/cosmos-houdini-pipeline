@@ -88,10 +88,14 @@ def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
 @click.option("--port", default=None, type=int, help="Port number (default: from config.toml)")
 @click.option("--host", default=None, help="Host to bind to (default: from config.toml)")
 @click.option("--share", is_flag=True, help="Create public link")
-def ui(port, host, share):
-    """Launch web interface for workflow management."""
-    from cosmos_workflow.ui.app import create_ui
+@click.option("--reload/--no-reload", default=None, help="Enable/disable auto-reload (default: from config.toml)")
+@click.option("--watch", multiple=True, help="Additional directories to watch for changes")
+def ui(port, host, share, reload, watch):
+    """Launch web interface for workflow management.
 
+    With auto-reload enabled, the UI will automatically restart when
+    source files change - useful for development.
+    """
     # Load configuration
     config = ConfigManager()
     ui_config = config._config_data.get("ui", {})
@@ -100,6 +104,18 @@ def ui(port, host, share):
     port = port or ui_config.get("port", 7860)
     host = host or ui_config.get("host", "0.0.0.0")  # noqa: S104
     share = share or ui_config.get("share", False)
+
+    # Handle auto-reload setting
+    if reload is None:
+        # Use config value if not specified on command line
+        auto_reload = ui_config.get("auto_reload", False)
+    else:
+        auto_reload = reload
+
+    # Build watch directories list
+    watch_dirs = list(ui_config.get("watch_dirs", ["cosmos_workflow"]))
+    if watch:
+        watch_dirs.extend(watch)
 
     # Check if port is in use and kill existing process if needed
     if is_port_in_use(port, host):
@@ -118,19 +134,53 @@ def ui(port, host, share):
             logger.warning("Could not automatically free port %s", port)
             return
 
-    click.echo(f"Starting Cosmos Workflow Manager UI on {host}:{port}...")
-    logger.info("Starting UI on %s:%s", host, port)
+    # Handle auto-reload mode
+    if auto_reload:
+        # Use gradio CLI for auto-reload
+        from pathlib import Path
 
-    if host == "0.0.0.0":  # noqa: S104
-        click.echo(f"📌 Open browser to: http://localhost:{port} (or use machine's IP)")
+        click.echo("Starting Cosmos Workflow Manager UI with auto-reload...")
+        click.echo(f"Watching directories: {', '.join(watch_dirs)}")
+        logger.info("Starting UI with auto-reload on %s:%s", host, port)
+
+        # Path to the app module
+        app_path = Path(__file__).parent.parent / "ui" / "app.py"
+
+        # Build the command
+        cmd = ["gradio", str(app_path)]
+
+        # Add watch directories
+        for watch_dir in watch_dirs:
+            cmd.extend(["--watch-dirs", watch_dir])
+
+        click.echo("📌 UI will auto-reload when files change in watched directories")
+        click.echo(f"📌 Open browser to: http://localhost:{port}")
+
+        try:
+            # Run the gradio CLI
+            subprocess.run(cmd, check=False)
+        except KeyboardInterrupt:
+            click.echo("\nShutting down UI...")
+        except Exception as e:
+            logger.error("Failed to start UI with auto-reload: %s", e)
+            click.echo(f"Error: {e}")
     else:
-        click.echo(f"📌 Open browser to: http://{host}:{port}")
+        # Normal mode without auto-reload
+        from cosmos_workflow.ui.app import create_ui
 
-    interface = create_ui()
-    interface.launch(
-        server_name=host,
-        server_port=port,
-        share=share,
-        inbrowser=True,
-        allowed_paths=["inputs/", "outputs/"],  # Allow serving video files
-    )
+        click.echo(f"Starting Cosmos Workflow Manager UI on {host}:{port}...")
+        logger.info("Starting UI on %s:%s", host, port)
+
+        if host == "0.0.0.0":  # noqa: S104
+            click.echo(f"📌 Open browser to: http://localhost:{port} (or use machine's IP)")
+        else:
+            click.echo(f"📌 Open browser to: http://{host}:{port}")
+
+        interface = create_ui()
+        interface.launch(
+            server_name=host,
+            server_port=port,
+            share=share,
+            inbrowser=True,
+            allowed_paths=["inputs/", "outputs/"],  # Allow serving video files
+        )

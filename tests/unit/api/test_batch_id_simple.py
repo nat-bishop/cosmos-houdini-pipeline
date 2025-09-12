@@ -1,6 +1,5 @@
 """Test batch_id in execution config - simplified version."""
 
-import uuid
 from cosmos_workflow.api.cosmos_api import CosmosAPI
 
 

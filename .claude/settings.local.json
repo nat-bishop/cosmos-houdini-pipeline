@@ -19,7 +19,8 @@
       "Read(//f/Art/cosmos-houdini-testarea/**)",
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_console_messages",
-      "mcp__playwright__browser_evaluate"
+      "mcp__playwright__browser_evaluate",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": [

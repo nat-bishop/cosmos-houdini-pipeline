@@ -88,7 +88,11 @@ def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
 @click.option("--port", default=None, type=int, help="Port number (default: from config.toml)")
 @click.option("--host", default=None, help="Host to bind to (default: from config.toml)")
 @click.option("--share", is_flag=True, help="Create public link")
-@click.option("--reload/--no-reload", default=None, help="Enable/disable auto-reload (default: from config.toml)")
+@click.option(
+    "--reload/--no-reload",
+    default=None,
+    help="Enable/disable auto-reload (default: from config.toml)",
+)
 @click.option("--watch", multiple=True, help="Additional directories to watch for changes")
 def ui(port, host, share, reload, watch):
     """Launch web interface for workflow management.

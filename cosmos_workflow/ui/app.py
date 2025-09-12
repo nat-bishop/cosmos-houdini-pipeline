@@ -1377,7 +1377,9 @@ def create_ui():
             # ========================================
             with gr.Tab("🎬 Runs", id=3):
                 gr.Markdown("### Run Management Center")
-                gr.Markdown("View, filter, and manage all runs with generated outputs and detailed information")
+                gr.Markdown(
+                    "View, filter, and manage all runs with generated outputs and detailed information"
+                )
 
                 with gr.Row():
                     # Left: Filters and Statistics
@@ -1455,7 +1457,9 @@ def create_ui():
                                 # Batch operations
                                 with gr.Row():
                                     runs_select_all_btn = gr.Button("☑ Select All", size="sm")
-                                    runs_clear_selection_btn = gr.Button("☐ Clear Selection", size="sm")
+                                    runs_clear_selection_btn = gr.Button(
+                                        "☐ Clear Selection", size="sm"
+                                    )
                                     runs_delete_selected_btn = gr.Button(
                                         "🗑️ Delete Selected",
                                         size="sm",
@@ -1480,168 +1484,177 @@ def create_ui():
                                 )
 
                                 # Run Details below the table for better visibility
-                                with gr.Group(visible=False, elem_classes=["detail-card"]) as runs_details_group:
-                                            gr.Markdown("### 📋 Run Details")
+                                with gr.Group(
+                                    visible=False, elem_classes=["detail-card"]
+                                ) as runs_details_group:
+                                    gr.Markdown("### 📋 Run Details")
 
-                                            with gr.Tabs():
-                                                # Main Tab - Day-to-day essentials
-                                                with gr.Tab("Main"):
-                                                    # Generated Output at the top
-                                                    gr.Markdown("#### Generated Output")
-                                                    runs_output_video = gr.Video(
-                                                        label="Output Video",
-                                                        show_label=False,
-                                                        autoplay=True,
-                                                        loop=True,
-                                                        height=500,
+                                    with gr.Tabs():
+                                        # Main Tab - Day-to-day essentials
+                                        with gr.Tab("Main"):
+                                            # Generated Output at the top
+                                            gr.Markdown("#### Generated Output")
+                                            runs_output_video = gr.Video(
+                                                label="Output Video",
+                                                show_label=False,
+                                                autoplay=True,
+                                                loop=True,
+                                                height=500,
+                                            )
+
+                                            # Input Videos with control weights
+                                            gr.Markdown("#### Input Videos & Control Weights")
+
+                                            # Control weights in a single row with compact layout
+                                            with gr.Row(equal_height=True):
+                                                with gr.Column(scale=1, min_width=120):
+                                                    gr.Markdown(
+                                                        "**Color/Visual**",
+                                                        elem_classes=["compact-label"],
                                                     )
-
-                                                    # Input Videos with control weights
-                                                    gr.Markdown("#### Input Videos & Control Weights")
-
-                                                    # Control weights in a single row with compact layout
-                                                    with gr.Row(equal_height=True):
-                                                        with gr.Column(scale=1, min_width=120):
-                                                            gr.Markdown("**Color/Visual**", elem_classes=["compact-label"])
-                                                            runs_visual_weight = gr.Slider(
-                                                                minimum=0,
-                                                                maximum=1,
-                                                                step=0.1,
-                                                                value=0,
-                                                                interactive=False,
-                                                                show_label=False,
-                                                                elem_classes=["compact-slider"],
-                                                            )
-                                                        with gr.Column(scale=1, min_width=120):
-                                                            gr.Markdown("**Edge**", elem_classes=["compact-label"])
-                                                            runs_edge_weight = gr.Slider(
-                                                                minimum=0,
-                                                                maximum=1,
-                                                                step=0.1,
-                                                                value=0,
-                                                                interactive=False,
-                                                                show_label=False,
-                                                                elem_classes=["compact-slider"],
-                                                            )
-                                                        with gr.Column(scale=1, min_width=120):
-                                                            gr.Markdown("**Depth**", elem_classes=["compact-label"])
-                                                            runs_depth_weight = gr.Slider(
-                                                                minimum=0,
-                                                                maximum=1,
-                                                                step=0.1,
-                                                                value=0,
-                                                                interactive=False,
-                                                                show_label=False,
-                                                                elem_classes=["compact-slider"],
-                                                            )
-                                                        with gr.Column(scale=1, min_width=120):
-                                                            gr.Markdown("**Segmentation**", elem_classes=["compact-label"])
-                                                            runs_segmentation_weight = gr.Slider(
-                                                                minimum=0,
-                                                                maximum=1,
-                                                                step=0.1,
-                                                                value=0,
-                                                                interactive=False,
-                                                                show_label=False,
-                                                                elem_classes=["compact-slider"],
-                                                            )
-
-                                                    # Input video gallery - 4 columns to show all videos in one row
-                                                    runs_input_videos = gr.Gallery(
-                                                        label="Input Frames",
-                                                        show_label=False,
-                                                        columns=4,  # 4 columns for all videos
-                                                        rows=1,
-                                                        height=200,
-                                                        object_fit="contain",
-                                                        allow_preview=True,
-                                                        container=True,  # Enable container for proper layout
-                                                        elem_classes=["input-videos-gallery"],
-                                                    )
-
-                                                    # Full Prompt
-                                                    gr.Markdown("#### Full Prompt")
-                                                    runs_prompt_text = gr.Textbox(
-                                                        label="Prompt Text",
-                                                        show_label=False,
-                                                        lines=4,
-                                                        max_lines=10,
+                                                    runs_visual_weight = gr.Slider(
+                                                        minimum=0,
+                                                        maximum=1,
+                                                        step=0.1,
+                                                        value=0,
                                                         interactive=False,
-                                                    )
-
-                                                    # Hidden components to maintain interface compatibility
-                                                    runs_detail_id = gr.Textbox(visible=False)
-                                                    runs_detail_status = gr.Textbox(visible=False)
-
-                                                # Info Tab - Run metadata
-                                                with gr.Tab("Info"):
-                                                    with gr.Row():
-                                                        runs_info_id = gr.Textbox(
-                                                            label="Run ID",
-                                                            interactive=False,
-                                                        )
-                                                        runs_info_prompt_id = gr.Textbox(
-                                                            label="Prompt ID",
-                                                            interactive=False,
-                                                        )
-
-                                                    with gr.Row():
-                                                        runs_info_status = gr.Textbox(
-                                                            label="Status",
-                                                            interactive=False,
-                                                        )
-                                                        runs_info_duration = gr.Textbox(
-                                                            label="Duration",
-                                                            interactive=False,
-                                                        )
-                                                        runs_info_type = gr.Textbox(
-                                                            label="Run Type",
-                                                            interactive=False,
-                                                        )
-
-                                                    runs_info_prompt_name = gr.Textbox(
-                                                        label="Prompt Name",
-                                                        interactive=False,
-                                                    )
-
-                                                    with gr.Row():
-                                                        runs_info_created = gr.Textbox(
-                                                            label="Created",
-                                                            interactive=False,
-                                                        )
-                                                        runs_info_completed = gr.Textbox(
-                                                            label="Completed",
-                                                            interactive=False,
-                                                        )
-
-                                                # Parameters Tab
-                                                with gr.Tab("Parameters"):
-                                                    gr.Markdown("#### Execution Configuration")
-                                                    runs_params_json = gr.JSON(
-                                                        label="Inference Parameters",
                                                         show_label=False,
+                                                        elem_classes=["compact-slider"],
+                                                    )
+                                                with gr.Column(scale=1, min_width=120):
+                                                    gr.Markdown(
+                                                        "**Edge**", elem_classes=["compact-label"]
+                                                    )
+                                                    runs_edge_weight = gr.Slider(
+                                                        minimum=0,
+                                                        maximum=1,
+                                                        step=0.1,
+                                                        value=0,
+                                                        interactive=False,
+                                                        show_label=False,
+                                                        elem_classes=["compact-slider"],
+                                                    )
+                                                with gr.Column(scale=1, min_width=120):
+                                                    gr.Markdown(
+                                                        "**Depth**", elem_classes=["compact-label"]
+                                                    )
+                                                    runs_depth_weight = gr.Slider(
+                                                        minimum=0,
+                                                        maximum=1,
+                                                        step=0.1,
+                                                        value=0,
+                                                        interactive=False,
+                                                        show_label=False,
+                                                        elem_classes=["compact-slider"],
+                                                    )
+                                                with gr.Column(scale=1, min_width=120):
+                                                    gr.Markdown(
+                                                        "**Segmentation**",
+                                                        elem_classes=["compact-label"],
+                                                    )
+                                                    runs_segmentation_weight = gr.Slider(
+                                                        minimum=0,
+                                                        maximum=1,
+                                                        step=0.1,
+                                                        value=0,
+                                                        interactive=False,
+                                                        show_label=False,
+                                                        elem_classes=["compact-slider"],
                                                     )
 
-                                                # Logs Tab
-                                                with gr.Tab("Logs"):
-                                                    runs_log_path = gr.Textbox(
-                                                        label="Log File Path",
-                                                        interactive=False,
-                                                    )
-                                                    runs_log_output = gr.Code(
-                                                        label="Log Output (Last 15 Lines)",
-                                                        language="shell",
-                                                        lines=15,
-                                                        interactive=False,
-                                                    )
-                                                    with gr.Row():
-                                                        runs_load_logs_btn = gr.Button("📄 Load Full Logs")
-                                                        runs_copy_logs_btn = gr.Button("📋 Copy Logs")
+                                            # Input video gallery - 4 columns to show all videos in one row
+                                            runs_input_videos = gr.Gallery(
+                                                label="Input Frames",
+                                                show_label=False,
+                                                columns=4,  # 4 columns for all videos
+                                                rows=1,
+                                                height=200,
+                                                object_fit="contain",
+                                                allow_preview=True,
+                                                container=True,  # Enable container for proper layout
+                                                elem_classes=["input-videos-gallery"],
+                                            )
 
-            # ========================================
-            # Tab 4: Outputs (OLD - Phase 4 Implementation)
-            # ========================================
-            with gr.Tab("🎬 Outputs (OLD)", id=30):
+                                            # Full Prompt
+                                            gr.Markdown("#### Full Prompt")
+                                            runs_prompt_text = gr.Textbox(
+                                                label="Prompt Text",
+                                                show_label=False,
+                                                lines=4,
+                                                max_lines=10,
+                                                interactive=False,
+                                            )
+
+                                            # Hidden components to maintain interface compatibility
+                                            runs_detail_id = gr.Textbox(visible=False)
+                                            runs_detail_status = gr.Textbox(visible=False)
+
+                                        # Info Tab - Run metadata
+                                        with gr.Tab("Info"):
+                                            with gr.Row():
+                                                runs_info_id = gr.Textbox(
+                                                    label="Run ID",
+                                                    interactive=False,
+                                                )
+                                                runs_info_prompt_id = gr.Textbox(
+                                                    label="Prompt ID",
+                                                    interactive=False,
+                                                )
+
+                                            with gr.Row():
+                                                runs_info_status = gr.Textbox(
+                                                    label="Status",
+                                                    interactive=False,
+                                                )
+                                                runs_info_duration = gr.Textbox(
+                                                    label="Duration",
+                                                    interactive=False,
+                                                )
+                                                runs_info_type = gr.Textbox(
+                                                    label="Run Type",
+                                                    interactive=False,
+                                                )
+
+                                            runs_info_prompt_name = gr.Textbox(
+                                                label="Prompt Name",
+                                                interactive=False,
+                                            )
+
+                                            with gr.Row():
+                                                runs_info_created = gr.Textbox(
+                                                    label="Created",
+                                                    interactive=False,
+                                                )
+                                                runs_info_completed = gr.Textbox(
+                                                    label="Completed",
+                                                    interactive=False,
+                                                )
+
+                                        # Parameters Tab
+                                        with gr.Tab("Parameters"):
+                                            gr.Markdown("#### Execution Configuration")
+                                            runs_params_json = gr.JSON(
+                                                label="Inference Parameters",
+                                                show_label=False,
+                                            )
+
+                                        # Logs Tab
+                                        with gr.Tab("Logs"):
+                                            runs_log_path = gr.Textbox(
+                                                label="Log File Path",
+                                                interactive=False,
+                                            )
+                                            runs_log_output = gr.Code(
+                                                label="Log Output (Last 15 Lines)",
+                                                language="shell",
+                                                lines=15,
+                                                interactive=False,
+                                            )
+                                            with gr.Row():
+                                                runs_load_logs_btn = gr.Button("📄 Load Full Logs")
+                                                gr.Button("📋 Copy Logs")
+
+            with gr.Tab("🎬 Outputs (OLD)", id=30, visible=False):
                 gr.Markdown("### Output Gallery")
                 gr.Markdown("View and download generated video outputs from completed runs")
 
@@ -1741,7 +1754,7 @@ def create_ui():
                                 # Create dynamic video components for various control types
                                 # Support up to 6 input videos (color + 5 controls)
                                 output_input_videos = []
-                                for i in range(6):
+                                for _i in range(6):
                                     video = gr.Video(
                                         label="Input",
                                         height=180,  # Consistent height for all inputs
@@ -1765,7 +1778,7 @@ def create_ui():
             # ========================================
             # Tab 4: Run History - Comprehensive Run Management
             # ========================================
-            with gr.Tab("📊 Run History (OLD)", id=40):
+            with gr.Tab("📊 Run History (OLD)", id=40, visible=False):
                 gr.Markdown("### Comprehensive Run History & Management")
                 gr.Markdown("View, filter, and manage all runs with detailed information")
 
@@ -1775,7 +1788,7 @@ def create_ui():
                         gr.Markdown("#### 🔍 Filter Options")
 
                         with gr.Group(elem_classes=["detail-card"]):
-                            history_status_filter = gr.Dropdown(
+                            gr.Dropdown(
                                 choices=[
                                     "all",
                                     "completed",
@@ -1789,7 +1802,7 @@ def create_ui():
                                 info="Filter runs by status",
                             )
 
-                            history_date_filter = gr.Dropdown(
+                            gr.Dropdown(
                                 choices=[
                                     "all",
                                     "today",
@@ -1802,13 +1815,13 @@ def create_ui():
                                 info="Filter by creation date",
                             )
 
-                            history_search = gr.Textbox(
+                            gr.Textbox(
                                 label="Search",
                                 placeholder="Search by prompt text or ID...",
                                 info="Search in prompt text or run ID",
                             )
 
-                            history_limit = gr.Number(
+                            gr.Number(
                                 value=100,
                                 label="Max Results",
                                 minimum=10,
@@ -2268,7 +2281,7 @@ def create_ui():
                     return empty_return()
 
                 # Get selected row
-                row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+                row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
 
                 if isinstance(table_data, pd.DataFrame):
                     row = table_data.iloc[row_idx]
@@ -2485,18 +2498,12 @@ def create_ui():
                 # Load all data
                 inputs_data = load_input_gallery()
                 prompts_data = load_ops_prompts(50)
-                outputs_data = load_outputs("all", "all", 50)
-                history_data = load_run_history("all", "all", "", 100)
                 jobs_data = check_running_jobs()
 
                 return (
                     status,  # refresh_status
                     inputs_data,  # input_gallery
                     prompts_data,  # ops_prompts_table
-                    outputs_data[0],  # output_gallery
-                    outputs_data[1],  # outputs_table
-                    history_data[0],  # history_table
-                    history_data[1],  # history_stats
                     jobs_data[0],  # running_jobs_display
                     jobs_data[1],  # job_status
                 )
@@ -2506,10 +2513,6 @@ def create_ui():
                     f"❌ Error: {e!s}",
                     gr.Gallery(),
                     gr.Dataframe(),
-                    gr.Gallery(),
-                    gr.Dataframe(),
-                    gr.Dataframe(),
-                    gr.Textbox(),
                     gr.Textbox(),
                     gr.Textbox(),
                 )
@@ -2523,10 +2526,6 @@ def create_ui():
                 refresh_status,
                 input_gallery,
                 ops_prompts_table,
-                output_gallery,
-                outputs_table,
-                history_table,
-                history_stats,
                 running_jobs_display,
                 job_status,
             ],
@@ -2540,10 +2539,6 @@ def create_ui():
                 refresh_status,
                 input_gallery,
                 ops_prompts_table,
-                output_gallery,
-                outputs_table,
-                history_table,
-                history_stats,
                 running_jobs_display,
                 job_status,
             ],
@@ -2612,12 +2607,12 @@ def create_ui():
 
                 # Query runs with status filter
                 all_runs = ops.list_runs(
-                    status=None if status_filter == "all" else status_filter,
-                    limit=int(limit)
+                    status=None if status_filter == "all" else status_filter, limit=int(limit)
                 )
 
                 # Apply date filter
                 from datetime import datetime, timedelta, timezone
+
                 now = datetime.now(timezone.utc)
                 filtered_runs = []
 
@@ -2655,7 +2650,8 @@ def create_ui():
                 if search_text:
                     search_lower = search_text.lower()
                     filtered_runs = [
-                        run for run in filtered_runs
+                        run
+                        for run in filtered_runs
                         if search_lower in run.get("id", "").lower()
                         or search_lower in run.get("prompt_text", "").lower()
                     ]
@@ -2668,7 +2664,10 @@ def create_ui():
                         if run.get("outputs") and run["outputs"].get("files"):
                             # Look for output.mp4 in the files list
                             for file_path in run["outputs"]["files"]:
-                                if "output.mp4" in file_path and "edge_input_control" not in file_path:
+                                if (
+                                    "output.mp4" in file_path
+                                    and "edge_input_control" not in file_path
+                                ):
                                     output_path = Path(file_path)
                                     if output_path.exists() and output_path.is_file():
                                         gallery_data.append((str(output_path), run["id"]))
@@ -2684,8 +2683,12 @@ def create_ui():
                     duration = "N/A"
                     try:
                         if run.get("completed_at") and run.get("created_at"):
-                            created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                            completed = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
+                            created = datetime.fromisoformat(
+                                run["created_at"].replace("Z", "+00:00")
+                            )
+                            completed = datetime.fromisoformat(
+                                run["completed_at"].replace("Z", "+00:00")
+                            )
                             duration_delta = completed - created
                             minutes = int(duration_delta.total_seconds() / 60)
                             seconds = int(duration_delta.total_seconds() % 60)
@@ -2694,18 +2697,30 @@ def create_ui():
                         pass
 
                     # Format dates
-                    created_str = run.get("created_at", "")[:19].replace("T", " ") if run.get("created_at") else ""
-                    completed_str = run.get("completed_at", "")[:19].replace("T", " ") if run.get("completed_at") else ""
+                    created_str = (
+                        run.get("created_at", "")[:19].replace("T", " ")
+                        if run.get("created_at")
+                        else ""
+                    )
+                    completed_str = (
+                        run.get("completed_at", "")[:19].replace("T", " ")
+                        if run.get("completed_at")
+                        else ""
+                    )
 
-                    table_data.append([
-                        False,  # Checkbox
-                        run.get("id", ""),
-                        run.get("status", ""),
-                        run.get("prompt_text", "")[:50] + "..." if len(run.get("prompt_text", "")) > 50 else run.get("prompt_text", ""),
-                        duration,
-                        created_str,
-                        completed_str
-                    ])
+                    table_data.append(
+                        [
+                            False,  # Checkbox
+                            run.get("id", ""),
+                            run.get("status", ""),
+                            run.get("prompt_text", "")[:50] + "..."
+                            if len(run.get("prompt_text", "")) > 50
+                            else run.get("prompt_text", ""),
+                            duration,
+                            created_str,
+                            completed_str,
+                        ]
+                    )
 
                 # Calculate statistics
                 total = len(filtered_runs)
@@ -2730,7 +2745,9 @@ def create_ui():
                 """
 
                 logger.info(f"Found {total} runs from CosmosAPI")
-                logger.info(f"Returning {len(gallery_data)} gallery items and {len(table_data)} table rows")
+                logger.info(
+                    f"Returning {len(gallery_data)} gallery items and {len(table_data)} table rows"
+                )
 
                 return gallery_data, table_data, stats_md
 
@@ -2744,21 +2761,45 @@ def create_ui():
                 if not ops or evt.value is None:
                     return (
                         gr.update(visible=False),  # runs_details_group
-                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values)
-                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        "",
+                        "",
+                        None,
+                        "",
+                        0,
+                        0,
+                        0,
+                        0,
+                        "",  # Main tab (9 values)
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",  # Info tab (8 values)
                         {},  # Parameters tab (1 value)
-                        "", ""  # Logs tab (2 values)
+                        "",
+                        "",  # Logs tab (2 values)
                     )
 
                 # Gallery value is (path, label) tuple
                 # Label format is "Run {run_id}: {prompt_text}..."
-                label = evt.value.get("caption", "") if isinstance(evt.value, dict) else evt.value[1] if isinstance(evt.value, tuple) else ""
+                label = (
+                    evt.value.get("caption", "")
+                    if isinstance(evt.value, dict)
+                    else evt.value[1]
+                    if isinstance(evt.value, tuple)
+                    else ""
+                )
 
                 # Extract run ID from label
                 if label.startswith("Run "):
                     run_id_part = label[4:].split(":")[0]
                     # Full run ID is in the gallery data
-                    run_id = "rs_" + run_id_part if not run_id_part.startswith("rs_") else run_id_part
+                    run_id = (
+                        "rs_" + run_id_part if not run_id_part.startswith("rs_") else run_id_part
+                    )
                 else:
                     # Fallback: try to extract from the label directly
                     run_id = label
@@ -2776,10 +2817,26 @@ def create_ui():
                 logger.error("Error handling gallery selection: %s", e)
                 return (
                     gr.update(visible=False),  # runs_details_group
-                    "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values)
-                    "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                    "",
+                    "",
+                    None,
+                    "",
+                    0,
+                    0,
+                    0,
+                    0,
+                    "",  # Main tab (9 values)
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",  # Info tab (8 values)
                     {},  # Parameters tab (1 value)
-                    "", ""  # Logs tab (2 values)
+                    "",
+                    "",  # Logs tab (2 values)
                 )
 
         def handle_run_selection(evt: gr.SelectData, table_data=None):
@@ -2790,20 +2847,52 @@ def create_ui():
                 if not ops:
                     return (
                         gr.update(visible=False),  # runs_details_group
-                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
-                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        "",
+                        "",
+                        None,
+                        "",
+                        0,
+                        0,
+                        0,
+                        0,
+                        "",  # Main tab (9 values) - None for Gallery
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",  # Info tab (8 values)
                         {},  # Parameters tab (1 value)
-                        "", ""  # Logs tab (2 values)
+                        "",
+                        "",  # Logs tab (2 values)
                     )
 
                 # Get run ID from table selection
                 if evt.index is None or table_data is None:
                     return (
                         gr.update(visible=False),  # runs_details_group
-                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
-                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        "",
+                        "",
+                        None,
+                        "",
+                        0,
+                        0,
+                        0,
+                        0,
+                        "",  # Main tab (9 values) - None for Gallery
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",  # Info tab (8 values)
                         {},  # Parameters tab (1 value)
-                        "", ""  # Logs tab (2 values)
+                        "",
+                        "",  # Logs tab (2 values)
                     )
 
                 # Get run_id from the selected row (column 1 is Run ID)
@@ -2811,10 +2900,26 @@ def create_ui():
                     if table_data.empty or evt.index[0] >= len(table_data):
                         return (
                             gr.update(visible=False),  # runs_details_group
-                            "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
-                            "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                            "",
+                            "",
+                            None,
+                            "",
+                            0,
+                            0,
+                            0,
+                            0,
+                            "",  # Main tab (9 values) - None for Gallery
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",  # Info tab (8 values)
                             {},  # Parameters tab (1 value)
-                            "", ""  # Logs tab (2 values)
+                            "",
+                            "",  # Logs tab (2 values)
                         )
                     run_id = table_data.iloc[evt.index[0], 1]  # Column 1 is Run ID
                 else:
@@ -2824,10 +2929,26 @@ def create_ui():
                 if not run_id:
                     return (
                         gr.update(visible=False),  # runs_details_group
-                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
-                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        "",
+                        "",
+                        None,
+                        "",
+                        0,
+                        0,
+                        0,
+                        0,
+                        "",  # Main tab (9 values) - None for Gallery
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",  # Info tab (8 values)
                         {},  # Parameters tab (1 value)
-                        "", ""  # Logs tab (2 values)
+                        "",
+                        "",  # Logs tab (2 values)
                     )
 
                 logger.info(f"Selected run ID from table: {run_id}")
@@ -2837,10 +2958,26 @@ def create_ui():
                 if not run:
                     return (
                         gr.update(visible=False),  # runs_details_group
-                        "", "", None, "", 0, 0, 0, 0, "",  # Main tab (9 values) - None for Gallery
-                        "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                        "",
+                        "",
+                        None,
+                        "",
+                        0,
+                        0,
+                        0,
+                        0,
+                        "",  # Main tab (9 values) - None for Gallery
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",  # Info tab (8 values)
                         {},  # Parameters tab (1 value)
-                        "", ""  # Logs tab (2 values)
+                        "",
+                        "",  # Logs tab (2 values)
                     )
 
                 # Extract control weights from execution_config.weights
@@ -2857,22 +2994,75 @@ def create_ui():
                         # Get the prompt text
                         prompt_text = prompt.get("prompt_text", "")
                         video_path = prompt.get("inputs", {}).get("video", "")
-                        if video_path and video_path.strip():  # Check for non-empty path
-                            # Convert relative path to absolute if needed
-                            video_path_obj = Path(video_path)
-                            if not video_path_obj.is_absolute():
-                                video_path_obj = Path.cwd() / video_path_obj
 
-                            # Get the directory containing the videos
-                            video_dir = video_path_obj.parent
-                            if video_dir.exists() and video_dir.is_dir():
-                                # Collect color, depth, and segmentation videos from input directory
-                                for video_file in sorted(video_dir.glob("*.mp4")):
-                                    if video_file.is_file():
-                                        input_videos.append(str(video_file.resolve()))
-                                logger.info(f"Found {len(input_videos)} videos in {video_dir}")
-                            else:
-                                logger.warning(f"Video directory does not exist: {video_dir}")
+                        # Log the raw video path for debugging
+                        logger.debug(f"Raw video path from prompt: '{video_path}'")
+
+                        # Only process video path if it's not empty and not just whitespace
+                        if video_path and video_path.strip() and video_path.strip() != ".":
+                            try:
+                                video_path_stripped = video_path.strip()
+
+                                # Skip if it's just the project root or problematic paths
+                                if video_path_stripped in [
+                                    ".",
+                                    "",
+                                    "F:\\Art\\cosmos-houdini-experiments",
+                                    "F:/Art/cosmos-houdini-experiments",
+                                ]:
+                                    logger.debug(
+                                        f"Skipping problematic path: '{video_path_stripped}'"
+                                    )
+                                else:
+                                    # Convert to Path object
+                                    video_path_obj = Path(video_path_stripped)
+
+                                    # Make absolute if relative (safer approach)
+                                    if not video_path_obj.is_absolute():
+                                        try:
+                                            # Try to resolve, but catch any permission errors
+                                            video_path_obj = video_path_obj.resolve(strict=False)
+                                        except (PermissionError, OSError) as e:
+                                            # If resolve fails, skip processing
+                                            logger.warning(
+                                                f"Could not resolve path '{video_path}': {e}"
+                                            )
+                                            video_path_obj = None
+
+                                    if video_path_obj:
+                                        # Check if this is a file path (not just a directory)
+                                        if video_path_obj.is_file():
+                                            # Get the directory containing the videos
+                                            video_dir = video_path_obj.parent
+                                            if video_dir.exists() and video_dir.is_dir():
+                                                # Collect color, depth, and segmentation videos from input directory
+                                                for video_file in sorted(video_dir.glob("*.mp4")):
+                                                    if video_file.is_file():
+                                                        input_videos.append(
+                                                            str(video_file.resolve())
+                                                        )
+                                                logger.info(
+                                                    f"Found {len(input_videos)} videos in {video_dir}"
+                                                )
+                                            else:
+                                                logger.warning(
+                                                    f"Video directory does not exist: {video_dir}"
+                                                )
+                                        elif video_path_obj.is_dir():
+                                            # If it's a directory, look for videos directly in it
+                                            for video_file in sorted(video_path_obj.glob("*.mp4")):
+                                                if video_file.is_file():
+                                                    input_videos.append(str(video_file.resolve()))
+                                            logger.info(
+                                                f"Found {len(input_videos)} videos in directory {video_path_obj}"
+                                            )
+                                        else:
+                                            logger.warning(
+                                                f"Video path does not exist: {video_path_obj}"
+                                            )
+                            except (PermissionError, OSError) as e:
+                                logger.warning(f"Error accessing video path: {e}")
+                                # Continue without input videos
 
                 # Add edge control video from outputs if it exists
                 if run.get("outputs") and run["outputs"].get("files"):
@@ -2905,16 +3095,27 @@ def create_ui():
                         log_content = "Error reading log file"
 
                 # Format dates
-                created_str = run.get("created_at", "")[:19].replace("T", " ") if run.get("created_at") else ""
-                completed_str = run.get("completed_at", "")[:19].replace("T", " ") if run.get("completed_at") else ""
+                created_str = (
+                    run.get("created_at", "")[:19].replace("T", " ")
+                    if run.get("created_at")
+                    else ""
+                )
+                completed_str = (
+                    run.get("completed_at", "")[:19].replace("T", " ")
+                    if run.get("completed_at")
+                    else ""
+                )
 
                 # Calculate duration
                 duration = "N/A"
                 try:
                     if run.get("completed_at") and run.get("created_at"):
                         from datetime import datetime
+
                         created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                        completed = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
+                        completed = datetime.fromisoformat(
+                            run["completed_at"].replace("Z", "+00:00")
+                        )
                         duration_delta = completed - created
                         minutes = int(duration_delta.total_seconds() / 60)
                         seconds = int(duration_delta.total_seconds() % 60)
@@ -2964,7 +3165,7 @@ def create_ui():
                     run.get("execution_config", {}),  # runs_params_json
                     # Logs tab
                     log_path_str,  # runs_log_path
-                    log_content  # runs_log_output
+                    log_content,  # runs_log_output
                 )
 
             except Exception as e:
@@ -2972,10 +3173,26 @@ def create_ui():
                 # Return empty values for all outputs
                 return (
                     gr.update(visible=False),  # runs_details_group
-                    "", "", [], "", 0, 0, 0, 0, "",  # Main tab (9 values)
-                    "", "", "", "", "", "", "", "",  # Info tab (8 values)
+                    "",
+                    "",
+                    [],
+                    "",
+                    0,
+                    0,
+                    0,
+                    0,
+                    "",  # Main tab (9 values)
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",  # Info tab (8 values)
                     {},  # Parameters tab (1 value)
-                    "", ""  # Logs tab (2 values)
+                    "",
+                    "",  # Logs tab (2 values)
                 )
 
         def update_runs_selection_info(dataframe):
@@ -2992,7 +3209,7 @@ def create_ui():
                 return dataframe
 
             # Set all checkboxes to True
-            updated = [[True] + row[1:] for row in dataframe]
+            updated = [[True, *row[1:]] for row in dataframe]
             return updated
 
         def clear_runs_selection(dataframe):
@@ -3001,7 +3218,7 @@ def create_ui():
                 return dataframe
 
             # Set all checkboxes to False
-            updated = [[False] + row[1:] for row in dataframe]
+            updated = [[False, *row[1:]] for row in dataframe]
             return updated
 
         def delete_selected_runs(dataframe):
@@ -3164,7 +3381,6 @@ def create_ui():
                 # Initialize variables for structured fields
                 run = None
                 prompt = None
-                inputs = {}
                 prompt_id = None
 
                 # Get full run details using CosmosAPI
@@ -3180,7 +3396,7 @@ def create_ui():
                             try:
                                 prompt = ops.get_prompt(prompt_id)
                                 if prompt:
-                                    inputs = prompt.get("inputs", {})
+                                    prompt.get("inputs", {})
                             except Exception as e:
                                 logger.error("Error getting prompt {}: {}", prompt_id, e)
 
@@ -3256,21 +3472,22 @@ def create_ui():
 
         # refresh_outputs_btn.click removed - using global refresh
 
-        output_gallery.select(
-            fn=select_output,
-            inputs=[output_gallery, outputs_table],
-            outputs=[
-                output_details_group,
-                output_run_id,
-                output_status,
-                output_created,
-                output_prompt_name,
-                output_prompt_text,
-                *output_input_videos,  # Dynamic input videos (up to 6)
-                output_video,
-                output_path_display,
-            ],
-        )
+        # OLD TAB EVENT HANDLERS - COMMENTED OUT FOR REMOVAL
+        # output_gallery.select(
+        #     fn=select_output,
+        #     inputs=[output_gallery, outputs_table],
+        #     outputs=[
+        #         output_details_group,
+        #         output_run_id,
+        #         output_status,
+        #         output_created,
+        #         output_prompt_name,
+        #         output_prompt_text,
+        #         *output_input_videos,  # Dynamic input videos (up to 6)
+        #         output_video,
+        #         output_path_display,
+        #     ],
+        # )
 
         # Download functionality will be handled through the video component itself
 
@@ -3364,54 +3581,54 @@ def create_ui():
             outputs=[recent_runs_table],
         )
 
-        # Run History tab events
-        # history_refresh_btn.click removed - using global refresh
-
-        history_table.select(
-            fn=select_run_from_history,
-            inputs=[history_table],
-            outputs=[
-                history_run_id,
-                history_status,
-                history_duration,
-                history_run_type,
-                history_prompt_name,
-                history_prompt_text,
-                history_created,
-                history_completed,
-                history_execution_config,
-                history_log_path,
-                history_log_content,
-                history_output_video,
-                history_output_path,
-            ],
-        )
-
-        history_table.change(
-            fn=update_history_selection_count,
-            inputs=[history_table],
-            outputs=[history_selection_count, history_delete_selected_btn],
-        )
-
-        history_select_all_btn.click(
-            fn=select_all_runs, inputs=[history_table], outputs=[history_table]
-        ).then(
-            fn=update_history_selection_count,
-            inputs=[history_table],
-            outputs=[history_selection_count, history_delete_selected_btn],
-        )
-
-        history_clear_selection_btn.click(
-            fn=clear_all_runs, inputs=[history_table], outputs=[history_table]
-        ).then(
-            fn=update_history_selection_count,
-            inputs=[history_table],
-            outputs=[history_selection_count, history_delete_selected_btn],
-        )
-
-        history_load_logs_btn.click(
-            fn=load_run_logs, inputs=[history_run_id], outputs=[history_log_content]
-        )
+        #         # Run History tab events
+        #         # history_refresh_btn.click removed - using global refresh
+        #
+        #         history_table.select(
+        #             fn=select_run_from_history,
+        #             inputs=[history_table],
+        #             outputs=[
+        #                 history_run_id,
+        #                 history_status,
+        #                 history_duration,
+        #                 history_run_type,
+        #                 history_prompt_name,
+        #                 history_prompt_text,
+        #                 history_created,
+        #                 history_completed,
+        #                 history_execution_config,
+        #                 history_log_path,
+        #                 history_log_content,
+        #                 history_output_video,
+        #                 history_output_path,
+        #             ],
+        #         )
+        #
+        #         history_table.change(
+        #             fn=update_history_selection_count,
+        #             inputs=[history_table],
+        #             outputs=[history_selection_count, history_delete_selected_btn],
+        #         )
+        #
+        #         history_select_all_btn.click(
+        #             fn=select_all_runs, inputs=[history_table], outputs=[history_table]
+        #         ).then(
+        #             fn=update_history_selection_count,
+        #             inputs=[history_table],
+        #             outputs=[history_selection_count, history_delete_selected_btn],
+        #         )
+        #
+        #         history_clear_selection_btn.click(
+        #             fn=clear_all_runs, inputs=[history_table], outputs=[history_table]
+        #         ).then(
+        #             fn=update_history_selection_count,
+        #             inputs=[history_table],
+        #             outputs=[history_selection_count, history_delete_selected_btn],
+        #         )
+        #
+        #         history_load_logs_btn.click(
+        #             fn=load_run_logs, inputs=[history_run_id], outputs=[history_log_content]
+        #         )
 
         # ========================================
         # Unified Runs Tab Event Connections
@@ -3421,25 +3638,25 @@ def create_ui():
         runs_status_filter.change(
             fn=load_runs_data,
             inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
-            outputs=[runs_gallery, runs_table, runs_stats]
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
         runs_date_filter.change(
             fn=load_runs_data,
             inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
-            outputs=[runs_gallery, runs_table, runs_stats]
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
         runs_search.change(
             fn=load_runs_data,
             inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
-            outputs=[runs_gallery, runs_table, runs_stats]
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
         runs_limit.change(
             fn=load_runs_data,
             inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
-            outputs=[runs_gallery, runs_table, runs_stats]
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
         # Gallery selection
@@ -3471,8 +3688,8 @@ def create_ui():
                 runs_params_json,
                 # Logs tab
                 runs_log_path,
-                runs_log_output
-            ]
+                runs_log_output,
+            ],
         )
 
         # Table selection
@@ -3504,61 +3721,41 @@ def create_ui():
                 runs_params_json,
                 # Logs tab
                 runs_log_path,
-                runs_log_output
-            ]
+                runs_log_output,
+            ],
         )
 
         # Table batch operations
-        runs_select_all_btn.click(
-            fn=select_all_runs,
-            inputs=[runs_table],
-            outputs=[runs_table]
-        )
+        runs_select_all_btn.click(fn=select_all_runs, inputs=[runs_table], outputs=[runs_table])
 
         runs_clear_selection_btn.click(
-            fn=clear_runs_selection,
-            inputs=[runs_table],
-            outputs=[runs_table]
+            fn=clear_runs_selection, inputs=[runs_table], outputs=[runs_table]
         )
 
         runs_table.change(
-            fn=update_runs_selection_info,
-            inputs=[runs_table],
-            outputs=[runs_selected_info]
+            fn=update_runs_selection_info, inputs=[runs_table], outputs=[runs_selected_info]
         )
 
         runs_delete_selected_btn.click(
-            fn=delete_selected_runs,
-            inputs=[runs_table],
-            outputs=[runs_table, runs_selected_info]
+            fn=delete_selected_runs, inputs=[runs_table], outputs=[runs_table, runs_selected_info]
         ).then(
             fn=load_runs_data,
             inputs=[runs_status_filter, runs_date_filter, runs_search, runs_limit],
-            outputs=[runs_gallery, runs_table, runs_stats]
+            outputs=[runs_gallery, runs_table, runs_stats],
         )
 
         # Load full logs button
         runs_load_logs_btn.click(
-            fn=load_full_logs,
-            inputs=[runs_log_path],
-            outputs=[runs_log_output]
+            fn=load_full_logs, inputs=[runs_log_path], outputs=[runs_log_output]
         )
 
         # Auto-load data on app start
         app.load(fn=load_input_gallery, inputs=[], outputs=[input_gallery]).then(
             fn=check_running_jobs, inputs=[], outputs=[running_jobs_display, job_status]
         ).then(
-            fn=load_outputs,
-            inputs=[output_status_filter, output_model_filter, output_limit],
-            outputs=[output_gallery, outputs_table],
-        ).then(
             fn=lambda: load_ops_prompts(50),  # Load operations prompts
             inputs=[],
             outputs=[ops_prompts_table],
-        ).then(
-            fn=lambda: load_run_history("all", "all", "", 100),  # Load run history
-            inputs=[],
-            outputs=[history_table, history_stats],
         ).then(
             fn=lambda: load_runs_data("all", "all", "", 50),  # Load runs for unified tab
             inputs=[],

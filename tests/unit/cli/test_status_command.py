@@ -119,7 +119,7 @@ class TestStatusCommand:
             mock_ops.check_status.return_value = status_info
 
             runner = CliRunner()
-            result = runner.invoke(status, obj=mock_ctx)
+            runner.invoke(status, obj=mock_ctx)
             # Check that the model type is shown
 
     def test_status_without_active_operations_key(self):

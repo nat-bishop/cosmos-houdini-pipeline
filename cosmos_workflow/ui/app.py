@@ -938,8 +938,12 @@ def create_ui():
         # Import additional functions for runs tab
 
         # Global refresh function
-        def global_refresh_all():
-            """Refresh all data across all tabs."""
+        def global_refresh_all(current_prompts_table=None):
+            """Refresh all data across all tabs.
+
+            Args:
+                current_prompts_table: Current prompts table data to preserve selections
+            """
             from datetime import datetime
 
             try:
@@ -948,7 +952,16 @@ def create_ui():
 
                 # Load all data
                 inputs_data = load_input_gallery()
+
+                # Preserve selections when loading prompts
                 prompts_data = load_ops_prompts(50)
+                if current_prompts_table:
+                    # Create a dict of selected prompt IDs
+                    selected_ids = {row[1] for row in current_prompts_table if row[0]}
+                    # Update new data with selections
+                    for row in prompts_data:
+                        if row[1] in selected_ids:  # Check if prompt ID was selected
+                            row[0] = True
                 jobs_data = check_running_jobs()
 
                 return (
@@ -972,6 +985,9 @@ def create_ui():
         if "global_refresh_timer" in components:
             components["global_refresh_timer"].tick(
                 fn=global_refresh_all,
+                inputs=[
+                    components.get("ops_prompts_table")
+                ],  # Pass current table to preserve selections
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],
@@ -984,6 +1000,9 @@ def create_ui():
         if "manual_refresh_btn" in components:
             components["manual_refresh_btn"].click(
                 fn=global_refresh_all,
+                inputs=[
+                    components.get("ops_prompts_table")
+                ],  # Pass current table to preserve selections
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],

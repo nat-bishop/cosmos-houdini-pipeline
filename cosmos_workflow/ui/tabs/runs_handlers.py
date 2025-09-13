@@ -595,9 +595,9 @@ def preview_delete_run(selected_run_id):
             )
 
         run_info = preview["run"]
-        output_dir = preview.get("output_directory", "")
-        file_count = preview.get("file_count", 0)
-        total_size = preview.get("total_size_mb", 0)
+        output_dir = preview.get("directory_to_delete", "")
+        file_count = preview.get("total_files", 0)
+        total_size = preview.get("total_size", "0 B")
 
         # Build preview text
         preview_text = f"""### ⚠️ Delete Run Confirmation
@@ -606,9 +606,9 @@ def preview_delete_run(selected_run_id):
 **Status:** {run_info.get('status', 'unknown')}
 **Created:** {run_info.get('created_at', '')[:19] if run_info.get('created_at') else 'unknown'}
 
-**Output Directory:** {output_dir}
+**Output Directory:** {output_dir if output_dir else "No output directory"}
 **Files:** {file_count} files
-**Total Size:** {total_size:.2f} MB
+**Total Size:** {total_size}
 
 ⚠️ **Warning:** This action cannot be undone!
 """

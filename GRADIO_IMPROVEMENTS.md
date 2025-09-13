@@ -40,7 +40,7 @@ This document tracks the implementation of improvements to the Cosmos Workflow G
 ---
 
 ### Phase 1.5: Complete Runs Tab Video Display Fix ✅
-**Status**: COMPLETED
+**Status**: FULLY COMPLETED (2025-09-13)
 **Priority**: CRITICAL
 **Issue**: Videos still not displaying despite path extraction fixes
 
@@ -138,11 +138,12 @@ This document tracks the implementation of improvements to the Cosmos Workflow G
 - [ ] Multiple video files handled correctly - **NOT TESTED**
 
 ### Phase 1.5 Tests
-- [ ] Generated Videos gallery shows videos
-- [ ] Output video plays in Run Details
-- [ ] Input videos display in gallery
-- [ ] Prompt Name shows in Info tab
-- [ ] Parameters JSON displays correctly
+- [x] Generated Videos gallery shows videos - **PASS**
+- [x] Output video plays in Run Details - **PASS**
+- [x] Input videos display in gallery (all 3: Color/Visual, Depth, Segmentation) - **PASS**
+- [x] Prompt Name shows in Info tab (earthquake_camera_derelict) - **PASS**
+- [x] Parameters JSON displays correctly - **PASS**
+- [x] Gallery videos are clickable and open run details - **PASS**
 
 ### Phase 2 Tests
 - [ ] Can select individual prompts
@@ -175,4 +176,21 @@ Each phase is independent. If issues arise:
 
 ---
 
-Last Updated: 2025-09-13 (Phase 1 Completed)
+### Phase 1.6: Run Details Visibility Enhancement ✅
+**Status**: COMPLETED (2025-09-13)
+**Priority**: HIGH
+**Issue**: Run details only visible in Run Records tab, not in Generated Videos tab
+
+#### Implementation
+- Moved Run Details section outside of both tabs structure
+- Now appears below both Generated Videos and Run Records tabs
+- Details persist when switching between tabs
+
+#### Files Modified
+- `cosmos_workflow/ui/tabs/runs_ui.py`
+  - Line 126: Moved Run Details group outside tab panels
+  - Lines 130-293: Fixed indentation for all run details components
+
+---
+
+Last Updated: 2025-09-13 (Phase 1.6 Completed - All Runs Tab issues resolved)

@@ -123,173 +123,171 @@ def create_runs_tab_ui():
                             elem_classes=["run-history-table"],
                         )
 
-                        # Run Details below the table
-                        with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
-                            "runs_details_group"
-                        ]:
-                            gr.Markdown("### 📋 Run Details")
+                # Run Details below both tabs
+                with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_details_group"
+                ]:
+                    gr.Markdown("### 📋 Run Details")
 
-                            with gr.Tabs():
-                                # Main Tab
-                                with gr.Tab("Main"):
-                                    # Generated Output
-                                    gr.Markdown("#### Generated Output")
-                                    components["runs_output_video"] = gr.Video(
-                                        label="Output Video",
-                                        show_label=False,
-                                        autoplay=True,
-                                        loop=True,
-                                        height=500,
+                    with gr.Tabs():
+                        # Main Tab
+                        with gr.Tab("Main"):
+                            # Generated Output
+                            gr.Markdown("#### Generated Output")
+                            components["runs_output_video"] = gr.Video(
+                                label="Output Video",
+                                show_label=False,
+                                autoplay=True,
+                                loop=True,
+                                height=500,
+                            )
+
+                            # Input Videos with control weights
+                            gr.Markdown("#### Input Videos & Control Weights")
+
+                            # Control weights in a single row
+                            with gr.Row(equal_height=True):
+                                with gr.Column(scale=1, min_width=120):
+                                    gr.Markdown(
+                                        "**Color/Visual**",
+                                        elem_classes=["compact-label"],
                                     )
-
-                                    # Input Videos with control weights
-                                    gr.Markdown("#### Input Videos & Control Weights")
-
-                                    # Control weights in a single row
-                                    with gr.Row(equal_height=True):
-                                        with gr.Column(scale=1, min_width=120):
-                                            gr.Markdown(
-                                                "**Color/Visual**",
-                                                elem_classes=["compact-label"],
-                                            )
-                                            components["runs_visual_weight"] = gr.Slider(
-                                                minimum=0,
-                                                maximum=1,
-                                                step=0.1,
-                                                value=0,
-                                                interactive=False,
-                                                show_label=False,
-                                                elem_classes=["compact-slider"],
-                                            )
-                                        with gr.Column(scale=1, min_width=120):
-                                            gr.Markdown("**Edge**", elem_classes=["compact-label"])
-                                            components["runs_edge_weight"] = gr.Slider(
-                                                minimum=0,
-                                                maximum=1,
-                                                step=0.1,
-                                                value=0,
-                                                interactive=False,
-                                                show_label=False,
-                                                elem_classes=["compact-slider"],
-                                            )
-                                        with gr.Column(scale=1, min_width=120):
-                                            gr.Markdown("**Depth**", elem_classes=["compact-label"])
-                                            components["runs_depth_weight"] = gr.Slider(
-                                                minimum=0,
-                                                maximum=1,
-                                                step=0.1,
-                                                value=0,
-                                                interactive=False,
-                                                show_label=False,
-                                                elem_classes=["compact-slider"],
-                                            )
-                                        with gr.Column(scale=1, min_width=120):
-                                            gr.Markdown(
-                                                "**Segmentation**",
-                                                elem_classes=["compact-label"],
-                                            )
-                                            components["runs_segmentation_weight"] = gr.Slider(
-                                                minimum=0,
-                                                maximum=1,
-                                                step=0.1,
-                                                value=0,
-                                                interactive=False,
-                                                show_label=False,
-                                                elem_classes=["compact-slider"],
-                                            )
-
-                                    # Input video gallery
-                                    components["runs_input_videos"] = gr.Gallery(
-                                        label="Input Frames",
-                                        show_label=False,
-                                        columns=4,
-                                        rows=1,
-                                        height=200,
-                                        object_fit="contain",
-                                        allow_preview=True,
-                                        container=True,
-                                        elem_classes=["input-videos-gallery"],
-                                    )
-
-                                    # Full Prompt
-                                    gr.Markdown("#### Full Prompt")
-                                    components["runs_prompt_text"] = gr.Textbox(
-                                        label="Prompt Text",
-                                        show_label=False,
-                                        lines=4,
-                                        max_lines=10,
+                                    components["runs_visual_weight"] = gr.Slider(
+                                        minimum=0,
+                                        maximum=1,
+                                        step=0.1,
+                                        value=0,
                                         interactive=False,
-                                    )
-
-                                    # Hidden components for compatibility
-                                    components["runs_detail_id"] = gr.Textbox(visible=False)
-                                    components["runs_detail_status"] = gr.Textbox(visible=False)
-
-                                # Info Tab
-                                with gr.Tab("Info"):
-                                    with gr.Row():
-                                        components["runs_info_id"] = gr.Textbox(
-                                            label="Run ID",
-                                            interactive=False,
-                                        )
-                                        components["runs_info_prompt_id"] = gr.Textbox(
-                                            label="Prompt ID",
-                                            interactive=False,
-                                        )
-
-                                    with gr.Row():
-                                        components["runs_info_status"] = gr.Textbox(
-                                            label="Status",
-                                            interactive=False,
-                                        )
-                                        components["runs_info_duration"] = gr.Textbox(
-                                            label="Duration",
-                                            interactive=False,
-                                        )
-                                        components["runs_info_type"] = gr.Textbox(
-                                            label="Run Type",
-                                            interactive=False,
-                                        )
-
-                                    components["runs_info_prompt_name"] = gr.Textbox(
-                                        label="Prompt Name",
-                                        interactive=False,
-                                    )
-
-                                    with gr.Row():
-                                        components["runs_info_created"] = gr.Textbox(
-                                            label="Created",
-                                            interactive=False,
-                                        )
-                                        components["runs_info_completed"] = gr.Textbox(
-                                            label="Completed",
-                                            interactive=False,
-                                        )
-
-                                # Parameters Tab
-                                with gr.Tab("Parameters"):
-                                    gr.Markdown("#### Execution Configuration")
-                                    components["runs_params_json"] = gr.JSON(
-                                        label="Inference Parameters",
                                         show_label=False,
+                                        elem_classes=["compact-slider"],
+                                    )
+                                with gr.Column(scale=1, min_width=120):
+                                    gr.Markdown("**Edge**", elem_classes=["compact-label"])
+                                    components["runs_edge_weight"] = gr.Slider(
+                                        minimum=0,
+                                        maximum=1,
+                                        step=0.1,
+                                        value=0,
+                                        interactive=False,
+                                        show_label=False,
+                                        elem_classes=["compact-slider"],
+                                    )
+                                with gr.Column(scale=1, min_width=120):
+                                    gr.Markdown("**Depth**", elem_classes=["compact-label"])
+                                    components["runs_depth_weight"] = gr.Slider(
+                                        minimum=0,
+                                        maximum=1,
+                                        step=0.1,
+                                        value=0,
+                                        interactive=False,
+                                        show_label=False,
+                                        elem_classes=["compact-slider"],
+                                    )
+                                with gr.Column(scale=1, min_width=120):
+                                    gr.Markdown(
+                                        "**Segmentation**",
+                                        elem_classes=["compact-label"],
+                                    )
+                                    components["runs_segmentation_weight"] = gr.Slider(
+                                        minimum=0,
+                                        maximum=1,
+                                        step=0.1,
+                                        value=0,
+                                        interactive=False,
+                                        show_label=False,
+                                        elem_classes=["compact-slider"],
                                     )
 
-                                # Logs Tab
-                                with gr.Tab("Logs"):
-                                    components["runs_log_path"] = gr.Textbox(
-                                        label="Log File Path",
-                                        interactive=False,
-                                    )
-                                    components["runs_log_output"] = gr.Code(
-                                        label="Log Output (Last 15 Lines)",
-                                        language="shell",
-                                        lines=15,
-                                        interactive=False,
-                                    )
-                                    with gr.Row():
-                                        components["runs_load_logs_btn"] = gr.Button(
-                                            "📄 Load Full Logs"
-                                        )
-                                        gr.Button("📋 Copy Logs")
+                            # Input video gallery
+                            components["runs_input_videos"] = gr.Gallery(
+                                label="Input Frames",
+                                show_label=False,
+                                columns=4,
+                                rows=1,
+                                height=200,
+                                object_fit="contain",
+                                allow_preview=True,
+                                container=True,
+                                elem_classes=["input-videos-gallery"],
+                            )
+
+                            # Full Prompt
+                            gr.Markdown("#### Full Prompt")
+                            components["runs_prompt_text"] = gr.Textbox(
+                                label="Prompt Text",
+                                show_label=False,
+                                lines=4,
+                                max_lines=10,
+                                interactive=False,
+                            )
+
+                            # Hidden components for compatibility
+                            components["runs_detail_id"] = gr.Textbox(visible=False)
+                            components["runs_detail_status"] = gr.Textbox(visible=False)
+
+                        # Info Tab
+                        with gr.Tab("Info"):
+                            with gr.Row():
+                                components["runs_info_id"] = gr.Textbox(
+                                    label="Run ID",
+                                    interactive=False,
+                                )
+                                components["runs_info_prompt_id"] = gr.Textbox(
+                                    label="Prompt ID",
+                                    interactive=False,
+                                )
+
+                            with gr.Row():
+                                components["runs_info_status"] = gr.Textbox(
+                                    label="Status",
+                                    interactive=False,
+                                )
+                                components["runs_info_duration"] = gr.Textbox(
+                                    label="Duration",
+                                    interactive=False,
+                                )
+                                components["runs_info_type"] = gr.Textbox(
+                                    label="Run Type",
+                                    interactive=False,
+                                )
+
+                            components["runs_info_prompt_name"] = gr.Textbox(
+                                label="Prompt Name",
+                                interactive=False,
+                            )
+
+                            with gr.Row():
+                                components["runs_info_created"] = gr.Textbox(
+                                    label="Created",
+                                    interactive=False,
+                                )
+                                components["runs_info_completed"] = gr.Textbox(
+                                    label="Completed",
+                                    interactive=False,
+                                )
+
+                        # Parameters Tab
+                        with gr.Tab("Parameters"):
+                            gr.Markdown("#### Execution Configuration")
+                            components["runs_params_json"] = gr.JSON(
+                                label="Inference Parameters",
+                                show_label=False,
+                            )
+
+                        # Logs Tab
+                        with gr.Tab("Logs"):
+                            components["runs_log_path"] = gr.Textbox(
+                                label="Log File Path",
+                                interactive=False,
+                            )
+                            components["runs_log_output"] = gr.Code(
+                                label="Log Output (Last 15 Lines)",
+                                language="shell",
+                                lines=15,
+                                interactive=False,
+                            )
+                            with gr.Row():
+                                components["runs_load_logs_btn"] = gr.Button("📄 Load Full Logs")
+                                gr.Button("📋 Copy Logs")
 
     return components

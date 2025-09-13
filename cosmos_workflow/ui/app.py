@@ -44,13 +44,22 @@ from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.ui.styles import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
+from cosmos_workflow.ui.tabs.prompts_handlers import (
+    cancel_delete_prompts,
+    clear_selection,
+    confirm_delete_prompts,
+    preview_delete_prompts,
+    select_all_prompts,
+)
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
 from cosmos_workflow.ui.tabs.runs_handlers import (
-    delete_selected_run,
+    cancel_delete_run,
+    confirm_delete_run,
     load_run_logs,
     load_runs_data,
     on_runs_gallery_select,
     on_runs_table_select,
+    preview_delete_run,
     update_runs_selection_info,
 )
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
@@ -1043,12 +1052,69 @@ def create_ui():
                     outputs=[components["selection_count"]],
                 )
 
+        # Prompts selection controls
+        if "select_all_btn" in components:
+            components["select_all_btn"].click(
+                fn=select_all_prompts,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[
+                    components["ops_prompts_table"],
+                    components.get("selection_count"),
+                ],
+            )
+
         if "clear_selection_btn" in components:
             components["clear_selection_btn"].click(
-                fn=clear_all_prompts,
+                fn=clear_selection,
                 inputs=[components["ops_prompts_table"]],
-                outputs=[components["ops_prompts_table"]],
+                outputs=[
+                    components["ops_prompts_table"],
+                    components.get("selection_count"),
+                ],
             )
+
+        # Prompts delete operations - Two-step process with preview
+        if "delete_selected_btn" in components and "ops_prompts_table" in components:
+            # Step 1: Show preview when delete button is clicked
+            components["delete_selected_btn"].click(
+                fn=preview_delete_prompts,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[
+                    components.get("prompts_delete_dialog"),
+                    components.get("prompts_delete_preview"),
+                    components.get("prompts_delete_outputs_checkbox"),
+                    components.get("prompts_delete_ids_hidden"),
+                ],
+            )
+
+            # Step 2: Confirm deletion
+            if "prompts_confirm_delete_btn" in components:
+                components["prompts_confirm_delete_btn"].click(
+                    fn=confirm_delete_prompts,
+                    inputs=[
+                        components.get("prompts_delete_ids_hidden"),
+                        components.get("prompts_delete_outputs_checkbox"),
+                    ],
+                    outputs=[
+                        components.get("selection_count"),
+                        components.get("prompts_delete_dialog"),
+                    ],
+                ).then(
+                    fn=load_ops_prompts,
+                    inputs=[components.get("ops_limit")],
+                    outputs=[components.get("ops_prompts_table")],
+                )
+
+            # Cancel deletion
+            if "prompts_cancel_delete_btn" in components:
+                components["prompts_cancel_delete_btn"].click(
+                    fn=cancel_delete_prompts,
+                    inputs=[],
+                    outputs=[
+                        components.get("selection_count"),
+                        components.get("prompts_delete_dialog"),
+                    ],
+                )
 
         if "run_inference_btn" in components and "ops_prompts_table" in components:
             inputs = get_components(
@@ -1206,25 +1272,57 @@ def create_ui():
                     outputs=outputs,
                 )
 
-        # Delete selected run operation
+        # Delete selected run operation - Two-step process with preview
         if "runs_delete_selected_btn" in components and "runs_selected_id" in components:
+            # Step 1: Show preview when delete button is clicked
             components["runs_delete_selected_btn"].click(
-                fn=delete_selected_run,
+                fn=preview_delete_run,
                 inputs=[components["runs_selected_id"]],
-                outputs=[components["runs_table"], components["runs_selected_info"]],
-            ).then(
-                fn=load_runs_data,
-                inputs=[
-                    components.get("runs_status_filter"),
-                    components.get("runs_date_filter"),
-                    components.get("runs_search"),
-                    components.get("runs_limit"),
-                ],
                 outputs=[
-                    components.get("runs_table"),
-                    components.get("runs_stats"),
+                    components.get("runs_delete_dialog"),
+                    components.get("runs_delete_preview"),
+                    components.get("runs_delete_outputs_checkbox"),
+                    components.get("runs_delete_id_hidden"),
                 ],
             )
+
+            # Step 2: Confirm deletion
+            if "runs_confirm_delete_btn" in components:
+                components["runs_confirm_delete_btn"].click(
+                    fn=confirm_delete_run,
+                    inputs=[
+                        components.get("runs_delete_id_hidden"),
+                        components.get("runs_delete_outputs_checkbox"),
+                    ],
+                    outputs=[
+                        components.get("runs_selected_info"),
+                        components.get("runs_delete_dialog"),
+                    ],
+                ).then(
+                    fn=load_runs_data,
+                    inputs=[
+                        components.get("runs_status_filter"),
+                        components.get("runs_date_filter"),
+                        components.get("runs_search"),
+                        components.get("runs_limit"),
+                    ],
+                    outputs=[
+                        components.get("runs_gallery"),
+                        components.get("runs_table"),
+                        components.get("runs_stats"),
+                    ],
+                )
+
+            # Cancel deletion
+            if "runs_cancel_delete_btn" in components:
+                components["runs_cancel_delete_btn"].click(
+                    fn=cancel_delete_run,
+                    inputs=[],
+                    outputs=[
+                        components.get("runs_selected_info"),
+                        components.get("runs_delete_dialog"),
+                    ],
+                )
 
         # Load logs button
         if all(k in components for k in ["runs_load_logs_btn", "runs_log_path", "runs_log_output"]):

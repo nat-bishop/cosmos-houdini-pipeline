@@ -49,12 +49,41 @@ def create_prompts_tab_ui():
 
                     # Selection controls with visual feedback
                     with gr.Row(elem_classes=["batch-operation"]):
+                        components["select_all_btn"] = gr.Button(
+                            "☑ Select All", size="sm", variant="secondary"
+                        )
                         components["clear_selection_btn"] = gr.Button(
                             "☐ Clear Selection", size="sm", variant="secondary"
+                        )
+                        components["delete_selected_btn"] = gr.Button(
+                            "🗑️ Delete Selected", size="sm", variant="stop"
                         )
                         components["selection_count"] = gr.Markdown(
                             "**0** prompts selected", elem_classes=["selection-counter"]
                         )
+
+                    # Delete confirmation dialog
+                    with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                        "prompts_delete_dialog"
+                    ]:
+                        components["prompts_delete_preview"] = gr.Markdown()
+                        components["prompts_delete_outputs_checkbox"] = gr.Checkbox(
+                            label="Delete output files",
+                            value=False,
+                            info="Check to permanently delete all output files. Leave unchecked to preserve files.",
+                        )
+                        components["prompts_delete_ids_hidden"] = gr.Textbox(visible=False)
+                        with gr.Row():
+                            components["prompts_confirm_delete_btn"] = gr.Button(
+                                "⚠️ Confirm Delete",
+                                variant="stop",
+                                size="sm",
+                            )
+                            components["prompts_cancel_delete_btn"] = gr.Button(
+                                "Cancel",
+                                variant="secondary",
+                                size="sm",
+                            )
 
             # Right: Split view for details and operations
             with gr.Column(scale=2, elem_classes=["split-right"]):

@@ -121,6 +121,29 @@ def create_runs_tab_ui():
                             elem_classes=["run-history-table"],
                         )
 
+                        # Delete confirmation dialog
+                        with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                            "runs_delete_dialog"
+                        ]:
+                            components["runs_delete_preview"] = gr.Markdown()
+                            components["runs_delete_outputs_checkbox"] = gr.Checkbox(
+                                label="Delete output files",
+                                value=False,
+                                info="Check to permanently delete all output files. Leave unchecked to preserve files.",
+                            )
+                            components["runs_delete_id_hidden"] = gr.Textbox(visible=False)
+                            with gr.Row():
+                                components["runs_confirm_delete_btn"] = gr.Button(
+                                    "⚠️ Confirm Delete",
+                                    variant="stop",
+                                    size="sm",
+                                )
+                                components["runs_cancel_delete_btn"] = gr.Button(
+                                    "Cancel",
+                                    variant="secondary",
+                                    size="sm",
+                                )
+
                 # Run Details below both tabs
                 with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
                     "runs_details_group"

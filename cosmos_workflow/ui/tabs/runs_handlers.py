@@ -560,44 +560,112 @@ def load_run_logs(log_path):
         return f"Error reading log file: {e}"
 
 
-def delete_selected_run(selected_run_id):
-    """Delete the selected run."""
+def preview_delete_run(selected_run_id):
+    """Preview what will be deleted for a run."""
     try:
         if not selected_run_id:
-            return gr.update(), "No run selected"
+            return (
+                gr.update(visible=False),  # Hide dialog
+                "",  # No preview text
+                False,  # Reset checkbox
+                "",  # No run ID
+            )
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
 
         ops = CosmosAPI()
-
         if not ops:
-            return gr.update(), "Error: Cannot connect to API"
+            return (
+                gr.update(visible=False),
+                "Error: Cannot connect to API",
+                False,
+                "",
+            )
 
-        run_id = selected_run_id
+        # Get preview of what will be deleted
+        preview = ops.preview_run_deletion(selected_run_id, keep_outputs=False)
 
-        if not run_id:
-            return gr.update(), "No run selected"
+        if not preview.get("run"):
+            return (
+                gr.update(visible=False),
+                f"Run {selected_run_id[:8]} not found",
+                False,
+                "",
+            )
 
-        # Delete the run
-        try:
-            result = ops.delete_run(run_id)
-            if result.get("success"):
-                # Return update to trigger table refresh
-                # We'll need to reload the data
-                return gr.update(), f"Deleted run {run_id[:8]}..."
-            else:
-                return (
-                    gr.update(),
-                    f"Failed to delete run: {result.get('message', 'Unknown error')}",
-                )
-        except Exception as e:
-            logger.error("Error deleting run {}: {}", run_id, str(e))
-            return gr.update(), f"Error deleting run: {e}"
+        run_info = preview["run"]
+        output_dir = preview.get("output_directory", "")
+        file_count = preview.get("file_count", 0)
+        total_size = preview.get("total_size_mb", 0)
+
+        # Build preview text
+        preview_text = f"""### ⚠️ Delete Run Confirmation
+
+**Run ID:** {run_info.get('id', '')}
+**Status:** {run_info.get('status', 'unknown')}
+**Created:** {run_info.get('created_at', '')[:19] if run_info.get('created_at') else 'unknown'}
+
+**Output Directory:** {output_dir}
+**Files:** {file_count} files
+**Total Size:** {total_size:.2f} MB
+
+⚠️ **Warning:** This action cannot be undone!
+"""
+
+        return (
+            gr.update(visible=True),  # Show dialog
+            preview_text,  # Preview text
+            False,  # Default to keep outputs
+            selected_run_id,  # Store run ID for confirmation
+        )
 
     except Exception as e:
-        logger.error("Error in delete handler: {}", str(e))
-        return gr.update(), f"Error: {e}"
+        logger.error("Error previewing run deletion: {}", str(e))
+        return (
+            gr.update(visible=False),
+            f"Error: {e}",
+            False,
+            "",
+        )
+
+
+def confirm_delete_run(run_id, delete_outputs):
+    """Actually delete the run after confirmation."""
+    try:
+        if not run_id:
+            return "No run selected", gr.update(visible=False)
+
+        # Create CosmosAPI instance
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+        if not ops:
+            return "Error: Cannot connect to API", gr.update(visible=False)
+
+        # Delete the run (keep_outputs is opposite of delete_outputs)
+        keep_outputs = not delete_outputs
+        result = ops.delete_run(run_id, keep_outputs=keep_outputs)
+
+        if result.get("success"):
+            msg = f"✅ Successfully deleted run {run_id[:8]}..."
+            if delete_outputs:
+                msg += " (output files deleted)"
+            else:
+                msg += " (output files preserved)"
+            return msg, gr.update(visible=False)
+        else:
+            error_msg = result.get("message", result.get("error", "Unknown error"))
+            return f"❌ Failed to delete run: {error_msg}", gr.update(visible=False)
+
+    except Exception as e:
+        logger.error("Error deleting run {}: {}", run_id, str(e))
+        return f"❌ Error deleting run: {e}", gr.update(visible=False)
+
+
+def cancel_delete_run():
+    """Cancel run deletion."""
+    return "Deletion cancelled", gr.update(visible=False)
 
 
 def update_runs_selection_info(table_data, evt: gr.SelectData):

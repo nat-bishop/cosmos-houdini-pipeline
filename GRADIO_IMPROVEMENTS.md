@@ -8,10 +8,26 @@ This document tracks the remaining improvements to be implemented for the Cosmos
 ✅ **Phase 1.5**: Complete video display implementation
 ✅ **Phase 1.6**: Run Details visibility in both tabs
 ✅ **Phase 1.7**: Input Videos & Controls Display Logic - spec.json based conditional display
+✅ **Phase 1.8**: Gallery thumbnail generation and selection fix
+✅ **Phase 1.9**: Gallery layout improvements (5 columns, 16:9 aspect ratio)
+✅ **Phase 1.10**: Delete operations with preview confirmation
 
 ---
 
 ## Remaining Implementation Phases
+
+### Phase 1.10: Delete Operations with Preview
+**Status**: Completed
+**Priority**: CRITICAL
+
+#### Implementation Summary
+Implemented safe deletion with preview for both runs and prompts:
+1. ✅ Added preview_run_deletion and preview_prompt_deletion calls
+2. ✅ Two-step deletion process with confirmation dialog
+3. ✅ Shows files and directories that will be deleted
+4. ✅ Option to keep or delete output files
+5. ✅ Prevents deletion of prompts with active runs
+6. ✅ Batch delete support for prompts with Select All
 
 ### Phase 1.7: Input Videos & Controls Display Logic
 **Status**: Completed
@@ -42,15 +58,15 @@ Successfully implemented spec.json-based control display logic:
 ---
 
 ### Phase 2: Core Feature Parity - Prompts Delete
-**Status**: Not Started
+**Status**: Completed
 **Priority**: HIGH
 
 #### Implementation Steps
-1. [ ] Add selection checkboxes to prompts table
-2. [ ] Add batch operation buttons (Select All, Clear, Delete)
-3. [ ] Implement delete handler with confirmation
-4. [ ] Show preview of items to delete
-5. [ ] Update table after deletion
+1. ✅ Add selection checkboxes to prompts table
+2. ✅ Add batch operation buttons (Select All, Clear, Delete)
+3. ✅ Implement delete handler with confirmation
+4. ✅ Show preview of items to delete
+5. ✅ Update table after deletion
 
 #### Files to Modify
 - `cosmos_workflow/ui/tabs/prompts_ui.py`
@@ -71,9 +87,10 @@ Successfully implemented spec.json-based control display logic:
 **Priority**: MEDIUM
 
 #### 3.1 Video Aspect Ratio Fix
-- [ ] Remove conflicting CSS in `styles.py`
-- [ ] Update gallery configuration in `inputs_ui.py`
-- [ ] Test with various video aspect ratios
+**Status**: Completed in Phase 1.9
+- ✅ Remove conflicting CSS in `styles.py`
+- ✅ Update gallery configuration to 5 columns with 16:9 ratio
+- ✅ Test with various video aspect ratios
 
 #### 3.2 Smart Filtering & Navigation
 - [ ] Add status/text filters to Prompts tab
@@ -129,4 +146,4 @@ Successfully implemented spec.json-based control display logic:
 
 ---
 
-Last Updated: 2025-09-13
+Last Updated: 2025-09-14

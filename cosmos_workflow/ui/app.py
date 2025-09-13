@@ -134,12 +134,16 @@ def get_input_directories():
             depth_video = dir_path / "depth.mp4"
             seg_video = dir_path / "segmentation.mp4"
 
+            # Get directory modification time
+            dir_stat = dir_path.stat()
+
             dir_info = {
                 "name": dir_path.name,
                 "path": str(dir_path),
                 "has_color": color_video.exists(),
                 "has_depth": depth_video.exists(),
                 "has_segmentation": seg_video.exists(),
+                "mtime": dir_stat.st_mtime,  # Modification time for date filtering
                 "files": [],
             }
 
@@ -159,12 +163,85 @@ def get_input_directories():
     return directories
 
 
-def load_input_gallery():
-    """Load input directories for gallery display."""
-    directories = get_input_directories()
-    gallery_items = []
+def filter_input_directories(search_text="", has_filter="all", date_filter="all"):
+    """Filter input directories based on criteria.
 
-    for dir_info in directories:
+    Args:
+        search_text: Text to search in directory names
+        has_filter: Filter by video types (all, has_color, has_depth, etc.)
+        date_filter: Filter by date range (all, today, last_7_days, etc.)
+
+    Returns:
+        Tuple of (filtered_directories, total_count, filtered_count)
+    """
+    import time
+
+    all_dirs = get_input_directories()
+    total_count = len(all_dirs)
+    filtered = all_dirs
+
+    # Apply search filter
+    if search_text and search_text.strip():
+        search_lower = search_text.lower().strip()
+        filtered = [d for d in filtered if search_lower in d["name"].lower()]
+
+    # Apply has_filter
+    if has_filter != "all":
+        if has_filter == "has_color":
+            filtered = [d for d in filtered if d["has_color"]]
+        elif has_filter == "has_depth":
+            filtered = [d for d in filtered if d["has_depth"]]
+        elif has_filter == "has_segmentation":
+            filtered = [d for d in filtered if d["has_segmentation"]]
+        elif has_filter == "complete_set":
+            filtered = [
+                d for d in filtered if d["has_color"] and d["has_depth"] and d["has_segmentation"]
+            ]
+        elif has_filter == "incomplete_set":
+            filtered = [
+                d
+                for d in filtered
+                if not (d["has_color"] and d["has_depth"] and d["has_segmentation"])
+            ]
+
+    # Apply date filter
+    if date_filter != "all":
+        current_time = time.time()
+        if date_filter == "today":
+            cutoff_time = current_time - (24 * 3600)  # 24 hours
+        elif date_filter == "last_7_days":
+            cutoff_time = current_time - (7 * 24 * 3600)
+        elif date_filter == "last_30_days":
+            cutoff_time = current_time - (30 * 24 * 3600)
+        elif date_filter == "older_than_30_days":
+            cutoff_time = current_time - (30 * 24 * 3600)
+            filtered = [d for d in filtered if d["mtime"] < cutoff_time]
+        else:
+            cutoff_time = 0
+
+        if date_filter != "older_than_30_days" and cutoff_time > 0:
+            filtered = [d for d in filtered if d["mtime"] >= cutoff_time]
+
+    return filtered, total_count, len(filtered)
+
+
+def load_input_gallery(search_text="", has_filter="all", date_filter="all"):
+    """Load input directories for gallery display with filtering.
+
+    Args:
+        search_text: Text to search in directory names
+        has_filter: Filter by video types
+        date_filter: Filter by date range
+
+    Returns:
+        Tuple of (gallery_items, results_text)
+    """
+    filtered_dirs, total_count, filtered_count = filter_input_directories(
+        search_text, has_filter, date_filter
+    )
+
+    gallery_items = []
+    for dir_info in filtered_dirs:
         # Use color.mp4 as thumbnail if it exists
         color_path = Path(dir_info["path"]) / "color.mp4"
         if color_path.exists():
@@ -176,7 +253,13 @@ def load_input_gallery():
                     gallery_items.append((file_info["path"], dir_info["name"]))
                     break
 
-    return gallery_items
+    # Format results text
+    if search_text or has_filter != "all" or date_filter != "all":
+        results_text = f"**{filtered_count}** of **{total_count}** directories"
+    else:
+        results_text = f"**{total_count}** directories found"
+
+    return gallery_items, results_text
 
 
 def on_input_select(evt: gr.SelectData, gallery_data):
@@ -957,7 +1040,7 @@ def create_ui():
                     selected_ids = get_selections_from_table(current_prompts_table)
 
                 # Load all data
-                inputs_data = load_input_gallery()
+                inputs_data, _ = load_input_gallery()  # Ignore results text in global refresh
                 prompts_data = load_ops_prompts(50)
                 jobs_data = check_running_jobs()
 
@@ -1074,6 +1157,51 @@ def create_ui():
                     components["create_video_dir"],
                 ],
             )
+
+        # Inputs filtering events
+        if all(
+            k in components for k in ["inputs_search", "inputs_has_filter", "inputs_date_filter"]
+        ):
+            filter_inputs = [
+                components["inputs_search"],
+                components["inputs_has_filter"],
+                components["inputs_date_filter"],
+            ]
+            filter_outputs = [
+                components["input_gallery"],
+                components["inputs_results_count"],
+            ]
+
+            # Search box with debouncing (responds to text changes)
+            if "inputs_search" in components:
+                components["inputs_search"].change(
+                    fn=load_input_gallery,
+                    inputs=filter_inputs,
+                    outputs=filter_outputs,
+                )
+
+            # Dropdown filters respond immediately
+            if "inputs_has_filter" in components:
+                components["inputs_has_filter"].change(
+                    fn=load_input_gallery,
+                    inputs=filter_inputs,
+                    outputs=filter_outputs,
+                )
+
+            if "inputs_date_filter" in components:
+                components["inputs_date_filter"].change(
+                    fn=load_input_gallery,
+                    inputs=filter_inputs,
+                    outputs=filter_outputs,
+                )
+
+            # Refresh button
+            if "inputs_refresh_btn" in components:
+                components["inputs_refresh_btn"].click(
+                    fn=load_input_gallery,
+                    inputs=filter_inputs,
+                    outputs=filter_outputs,
+                )
 
         if "create_prompt_btn" in components:
             components["create_prompt_btn"].click(
@@ -1404,6 +1532,7 @@ def create_ui():
         # Load initial data
         initial_outputs = get_components(
             "input_gallery",
+            "inputs_results_count",
             "ops_prompts_table",
             "running_jobs_display",
             "job_status",
@@ -1412,6 +1541,7 @@ def create_ui():
         # Debug: Check which components are missing
         required_components = [
             "input_gallery",
+            "inputs_results_count",
             "ops_prompts_table",
             "running_jobs_display",
             "job_status",
@@ -1425,7 +1555,7 @@ def create_ui():
 
             def load_initial_data():
                 """Load initial data efficiently."""
-                gallery_data = load_input_gallery()
+                gallery_data, results_text = load_input_gallery()
                 prompts_data = load_ops_prompts(50)
                 # Only call check_running_jobs once
                 if ops:
@@ -1435,7 +1565,7 @@ def create_ui():
                 else:
                     jobs_display = "No containers"
                     job_status = "Not connected"
-                return gallery_data, prompts_data, jobs_display, job_status
+                return gallery_data, results_text, prompts_data, jobs_display, job_status
 
             app.load(
                 fn=load_initial_data,

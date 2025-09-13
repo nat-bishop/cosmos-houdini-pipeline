@@ -7,10 +7,39 @@ This document tracks the remaining improvements to be implemented for the Cosmos
 ✅ **Phase 1**: Critical Runs Tab fixes - all video display issues resolved
 ✅ **Phase 1.5**: Complete video display implementation
 ✅ **Phase 1.6**: Run Details visibility in both tabs
+✅ **Phase 1.7**: Input Videos & Controls Display Logic - spec.json based conditional display
 
 ---
 
 ## Remaining Implementation Phases
+
+### Phase 1.7: Input Videos & Controls Display Logic
+**Status**: Completed
+**Priority**: CRITICAL
+
+#### Implementation Summary
+Successfully implemented spec.json-based control display logic:
+1. ✅ Reads spec.json from run outputs directory
+2. ✅ Parses control weights and input_control paths
+3. ✅ Implements conditional video path logic:
+   - User-provided: Uses path from spec.json (if exists)
+   - AI-generated: Uses outputs/<type>_input_control.mp4
+4. ✅ Shows controls with correct weights from spec.json
+5. ✅ Only displays videos that actually exist on disk
+
+#### Known Issues
+- Some spec.json files reference non-existent user-provided videos
+- This is a data issue, not a code issue - the UI correctly handles missing files
+- When files don't exist, warnings are logged and videos are not displayed
+
+#### Testing Results
+- ✅ Control weights correctly read from spec.json
+- ✅ AI-generated controls (edge) display correctly
+- ✅ Missing user-provided files handled gracefully with warnings
+- ✅ Weight sliders show correct values from spec.json
+- ✅ Only videos that exist are shown in the gallery
+
+---
 
 ### Phase 2: Core Feature Parity - Prompts Delete
 **Status**: Not Started
@@ -93,6 +122,10 @@ This document tracks the remaining improvements to be implemented for the Cosmos
 - Input videos use keys: "video", "depth", "seg"
 - Prompt name stored in `prompt.parameters.name`
 - Execution config contains weights and parameters
+- spec.json structure:
+  - Control configs: `{"edge": {"control_weight": 0.2, "input_control": "path/to/video.mp4"}}`
+  - If `input_control` missing, control was AI-generated
+  - AI-generated controls in: `outputs/<type>_input_control.mp4`
 
 ---
 

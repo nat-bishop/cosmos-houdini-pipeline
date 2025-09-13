@@ -86,11 +86,10 @@ def create_runs_tab_ui():
                             rows=2,
                             height=400,
                             object_fit="contain",
-                            preview=False,  # Disable preview popup
+                            preview=False,  # Disable preview to avoid duplication
                             allow_preview=False,  # Disable click to expand
                             show_download_button=True,
                             interactive=False,  # Read-only gallery
-                            type="filepath",  # Ensure it handles video files
                         )
 
                     # Run Records tab

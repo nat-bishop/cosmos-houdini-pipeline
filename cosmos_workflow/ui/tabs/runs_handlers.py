@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Event handlers for Runs tab functionality."""
 
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -8,9 +10,77 @@ import gradio as gr
 
 from cosmos_workflow.utils.logging import logger
 
+# Thread pool for parallel thumbnail generation
+THUMBNAIL_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+
+
+def generate_thumbnail_fast(video_path, thumb_size=(320, 180)):
+    """Generate a small, low-res thumbnail very quickly.
+
+    Args:
+        video_path: Path to video file
+        thumb_size: Thumbnail size (width, height)
+
+    Returns:
+        Path to thumbnail or None if failed
+    """
+    try:
+        video_path = Path(video_path)
+        if not video_path.exists():
+            return None
+
+        # Create thumbnails directory
+        thumb_dir = Path("outputs/.thumbnails")
+        thumb_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate unique thumbnail name based on video path
+        import hashlib
+
+        path_hash = hashlib.md5(str(video_path).encode()).hexdigest()[:8]  # noqa: S324
+        thumb_path = thumb_dir / f"{video_path.stem}_{path_hash}.jpg"
+
+        # Skip if thumbnail already exists
+        if thumb_path.exists():
+            return str(thumb_path)
+
+        # Use ffmpeg with fast settings for quick thumbnail generation
+        cmd = [
+            "ffmpeg",
+            "-ss",
+            "0.5",  # Seek to 0.5 seconds (very fast seek)
+            "-i",
+            str(video_path),
+            "-vframes",
+            "1",  # Just 1 frame
+            "-vf",
+            f"scale={thumb_size[0]}:{thumb_size[1]}",  # Small size
+            "-q:v",
+            "5",  # Lower quality for speed (1=best, 31=worst)
+            "-y",  # Overwrite
+            str(thumb_path),
+        ]
+
+        # Run with timeout
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            timeout=2,  # Very short timeout
+            creationflags=subprocess.CREATE_NO_WINDOW
+            if hasattr(subprocess, "CREATE_NO_WINDOW")
+            else 0,
+        )
+
+        if result.returncode == 0 and thumb_path.exists():
+            return str(thumb_path)
+
+    except (subprocess.TimeoutExpired, Exception):  # noqa: S110
+        pass
+
+    return None
+
 
 def load_runs_data(status_filter, date_filter, search_text, limit):
-    """Load runs data for table with filtering (gallery replaced with individual videos)."""
+    """Load runs data for table with filtering and populate video grid."""
     try:
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -77,8 +147,11 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
                 or search_lower in run.get("prompt_text", "").lower()
             ]
 
-        # Build gallery data (only completed runs with output files)
+        # Build gallery data with thumbnails (only completed runs)
         gallery_data = []
+        video_paths = []
+
+        # First collect all video paths
         for run in filtered_runs:
             if run.get("status") == "completed":
                 # Extract output video from files array
@@ -95,10 +168,27 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
                             break
 
                 if output_video:
-                    # Get prompt text for label
-                    prompt_text = run.get("prompt_text", "")
-                    label = f"{run.get('id', '')[:8]}... - {prompt_text[:30]}"
-                    gallery_data.append((str(output_video), label))
+                    video_paths.append((output_video, run))
+
+        # Generate thumbnails in parallel for speed
+        if video_paths:
+            futures = []
+            for video_path, run in video_paths[:50]:  # Limit to 50 for performance
+                future = THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path)
+                futures.append((future, run))
+
+            # Collect results
+            for future, run in futures:
+                try:
+                    thumb_path = future.result(timeout=3)
+                    if thumb_path:
+                        prompt_text = run.get("prompt_text", "")
+                        # Include full run ID for selection handler, show shortened version visually
+                        full_id = run.get("id", "")
+                        label = f"{full_id}||{prompt_text[:30]}..."
+                        gallery_data.append((thumb_path, label))
+                except Exception:  # noqa: S110
+                    pass  # Skip failed thumbnails
 
         # Build table data
         table_data = []
@@ -151,13 +241,22 @@ def on_runs_gallery_select(evt: gr.SelectData):
             logger.warning("No evt, hiding details")
             return [gr.update(visible=False)] + [gr.update()] * 16
 
-        # The label contains the run ID in format "rs_xxxxx... - prompt text"
+        # The label contains the run ID in format "full_run_id||prompt text..."
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
             return [gr.update(visible=False)] + [gr.update()] * 16
 
-        # Extract run ID from label (first 8 chars after "rs_")
+        # Extract full run ID from label (before the || separator)
+        if "||" in label:
+            full_run_id = label.split("||")[0].strip()
+            if full_run_id and full_run_id.startswith("rs_"):
+                # Create a fake table data and event to reuse the existing handler
+                fake_table_data = [[full_run_id]]
+                fake_evt = type("obj", (object,), {"index": 0})()
+                return on_runs_table_select(fake_table_data, fake_evt)
+
+        # Fallback to old format handling if || separator not found
         if "rs_" in label:
             # Find the run ID pattern - handle "rs_xxxxx..." format
             import re
@@ -185,7 +284,7 @@ def on_runs_gallery_select(evt: gr.SelectData):
 
                 if full_run_id:
                     # Create a fake table data and event to reuse the existing handler
-                    fake_table_data = [[False, full_run_id]]
+                    fake_table_data = [[full_run_id]]
                     fake_evt = type("obj", (object,), {"index": 0})()
                     return on_runs_table_select(fake_table_data, fake_evt)
 

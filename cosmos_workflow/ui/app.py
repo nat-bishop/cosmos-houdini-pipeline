@@ -49,6 +49,7 @@ from cosmos_workflow.ui.tabs.runs_handlers import (
     delete_selected_run,
     load_run_logs,
     load_runs_data,
+    on_runs_gallery_select,
     on_runs_table_select,
     update_runs_selection_info,
 )
@@ -1171,8 +1172,7 @@ def create_ui():
                 )
 
         # Runs gallery selection - reuse same outputs as table
-        # Removed gallery selection handler - replaced with individual videos
-        if False:  # Disabled old gallery code
+        if "runs_gallery" in components:
             runs_output_keys = [
                 "runs_details_group",
                 "runs_detail_id",
@@ -1198,7 +1198,13 @@ def create_ui():
                 "runs_log_output",
             ]
             outputs = get_components(*runs_output_keys)
-            # Gallery selection handler removed - we no longer use gallery component
+            if outputs:
+                logger.info("Connecting runs_gallery.select with {} outputs", len(outputs))
+                components["runs_gallery"].select(
+                    fn=on_runs_gallery_select,
+                    inputs=[],
+                    outputs=outputs,
+                )
 
         # Delete selected run operation
         if "runs_delete_selected_btn" in components and "runs_selected_id" in components:

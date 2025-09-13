@@ -10,7 +10,7 @@ from cosmos_workflow.utils.logging import logger
 
 
 def load_runs_data(status_filter, date_filter, search_text, limit):
-    """Load runs data for both gallery and table with filtering."""
+    """Load runs data for table with filtering (gallery replaced with individual videos)."""
     try:
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -121,8 +121,8 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
             created = run.get("created_at", "")[:19] if run.get("created_at") else ""
             completed = run.get("completed_at", "")[:19] if run.get("completed_at") else ""
 
-            # Add selection checkbox (False by default)
-            table_data.append([False, run_id, status, prompt_text, duration, created, completed])
+            # No checkbox, just data
+            table_data.append([run_id, status, prompt_text, duration, created, completed])
 
         # Build statistics
         stats = f"""
@@ -132,6 +132,7 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
         **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}
         """
 
+        # Return gallery data, table data and stats
         return gallery_data, table_data, stats
 
     except Exception as e:
@@ -214,17 +215,17 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         # Get selected row
         logger.info("Event index: {}, type: {}", evt.index, type(evt.index))
-        row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index  # noqa: UP038
+        row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
         logger.info("Selected row index: {}", row_idx)
 
         # Extract run ID from table
         import pandas as pd
 
         if isinstance(table_data, pd.DataFrame):
-            run_id = table_data.iloc[row_idx, 1]  # Run ID is second column
+            run_id = table_data.iloc[row_idx, 0]  # Run ID is first column now (no checkbox)
             logger.info("Extracted run_id from DataFrame: {}", run_id)
         else:
-            run_id = table_data[row_idx][1] if row_idx < len(table_data) else None
+            run_id = table_data[row_idx][0] if row_idx < len(table_data) else None
             logger.info("Extracted run_id from list: {}", run_id)
 
         if not run_id or not ops:
@@ -460,109 +461,64 @@ def load_run_logs(log_path):
         return f"Error reading log file: {e}"
 
 
-def select_all_runs(table_data):
-    """Select all runs in the table."""
-    if table_data is None:
-        return []
-
-    import pandas as pd
-
-    if isinstance(table_data, pd.DataFrame):
-        table_data = table_data.copy()
-        table_data.iloc[:, 0] = True
-        return table_data
-    else:
-        updated_data = []
-        for row in table_data:
-            new_row = list(row)
-            new_row[0] = True
-            updated_data.append(new_row)
-        return updated_data
-
-
-def clear_runs_selection(table_data):
-    """Clear all selections in the runs table."""
-    if table_data is None:
-        return []
-
-    import pandas as pd
-
-    if isinstance(table_data, pd.DataFrame):
-        table_data = table_data.copy()
-        table_data.iloc[:, 0] = False
-        return table_data
-    else:
-        updated_data = []
-        for row in table_data:
-            new_row = list(row)
-            new_row[0] = False
-            updated_data.append(new_row)
-        return updated_data
-
-
-def delete_selected_runs(table_data):
-    """Delete selected runs."""
+def delete_selected_run(selected_run_id):
+    """Delete the selected run."""
     try:
+        if not selected_run_id:
+            return gr.update(), "No run selected"
+
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
 
         ops = CosmosAPI()
 
-        if not ops or table_data is None:
-            return table_data, "0 runs selected"
+        if not ops:
+            return gr.update(), "Error: Cannot connect to API"
 
-        # Get selected run IDs
-        selected_ids = []
-        import pandas as pd
+        run_id = selected_run_id
 
-        if isinstance(table_data, pd.DataFrame):
-            for _, row in table_data.iterrows():
-                if row.iloc[0]:  # Checkbox is checked
-                    selected_ids.append(row.iloc[1])  # Run ID
-        else:
-            for row in table_data:
-                if row[0]:  # Checkbox is checked
-                    selected_ids.append(row[1])  # Run ID
+        if not run_id:
+            return gr.update(), "No run selected"
 
-        if not selected_ids:
-            return table_data, "0 runs selected"
-
-        # Delete runs
-        deleted_count = 0
-        for run_id in selected_ids:
-            try:
-                result = ops.delete_run(run_id)
-                if result.get("success"):
-                    deleted_count += 1
-            except Exception as e:
-                logger.error("Error deleting run {}: {}", run_id, str(e))
-
-        # Remove deleted runs from table
-        if isinstance(table_data, pd.DataFrame):
-            table_data = table_data[~table_data.iloc[:, 1].isin(selected_ids)]
-        else:
-            table_data = [row for row in table_data if row[1] not in selected_ids]
-
-        return table_data, f"Deleted {deleted_count} runs"
+        # Delete the run
+        try:
+            result = ops.delete_run(run_id)
+            if result.get("success"):
+                # Return update to trigger table refresh
+                # We'll need to reload the data
+                return gr.update(), f"Deleted run {run_id[:8]}..."
+            else:
+                return (
+                    gr.update(),
+                    f"Failed to delete run: {result.get('message', 'Unknown error')}",
+                )
+        except Exception as e:
+            logger.error("Error deleting run {}: {}", run_id, str(e))
+            return gr.update(), f"Error deleting run: {e}"
 
     except Exception as e:
-        logger.error("Error deleting runs: {}", str(e))
-        return table_data, f"Error: {e}"
+        logger.error("Error in delete handler: {}", str(e))
+        return gr.update(), f"Error: {e}"
 
 
-def update_runs_selection_info(table_data):
-    """Update the selection info text based on checked rows."""
+def update_runs_selection_info(table_data, evt: gr.SelectData):
+    """Update the selection info text and return selected run ID."""
     try:
-        if table_data is None:
-            return "0 runs selected"
+        if evt is None or evt.index is None or table_data is None:
+            return "No run selected", ""
 
+        # Get selected run ID
         import pandas as pd
 
-        if isinstance(table_data, pd.DataFrame):
-            selected = sum(1 for _, row in table_data.iterrows() if row.iloc[0])
-        else:
-            selected = sum(1 for row in table_data if row[0])
+        row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
 
-        return f"{selected} run{'s' if selected != 1 else ''} selected"
+        if isinstance(table_data, pd.DataFrame):
+            run_id = table_data.iloc[row_idx, 0]  # Run ID is first column
+        else:
+            run_id = table_data[row_idx][0] if row_idx < len(table_data) else ""
+
+        if run_id:
+            return f"Selected: {run_id[:8]}...", run_id
+        return "No run selected", ""
     except Exception:
-        return "0 runs selected"
+        return "No run selected", ""

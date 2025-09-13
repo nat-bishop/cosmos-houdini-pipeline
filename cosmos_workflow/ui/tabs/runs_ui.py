@@ -82,34 +82,33 @@ def create_runs_tab_ui():
                             label="Output Videos",
                             show_label=False,
                             elem_id="runs_gallery",
-                            columns=5,  # More columns for smaller thumbnails
-                            rows=3,  # More rows to show more videos
-                            height=350,  # Slightly shorter height
+                            columns=3,
+                            rows=2,
+                            height=400,
                             object_fit="contain",
                             preview=False,  # Disable preview popup
                             allow_preview=False,  # Disable click to expand
-                            show_download_button=False,  # Cleaner look
+                            show_download_button=True,
                             interactive=False,  # Read-only gallery
+                            type="filepath",  # Ensure it handles video files
                         )
 
                     # Run Records tab
                     with gr.Tab("Run Records"):
-                        # Batch operations
+                        # Single row operations
                         with gr.Row():
-                            components["runs_select_all_btn"] = gr.Button("☑ Select All", size="sm")
-                            components["runs_clear_selection_btn"] = gr.Button(
-                                "☐ Clear Selection", size="sm"
-                            )
                             components["runs_delete_selected_btn"] = gr.Button(
-                                "🗑️ Delete Selected",
+                                "🗑️ Delete Selected Run",
                                 size="sm",
                                 variant="stop",
                             )
-                            components["runs_selected_info"] = gr.Markdown("0 runs selected")
+                            components["runs_selected_info"] = gr.Markdown("No run selected")
+
+                        # Hidden component to store selected run ID
+                        components["runs_selected_id"] = gr.Textbox(visible=False)
 
                         components["runs_table"] = gr.Dataframe(
                             headers=[
-                                "Select",
                                 "Run ID",
                                 "Status",
                                 "Prompt",
@@ -117,8 +116,8 @@ def create_runs_tab_ui():
                                 "Created",
                                 "Completed",
                             ],
-                            datatype=["bool", "str", "str", "str", "str", "str", "str"],
-                            interactive=True,
+                            datatype=["str", "str", "str", "str", "str", "str"],
+                            interactive=False,  # Make non-interactive to prevent editing
                             max_height=400,
                             elem_classes=["run-history-table"],
                         )

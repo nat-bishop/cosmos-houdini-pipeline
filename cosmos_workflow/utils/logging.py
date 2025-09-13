@@ -62,6 +62,7 @@ def init_logger(
             encoding="utf8",
             backtrace=True,
             diagnose=True,  # Include variables in file logs
+            enqueue=True,  # Thread-safe logging to prevent Windows file locking issues
         )
 
     return _base_logger
@@ -103,6 +104,7 @@ def get_run_logger(run_id: str, prompt_name: str) -> "logger":
         level="DEBUG",
         format="[{time:HH:mm:ss}|{level}|{extra[run_id]}] {message}",
         filter=lambda record: record["extra"].get("run_id") == run_id,
+        enqueue=True,  # Thread-safe logging to prevent Windows file locking issues
     )
 
     return run_logger

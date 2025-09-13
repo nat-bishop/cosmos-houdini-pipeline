@@ -46,13 +46,10 @@ from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
 from cosmos_workflow.ui.tabs.runs_handlers import (
-    clear_runs_selection,
-    delete_selected_runs,
+    delete_selected_run,
     load_run_logs,
     load_runs_data,
-    on_runs_gallery_select,
     on_runs_table_select,
-    select_all_runs,
     update_runs_selection_info,
 )
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
@@ -1101,6 +1098,7 @@ def create_ui():
                 components["runs_search"],
                 components["runs_limit"],
             ]
+            # Update gallery, table and stats
             filter_outputs = get_components("runs_gallery", "runs_table", "runs_stats")
             if filter_outputs:
                 for filter_component in [
@@ -1164,16 +1162,17 @@ def create_ui():
                         outputs=available_outputs,
                     )
 
-            # Update selection info when table changes
-            if "runs_selected_info" in components:
-                components["runs_table"].change(
+            # Update selection info when a row is selected
+            if "runs_selected_info" in components and "runs_selected_id" in components:
+                components["runs_table"].select(
                     fn=update_runs_selection_info,
-                    inputs=[components["runs_table"]],
-                    outputs=[components["runs_selected_info"]],
+                    inputs=[components["runs_table"]],  # Pass table data
+                    outputs=[components["runs_selected_info"], components["runs_selected_id"]],
                 )
 
         # Runs gallery selection - reuse same outputs as table
-        if "runs_gallery" in components:
+        # Removed gallery selection handler - replaced with individual videos
+        if False:  # Disabled old gallery code
             runs_output_keys = [
                 "runs_details_group",
                 "runs_detail_id",
@@ -1199,37 +1198,27 @@ def create_ui():
                 "runs_log_output",
             ]
             outputs = get_components(*runs_output_keys)
-            if outputs:
-                logger.info("Connecting runs_gallery.select with {} outputs", len(outputs))
-                components["runs_gallery"].select(
-                    fn=on_runs_gallery_select,
-                    inputs=[],
-                    outputs=outputs,
-                )
+            # Gallery selection handler removed - we no longer use gallery component
 
-        # Batch operations
-        if "runs_select_all_btn" in components and "runs_table" in components:
-            components["runs_select_all_btn"].click(
-                fn=select_all_runs,
-                inputs=[components["runs_table"]],
-                outputs=[components["runs_table"]],
+        # Delete selected run operation
+        if "runs_delete_selected_btn" in components and "runs_selected_id" in components:
+            components["runs_delete_selected_btn"].click(
+                fn=delete_selected_run,
+                inputs=[components["runs_selected_id"]],
+                outputs=[components["runs_table"], components["runs_selected_info"]],
+            ).then(
+                fn=load_runs_data,
+                inputs=[
+                    components.get("runs_status_filter"),
+                    components.get("runs_date_filter"),
+                    components.get("runs_search"),
+                    components.get("runs_limit"),
+                ],
+                outputs=[
+                    components.get("runs_table"),
+                    components.get("runs_stats"),
+                ],
             )
-
-        if "runs_clear_selection_btn" in components and "runs_table" in components:
-            components["runs_clear_selection_btn"].click(
-                fn=clear_runs_selection,
-                inputs=[components["runs_table"]],
-                outputs=[components["runs_table"]],
-            )
-
-        if "runs_delete_selected_btn" in components and "runs_table" in components:
-            delete_outputs = get_components("runs_table", "runs_selected_info")
-            if delete_outputs:
-                components["runs_delete_selected_btn"].click(
-                    fn=delete_selected_runs,
-                    inputs=[components["runs_table"]],
-                    outputs=delete_outputs,
-                )
 
         # Load logs button
         if all(k in components for k in ["runs_load_logs_btn", "runs_log_path", "runs_log_output"]):

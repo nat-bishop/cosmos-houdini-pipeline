@@ -244,6 +244,18 @@ def create_runs_tab_ui():
                                     interactive=False,
                                 )
 
+                            # Video Paths
+                            gr.Markdown("#### Video Paths")
+                            components["runs_info_output_path"] = gr.Textbox(
+                                label="Output Video",
+                                interactive=False,
+                            )
+                            components["runs_info_input_paths"] = gr.Textbox(
+                                label="Input Videos",
+                                lines=4,
+                                interactive=False,
+                            )
+
                         # Parameters Tab
                         with gr.Tab("Parameters"):
                             gr.Markdown("#### Execution Configuration")

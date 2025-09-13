@@ -407,6 +407,11 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             else:
                 video_updates.append(gr.update(value=None, visible=False))
 
+        # Format input paths for display
+        input_paths_text = ""
+        for video_path, label in input_videos:
+            input_paths_text += f"{label}: {video_path}\n"
+
         return [
             gr.update(visible=True),  # runs_details_group
             gr.update(value=run_id),  # runs_detail_id (hidden)
@@ -427,6 +432,10 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             gr.update(value=prompt_name),  # runs_info_prompt_name
             gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
             gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
+            gr.update(value=output_video if output_video else "Not found"),  # runs_info_output_path
+            gr.update(
+                value=input_paths_text.strip() if input_paths_text else "No input videos"
+            ),  # runs_info_input_paths
             gr.update(value=params),  # runs_params_json
             gr.update(value=log_path),  # runs_log_path
             gr.update(value=log_content),  # runs_log_output
@@ -434,7 +443,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 19
+        return [gr.update(visible=False)] + [gr.update()] * 21
 
 
 def load_run_logs(log_path):

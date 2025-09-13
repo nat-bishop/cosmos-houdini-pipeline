@@ -82,10 +82,10 @@ def create_runs_tab_ui():
                             label="Output Videos",
                             show_label=False,
                             elem_id="runs_gallery",
-                            columns=3,
-                            rows=2,
-                            height=400,
-                            object_fit="contain",
+                            columns=5,  # Changed to 5 columns
+                            rows=3,  # Increased rows for better display
+                            height="auto",  # Auto height to enable scrolling
+                            object_fit="cover",  # Changed to cover to fill the space properly
                             preview=False,  # Disable preview to avoid duplication
                             allow_preview=False,  # Disable click to expand
                             show_download_button=True,

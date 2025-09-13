@@ -14,7 +14,7 @@ from cosmos_workflow.utils.logging import logger
 THUMBNAIL_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
-def generate_thumbnail_fast(video_path, thumb_size=(320, 180)):
+def generate_thumbnail_fast(video_path, thumb_size=(384, 216)):
     """Generate a small, low-res thumbnail very quickly.
 
     Args:

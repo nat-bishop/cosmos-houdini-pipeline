@@ -23,6 +23,59 @@ def create_inputs_tab_ui(config):
         gr.Markdown("### Input Video Browser")
         gr.Markdown("Browse input videos and create prompts directly")
 
+        # Filter Section
+        with gr.Group(elem_classes=["filter-section"]):
+            with gr.Row():
+                # Left side: Search and filters
+                with gr.Column(scale=3):
+                    with gr.Row():
+                        components["inputs_search"] = gr.Textbox(
+                            label="Search",
+                            placeholder="Search directory names...",
+                            scale=2,
+                            container=True,
+                        )
+
+                        components["inputs_has_filter"] = gr.Dropdown(
+                            label="Has Videos",
+                            choices=[
+                                "all",
+                                "has_color",
+                                "has_depth",
+                                "has_segmentation",
+                                "complete_set",  # Has all three
+                                "incomplete_set",  # Missing at least one
+                            ],
+                            value="all",
+                            scale=1,
+                        )
+
+                        components["inputs_date_filter"] = gr.Dropdown(
+                            label="Date Range",
+                            choices=[
+                                "all",
+                                "today",
+                                "last_7_days",
+                                "last_30_days",
+                                "older_than_30_days",
+                            ],
+                            value="all",
+                            scale=1,
+                        )
+
+                # Right side: Results counter and refresh
+                with gr.Column(scale=1):
+                    with gr.Row():
+                        components["inputs_results_count"] = gr.Markdown(
+                            "**0** directories found",
+                            elem_classes=["results-counter"],
+                        )
+                        components["inputs_refresh_btn"] = gr.Button(
+                            "🔄 Refresh",
+                            size="sm",
+                            variant="secondary",
+                        )
+
         with gr.Row():
             # Left: Gallery of inputs - MUCH LARGER (2x the right panel)
             with gr.Column(scale=2):

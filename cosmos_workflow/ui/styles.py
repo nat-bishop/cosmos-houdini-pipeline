@@ -247,6 +247,38 @@ def get_custom_css():
         100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
 
+    /* Filter section styling */
+    .filter-section {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.03), rgba(118, 75, 162, 0.03));
+        border: 1px solid rgba(102, 126, 234, 0.15);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 16px;
+    }
+
+    .filter-section:hover {
+        border-color: rgba(102, 126, 234, 0.3);
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+    }
+
+    /* Results counter styling */
+    .results-counter {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 16px;
+        font-size: 0.9em;
+        color: #667eea;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+    }
+
+    .results-counter strong {
+        color: #764ba2;
+        font-weight: 600;
+        margin: 0 4px;
+    }
+
     /* Slider enhancements */
     input[type="range"]::-webkit-slider-thumb:hover {
         transform: scale(1.2);

@@ -45,16 +45,16 @@ from cosmos_workflow.ui.styles import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
-from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
 from cosmos_workflow.ui.tabs.runs_handlers import (
-    load_runs_data,
-    on_runs_table_select,
-    load_run_logs,
-    select_all_runs,
     clear_runs_selection,
     delete_selected_runs,
+    load_run_logs,
+    load_runs_data,
+    on_runs_table_select,
+    select_all_runs,
     update_runs_selection_info,
 )
+from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
 from cosmos_workflow.utils.logging import logger
 
 # Load configuration
@@ -1090,7 +1090,10 @@ def create_ui():
 
         # Runs Tab Events
         # Runs filters - trigger data reload
-        if all(k in components for k in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]):
+        if all(
+            k in components
+            for k in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]
+        ):
             filter_inputs = [
                 components["runs_status_filter"],
                 components["runs_date_filter"],
@@ -1099,7 +1102,12 @@ def create_ui():
             ]
             filter_outputs = get_components("runs_gallery", "runs_table", "runs_stats")
             if filter_outputs:
-                for filter_component in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]:
+                for filter_component in [
+                    "runs_status_filter",
+                    "runs_date_filter",
+                    "runs_search",
+                    "runs_limit",
+                ]:
                     components[filter_component].change(
                         fn=load_runs_data,
                         inputs=filter_inputs,
@@ -1111,7 +1119,7 @@ def create_ui():
             runs_output_keys = [
                 "runs_details_group",
                 "runs_detail_id",
-                "runs_detail_status", 
+                "runs_detail_status",
                 "runs_input_videos",
                 "runs_output_video",
                 "runs_visual_weight",
@@ -1142,6 +1150,17 @@ def create_ui():
             else:
                 missing_runs = [k for k in runs_output_keys if k not in components]
                 logger.warning("Missing components for runs table select: {}", missing_runs)
+                # Try to connect with whatever components we have
+                available_outputs = [components[k] for k in runs_output_keys if k in components]
+                if available_outputs:
+                    logger.info(
+                        "Connecting with {} available outputs (partial)", len(available_outputs)
+                    )
+                    components["runs_table"].select(
+                        fn=on_runs_table_select,
+                        inputs=[components["runs_table"]],
+                        outputs=available_outputs,
+                    )
 
             # Update selection info when table changes
             if "runs_selected_info" in components:
@@ -1199,15 +1218,21 @@ def create_ui():
             "running_jobs_display",
             "job_status",
         )
-        
+
         # Debug: Check which components are missing
-        required_components = ["input_gallery", "ops_prompts_table", "running_jobs_display", "job_status"]
+        required_components = [
+            "input_gallery",
+            "ops_prompts_table",
+            "running_jobs_display",
+            "job_status",
+        ]
         missing = [k for k in required_components if k not in components]
         if missing:
             logger.warning("Missing components for initial load: {}", missing)
-        
+
         if initial_outputs:
             logger.info("Setting up initial data load with {} outputs", len(initial_outputs))
+
             def load_initial_data():
                 """Load initial data efficiently."""
                 gallery_data = load_input_gallery()
@@ -1221,7 +1246,7 @@ def create_ui():
                     jobs_display = "No containers"
                     job_status = "Not connected"
                 return gallery_data, prompts_data, jobs_display, job_status
-            
+
             app.load(
                 fn=load_initial_data,
                 outputs=initial_outputs,
@@ -1241,12 +1266,14 @@ def create_ui():
 # Lazy initialization to avoid creating UI on every import
 _demo = None
 
+
 def get_demo():
     """Get or create the demo instance."""
     global _demo
     if _demo is None:
         _demo = create_ui()
     return _demo
+
 
 # Create the demo variable that Gradio CLI expects
 demo = get_demo()

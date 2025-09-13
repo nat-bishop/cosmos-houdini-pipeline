@@ -82,13 +82,13 @@ def create_runs_tab_ui():
                             label="Output Videos",
                             show_label=False,
                             elem_id="runs_gallery",
-                            columns=3,
-                            rows=2,
-                            height=400,
+                            columns=5,  # More columns for smaller thumbnails
+                            rows=3,  # More rows to show more videos
+                            height=350,  # Slightly shorter height
                             object_fit="contain",
                             preview=False,  # Disable preview popup
                             allow_preview=False,  # Disable click to expand
-                            show_download_button=True,
+                            show_download_button=False,  # Cleaner look
                             interactive=False,  # Read-only gallery
                         )
 
@@ -142,74 +142,52 @@ def create_runs_tab_ui():
                                 height=500,
                             )
 
-                            # Input Videos with control weights
-                            gr.Markdown("#### Input Videos & Control Weights")
+                            # Input Videos
+                            gr.Markdown("#### Input Videos")
 
-                            # Control weights in a single row
+                            # Create individual video components for better control
                             with gr.Row(equal_height=True):
-                                with gr.Column(scale=1, min_width=120):
-                                    gr.Markdown(
-                                        "**Color/Visual**",
-                                        elem_classes=["compact-label"],
-                                    )
-                                    components["runs_visual_weight"] = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        step=0.1,
-                                        value=0,
+                                # Create 4 video slots (max possible: color, edge, depth, seg)
+                                with gr.Column(scale=1, min_width=200):
+                                    components["runs_input_video_1"] = gr.Video(
+                                        label="Video 1",
+                                        visible=False,
+                                        autoplay=False,
+                                        loop=True,
+                                        show_download_button=False,
                                         interactive=False,
-                                        show_label=False,
-                                        elem_classes=["compact-slider"],
+                                        container=True,
                                     )
-                                with gr.Column(scale=1, min_width=120):
-                                    gr.Markdown("**Edge**", elem_classes=["compact-label"])
-                                    components["runs_edge_weight"] = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        step=0.1,
-                                        value=0,
+                                with gr.Column(scale=1, min_width=200):
+                                    components["runs_input_video_2"] = gr.Video(
+                                        label="Video 2",
+                                        visible=False,
+                                        autoplay=False,
+                                        loop=True,
+                                        show_download_button=False,
                                         interactive=False,
-                                        show_label=False,
-                                        elem_classes=["compact-slider"],
+                                        container=True,
                                     )
-                                with gr.Column(scale=1, min_width=120):
-                                    gr.Markdown("**Depth**", elem_classes=["compact-label"])
-                                    components["runs_depth_weight"] = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        step=0.1,
-                                        value=0,
+                                with gr.Column(scale=1, min_width=200):
+                                    components["runs_input_video_3"] = gr.Video(
+                                        label="Video 3",
+                                        visible=False,
+                                        autoplay=False,
+                                        loop=True,
+                                        show_download_button=False,
                                         interactive=False,
-                                        show_label=False,
-                                        elem_classes=["compact-slider"],
+                                        container=True,
                                     )
-                                with gr.Column(scale=1, min_width=120):
-                                    gr.Markdown(
-                                        "**Segmentation**",
-                                        elem_classes=["compact-label"],
-                                    )
-                                    components["runs_segmentation_weight"] = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        step=0.1,
-                                        value=0,
+                                with gr.Column(scale=1, min_width=200):
+                                    components["runs_input_video_4"] = gr.Video(
+                                        label="Video 4",
+                                        visible=False,
+                                        autoplay=False,
+                                        loop=True,
+                                        show_download_button=False,
                                         interactive=False,
-                                        show_label=False,
-                                        elem_classes=["compact-slider"],
+                                        container=True,
                                     )
-
-                            # Input video gallery
-                            components["runs_input_videos"] = gr.Gallery(
-                                label="Input Frames",
-                                show_label=False,
-                                columns=4,
-                                rows=1,
-                                height=200,
-                                object_fit="contain",
-                                allow_preview=True,
-                                container=True,
-                                elem_classes=["input-videos-gallery"],
-                            )
 
                             # Full Prompt
                             gr.Markdown("#### Full Prompt")

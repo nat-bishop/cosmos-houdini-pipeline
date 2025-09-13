@@ -50,6 +50,7 @@ from cosmos_workflow.ui.tabs.runs_handlers import (
     delete_selected_runs,
     load_run_logs,
     load_runs_data,
+    on_runs_gallery_select,
     on_runs_table_select,
     select_all_runs,
     update_runs_selection_info,
@@ -1120,12 +1121,11 @@ def create_ui():
                 "runs_details_group",
                 "runs_detail_id",
                 "runs_detail_status",
-                "runs_input_videos",
+                "runs_input_video_1",
+                "runs_input_video_2",
+                "runs_input_video_3",
+                "runs_input_video_4",
                 "runs_output_video",
-                "runs_visual_weight",
-                "runs_edge_weight",
-                "runs_depth_weight",
-                "runs_segmentation_weight",
                 "runs_prompt_text",
                 "runs_info_id",
                 "runs_info_prompt_id",
@@ -1168,6 +1168,39 @@ def create_ui():
                     fn=update_runs_selection_info,
                     inputs=[components["runs_table"]],
                     outputs=[components["runs_selected_info"]],
+                )
+
+        # Runs gallery selection - reuse same outputs as table
+        if "runs_gallery" in components:
+            runs_output_keys = [
+                "runs_details_group",
+                "runs_detail_id",
+                "runs_detail_status",
+                "runs_input_video_1",
+                "runs_input_video_2",
+                "runs_input_video_3",
+                "runs_input_video_4",
+                "runs_output_video",
+                "runs_prompt_text",
+                "runs_info_id",
+                "runs_info_prompt_id",
+                "runs_info_status",
+                "runs_info_duration",
+                "runs_info_type",
+                "runs_info_prompt_name",
+                "runs_info_created",
+                "runs_info_completed",
+                "runs_params_json",
+                "runs_log_path",
+                "runs_log_output",
+            ]
+            outputs = get_components(*runs_output_keys)
+            if outputs:
+                logger.info("Connecting runs_gallery.select with {} outputs", len(outputs))
+                components["runs_gallery"].select(
+                    fn=on_runs_gallery_select,
+                    inputs=[],
+                    outputs=outputs,
                 )
 
         # Batch operations
@@ -1279,4 +1312,4 @@ def get_demo():
 demo = get_demo()
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860)  # noqa: S104

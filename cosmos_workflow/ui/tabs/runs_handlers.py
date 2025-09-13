@@ -115,7 +115,7 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
                     end = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
                     duration_delta = end - start
                     duration = str(duration_delta).split(".")[0]
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
 
             created = run.get("created_at", "")[:19] if run.get("created_at") else ""
@@ -141,6 +141,61 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
         return [], [], "Error loading data"
 
 
+def on_runs_gallery_select(evt: gr.SelectData):
+    """Handle selection of a run from the gallery."""
+    try:
+        logger.info("on_runs_gallery_select called - evt: {}", evt)
+
+        if evt is None:
+            logger.warning("No evt, hiding details")
+            return [gr.update(visible=False)] + [gr.update()] * 16
+
+        # The label contains the run ID in format "rs_xxxxx... - prompt text"
+        label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
+        if not label:
+            logger.warning("No label in gallery selection")
+            return [gr.update(visible=False)] + [gr.update()] * 16
+
+        # Extract run ID from label (first 8 chars after "rs_")
+        if "rs_" in label:
+            # Find the run ID pattern - handle "rs_xxxxx..." format
+            import re
+
+            # Try full ID first, then shortened with dots, then just prefix
+            match = (
+                re.search(r"(rs_[a-f0-9]{32})", label)
+                or re.search(r"(rs_[a-f0-9]+)\.\.\.", label)
+                or re.search(r"(rs_[a-f0-9]{5,8})", label)
+            )
+            if match:
+                run_id_prefix = match.group(1)
+                # If it's a shortened ID, we need to find the full one
+                from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+                ops = CosmosAPI()
+
+                # Get all runs and find the matching one
+                runs = ops.list_runs(limit=100)
+                full_run_id = None
+                for run in runs:
+                    if run["id"].startswith(run_id_prefix):
+                        full_run_id = run["id"]
+                        break
+
+                if full_run_id:
+                    # Create a fake table data and event to reuse the existing handler
+                    fake_table_data = [[False, full_run_id]]
+                    fake_evt = type("obj", (object,), {"index": 0})()
+                    return on_runs_table_select(fake_table_data, fake_evt)
+
+        logger.warning("Could not extract run ID from label: {}", label)
+        return [gr.update(visible=False)] + [gr.update()] * 16
+
+    except Exception as e:
+        logger.error("Error selecting from gallery: {}", str(e))
+        return [gr.update(visible=False)] + [gr.update()] * 16
+
+
 def on_runs_table_select(table_data, evt: gr.SelectData):
     """Handle selection of a run from the table."""
     try:
@@ -150,7 +205,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if evt is None or table_data is None:
             logger.warning("No evt or table_data, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 20
+            return [gr.update(visible=False)] + [gr.update()] * 16
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -159,7 +214,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         # Get selected row
         logger.info("Event index: {}, type: {}", evt.index, type(evt.index))
-        row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+        row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index  # noqa: UP038
         logger.info("Selected row index: {}", row_idx)
 
         # Extract run ID from table
@@ -174,14 +229,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if not run_id or not ops:
             logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            return [gr.update(visible=False)] + [gr.update()] * 20
+            return [gr.update(visible=False)] + [gr.update()] * 16
 
         # Get full run details
         run_details = ops.get_run(run_id)
         logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            return [gr.update(visible=False)] + [gr.update()] * 20
+            return [gr.update(visible=False)] + [gr.update()] * 16
 
         # Extract details
         # Get output video from files array
@@ -207,23 +262,114 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             if prompt:
                 prompt_text = prompt.get("prompt_text", "")
 
-        # Get input videos from prompt
+        # Get input videos and control weights
         input_videos = []
+        control_weights = {"vis": 0, "edge": 0, "depth": 0, "seg": 0}
         prompt_id = run_details.get("prompt_id")
+        prompt_name = ""  # Initialize prompt_name
+        run_id = run_details.get("id", "")
+
+        # Read spec.json just for control weights
+        spec_data = {}
+        if run_id:
+            spec_path = Path(
+                f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/inputs/spec.json"
+            )
+            if spec_path.exists():
+                try:
+                    import json
+
+                    with open(spec_path) as f:
+                        spec_data = json.load(f)
+                    logger.info("Loaded spec.json for run {}", run_id)
+                except Exception as e:
+                    logger.warning("Failed to load spec.json: {}", str(e))
+
+        # Get prompt inputs for video paths
+        prompt_inputs = {}
         if prompt_id and ops:
             prompt = ops.get_prompt(prompt_id)
             if prompt:
                 prompt_inputs = prompt.get("inputs", {})
-                for key in ["video", "edge", "depth", "segmentation"]:
-                    if prompt_inputs.get(key):
-                        path = Path(prompt_inputs[key])
-                        if path.exists():
-                            label = key.capitalize()
-                            input_videos.append((str(path), label))
+                # Get the prompt name from parameters
+                prompt_params = prompt.get("parameters", {})
+                prompt_name = prompt_params.get("name", "")
 
-        # Get weights and parameters from execution_config
+        # Process videos based on spec.json weights and prompt inputs
+        if spec_data:
+            # Add main video from prompt if it exists
+            if prompt_inputs.get("video"):
+                path = Path(prompt_inputs["video"])
+                if path.exists():
+                    # Main video doesn't need weight in label since it's always 1.0
+                    input_videos.append((str(path), "Color/Visual"))
+                    control_weights["vis"] = 1.0
+
+            # Process each control type
+            control_types = {"edge": "Edge", "depth": "Depth", "seg": "Segmentation"}
+
+            for control_key, control_label in control_types.items():
+                control_config = spec_data.get(control_key, {})
+                weight = control_config.get("control_weight", 0)
+
+                # Only process if weight > 0
+                if weight > 0:
+                    control_weights[control_key] = weight
+                    # Include weight in the label
+                    label_with_weight = f"{control_label} (Weight: {weight})"
+
+                    # First try prompt's input for this control
+                    if prompt_inputs.get(control_key):
+                        control_path = Path(prompt_inputs[control_key])
+                        if control_path.exists():
+                            input_videos.append((str(control_path), label_with_weight))
+                            logger.info("Using prompt's {} input: {}", control_key, control_path)
+                            continue
+
+                    # If no prompt input, check for AI-generated control
+                    generated_path = Path(
+                        f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control.mp4"
+                    )
+                    if generated_path.exists():
+                        input_videos.append((str(generated_path), label_with_weight))
+                        logger.info(
+                            "Using AI-generated {} control: {}", control_key, generated_path
+                        )
+                    else:
+                        logger.warning(
+                            "No video found for {} control (weight={})", control_key, weight
+                        )
+
+        # Fallback if no spec.json - use prompt inputs with default weights
+        elif prompt_inputs:
+            # Map the actual keys to display labels
+            video_keys = {
+                "video": ("Color/Visual", 1.0),
+                "edge": ("Edge", 0.5),
+                "depth": ("Depth", 0.5),
+                "seg": ("Segmentation", 0.5),
+            }
+            for key, (label, default_weight) in video_keys.items():
+                if prompt_inputs.get(key):
+                    path = Path(prompt_inputs[key])
+                    if path.exists():
+                        # Add weight to label for controls
+                        if key != "video":
+                            label = f"{label} (Weight: {default_weight})"
+                        input_videos.append((str(path), label))
+                        # Set default weight for backward compatibility
+                        if key == "video":
+                            control_weights["vis"] = default_weight
+                        else:
+                            control_weights[key] = default_weight
+
+        # Use control weights from spec.json, fallback to execution_config if needed
         exec_config = run_details.get("execution_config", {})
-        weights = exec_config.get("weights", {})
+        if not any(control_weights.values()):
+            # No weights from spec.json, try execution_config
+            weights = exec_config.get("weights", {})
+            control_weights = weights if weights else control_weights
+
         params = exec_config  # Use entire execution_config as parameters
 
         # Get metadata
@@ -234,7 +380,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 end = datetime.fromisoformat(run_details["completed_at"].replace("Z", "+00:00"))
                 duration_delta = end - start
                 duration = str(duration_delta).split(".")[0]
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         # Get log path
@@ -252,25 +398,33 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             "Returning updates - visible: True, run_id: {}, output_video: {}", run_id, output_video
         )
 
+        # Prepare individual video updates (up to 4 videos)
+        video_updates = []
+        for i in range(4):
+            if i < len(input_videos):
+                video_path, label = input_videos[i]
+                video_updates.append(gr.update(value=video_path, label=label, visible=True))
+            else:
+                video_updates.append(gr.update(value=None, visible=False))
+
         return [
             gr.update(visible=True),  # runs_details_group
             gr.update(value=run_id),  # runs_detail_id (hidden)
             gr.update(value=run_details.get("status", "")),  # runs_detail_status (hidden)
-            gr.update(value=input_videos),  # runs_input_videos
+            video_updates[0],  # runs_input_video_1
+            video_updates[1],  # runs_input_video_2
+            video_updates[2],  # runs_input_video_3
+            video_updates[3],  # runs_input_video_4
             gr.update(
                 value=output_video if output_video and Path(output_video).exists() else None
             ),  # runs_output_video
-            gr.update(value=weights.get("vis", 0)),  # runs_visual_weight
-            gr.update(value=weights.get("edge", 0)),  # runs_edge_weight
-            gr.update(value=weights.get("depth", 0)),  # runs_depth_weight
-            gr.update(value=weights.get("seg", 0)),  # runs_segmentation_weight
             gr.update(value=prompt_text),  # runs_prompt_text
             gr.update(value=run_id),  # runs_info_id
             gr.update(value=run_details.get("prompt_id", "")),  # runs_info_prompt_id
             gr.update(value=run_details.get("status", "")),  # runs_info_status
             gr.update(value=duration),  # runs_info_duration
             gr.update(value=run_details.get("run_type", "inference")),  # runs_info_type
-            gr.update(value="N/A"),  # runs_info_prompt_name (field doesn't exist)
+            gr.update(value=prompt_name),  # runs_info_prompt_name
             gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
             gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
             gr.update(value=params),  # runs_params_json
@@ -280,7 +434,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 20
+        return [gr.update(visible=False)] + [gr.update()] * 19
 
 
 def load_run_logs(log_path):

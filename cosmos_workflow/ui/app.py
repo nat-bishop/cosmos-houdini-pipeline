@@ -31,7 +31,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import gradio as gr
-from gradio import skip
 
 from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.config import ConfigManager
@@ -939,12 +938,12 @@ def create_ui():
         # Import additional functions for runs tab
 
         # Global refresh function
-        def global_refresh_all(current_prompts_table=None, skip_prompts=False):
+        def global_refresh_all(current_prompts_table=None, is_auto_refresh=False):
             """Refresh all data across all tabs.
 
             Args:
-                current_prompts_table: Current prompts table data to preserve or skip update
-                skip_prompts: If True, return gr.skip() for prompts table to preserve selections
+                current_prompts_table: Current prompts table data
+                is_auto_refresh: If True, preserve selections during auto-refresh
             """
             from datetime import datetime
 
@@ -952,17 +951,31 @@ def create_ui():
                 # Get current status
                 status = f"✅ Connected | Last refresh: {datetime.now(timezone.utc).strftime('%H:%M:%S')}"
 
+                # Get current selections before refreshing
+                selected_ids = []
+                if is_auto_refresh and current_prompts_table is not None:
+                    selected_ids = get_selections_from_table(current_prompts_table)
+
                 # Load all data
                 inputs_data = load_input_gallery()
-
-                # For auto-refresh, skip updating prompts table to preserve selections
-                # Only update prompts on manual refresh or when explicitly needed
-                if skip_prompts and current_prompts_table is not None:
-                    prompts_data = skip()  # Don't update prompts table
-                else:
-                    prompts_data = load_ops_prompts(50)
-
+                prompts_data = load_ops_prompts(50)
                 jobs_data = check_running_jobs()
+
+                # For auto-refresh, restore selections
+                if is_auto_refresh and selected_ids and prompts_data is not None:
+                    import pandas as pd
+
+                    if isinstance(prompts_data, pd.DataFrame):
+                        # DataFrame format - restore selections based on prompt IDs
+                        for idx, row in prompts_data.iterrows():
+                            prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
+                            prompts_data.iloc[idx, 0] = prompt_id in selected_ids
+                    elif isinstance(prompts_data, list):
+                        # List format - restore selections
+                        for row in prompts_data:
+                            if len(row) > 1:
+                                prompt_id = str(row[1])
+                                row[0] = prompt_id in selected_ids
 
                 return (
                     status,  # refresh_status
@@ -981,14 +994,40 @@ def create_ui():
                     "Error",
                 )
 
+        # Function to extract selections from prompts table
+        def get_selections_from_table(prompts_table):
+            """Extract selected prompt IDs from the table."""
+            if prompts_table is None:
+                return []
+
+            selected_ids = []
+            import pandas as pd
+
+            if isinstance(prompts_table, pd.DataFrame):
+                # DataFrame format
+                for _idx, row in prompts_table.iterrows():
+                    if row.iloc[0]:  # If selected (first column is checkbox)
+                        prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
+                        if prompt_id:
+                            selected_ids.append(prompt_id)
+            else:
+                # List format
+                for row in prompts_table:
+                    if row[0]:  # If selected
+                        prompt_id = str(row[1]) if len(row) > 1 else ""
+                        if prompt_id:
+                            selected_ids.append(prompt_id)
+
+            return selected_ids
+
         # Header/Global Refresh Events
-        if "global_refresh_timer" in components:
-            # Auto-refresh: skip prompts table update to preserve selections
+        if "global_refresh_timer" in components and "ops_prompts_table" in components:
+            # Auto-refresh: preserve selections
             components["global_refresh_timer"].tick(
-                fn=lambda table: global_refresh_all(table, skip_prompts=True),
+                fn=lambda table: global_refresh_all(table, is_auto_refresh=True),
                 inputs=[
-                    components.get("ops_prompts_table")
-                ],  # Pass current table to check if we should skip
+                    components["ops_prompts_table"],
+                ],
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],
@@ -998,13 +1037,13 @@ def create_ui():
                 ],
             )
 
-        if "manual_refresh_btn" in components:
-            # Manual refresh: update everything including prompts
+        if "manual_refresh_btn" in components and "ops_prompts_table" in components:
+            # Manual refresh: clear selections
             components["manual_refresh_btn"].click(
-                fn=lambda table: global_refresh_all(table, skip_prompts=False),
+                fn=lambda table: global_refresh_all(table, is_auto_refresh=False),
                 inputs=[
-                    components.get("ops_prompts_table")
-                ],  # Pass current table for manual refresh
+                    components["ops_prompts_table"],
+                ],
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],

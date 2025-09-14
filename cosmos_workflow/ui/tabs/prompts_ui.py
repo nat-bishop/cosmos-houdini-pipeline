@@ -28,6 +28,40 @@ def create_prompts_tab_ui():
 
                     # Filter row with animations
                     with gr.Row(elem_classes=["batch-operation"]):
+                        components["prompts_search"] = gr.Textbox(
+                            label="Search",
+                            placeholder="Search by name or prompt text...",
+                            scale=2,
+                        )
+
+                        components["prompts_enhanced_filter"] = gr.Dropdown(
+                            label="Enhanced Status",
+                            choices=[
+                                ("All", "all"),
+                                ("Enhanced", "enhanced"),
+                                ("Not Enhanced", "not_enhanced"),
+                            ],
+                            value="all",
+                            interactive=True,
+                            filterable=False,
+                            scale=1,
+                        )
+
+                        components["prompts_date_filter"] = gr.Dropdown(
+                            label="Date Range",
+                            choices=[
+                                ("All", "all"),
+                                ("Today", "today"),
+                                ("Last 7 Days", "last_7_days"),
+                                ("Last 30 Days", "last_30_days"),
+                                ("Older than 30 Days", "older_than_30_days"),
+                            ],
+                            value="all",
+                            interactive=True,
+                            filterable=False,
+                            scale=1,
+                        )
+
                         components["ops_limit"] = gr.Number(
                             value=50,
                             label="Limit",
@@ -35,7 +69,6 @@ def create_prompts_tab_ui():
                             maximum=500,
                             scale=1,
                         )
-                        # Individual refresh button removed - using global refresh
 
                     # Enhanced prompts table with selection
                     components["ops_prompts_table"] = gr.Dataframe(

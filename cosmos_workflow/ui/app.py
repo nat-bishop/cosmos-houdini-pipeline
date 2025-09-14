@@ -502,18 +502,92 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
 # ============================================================================
 
 
-def load_ops_prompts(limit=50):
-    """Load prompts for operations table with selection column."""
+def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="all"):
+    """Apply filters to prompts list."""
+    filtered = prompts
+
+    # Apply search filter
+    if search_text:
+        search_lower = search_text.lower()
+        filtered = [
+            p
+            for p in filtered
+            if search_lower in p.get("parameters", {}).get("name", "").lower()
+            or search_lower in p.get("prompt_text", "").lower()
+        ]
+
+    # Apply enhanced filter
+    if enhanced_filter == "enhanced":
+        filtered = [p for p in filtered if p.get("parameters", {}).get("enhanced", False)]
+    elif enhanced_filter == "not_enhanced":
+        filtered = [p for p in filtered if not p.get("parameters", {}).get("enhanced", False)]
+
+    # Apply date filter
+    if date_filter != "all":
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        filtered_by_date = []
+
+        for prompt in filtered:
+            created_str = prompt.get("created_at", "")
+            if not created_str:
+                continue
+
+            try:
+                created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                days_old = (now - created.replace(tzinfo=None)).days
+
+                if date_filter == "today" and days_old == 0:
+                    filtered_by_date.append(prompt)
+                elif date_filter == "last_7_days" and days_old <= 7:
+                    filtered_by_date.append(prompt)
+                elif date_filter == "last_30_days" and days_old <= 30:
+                    filtered_by_date.append(prompt)
+                elif date_filter == "older_than_30_days" and days_old > 30:
+                    filtered_by_date.append(prompt)
+            except Exception as e:
+                # Skip prompts with invalid date format
+                logger.debug("Skipping prompt with invalid date format: %s", e)
+                continue
+
+        filtered = filtered_by_date
+
+    return filtered
+
+
+def load_ops_prompts(limit=50, search_text="", enhanced_filter="all", date_filter="all"):
+    """Load prompts for operations table with selection column and filtering."""
     try:
+        # Debug logging
+        logger.info(
+            "load_ops_prompts called with: limit={}, search_text='{}', enhanced_filter='{}', date_filter='{}'",
+            limit,
+            search_text,
+            enhanced_filter,
+            date_filter,
+        )
+
         if not ops:
             return []
 
-        # Use CosmosAPI to get prompts
-        prompts = ops.list_prompts(limit=limit)
+        # Use CosmosAPI to get prompts (get more than limit to filter)
+        prompts = ops.list_prompts(
+            limit=limit * 3
+            if search_text or enhanced_filter != "all" or date_filter != "all"
+            else limit
+        )
+
+        # Apply filters
+        filtered_prompts = filter_prompts(prompts, search_text, enhanced_filter, date_filter)
+        logger.info("Filtered {} prompts to {} results", len(prompts), len(filtered_prompts))
+
+        # Limit results
+        filtered_prompts = filtered_prompts[:limit]
 
         # Format for operations table with selection column
         table_data = []
-        for prompt in prompts:
+        for prompt in filtered_prompts:
             prompt_id = prompt.get("id", "")
             name = prompt.get("parameters", {}).get("name", "unnamed")
             # Model type removed - prompts don't have model types
@@ -1059,12 +1133,21 @@ def create_ui():
         # Import additional functions for runs tab
 
         # Global refresh function
-        def global_refresh_all(current_prompts_table=None, is_auto_refresh=False):
+        def global_refresh_all(
+            current_prompts_table=None,
+            is_auto_refresh=False,
+            prompts_search="",
+            prompts_enhanced_filter="all",
+            prompts_date_filter="all",
+        ):
             """Refresh all data across all tabs.
 
             Args:
                 current_prompts_table: Current prompts table data
                 is_auto_refresh: If True, preserve selections during auto-refresh
+                prompts_search: Search text for prompts filtering
+                prompts_enhanced_filter: Enhanced status filter for prompts
+                prompts_date_filter: Date range filter for prompts
             """
             from datetime import datetime
 
@@ -1077,9 +1160,11 @@ def create_ui():
                 if is_auto_refresh and current_prompts_table is not None:
                     selected_ids = get_selections_from_table(current_prompts_table)
 
-                # Load all data
+                # Load all data with filter parameters
                 inputs_data, _ = load_input_gallery()  # Ignore results text in global refresh
-                prompts_data = load_ops_prompts(50)
+                prompts_data = load_ops_prompts(
+                    50, prompts_search, prompts_enhanced_filter, prompts_date_filter
+                )
                 jobs_data = check_running_jobs()
 
                 # For auto-refresh, restore selections
@@ -1143,12 +1228,26 @@ def create_ui():
 
         # Header/Global Refresh Events
         if "global_refresh_timer" in components and "ops_prompts_table" in components:
-            # Auto-refresh: preserve selections
+            # Auto-refresh: preserve selections and filters
+            refresh_inputs = [components["ops_prompts_table"]]
+
+            # Add filter inputs if they exist
+            if "prompts_search" in components:
+                refresh_inputs.append(components["prompts_search"])
+            if "prompts_enhanced_filter" in components:
+                refresh_inputs.append(components["prompts_enhanced_filter"])
+            if "prompts_date_filter" in components:
+                refresh_inputs.append(components["prompts_date_filter"])
+
             components["global_refresh_timer"].tick(
-                fn=lambda table: global_refresh_all(table, is_auto_refresh=True),
-                inputs=[
-                    components["ops_prompts_table"],
-                ],
+                fn=lambda table, search="", enhanced="all", date="all": global_refresh_all(
+                    table,
+                    is_auto_refresh=True,
+                    prompts_search=search,
+                    prompts_enhanced_filter=enhanced,
+                    prompts_date_filter=date,
+                ),
+                inputs=refresh_inputs,
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],
@@ -1159,12 +1258,26 @@ def create_ui():
             )
 
         if "manual_refresh_btn" in components and "ops_prompts_table" in components:
-            # Manual refresh: clear selections
+            # Manual refresh: preserve filters but clear selections
+            manual_refresh_inputs = [components["ops_prompts_table"]]
+
+            # Add filter inputs if they exist
+            if "prompts_search" in components:
+                manual_refresh_inputs.append(components["prompts_search"])
+            if "prompts_enhanced_filter" in components:
+                manual_refresh_inputs.append(components["prompts_enhanced_filter"])
+            if "prompts_date_filter" in components:
+                manual_refresh_inputs.append(components["prompts_date_filter"])
+
             components["manual_refresh_btn"].click(
-                fn=lambda table: global_refresh_all(table, is_auto_refresh=False),
-                inputs=[
-                    components["ops_prompts_table"],
-                ],
+                fn=lambda table, search="", enhanced="all", date="all": global_refresh_all(
+                    table,
+                    is_auto_refresh=False,
+                    prompts_search=search,
+                    prompts_enhanced_filter=enhanced,
+                    prompts_date_filter=date,
+                ),
+                inputs=manual_refresh_inputs,
                 outputs=[
                     components["refresh_status"],
                     components["input_gallery"],
@@ -1302,6 +1415,27 @@ def create_ui():
                     inputs=[components["ops_prompts_table"]],
                     outputs=[components["selection_count"]],
                 )
+
+        # Prompts filtering events
+        prompts_filter_inputs = get_components(
+            "ops_limit",
+            "prompts_search",
+            "prompts_enhanced_filter",
+            "prompts_date_filter",
+        )
+        if prompts_filter_inputs and "ops_prompts_table" in components:
+            # Connect all filter controls to update the table
+            for filter_component in [
+                "prompts_search",
+                "prompts_enhanced_filter",
+                "prompts_date_filter",
+            ]:
+                if filter_component in components:
+                    components[filter_component].change(
+                        fn=load_ops_prompts,
+                        inputs=prompts_filter_inputs,
+                        outputs=[components["ops_prompts_table"]],
+                    )
 
         # Prompts selection controls
         if "select_all_btn" in components:

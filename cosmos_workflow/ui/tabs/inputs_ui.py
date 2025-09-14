@@ -63,6 +63,29 @@ def create_inputs_tab_ui(config):
                             scale=1,
                         )
 
+                    # Second row with advanced filters
+                    with gr.Row():
+                        components["inputs_sort"] = gr.Dropdown(
+                            label="Sort By",
+                            choices=[
+                                "name_asc",
+                                "name_desc",
+                                "date_newest",
+                                "date_oldest",
+                            ],
+                            value="name_asc",
+                            scale=1,
+                        )
+
+                        components["inputs_unused_only"] = gr.Checkbox(
+                            label="Show only unused (no prompts)",
+                            value=False,
+                            scale=1,
+                        )
+
+                        # Hidden state to store filter preferences
+                        components["inputs_filter_state"] = gr.State({})
+
                 # Right side: Results counter and refresh
                 with gr.Column(scale=1):
                     with gr.Row():

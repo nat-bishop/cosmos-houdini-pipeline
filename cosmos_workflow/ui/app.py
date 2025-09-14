@@ -41,7 +41,7 @@ from cosmos_workflow.ui.helpers import (
     extract_video_metadata,
 )
 from cosmos_workflow.ui.log_viewer import LogViewer
-from cosmos_workflow.ui.styles import get_custom_css
+from cosmos_workflow.ui.styles_simple import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_handlers import (

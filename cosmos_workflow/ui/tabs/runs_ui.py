@@ -41,7 +41,6 @@ def create_runs_tab_ui():
                         label="Status Filter",
                         info="Filter runs by status",
                         interactive=True,
-                        filterable=False,
                     )
 
                     components["runs_date_filter"] = gr.Dropdown(
@@ -56,7 +55,6 @@ def create_runs_tab_ui():
                         label="Date Range",
                         info="Filter by creation date",
                         interactive=True,
-                        filterable=False,
                     )
 
                     components["runs_search"] = gr.Textbox(

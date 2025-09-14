@@ -602,9 +602,9 @@ def preview_delete_run(selected_run_id):
         # Build preview text
         preview_text = f"""### ⚠️ Delete Run Confirmation
 
-**Run ID:** {run_info.get('id', '')}
-**Status:** {run_info.get('status', 'unknown')}
-**Created:** {run_info.get('created_at', '')[:19] if run_info.get('created_at') else 'unknown'}
+**Run ID:** {run_info.get("id", "")}
+**Status:** {run_info.get("status", "unknown")}
+**Created:** {run_info.get("created_at", "")[:19] if run_info.get("created_at") else "unknown"}
 
 **Output Directory:** {output_dir if output_dir else "No output directory"}
 **Files:** {file_count} files

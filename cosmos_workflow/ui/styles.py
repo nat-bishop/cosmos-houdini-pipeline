@@ -36,17 +36,17 @@ def get_custom_css():
         backdrop-filter: blur(10px) !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         border-radius: 12px !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
     .gr-box:hover, .gr-group:hover {
-        transform: translateY(-2px);
+        /* Removed transform to prevent stacking context issues with dropdowns */
         box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2) !important;
         border-color: var(--border-glow) !important;
     }
 
-    /* Button animations */
-    button {
+    /* Button animations - only for Gradio buttons, not dropdown arrows */
+    button.gr-button {
         position: relative;
         overflow: hidden;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -54,16 +54,16 @@ def get_custom_css():
         font-weight: 600 !important;
     }
 
-    button.primary, button[variant="primary"] {
+    button.gr-button.primary, button.gr-button[variant="primary"] {
         background: var(--primary-gradient) !important;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
     }
 
-    button:hover {
+    button.gr-button:hover {
         transform: translateY(-2px) scale(1.02);
     }
 
-    button::before {
+    button.gr-button::before {
         content: '';
         position: absolute;
         top: 0;
@@ -74,7 +74,7 @@ def get_custom_css():
         transition: left 0.5s;
     }
 
-    button:hover::before {
+    button.gr-button:hover::before {
         left: 100%;
     }
 
@@ -358,9 +358,31 @@ def get_custom_css():
         object-fit: cover !important;
     }
 
-    /* Remove scroll indicators from video components */
-    div[class*="video"] {
+    /* Remove scroll indicators from video components - but not dropdowns */
+    div[class*="video"]:not([class*="dropdown"]) {
         overflow: hidden !important;
+    }
+
+    /* Fix dropdown z-index and overflow issues */
+    .gr-dropdown {
+        position: relative !important;
+        z-index: 999 !important;
+    }
+
+    .gr-dropdown-menu,
+    [class*="dropdown"][class*="menu"],
+    [class*="dropdown"][class*="list"] {
+        position: absolute !important;
+        z-index: 9999 !important;
+        overflow: visible !important;
+    }
+
+    /* Ensure parent containers don't clip dropdowns */
+    .gr-box:has(.gr-dropdown),
+    .gr-group:has(.gr-dropdown),
+    .gr-column:has(.gr-dropdown),
+    .gr-row:has(.gr-dropdown) {
+        overflow: visible !important;
     }
 
     /* Consistent textbox styling matching prompts tab */

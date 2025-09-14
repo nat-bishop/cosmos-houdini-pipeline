@@ -219,6 +219,7 @@ def create_prompts_tab_ui():
                                         "very_high",
                                     ],
                                     value="medium",
+                                    interactive=True,
                                     filterable=False,
                                 )
                                 components["inf_canny_threshold"] = gr.Dropdown(
@@ -231,6 +232,7 @@ def create_prompts_tab_ui():
                                         "very_high",
                                     ],
                                     value="medium",
+                                    interactive=True,
                                     filterable=False,
                                 )
 

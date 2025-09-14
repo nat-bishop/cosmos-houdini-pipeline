@@ -40,6 +40,7 @@ def create_runs_tab_ui():
                         value="all",
                         label="Status Filter",
                         info="Filter runs by status",
+                        interactive=True,
                         filterable=False,
                     )
 
@@ -54,6 +55,7 @@ def create_runs_tab_ui():
                         value="all",
                         label="Date Range",
                         info="Filter by creation date",
+                        interactive=True,
                         filterable=False,
                     )
 

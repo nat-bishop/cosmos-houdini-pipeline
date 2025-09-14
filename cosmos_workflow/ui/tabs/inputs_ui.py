@@ -39,27 +39,29 @@ def create_inputs_tab_ui(config):
                         components["inputs_has_filter"] = gr.Dropdown(
                             label="Has Videos",
                             choices=[
-                                "all",
-                                "has_color",
-                                "has_depth",
-                                "has_segmentation",
-                                "complete_set",  # Has all three
-                                "incomplete_set",  # Missing at least one
+                                ("All", "all"),
+                                ("Has Color", "has_color"),
+                                ("Has Depth", "has_depth"),
+                                ("Has Segmentation", "has_segmentation"),
+                                ("Complete Set", "complete_set"),
+                                ("Incomplete Set", "incomplete_set"),
                             ],
                             value="all",
+                            interactive=True,
                             scale=1,
                         )
 
                         components["inputs_date_filter"] = gr.Dropdown(
                             label="Date Range",
                             choices=[
-                                "all",
-                                "today",
-                                "last_7_days",
-                                "last_30_days",
-                                "older_than_30_days",
+                                ("All", "all"),
+                                ("Today", "today"),
+                                ("Last 7 Days", "last_7_days"),
+                                ("Last 30 Days", "last_30_days"),
+                                ("Older than 30 Days", "older_than_30_days"),
                             ],
                             value="all",
+                            interactive=True,
                             scale=1,
                         )
 
@@ -68,23 +70,21 @@ def create_inputs_tab_ui(config):
                         components["inputs_sort"] = gr.Dropdown(
                             label="Sort By",
                             choices=[
-                                "name_asc",
-                                "name_desc",
-                                "date_newest",
-                                "date_oldest",
+                                ("Name (A-Z)", "name_asc"),
+                                ("Name (Z-A)", "name_desc"),
+                                ("Date (Newest)", "date_newest"),
+                                ("Date (Oldest)", "date_oldest"),
                             ],
                             value="name_asc",
+                            interactive=True,
                             scale=1,
                         )
 
                         components["inputs_unused_only"] = gr.Checkbox(
-                            label="Show only unused (no prompts)",
+                            label="Show only unused",
                             value=False,
                             scale=1,
                         )
-
-                        # Hidden state to store filter preferences
-                        components["inputs_filter_state"] = gr.State({})
 
                 # Right side: Results counter and refresh
                 with gr.Column(scale=1):

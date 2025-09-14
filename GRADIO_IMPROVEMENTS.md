@@ -93,10 +93,19 @@ Successfully implemented spec.json-based control display logic:
 - ✅ Test with various video aspect ratios
 
 #### 3.2 Smart Filtering & Navigation
-- [ ] Add status/text filters to Prompts tab
-- [ ] Implement cross-tab data passing
-- [ ] Add click handlers for input videos → filter prompts
-- [ ] Implement programmatic tab switching
+**Status**: Filtering Completed, Navigation Pending
+- [x] Add search/status/date filters to Prompts tab
+  - [x] Search by name or prompt text
+  - [x] Filter by enhanced status (all/enhanced/not enhanced)
+  - [x] Filter by date range (all/today/last 7/30 days/older)
+  - [x] Preserve filter state during auto-refresh
+- [x] Runs tab filtering fully functional
+  - [x] Search by prompt text or run ID
+  - [x] Status and date filters working
+- [ ] Implement cross-tab navigation
+  - [ ] Click prompt → view its runs in Runs tab
+  - [ ] Click run → view source prompt in Prompts tab
+  - [ ] Click input → view related prompts
 
 ---
 

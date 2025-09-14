@@ -47,7 +47,7 @@ def create_inputs_tab_ui(config):
                                 ("Incomplete Set", "incomplete_set"),
                             ],
                             value="all",
-                            allow_custom_value=False,
+                            filterable=False,
                             scale=1,
                         )
 
@@ -61,7 +61,7 @@ def create_inputs_tab_ui(config):
                                 ("Older than 30 Days", "older_than_30_days"),
                             ],
                             value="all",
-                            allow_custom_value=False,
+                            filterable=False,
                             scale=1,
                         )
 
@@ -76,7 +76,7 @@ def create_inputs_tab_ui(config):
                                 ("Date (Oldest)", "date_oldest"),
                             ],
                             value="name_asc",
-                            allow_custom_value=False,
+                            filterable=False,
                             scale=1,
                         )
 

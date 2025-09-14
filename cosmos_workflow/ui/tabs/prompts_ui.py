@@ -219,6 +219,7 @@ def create_prompts_tab_ui():
                                         "very_high",
                                     ],
                                     value="medium",
+                                    filterable=False,
                                 )
                                 components["inf_canny_threshold"] = gr.Dropdown(
                                     label="Canny Threshold",
@@ -230,6 +231,7 @@ def create_prompts_tab_ui():
                                         "very_high",
                                     ],
                                     value="medium",
+                                    filterable=False,
                                 )
 
                         # Run button

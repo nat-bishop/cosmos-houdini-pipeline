@@ -11,10 +11,27 @@ This document tracks the remaining improvements to be implemented for the Cosmos
 ✅ **Phase 1.8**: Gallery thumbnail generation and selection fix
 ✅ **Phase 1.9**: Gallery layout improvements (5 columns, 16:9 aspect ratio)
 ✅ **Phase 1.10**: Delete operations with preview confirmation
+✅ **Phase 1.11**: Table scrolling and Runs tab improvements
 
 ---
 
 ## Remaining Implementation Phases
+
+### Phase 1.11: Table Scrolling and Runs Tab Improvements
+**Status**: Completed
+**Priority**: CRITICAL
+
+#### Implementation Summary
+Fixed table scrolling issues and enhanced Runs tab functionality:
+1. ✅ Fixed Prompts tab table scrolling with 700px height constraint
+2. ✅ Applied same scrolling fix to Runs tab table
+3. ✅ Removed duplicate scrollbars and horizontal overflow
+4. ✅ Updated Runs table columns:
+   - Replaced "Prompt Name" with "Prompt ID"
+   - Removed "Completed at" column
+   - Added "Run Type" column
+5. ✅ Added Run Type filter with options: all, transfer, enhance, upscale
+6. ✅ Fixed parameter mismatch in load_runs_data function calls
 
 ### Phase 1.10: Delete Operations with Preview
 **Status**: Completed
@@ -155,4 +172,4 @@ Successfully implemented spec.json-based control display logic:
 
 ---
 
-Last Updated: 2025-09-14
+Last Updated: 2025-09-15

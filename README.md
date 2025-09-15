@@ -3,19 +3,10 @@
 **A production Python system that orchestrates NVIDIA Cosmos AI video generation on remote GPU clusters, featuring a custom Houdini procedural city generator for synthetic training data.**
 
 ## 📑 Table of Contents
-- [What This System Does](#-what-this-system-does)
-- [Why This Matters](#-why-this-matters)
-- [Gradio Web Interface](#️-gradio-web-interface)
-- [Code Example](#-code-example)
-- [Houdini Procedural City Generator](#️-houdini-procedural-city-generator-input-creation)
-- [Technical Achievements](#-technical-achievements)
-- [Tech Stack](#️-tech-stack)
-- [System Architecture](#️-system-architecture)
-- [Core Features](#-core-features)
+- [Overview](#-what-this-system-does)
+- [Web Interface](#️-gradio-web-interface)
+- [Technical Implementation](#-technical-achievements)
 - [Quick Start](#-quick-start)
-- [Documentation](#-documentation)
-- [Skills Demonstrated](#-skills-demonstrated)
-- [Requirements](#-requirements)
 - [Future Work](#-future-work)
 
 ## 🎯 What This System Does

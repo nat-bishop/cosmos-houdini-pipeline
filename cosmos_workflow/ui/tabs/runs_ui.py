@@ -57,6 +57,19 @@ def create_runs_tab_ui():
                         interactive=True,
                     )
 
+                    components["runs_type_filter"] = gr.Dropdown(
+                        choices=[
+                            "all",
+                            "transfer",  # inference runs
+                            "enhance",
+                            "upscale",
+                        ],
+                        value="all",
+                        label="Run Type",
+                        info="Filter by run type",
+                        interactive=True,
+                    )
+
                     components["runs_search"] = gr.Textbox(
                         label="Search",
                         placeholder="Search by prompt text or ID...",
@@ -108,20 +121,23 @@ def create_runs_tab_ui():
                         # Hidden component to store selected run ID
                         components["runs_selected_id"] = gr.Textbox(visible=False)
 
-                        components["runs_table"] = gr.Dataframe(
-                            headers=[
-                                "Run ID",
-                                "Status",
-                                "Prompt",
-                                "Duration",
-                                "Created",
-                                "Completed",
-                            ],
-                            datatype=["str", "str", "str", "str", "str", "str"],
-                            interactive=False,  # Make non-interactive to prevent editing
-                            max_height=400,
-                            elem_classes=["run-history-table"],
-                        )
+                        with gr.Column(
+                            elem_id="runs-table-wrapper", elem_classes=["runs-table-container"]
+                        ):
+                            components["runs_table"] = gr.Dataframe(
+                                headers=[
+                                    "Run ID",
+                                    "Status",
+                                    "Prompt ID",
+                                    "Run Type",
+                                    "Duration",
+                                    "Created",
+                                ],
+                                datatype=["str", "str", "str", "str", "str", "str"],
+                                interactive=False,  # Make non-interactive to prevent editing
+                                elem_id="runs-dataframe",
+                                elem_classes=["run-history-table"],
+                            )
 
                         # Delete confirmation dialog
                         with gr.Group(visible=False, elem_classes=["detail-card"]) as components[

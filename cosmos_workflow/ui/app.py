@@ -1106,6 +1106,7 @@ def create_ui():
             # Runs tab filters
             runs_status_filter="all",
             runs_date_filter="all",
+            runs_type_filter="all",
             runs_search="",
             runs_limit=50,
         ):
@@ -1142,7 +1143,7 @@ def create_ui():
 
                 # Load runs data with filters
                 runs_gallery, runs_table, runs_stats = load_runs_data(
-                    runs_status_filter, runs_date_filter, runs_search, runs_limit
+                    runs_status_filter, runs_date_filter, runs_type_filter, runs_search, runs_limit
                 )
 
                 return (
@@ -1197,6 +1198,8 @@ def create_ui():
                 manual_refresh_inputs.append(components["runs_status_filter"])
             if "runs_date_filter" in components:
                 manual_refresh_inputs.append(components["runs_date_filter"])
+            if "runs_type_filter" in components:
+                manual_refresh_inputs.append(components["runs_type_filter"])
             if "runs_search" in components:
                 manual_refresh_inputs.append(components["runs_search"])
             if "runs_limit" in components:
@@ -1249,6 +1252,8 @@ def create_ui():
                 idx += 1
                 r_date = args[idx] if len(args) > idx else "all"
                 idx += 1
+                r_type = args[idx] if len(args) > idx else "all"
+                idx += 1
                 r_search = args[idx] if len(args) > idx else ""
                 idx += 1
                 r_limit = args[idx] if len(args) > idx else 50
@@ -1262,6 +1267,7 @@ def create_ui():
                     prompts_date_filter=p_date,
                     runs_status_filter=r_status,
                     runs_date_filter=r_date,
+                    runs_type_filter=r_type,
                     runs_search=r_search,
                     runs_limit=r_limit,
                 )
@@ -1501,11 +1507,18 @@ def create_ui():
         # Runs filters - trigger data reload
         if all(
             k in components
-            for k in ["runs_status_filter", "runs_date_filter", "runs_search", "runs_limit"]
+            for k in [
+                "runs_status_filter",
+                "runs_date_filter",
+                "runs_type_filter",
+                "runs_search",
+                "runs_limit",
+            ]
         ):
             filter_inputs = [
                 components["runs_status_filter"],
                 components["runs_date_filter"],
+                components["runs_type_filter"],
                 components["runs_search"],
                 components["runs_limit"],
             ]
@@ -1515,6 +1528,7 @@ def create_ui():
                 for filter_component in [
                     "runs_status_filter",
                     "runs_date_filter",
+                    "runs_type_filter",
                     "runs_search",
                     "runs_limit",
                 ]:
@@ -1647,6 +1661,7 @@ def create_ui():
                     inputs=[
                         components.get("runs_status_filter"),
                         components.get("runs_date_filter"),
+                        components.get("runs_type_filter"),
                         components.get("runs_search"),
                         components.get("runs_limit"),
                     ],

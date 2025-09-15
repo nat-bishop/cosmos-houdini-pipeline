@@ -79,7 +79,7 @@ def generate_thumbnail_fast(video_path, thumb_size=(384, 216)):
     return None
 
 
-def load_runs_data(status_filter, date_filter, search_text, limit):
+def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
     """Load runs data for table with filtering and populate video grid."""
     try:
         # Create CosmosAPI instance
@@ -125,22 +125,34 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
                 created = now
 
             # Apply date filter
+            date_match = False
             if date_filter == "today":
-                if created.date() == now.date():
-                    filtered_runs.append(run)
+                date_match = created.date() == now.date()
             elif date_filter == "yesterday":
                 yesterday = now - timedelta(days=1)
-                if created.date() == yesterday.date():
-                    filtered_runs.append(run)
+                date_match = created.date() == yesterday.date()
             elif date_filter == "last_7_days":
                 seven_days_ago = now - timedelta(days=7)
-                if created >= seven_days_ago:
-                    filtered_runs.append(run)
+                date_match = created >= seven_days_ago
             elif date_filter == "last_30_days":
                 thirty_days_ago = now - timedelta(days=30)
-                if created >= thirty_days_ago:
-                    filtered_runs.append(run)
+                date_match = created >= thirty_days_ago
             else:  # all
+                date_match = True
+
+            # Apply type filter
+            type_match = False
+            if type_filter == "all":
+                type_match = True
+            else:
+                # Get model_type from run data (it's stored in database as model_type, not run_type)
+                model_type = run.get(
+                    "model_type", "transfer"
+                )  # Default to transfer if not specified
+                type_match = type_filter == model_type
+
+            # Add to filtered runs if both filters match
+            if date_match and type_match:
                 filtered_runs.append(run)
 
         # Apply text search
@@ -201,7 +213,8 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
         for run in filtered_runs:
             run_id = run.get("id", "")
             status = run.get("status", "unknown")
-            prompt_text = run.get("prompt_text", "")[:50]
+            prompt_id = run.get("prompt_id", "")
+            model_type = run.get("model_type", "transfer")  # Default to transfer if not specified
 
             # Calculate duration
             duration = "N/A"
@@ -226,10 +239,9 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
                     pass
 
             created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-            completed = run.get("completed_at", "")[:19] if run.get("completed_at") else ""
 
-            # No checkbox, just data
-            table_data.append([run_id, status, prompt_text, duration, created, completed])
+            # Updated columns: Run ID, Status, Prompt ID, Run Type, Duration, Created
+            table_data.append([run_id, status, prompt_id, model_type, duration, created])
 
         # Build statistics
         stats = f"""

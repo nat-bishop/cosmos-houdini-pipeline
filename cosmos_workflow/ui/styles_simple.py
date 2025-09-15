@@ -137,6 +137,84 @@ def get_custom_css():
         white-space: normal !important;
     }
 
+    /* ===== RUNS TABLE STYLING ===== */
+    /* Apply same scrolling behavior to runs table */
+    #runs-table-wrapper {
+        max-height: 700px !important;  /* Container height limit */
+        overflow: hidden !important;  /* Hide overflow on wrapper */
+        margin-bottom: 12px !important;
+    }
+
+    #runs-table-wrapper > div {
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow on intermediate divs */
+    }
+
+    /* Target the runs dataframe directly by ID */
+    #runs-dataframe {
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow, let .wrap handle scrolling */
+        display: block !important;
+    }
+
+    /* The wrap class for runs table scrollable area */
+    #runs-dataframe .wrap {
+        max-height: 700px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Gradio specific runs table container */
+    #runs-dataframe .table-wrap {
+        max-height: 700px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Make runs table columns fit without horizontal scroll */
+    #runs-dataframe table {
+        width: 100% !important;
+        table-layout: fixed !important;  /* Force columns to fit */
+    }
+
+    /* Adjust runs table column widths for better fit */
+    #runs-dataframe th:nth-child(1),
+    #runs-dataframe td:nth-child(1) {
+        width: 20% !important;  /* Run ID column */
+    }
+
+    #runs-dataframe th:nth-child(2),
+    #runs-dataframe td:nth-child(2) {
+        width: 10% !important;  /* Status column */
+    }
+
+    #runs-dataframe th:nth-child(3),
+    #runs-dataframe td:nth-child(3) {
+        width: 25% !important;  /* Prompt ID column */
+    }
+
+    #runs-dataframe th:nth-child(4),
+    #runs-dataframe td:nth-child(4) {
+        width: 15% !important;  /* Run Type column */
+    }
+
+    #runs-dataframe th:nth-child(5),
+    #runs-dataframe td:nth-child(5) {
+        width: 15% !important;  /* Duration column */
+    }
+
+    #runs-dataframe th:nth-child(6),
+    #runs-dataframe td:nth-child(6) {
+        width: 15% !important;  /* Created column */
+    }
+
+    /* Ensure text wraps in runs table cells */
+    #runs-dataframe td {
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        white-space: normal !important;
+    }
+
     .gr-dataframe thead {
         background: rgba(102, 126, 234, 0.1) !important;
         position: sticky !important;

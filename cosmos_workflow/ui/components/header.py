@@ -16,10 +16,6 @@ def create_header_ui(config):
     Returns:
         dict: Dictionary of UI components
     """
-    # Get refresh interval from config
-    ui_config = config._config_data.get("ui", {})
-    default_refresh_interval = ui_config.get("refresh_interval", 5)
-
     components = {}
 
     # Title and description
@@ -38,32 +34,11 @@ def create_header_ui(config):
                 elem_classes=["status-indicator"],
             )
         with gr.Column(scale=1):
-            # Auto-refresh controls
-            with gr.Row():
-                components["auto_refresh_enabled"] = gr.Checkbox(
-                    label="Auto-refresh",
-                    value=True,
-                    container=False,
-                    elem_classes=["auto-refresh-toggle"],
-                )
-                components["refresh_interval"] = gr.Slider(
-                    minimum=2,
-                    maximum=30,
-                    value=default_refresh_interval,
-                    step=1,
-                    label="Interval (s)",
-                    container=False,
-                    visible=True,
-                )
-                components["manual_refresh_btn"] = gr.Button(
-                    "🔄 Refresh Now",
-                    variant="secondary",
-                    size="sm",
-                )
-
-    # Global timer for auto-refresh
-    components["global_refresh_timer"] = gr.Timer(
-        value=float(default_refresh_interval), active=True
-    )
+            # Manual refresh control
+            components["manual_refresh_btn"] = gr.Button(
+                "🔄 Refresh Now",
+                variant="secondary",
+                size="sm",
+            )
 
     return components

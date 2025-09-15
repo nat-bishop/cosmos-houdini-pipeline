@@ -23,71 +23,49 @@ def create_inputs_tab_ui(config):
         gr.Markdown("### Input Video Browser")
         gr.Markdown("Browse input videos and create prompts directly")
 
-        # Filter Section
-        with gr.Group(elem_classes=["filter-section"]):
-            with gr.Row():
-                # Left side: Search and filters
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        components["inputs_search"] = gr.Textbox(
-                            label="Search",
-                            placeholder="Search directory names...",
-                            scale=2,
-                            container=True,
-                        )
+        # Clean single-line filter section
+        with gr.Row():
+            components["inputs_search"] = gr.Textbox(
+                label="Search",
+                placeholder="Search directory names...",
+                scale=3,
+                container=True,
+            )
 
-                        components["inputs_has_filter"] = gr.Dropdown(
-                            label="Has Videos",
-                            choices=[
-                                ("All", "all"),
-                                ("Has Color", "has_color"),
-                                ("Has Depth", "has_depth"),
-                                ("Has Segmentation", "has_segmentation"),
-                                ("Complete Set", "complete_set"),
-                                ("Incomplete Set", "incomplete_set"),
-                            ],
-                            value="all",
-                            interactive=True,
-                            filterable=False,
-                            scale=1,
-                        )
+            components["inputs_date_filter"] = gr.Dropdown(
+                label="Date Range",
+                choices=[
+                    ("All", "all"),
+                    ("Today", "today"),
+                    ("Last 7 Days", "last_7_days"),
+                    ("Last 30 Days", "last_30_days"),
+                    ("Older", "older_than_30_days"),
+                ],
+                value="all",
+                interactive=True,
+                filterable=False,
+                scale=1,
+            )
 
-                        components["inputs_date_filter"] = gr.Dropdown(
-                            label="Date Range",
-                            choices=[
-                                ("All", "all"),
-                                ("Today", "today"),
-                                ("Last 7 Days", "last_7_days"),
-                                ("Last 30 Days", "last_30_days"),
-                                ("Older than 30 Days", "older_than_30_days"),
-                            ],
-                            value="all",
-                            interactive=True,
-                            filterable=False,
-                            scale=1,
-                        )
+            components["inputs_sort"] = gr.Dropdown(
+                label="Sort",
+                choices=[
+                    ("Name ↑", "name_asc"),
+                    ("Name ↓", "name_desc"),
+                    ("Date ↑", "date_newest"),
+                    ("Date ↓", "date_oldest"),
+                ],
+                value="name_asc",
+                interactive=True,
+                filterable=False,
+                scale=1,
+            )
 
-                    # Second row with advanced filters
-                    with gr.Row():
-                        components["inputs_sort"] = gr.Dropdown(
-                            label="Sort By",
-                            choices=[
-                                ("Name (A-Z)", "name_asc"),
-                                ("Name (Z-A)", "name_desc"),
-                                ("Date (Newest)", "date_newest"),
-                                ("Date (Oldest)", "date_oldest"),
-                            ],
-                            value="name_asc",
-                            interactive=True,
-                            filterable=False,
-                            scale=1,
-                        )
-
-                        # Results counter where checkbox used to be
-                        components["inputs_results_count"] = gr.Markdown(
-                            "**0** directories found",
-                            scale=1,
-                        )
+        # Results counter as clean text below filters
+        components["inputs_results_count"] = gr.Markdown(
+            "0 directories found",
+            elem_classes=["minimal-text"],
+        )
 
         with gr.Row():
             # Left: Gallery of inputs - MUCH LARGER (2x the right panel)

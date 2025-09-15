@@ -163,14 +163,11 @@ def get_input_directories():
     return directories
 
 
-def filter_input_directories(
-    search_text="", has_filter="all", date_filter="all", sort_by="name_asc"
-):
+def filter_input_directories(search_text="", date_filter="all", sort_by="name_asc"):
     """Filter input directories based on criteria.
 
     Args:
         search_text: Text to search in directory names
-        has_filter: Filter by video types (all, has_color, has_depth, etc.)
         date_filter: Filter by date range (all, today, last_7_days, etc.)
         sort_by: Sort order (name_asc, name_desc, date_newest, date_oldest)
 
@@ -187,25 +184,6 @@ def filter_input_directories(
     if search_text and search_text.strip():
         search_lower = search_text.lower().strip()
         filtered = [d for d in filtered if search_lower in d["name"].lower()]
-
-    # Apply has_filter
-    if has_filter != "all":
-        if has_filter == "has_color":
-            filtered = [d for d in filtered if d["has_color"]]
-        elif has_filter == "has_depth":
-            filtered = [d for d in filtered if d["has_depth"]]
-        elif has_filter == "has_segmentation":
-            filtered = [d for d in filtered if d["has_segmentation"]]
-        elif has_filter == "complete_set":
-            filtered = [
-                d for d in filtered if d["has_color"] and d["has_depth"] and d["has_segmentation"]
-            ]
-        elif has_filter == "incomplete_set":
-            filtered = [
-                d
-                for d in filtered
-                if not (d["has_color"] and d["has_depth"] and d["has_segmentation"])
-            ]
 
     # Apply date filter
     if date_filter != "all":
@@ -238,12 +216,11 @@ def filter_input_directories(
     return filtered, total_count, len(filtered)
 
 
-def load_input_gallery(search_text="", has_filter="all", date_filter="all", sort_by="name_asc"):
+def load_input_gallery(search_text="", date_filter="all", sort_by="name_asc"):
     """Load input directories for gallery display with filtering.
 
     Args:
         search_text: Text to search in directory names
-        has_filter: Filter by video types
         date_filter: Filter by date range
         sort_by: Sort order
 
@@ -251,7 +228,7 @@ def load_input_gallery(search_text="", has_filter="all", date_filter="all", sort
         Tuple of (gallery_items, results_text)
     """
     filtered_dirs, total_count, filtered_count = filter_input_directories(
-        search_text, has_filter, date_filter, sort_by
+        search_text, date_filter, sort_by
     )
 
     gallery_items = []
@@ -267,11 +244,11 @@ def load_input_gallery(search_text="", has_filter="all", date_filter="all", sort
                     gallery_items.append((file_info["path"], dir_info["name"]))
                     break
 
-    # Format results text
-    if search_text or has_filter != "all" or date_filter != "all" or sort_by != "name_asc":
-        results_text = f"**{filtered_count}** of **{total_count}** directories"
+    # Format results text - simpler without bold
+    if search_text or date_filter != "all" or sort_by != "name_asc":
+        results_text = f"{filtered_count} of {total_count} directories"
     else:
-        results_text = f"**{total_count}** directories found"
+        results_text = f"{total_count} directories found"
 
     return gallery_items, results_text
 
@@ -511,7 +488,14 @@ def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="
                 continue
 
             try:
-                created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                # Handle both timezone-aware and naive dates
+                if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                    # Has timezone info
+                    created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                else:
+                    # No timezone info - assume UTC
+                    created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+
                 # Fix: properly calculate days_old with timezone-aware datetime
                 days_old = (now - created).days
 
@@ -1113,7 +1097,6 @@ def create_ui():
         def global_refresh_all(
             # Inputs tab filters
             inputs_search="",
-            inputs_has_filter="all",
             inputs_date_filter="all",
             inputs_sort="name_asc",
             # Prompts tab filters
@@ -1130,7 +1113,6 @@ def create_ui():
 
             Args:
                 inputs_search: Search text for inputs
-                inputs_has_filter: Has videos filter for inputs
                 inputs_date_filter: Date filter for inputs
                 inputs_sort: Sort order for inputs
                 prompts_search: Search text for prompts filtering
@@ -1150,7 +1132,6 @@ def create_ui():
                 # Load all data with filter parameters
                 inputs_data, inputs_count = load_input_gallery(
                     inputs_search,
-                    inputs_has_filter,
                     inputs_date_filter,
                     inputs_sort,
                 )
@@ -1198,8 +1179,6 @@ def create_ui():
             # Add Inputs tab filter inputs
             if "inputs_search" in components:
                 manual_refresh_inputs.append(components["inputs_search"])
-            if "inputs_has_filter" in components:
-                manual_refresh_inputs.append(components["inputs_has_filter"])
             if "inputs_date_filter" in components:
                 manual_refresh_inputs.append(components["inputs_date_filter"])
             if "inputs_sort" in components:
@@ -1252,8 +1231,6 @@ def create_ui():
                 # Inputs filters
                 i_search = args[idx] if len(args) > idx else ""
                 idx += 1
-                i_has = args[idx] if len(args) > idx else "all"
-                idx += 1
                 i_date = args[idx] if len(args) > idx else "all"
                 idx += 1
                 i_sort = args[idx] if len(args) > idx else "name_asc"
@@ -1278,7 +1255,6 @@ def create_ui():
 
                 return global_refresh_all(
                     inputs_search=i_search,
-                    inputs_has_filter=i_has,
                     inputs_date_filter=i_date,
                     inputs_sort=i_sort,
                     prompts_search=p_search,
@@ -1323,14 +1299,12 @@ def create_ui():
             k in components
             for k in [
                 "inputs_search",
-                "inputs_has_filter",
                 "inputs_date_filter",
                 "inputs_sort",
             ]
         ):
             filter_inputs = [
                 components["inputs_search"],
-                components["inputs_has_filter"],
                 components["inputs_date_filter"],
                 components["inputs_sort"],
             ]
@@ -1348,12 +1322,6 @@ def create_ui():
                 )
 
             # Dropdown filters respond immediately
-            if "inputs_has_filter" in components:
-                components["inputs_has_filter"].change(
-                    fn=load_input_gallery,
-                    inputs=filter_inputs,
-                    outputs=filter_outputs,
-                )
 
             if "inputs_date_filter" in components:
                 components["inputs_date_filter"].change(

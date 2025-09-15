@@ -168,6 +168,44 @@ def get_custom_css():
         border-left: 3px solid #667eea !important;
     }
 
+    /* Ensure prompts table container has proper overflow handling */
+    .prompts-table-container {
+        max-height: 450px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        margin-bottom: 16px !important;
+        border: 1px solid rgba(102, 126, 234, 0.2) !important;
+        border-radius: 8px !important;
+        padding: 8px !important;
+        display: block !important;
+        position: relative !important;
+    }
+
+    /* Force the table to stay within container */
+    .prompts-table {
+        max-height: 430px !important;
+        overflow-y: auto !important;
+        display: block !important;
+    }
+
+    /* Ensure the dataframe wrapper respects container */
+    .prompts-table-container .gr-dataframe {
+        max-height: 430px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+    }
+
+    /* Make sure the dataframe table itself scrolls */
+    .prompts-table-container table {
+        width: 100% !important;
+    }
+
+    /* Fix for the dataframe overflow */
+    .prompts-table-container > div {
+        max-height: 430px !important;
+        overflow: auto !important;
+    }
+
     /* Checkbox animations */
     input[type="checkbox"] {
         transition: all 0.2s !important;
@@ -192,6 +230,53 @@ def get_custom_css():
 
     .batch-operation {
         animation: fadeInUp 0.3s ease-out;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)) !important;
+        border: 1px solid rgba(102, 126, 234, 0.2) !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        margin-top: 8px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .batch-operation:hover {
+        border-color: rgba(102, 126, 234, 0.3) !important;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08)) !important;
+    }
+
+    /* Ensure batch operations always have proper styling regardless of parent state */
+    .gr-row.batch-operation,
+    .batch-operation.gr-row,
+    div.batch-operation,
+    .batch-operation {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)) !important;
+        border: 1px solid rgba(102, 126, 234, 0.2) !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+        margin-top: 8px !important;
+        position: relative !important;
+        z-index: 10 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        min-height: 50px !important;
+    }
+
+    /* Selection counter styling */
+    .selection-counter {
+        display: inline-flex;
+        align-items: center;
+        margin-left: auto;
+        padding: 4px 12px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 16px;
+        font-size: 0.9em;
+        color: #667eea;
+    }
+
+    .selection-counter strong {
+        color: #764ba2;
+        font-weight: 600;
+        margin: 0 4px;
     }
 
     /* Loading skeleton */

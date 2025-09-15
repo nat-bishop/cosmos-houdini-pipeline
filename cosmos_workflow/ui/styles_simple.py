@@ -63,10 +63,47 @@ def get_custom_css():
     /* Tables */
     .gr-dataframe {
         border-radius: 8px !important;
+        max-height: 400px !important;
+        overflow-y: auto !important;
+    }
+
+    /* Ensure the prompts table specifically has proper scrolling */
+    #prompts-table-wrapper {
+        max-height: 400px !important;
+        overflow: hidden !important;
+        margin-bottom: 12px !important;
+    }
+
+    #prompts-table-wrapper > div {
+        max-height: 400px !important;
+        overflow: hidden !important;
+    }
+
+    /* Target the dataframe directly by ID */
+    #prompts-dataframe {
+        max-height: 380px !important;
+        overflow: auto !important;
+        display: block !important;
+    }
+
+    /* The wrap class is what Gradio uses for the scrollable area */
+    #prompts-dataframe .wrap {
+        max-height: 380px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+    }
+
+    /* Gradio specific table container */
+    #prompts-dataframe .table-wrap {
+        max-height: 380px !important;
+        overflow-y: auto !important;
     }
 
     .gr-dataframe thead {
         background: rgba(102, 126, 234, 0.1) !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10 !important;
     }
 
     .gr-dataframe tbody tr:hover {
@@ -132,12 +169,25 @@ def get_custom_css():
 
     .split-left {
         flex: 1.5;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        max-height: calc(100vh - 200px);
+    }
+
+    /* Ensure proper layout for the prompts library group */
+    .split-left .detail-card {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
     }
 
     .split-right {
         flex: 1;
         border-left: 1px solid var(--border-color);
         padding-left: 16px;
+        overflow-y: auto;
     }
 
     /* CRITICAL: Ensure dropdowns work properly */

@@ -71,15 +71,14 @@ def create_prompts_tab_ui():
                         )
 
                     # Enhanced prompts table with selection
-                    with gr.Group(elem_classes=["prompts-table-container"]):
-                        components["ops_prompts_table"] = gr.Dataframe(
-                            headers=["☑", "ID", "Name", "Prompt Text", "Created"],
-                            datatype=["bool", "str", "str", "str", "str"],
-                            interactive=True,  # Must be True for select event to work
-                            col_count=(5, "fixed"),
-                            wrap=True,
-                            elem_classes=["prompts-table"],
-                        )
+                    components["ops_prompts_table"] = gr.Dataframe(
+                        headers=["☑", "ID", "Name", "Prompt Text", "Created"],
+                        datatype=["bool", "str", "str", "str", "str"],
+                        interactive=True,  # Must be True for select event to work
+                        col_count=(5, "fixed"),
+                        wrap=True,
+                        elem_classes=["prompts-table"],
+                    )
 
                     # Selection controls with visual feedback
                     with gr.Row(elem_classes=["batch-operation"]):

@@ -202,9 +202,13 @@ def get_custom_css():
     /* Batch operation styling */
     .batch-operation {
         padding: 12px;
-        background: rgba(102, 126, 234, 0.05);
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+        border: 1px solid rgba(102, 126, 234, 0.2);
         border-radius: 8px;
-        margin: 8px 0;
+        margin: 12px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     /* Detail cards */

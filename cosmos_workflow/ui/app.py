@@ -944,7 +944,7 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
                         selected_ids.append(row[1])  # Prompt ID
 
         if not selected_ids:
-            return "❌ No prompts selected", "Idle"
+            return "❌ No prompts selected"
 
         # Always use pixtral model
         model = "pixtral"
@@ -975,17 +975,17 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
             error_msg = "\n".join(errors[:3])  # Show first 3 errors
             if len(errors) > 3:
                 error_msg += f"\n... and {len(errors) - 3} more errors"
-            return (f"⚠️ Enhanced {len(results)}/{len(selected_ids)} prompts\n{error_msg}", "Idle")
+            return f"⚠️ Enhanced {len(results)}/{len(selected_ids)} prompts\n{error_msg}"
         else:
             action = "created new" if create_new else "updated"
-            return (f"✅ Successfully {action} {len(results)} enhanced prompt(s)", "Idle")
+            return f"✅ Successfully {action} {len(results)} enhanced prompt(s)"
 
     except Exception as e:
         import traceback
 
         logger.error("Failed to run enhancement: {}", str(e))
         logger.error("Traceback: {}", traceback.format_exc())
-        return f"❌ Error: {e}", "Idle"
+        return f"❌ Error: {e}"
 
 
 # ============================================================================

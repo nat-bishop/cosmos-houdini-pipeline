@@ -30,18 +30,31 @@ def create_jobs_tab_ui():
                 # Queue Status Section
                 gr.Markdown("#### 📦 Queue Status")
                 with gr.Group():
-                    components["queue_status"] = gr.Textbox(
-                        label="Current Queue",
-                        value="Queue: Empty | GPU: Available",
-                        interactive=False,
+                    # Queue Summary Card
+                    components["queue_summary_card"] = gr.Markdown(
+                        """**Queue Summary**
+
+📋 **Pending:** 0 runs
+⏭️ **Next in Queue:** None
+🖥️ **GPU Status:** Available
+                        """,
+                        elem_classes=["status-card"],
                     )
-                    components["execution_status"] = gr.Textbox(
-                        label="GPU Status",
-                        value="Idle",
-                        interactive=False,
+
+                # Active Job Section
+                gr.Markdown("#### 🚀 Active Job")
+                with gr.Group():
+                    # Active Job Card
+                    components["active_job_card"] = gr.Markdown(
+                        """**No Active Job**
+
+Currently idle - no jobs running
+                        """,
+                        elem_classes=["status-card"],
                     )
-                    # Auto-refresh queue status
-                    components["queue_timer"] = gr.Timer(value=2.0, active=False)
+
+                # Auto-refresh timer (inactive by default)
+                components["queue_timer"] = gr.Timer(value=2.0, active=False)
 
                 # Queue Control Section
                 gr.Markdown("#### ⚙️ Queue Controls")
@@ -92,16 +105,6 @@ def create_jobs_tab_ui():
                                 variant="secondary",
                                 size="sm",
                             )
-
-                # Active Jobs Section
-                gr.Markdown("#### 🚀 Active Jobs")
-                components["running_jobs_display"] = gr.Textbox(
-                    label="Running Containers",
-                    value="Checking for active containers...",
-                    interactive=False,
-                    lines=5,
-                )
-                # Individual refresh button removed - using global refresh
 
                 # Recent Runs
                 gr.Markdown("#### 📋 Recent Runs")

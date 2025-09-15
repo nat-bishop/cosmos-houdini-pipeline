@@ -164,7 +164,7 @@ def get_input_directories():
 
 
 def filter_input_directories(
-    search_text="", has_filter="all", date_filter="all", sort_by="name_asc", unused_only=False
+    search_text="", has_filter="all", date_filter="all", sort_by="name_asc"
 ):
     """Filter input directories based on criteria.
 
@@ -173,7 +173,6 @@ def filter_input_directories(
         has_filter: Filter by video types (all, has_color, has_depth, etc.)
         date_filter: Filter by date range (all, today, last_7_days, etc.)
         sort_by: Sort order (name_asc, name_desc, date_newest, date_oldest)
-        unused_only: Show only directories without prompts
 
     Returns:
         Tuple of (filtered_directories, total_count, filtered_count)
@@ -226,20 +225,6 @@ def filter_input_directories(
         if date_filter != "older_than_30_days" and cutoff_time > 0:
             filtered = [d for d in filtered if d["mtime"] >= cutoff_time]
 
-    # Apply unused filter
-    if unused_only:
-        # Get all prompts to check which directories are used
-        cosmos_api = CosmosAPI()
-        all_prompts = cosmos_api.list_prompts()
-        used_dirs = set()
-        for prompt in all_prompts:
-            if prompt.get("parameters", {}).get("video_directory"):
-                video_dir = Path(prompt["parameters"]["video_directory"])
-                used_dirs.add(video_dir.name)
-
-        # Filter to only show unused directories
-        filtered = [d for d in filtered if d["name"] not in used_dirs]
-
     # Apply sorting
     if sort_by == "name_asc":
         filtered = sorted(filtered, key=lambda x: x["name"].lower())
@@ -253,9 +238,7 @@ def filter_input_directories(
     return filtered, total_count, len(filtered)
 
 
-def load_input_gallery(
-    search_text="", has_filter="all", date_filter="all", sort_by="name_asc", unused_only=False
-):
+def load_input_gallery(search_text="", has_filter="all", date_filter="all", sort_by="name_asc"):
     """Load input directories for gallery display with filtering.
 
     Args:
@@ -263,13 +246,12 @@ def load_input_gallery(
         has_filter: Filter by video types
         date_filter: Filter by date range
         sort_by: Sort order
-        unused_only: Show only unused directories
 
     Returns:
         Tuple of (gallery_items, results_text)
     """
     filtered_dirs, total_count, filtered_count = filter_input_directories(
-        search_text, has_filter, date_filter, sort_by, unused_only
+        search_text, has_filter, date_filter, sort_by
     )
 
     gallery_items = []
@@ -286,13 +268,7 @@ def load_input_gallery(
                     break
 
     # Format results text
-    if (
-        search_text
-        or has_filter != "all"
-        or date_filter != "all"
-        or unused_only
-        or sort_by != "name_asc"
-    ):
+    if search_text or has_filter != "all" or date_filter != "all" or sort_by != "name_asc":
         results_text = f"**{filtered_count}** of **{total_count}** directories"
     else:
         results_text = f"**{total_count}** directories found"
@@ -536,7 +512,8 @@ def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="
 
             try:
                 created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                days_old = (now - created.replace(tzinfo=None)).days
+                # Fix: properly calculate days_old with timezone-aware datetime
+                days_old = (now - created).days
 
                 if date_filter == "today" and days_old == 0:
                     filtered_by_date.append(prompt)
@@ -1139,7 +1116,6 @@ def create_ui():
             inputs_has_filter="all",
             inputs_date_filter="all",
             inputs_sort="name_asc",
-            inputs_unused_only=False,
             # Prompts tab filters
             prompts_search="",
             prompts_enhanced_filter="all",
@@ -1157,7 +1133,6 @@ def create_ui():
                 inputs_has_filter: Has videos filter for inputs
                 inputs_date_filter: Date filter for inputs
                 inputs_sort: Sort order for inputs
-                inputs_unused_only: Show only unused inputs
                 prompts_search: Search text for prompts filtering
                 prompts_enhanced_filter: Enhanced status filter for prompts
                 prompts_date_filter: Date range filter for prompts
@@ -1178,7 +1153,6 @@ def create_ui():
                     inputs_has_filter,
                     inputs_date_filter,
                     inputs_sort,
-                    inputs_unused_only,
                 )
                 prompts_data = load_ops_prompts(
                     50, prompts_search, prompts_enhanced_filter, prompts_date_filter
@@ -1230,8 +1204,6 @@ def create_ui():
                 manual_refresh_inputs.append(components["inputs_date_filter"])
             if "inputs_sort" in components:
                 manual_refresh_inputs.append(components["inputs_sort"])
-            if "inputs_unused_only" in components:
-                manual_refresh_inputs.append(components["inputs_unused_only"])
 
             # Add Prompts tab filter inputs
             if "prompts_search" in components:
@@ -1286,8 +1258,6 @@ def create_ui():
                 idx += 1
                 i_sort = args[idx] if len(args) > idx else "name_asc"
                 idx += 1
-                i_unused = args[idx] if len(args) > idx else False
-                idx += 1
 
                 # Prompts filters
                 p_search = args[idx] if len(args) > idx else ""
@@ -1311,7 +1281,6 @@ def create_ui():
                     inputs_has_filter=i_has,
                     inputs_date_filter=i_date,
                     inputs_sort=i_sort,
-                    inputs_unused_only=i_unused,
                     prompts_search=p_search,
                     prompts_enhanced_filter=p_enhanced,
                     prompts_date_filter=p_date,
@@ -1357,7 +1326,6 @@ def create_ui():
                 "inputs_has_filter",
                 "inputs_date_filter",
                 "inputs_sort",
-                "inputs_unused_only",
             ]
         ):
             filter_inputs = [
@@ -1365,7 +1333,6 @@ def create_ui():
                 components["inputs_has_filter"],
                 components["inputs_date_filter"],
                 components["inputs_sort"],
-                components["inputs_unused_only"],
             ]
             filter_outputs = [
                 components["input_gallery"],
@@ -1398,22 +1365,6 @@ def create_ui():
             # Sort dropdown
             if "inputs_sort" in components:
                 components["inputs_sort"].change(
-                    fn=load_input_gallery,
-                    inputs=filter_inputs,
-                    outputs=filter_outputs,
-                )
-
-            # Unused only checkbox
-            if "inputs_unused_only" in components:
-                components["inputs_unused_only"].change(
-                    fn=load_input_gallery,
-                    inputs=filter_inputs,
-                    outputs=filter_outputs,
-                )
-
-            # Refresh button
-            if "inputs_refresh_btn" in components:
-                components["inputs_refresh_btn"].click(
                     fn=load_input_gallery,
                     inputs=filter_inputs,
                     outputs=filter_outputs,

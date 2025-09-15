@@ -83,23 +83,10 @@ def create_inputs_tab_ui(config):
                             scale=1,
                         )
 
-                        components["inputs_unused_only"] = gr.Checkbox(
-                            label="Show only unused",
-                            value=False,
-                            scale=1,
-                        )
-
-                # Right side: Results counter and refresh
-                with gr.Column(scale=1):
-                    with gr.Row():
+                        # Results counter where checkbox used to be
                         components["inputs_results_count"] = gr.Markdown(
                             "**0** directories found",
-                            elem_classes=["results-counter"],
-                        )
-                        components["inputs_refresh_btn"] = gr.Button(
-                            "🔄 Refresh",
-                            size="sm",
-                            variant="secondary",
+                            scale=1,
                         )
 
         with gr.Row():

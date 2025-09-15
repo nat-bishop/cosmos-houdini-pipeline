@@ -350,6 +350,7 @@ class TestDatabaseTransactions:
             run = Run(
                 id="rs_commit",
                 prompt_id=prompt.id,
+                model_type="inference",
                 status="pending",
                 execution_config={},
                 outputs={},
@@ -404,6 +405,7 @@ class TestDatabaseTransactions:
                 run = Run(
                     id="rs_inner",
                     prompt_id=prompt.id,
+                    model_type="inference",
                     status="pending",
                     execution_config={},
                     outputs={},

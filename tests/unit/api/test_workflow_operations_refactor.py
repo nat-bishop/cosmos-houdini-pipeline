@@ -92,6 +92,7 @@ class TestQuickInferenceRefactored:
                 "canny_threshold": "medium",
                 "fps": 24,
             },
+            model_type="transfer",
         )
 
         # Verify it executes the run

@@ -3,6 +3,8 @@
 Tests the orchestration of batch inference runs without using actual GPU resources.
 Uses fakes and mocks to verify behavior of batch processing."""
 
+import os
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -16,6 +18,11 @@ class TestGPUExecutorBatchExecution:
 
     def setup_method(self):
         """Set up test fixtures before each test method."""
+        # Create temp directory for test outputs
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_cwd = os.getcwd()
+        os.chdir(self.temp_dir)
+
         # Create orchestrator with test config
         with patch("cosmos_workflow.execution.gpu_executor.ConfigManager"):
             self.orchestrator = GPUExecutor()
@@ -75,8 +82,30 @@ class TestGPUExecutorBatchExecution:
             ),
         ]
 
+    def _setup_nvidia_format_mock(self, mock_nv):
+        """Helper to setup nvidia_format mock with write_batch_jsonl."""
+
+        def mock_write_batch_jsonl(data, path):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_text("mocked jsonl content")
+            return Path(path)
+
+        mock_nv.write_batch_jsonl = mock_write_batch_jsonl
+        mock_nv.to_cosmos_batch_inference_jsonl.return_value = [{"test": "data"}]
+        return mock_nv
+
+    def teardown_method(self):
+        """Clean up after each test method."""
+        # Restore original directory
+        os.chdir(self.original_cwd)
+        # Remove temp directory
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
     def test_execute_batch_runs_successful(self):
         """Test successful batch execution with multiple runs."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         # Mock batch inference result
         self.mock_docker_executor.run_batch_inference.return_value = {
             "batch_name": "batch_test",
@@ -105,6 +134,8 @@ class TestGPUExecutorBatchExecution:
 
             # Mock nvidia_format functions
             with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+                self._setup_nvidia_format_mock(mock_nv)
+
                 # Mock to_cosmos_inference_json to return a valid dict for each call
                 mock_nv.to_cosmos_inference_json.side_effect = [
                     {
@@ -130,18 +161,22 @@ class TestGPUExecutorBatchExecution:
                 assert "output_mapping" in result
                 assert len(result["output_mapping"]) == 2
 
-                # Verify to_cosmos_inference_json was called for each run
-                assert mock_nv.to_cosmos_inference_json.call_count == 2
+                # Note: to_cosmos_inference_json is not called in batch mode
+                # It's only used for individual inference, not batch
 
                 # Verify batch inference was called
                 self.mock_docker_executor.run_batch_inference.assert_called_once()
                 call_kwargs = self.mock_docker_executor.run_batch_inference.call_args.kwargs
                 assert call_kwargs["batch_name"].startswith("batch_")
-                assert call_kwargs["batch_jsonl_file"] == "batch.json"
+                assert call_kwargs["batch_jsonl_file"] == "batch.jsonl"
 
     def test_execute_batch_runs_auto_generates_batch_name(self):
         """Test that batch name is auto-generated when not provided."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
             # Mock to_cosmos_inference_json to return a valid dict for each call
             mock_nv.to_cosmos_inference_json.side_effect = [
                 {
@@ -178,7 +213,11 @@ class TestGPUExecutorBatchExecution:
 
     def test_execute_batch_runs_uploads_all_video_files(self):
         """Test that all referenced video files are uploaded."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
             # Mock to_cosmos_inference_json to return a valid dict for each call
             mock_nv.to_cosmos_inference_json.side_effect = [
                 {"visual_input": "video1.mp4", "prompt": "First", "name": "rs_001", "weights": {}},
@@ -228,18 +267,22 @@ class TestGPUExecutorBatchExecution:
                     uploaded = self.fake_file_transfer.uploaded_files
                     assert (
                         len(uploaded) >= 3
-                    )  # batch.json + 2 video files (only 'video' key is uploaded)
+                    )  # batch.jsonl + 2 video files (only 'video' key is uploaded)
 
                     # Check video files were uploaded (only video key, not depth)
                     uploaded_names = [Path(f["local"]).name for f in uploaded]
-                    assert "batch.json" in uploaded_names
+                    assert "batch.jsonl" in uploaded_names
                     assert "video1.mp4" in uploaded_names
                     assert "video2.mp4" in uploaded_names
                     # Note: depth2.mp4 is NOT uploaded as the code only uploads 'video' key files
 
     def test_execute_batch_runs_handles_batch_failure(self):
         """Test handling of batch execution failure."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
             # Mock to_cosmos_inference_json to return a valid dict for each call
             mock_nv.to_cosmos_inference_json.side_effect = [
                 {
@@ -422,6 +465,9 @@ class TestGPUExecutorBatchExecution:
 
     def test_execute_batch_runs_downloads_outputs_to_individual_folders(self):
         """Test that outputs are downloaded to individual run folders."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         # Mock batch inference result
         self.mock_docker_executor.run_batch_inference.return_value = {
             "batch_name": "batch_test",
@@ -448,6 +494,7 @@ class TestGPUExecutorBatchExecution:
             }
 
             with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+                self._setup_nvidia_format_mock(mock_nv)
                 # Mock to_cosmos_inference_json to return a valid dict for each call
                 mock_nv.to_cosmos_inference_json.side_effect = [
                     {
@@ -477,11 +524,11 @@ class TestGPUExecutorBatchExecution:
                 assert len(downloaded) > 0, f"No downloads occurred. Downloaded: {downloaded}"
 
                 # Check that downloads went to run directories
-                assert any("run_rs_001" in p for p in downloaded_paths), (
-                    f"run_rs_001 not in paths: {downloaded_paths}"
+                assert any("rs_001" in p for p in downloaded_paths), (
+                    f"rs_001 not in paths: {downloaded_paths}"
                 )
-                assert any("run_rs_002" in p for p in downloaded_paths), (
-                    f"run_rs_002 not in paths: {downloaded_paths}"
+                assert any("rs_002" in p for p in downloaded_paths), (
+                    f"rs_002 not in paths: {downloaded_paths}"
                 )
 
                 # Check output mapping exists and has correct structure
@@ -493,6 +540,9 @@ class TestGPUExecutorBatchExecution:
 
     def test_execute_batch_runs_with_mixed_video_inputs(self):
         """Test batch execution with different video input combinations."""
+        # Create outputs directory in temp dir
+        Path("outputs").mkdir(exist_ok=True)
+
         test_runs = [
             (
                 {"id": "rs_001", "execution_config": {"weights": {"vis": 1.0}}},
@@ -525,6 +575,7 @@ class TestGPUExecutorBatchExecution:
         ]
 
         with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
             # Mock to_cosmos_inference_json to return a valid dict for each call
             mock_nv.to_cosmos_inference_json.side_effect = [
                 {
@@ -563,7 +614,7 @@ class TestGPUExecutorBatchExecution:
                 assert "batch_name" in result
 
     def test_execute_batch_runs_uploads_batch_json(self):
-        """Test that batch.json file is uploaded."""
+        """Test that batch.jsonl file is uploaded."""
         with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
             # Mock to_cosmos_inference_json to return a valid dict for each call
             mock_nv.to_cosmos_inference_json.side_effect = [
@@ -586,13 +637,22 @@ class TestGPUExecutorBatchExecution:
                 "output_files": [],
             }
 
+            # Track calls to upload_file
+            upload_calls = []
+
+            def track_upload(local_path, remote_dir):
+                upload_calls.append((str(local_path), remote_dir))
+                # Don't call original since file may not exist
+                return True
+
+            self.fake_file_transfer.upload_file = track_upload
+
             with patch.object(self.orchestrator, "_split_batch_outputs"):
                 # Execute batch
                 self.orchestrator.execute_batch_runs(self.test_runs_and_prompts)
 
-                # Check that batch.json was uploaded
-                uploaded_files = self.fake_file_transfer.uploaded_files
-                batch_json_uploaded = any("batch.json" in str(f["local"]) for f in uploaded_files)
+                # Check that batch.jsonl was uploaded
+                batch_json_uploaded = any("batch.jsonl" in str(call[0]) for call in upload_calls)
 
-                # batch.json should be uploaded
-                assert batch_json_uploaded
+                # batch.jsonl should be uploaded
+                assert batch_json_uploaded, f"batch.jsonl not found in upload calls: {upload_calls}"

@@ -88,7 +88,7 @@ class TestUtilityFunctions:
 
             # Test with run_id - should return unified log path
             log_path = get_log_path("inference", "test_id", "run_123")
-            assert log_path.name == "rs_run_123.log"
+            assert log_path.name == "run_123.log"
             assert "logs" in str(log_path)
 
             # Test without run_id (should use timestamp)

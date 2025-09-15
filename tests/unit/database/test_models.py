@@ -163,6 +163,7 @@ class TestRunModel:
         run = Run(
             id="rs_20250104_120000_abc123",
             prompt_id=sample_prompt.id,
+            model_type="inference",
             status="pending",
             execution_config={
                 "gpu_node": "gpu-001",
@@ -187,6 +188,7 @@ class TestRunModel:
         run = Run(
             id="rs_status",
             prompt_id=sample_prompt.id,
+            model_type="inference",
             status="pending",
             execution_config={},
             outputs={},
@@ -207,6 +209,7 @@ class TestRunModel:
         run = Run(
             id="rs_outputs",
             prompt_id=sample_prompt.id,
+            model_type="inference",
             status="completed",
             execution_config={},
             outputs={
@@ -233,6 +236,7 @@ class TestRunModel:
         run = Run(
             id="rs_time",
             prompt_id=sample_prompt.id,
+            model_type="inference",
             status="pending",
             execution_config={},
             outputs={},
@@ -265,6 +269,7 @@ class TestRunModel:
             Run(
                 id=f"rs_{i}",
                 prompt_id=sample_prompt.id,
+                model_type="inference",
                 status=status,
                 execution_config={},
                 outputs={},
@@ -298,6 +303,7 @@ class TestRunModel:
             Run(
                 id=f"rs_rel_{i}",
                 prompt_id=prompt.id,
+                model_type="inference",
                 status="pending",
                 execution_config={},
                 outputs={},
@@ -351,6 +357,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
+                model_type="inference",
                 status="pending",
                 execution_config=None,
                 outputs={},
@@ -361,6 +368,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
+                model_type="inference",
                 status="",
                 execution_config={},
                 outputs={},
@@ -398,6 +406,7 @@ class TestDatabaseIntegration:
         run = Run(
             id="rs_workflow",
             prompt_id=prompt.id,
+            model_type="inference",
             status="pending",
             execution_config={
                 "gpu_node": "gpu-002",
@@ -441,6 +450,7 @@ class TestDatabaseIntegration:
             run = Run(
                 id=f"rs_multi_{i}",
                 prompt_id=prompt.id,
+                model_type="inference",
                 status=status,
                 execution_config={"attempt": i + 1},
                 outputs={},
@@ -470,6 +480,7 @@ class TestDatabaseIntegration:
         run = Run(
             id="rs_cascade",
             prompt_id=prompt.id,
+            model_type="inference",
             status="running",
             execution_config={},
             outputs={},

@@ -322,6 +322,24 @@ See [Development Guide](docs/DEVELOPMENT.md) for detailed setup.
 
 ## 🚀 Future Work
 
+### Intelligent Data Curation with Cosmos Reason
+
+Leveraging **NVIDIA Cosmos Reason** — a 7B-parameter reasoning vision-language model — to automatically analyze and validate augmented synthetic data from Cosmos Transfer. This ensures only physically accurate and high-quality training data enters the pipeline.
+
+#### Quality Assurance Pipeline:
+
+**1. Automated Physics Validation**
+- Deploy Cosmos Reason to analyze Cosmos Transfer augmentation outputs
+- Automatically identify and prune physically inaccurate results (e.g., floating debris, impossible structural deformations)
+- Validate temporal consistency across video sequences
+- Score outputs based on physical plausibility and visual coherence
+
+**2. Intelligent Data Filtering**
+- Use Cosmos Reason's understanding of physics and common sense to detect anomalies
+- Filter out augmentations with rendering artifacts or domain gaps
+- Ensure structural integrity is maintained in disaster scenarios
+- Create confidence scores for each augmented sample
+
 ### Post-Training NVIDIA Cosmos with Synthetic Disaster Data
 
 This project explores a **self-improving feedback loop** for physical AI models through synthetic data generation and augmentation. The approach focuses on creating specialized training data for rare scenarios that are difficult or dangerous to capture in real life.
@@ -331,7 +349,8 @@ This project explores a **self-improving feedback loop** for physical AI models 
 **1. Synthetic Data Generation & Augmentation Loop**
 - Generate initial disaster scenarios using my Houdini procedural system (earthquakes, building collapses, floods)
 - Augment this data using NVIDIA Cosmos Transfer/Predict to create diverse variations
-- Use the augmented Cosmos-generated data to post-train Cosmos models themselves
+- **NEW**: Apply Cosmos Reason to validate physical accuracy before training
+- Use the augmented and validated Cosmos-generated data to post-train Cosmos models themselves
 - Create a feedback loop where each iteration improves the model's understanding of:
   - Structural damage patterns and physics
   - Environmental variations (weather, lighting, debris patterns)

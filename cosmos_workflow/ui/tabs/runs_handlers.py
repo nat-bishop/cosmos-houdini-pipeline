@@ -112,7 +112,13 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
             try:
                 created_str = run.get("created_at", "")
                 if created_str:
-                    created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    # Handle both timezone-aware and naive dates
+                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                        # Has timezone info
+                        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    else:
+                        # No timezone info - assume UTC
+                        created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
                 else:
                     created = now
             except Exception:
@@ -201,8 +207,19 @@ def load_runs_data(status_filter, date_filter, search_text, limit):
             duration = "N/A"
             if run.get("created_at") and run.get("completed_at"):
                 try:
-                    start = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                    end = datetime.fromisoformat(run["completed_at"].replace("Z", "+00:00"))
+                    # Handle both timezone-aware and naive dates for start time
+                    created_str = run["created_at"]
+                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                        start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    else:
+                        start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+
+                    # Handle both timezone-aware and naive dates for end time
+                    completed_str = run["completed_at"]
+                    if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
+                        end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
+                    else:
+                        end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
                     duration_delta = end - start
                     duration = str(duration_delta).split(".")[0]
                 except Exception:  # noqa: S110

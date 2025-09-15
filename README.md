@@ -2,6 +2,22 @@
 
 **A production Python system that orchestrates NVIDIA Cosmos AI video generation on remote GPU clusters, featuring a custom Houdini procedural city generator for synthetic training data.**
 
+## 📑 Table of Contents
+- [What This System Does](#-what-this-system-does)
+- [Why This Matters](#-why-this-matters)
+- [Gradio Web Interface](#️-gradio-web-interface)
+- [Code Example](#-code-example)
+- [Houdini Procedural City Generator](#️-houdini-procedural-city-generator-input-creation)
+- [Technical Achievements](#-technical-achievements)
+- [Tech Stack](#️-tech-stack)
+- [System Architecture](#️-system-architecture)
+- [Core Features](#-core-features)
+- [Quick Start](#-quick-start)
+- [Documentation](#-documentation)
+- [Skills Demonstrated](#-skills-demonstrated)
+- [Requirements](#-requirements)
+- [Future Work](#-future-work)
+
 ## 🎯 What This System Does
 
 • **Generates synthetic training data** using my custom Houdini tool that creates destroyed cities with perfect multimodal outputs (depth, segmentation, etc.)
@@ -333,3 +349,78 @@ cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 - **Houdini**: For procedural city generation (optional, pre-generated data included)
 
 See [Development Guide](docs/DEVELOPMENT.md) for detailed setup.
+
+---
+
+## 🚀 Future Work
+
+### Post-Training NVIDIA Cosmos with Synthetic Disaster Data
+
+This project positions itself at the forefront of **physical AI model improvement** through specialized synthetic data generation. The unique contribution lies in creating high-quality training data for rare but critical scenarios that are difficult or dangerous to capture in real life.
+
+#### Planned Enhancements:
+
+**1. Domain-Specific Post-Training Pipeline**
+- Generate 100,000+ hours of synthetic earthquake/disaster scenarios using my Houdini procedural system
+- Create perfect multimodal ground truth (depth, segmentation, damage maps) impossible to obtain from real footage
+- Post-train Cosmos WFMs on this specialized dataset to improve physical understanding of:
+  - Structural damage patterns and building collapse dynamics
+  - Emergency response vehicle navigation through debris
+  - Flood and fire propagation in urban environments
+  - Search and rescue robot path planning
+
+**2. Disaster Response Applications**
+- Train specialized Cosmos models for disaster assessment and emergency response
+- Generate training data for autonomous drones surveying damaged infrastructure
+- Create synthetic scenarios for testing resilient city planning and building codes
+- Enable "what-if" simulations for urban planners and emergency management
+
+### LeRobot Integration for Physical AI Training
+
+Leveraging Hugging Face's **LeRobot framework** (12,000+ GitHub stars) to create an end-to-end physical AI training pipeline that bridges simulation and real-world robotics.
+
+#### Proposed Architecture:
+
+**1. Sim-to-Real Transfer Pipeline**
+```
+Houdini → Cosmos → LeRobot → Physical Robot
+   ↓          ↓          ↓           ↓
+3D Scenes  Synthetic  Training   Real-world
+           Videos     Dataset    Deployment
+```
+
+**2. Implementation Roadmap**
+- **Phase 1**: Export Houdini scenes to LeRobot-compatible dataset format
+  - Convert multimodal outputs (RGB, depth, segmentation) to LeRobotDataset structure
+  - Generate action trajectories for manipulation tasks in destroyed environments
+  - Create paired observation-action sequences for imitation learning
+
+- **Phase 2**: Train disaster response behaviors
+  - Use LeRobot's PyTorch models with Cosmos-generated synthetic data
+  - Implement reinforcement learning for debris clearing tasks
+  - Train vision-based navigation through unstable structures
+  - Leverage LeRobot's SO-100 ($100 arm) for affordable testing
+
+- **Phase 3**: Scale to multi-robot coordination
+  - Generate multi-agent scenarios in Cosmos
+  - Train collaborative behaviors for search and rescue
+  - Deploy to NVIDIA Jetson edge devices for real-time inference
+  - Integrate with ROS2 for production deployment
+
+**3. Technical Advantages**
+- **Cost Reduction**: $100 LeRobot hardware vs. $50,000+ industrial robots
+- **Safety**: Train dangerous scenarios entirely in simulation first
+- **Scale**: Generate millions of training scenarios procedurally
+- **Verification**: Perfect ground truth from Houdini eliminates annotation errors
+- **Community**: Contribute datasets to Hugging Face hub for research advancement
+
+### Integration with NVIDIA Omniverse and Isaac Sim
+
+Future development will leverage NVIDIA's complete physical AI stack:
+
+- **Omniverse Integration**: Export Houdini scenes to USD format for physics-accurate simulation
+- **Isaac Sim**: Validate robot behaviors in high-fidelity physics before real deployment
+- **Cosmos Blueprints**: Use NVIDIA's synthetic data generation blueprints for scalable training
+- **RTX Acceleration**: Leverage local RTX GPUs for real-time synthetic data generation
+
+This positions the project at the intersection of **procedural generation**, **world models**, and **embodied AI** — three of the most critical areas in physical AI development for 2025 and beyond.

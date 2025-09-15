@@ -917,10 +917,11 @@ class GPUExecutor:
                             if not enhanced_text:
                                 raise RuntimeError("Enhanced text is empty")
 
-                            # Get the data repository to create/update prompts
-                            from cosmos_workflow.services.data_repository import DataRepository
+                            # Use the existing data repository service
+                            if not self.service:
+                                raise RuntimeError("DataRepository service not initialized")
 
-                            data_repo = DataRepository()
+                            data_repo = self.service
 
                             # Handle prompt creation/update based on create_new flag
                             create_new = execution_config.get("create_new", True)

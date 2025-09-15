@@ -409,7 +409,7 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "/workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
+            f'bash -lc "bash /workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
         )
 
         # Run synchronously (blocking)

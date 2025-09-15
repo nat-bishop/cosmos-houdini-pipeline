@@ -18,7 +18,7 @@ local_notes_dir = "./notes"
 
 # ===== Docker image on remote =====
 [docker]
-image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
+image = "nvcr.io/nbishop/cosmos-transfer1:latest"
 
 # ===== Video Generation Defaults =====
 [generation]

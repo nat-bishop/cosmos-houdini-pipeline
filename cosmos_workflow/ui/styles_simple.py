@@ -63,39 +63,37 @@ def get_custom_css():
     /* Tables */
     .gr-dataframe {
         border-radius: 8px !important;
-        max-height: 400px !important;
-        overflow-y: auto !important;
     }
 
     /* Ensure the prompts table specifically has proper scrolling */
     #prompts-table-wrapper {
-        max-height: 400px !important;
-        overflow: visible !important;  /* No scrolling on outer wrapper */
+        max-height: 700px !important;  /* Container height limit */
+        overflow: hidden !important;  /* Hide overflow on wrapper */
         margin-bottom: 12px !important;
     }
 
     #prompts-table-wrapper > div {
-        max-height: 400px !important;
-        overflow: visible !important;  /* No scrolling on intermediate divs */
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow on intermediate divs */
     }
 
     /* Target the dataframe directly by ID */
     #prompts-dataframe {
-        max-height: 380px !important;
-        overflow: visible !important;  /* Let inner elements handle scrolling */
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow, let .wrap handle scrolling */
         display: block !important;
     }
 
     /* The wrap class is what Gradio uses for the scrollable area - only vertical scroll */
     #prompts-dataframe .wrap {
-        max-height: 380px !important;
+        max-height: 700px !important;  /* Doubled from ~350px */
         overflow-y: auto !important;
         overflow-x: hidden !important;  /* No horizontal scrolling */
     }
 
     /* Gradio specific table container */
     #prompts-dataframe .table-wrap {
-        max-height: 380px !important;
+        max-height: 700px !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;  /* No horizontal scrolling */
     }

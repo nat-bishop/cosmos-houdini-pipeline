@@ -41,7 +41,57 @@ def create_jobs_tab_ui():
                         interactive=False,
                     )
                     # Auto-refresh queue status
-                    components["queue_timer"] = gr.Timer(value=2.0, active=True)
+                    components["queue_timer"] = gr.Timer(value=2.0, active=False)
+
+                # Queue Control Section
+                gr.Markdown("#### ⚙️ Queue Controls")
+                with gr.Group():
+                    with gr.Row():
+                        components["kill_job_btn"] = gr.Button(
+                            "🛑 Kill Active Job",
+                            variant="stop",
+                            size="sm",
+                        )
+                        components["clear_queue_btn"] = gr.Button(
+                            "🗑️ Clear Queue",
+                            variant="stop",
+                            size="sm",
+                        )
+
+                    # Confirmation dialogs (hidden by default)
+                    with gr.Group(visible=False) as components["kill_confirmation"]:
+                        gr.Markdown("⚠️ **Confirm Kill Active Job**")
+                        components["kill_preview"] = gr.Markdown(
+                            "This will stop the currently running container."
+                        )
+                        with gr.Row():
+                            components["confirm_kill_btn"] = gr.Button(
+                                "⚠️ Confirm Kill",
+                                variant="stop",
+                                size="sm",
+                            )
+                            components["cancel_kill_btn"] = gr.Button(
+                                "Cancel",
+                                variant="secondary",
+                                size="sm",
+                            )
+
+                    with gr.Group(visible=False) as components["clear_confirmation"]:
+                        gr.Markdown("⚠️ **Confirm Clear Queue**")
+                        components["clear_preview"] = gr.Markdown(
+                            "This will cancel all pending runs."
+                        )
+                        with gr.Row():
+                            components["confirm_clear_btn"] = gr.Button(
+                                "⚠️ Confirm Clear",
+                                variant="stop",
+                                size="sm",
+                            )
+                            components["cancel_clear_btn"] = gr.Button(
+                                "Cancel",
+                                variant="secondary",
+                                size="sm",
+                            )
 
                 # Active Jobs Section
                 gr.Markdown("#### 🚀 Active Jobs")

@@ -43,6 +43,14 @@ from cosmos_workflow.ui.helpers import (
 from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.ui.styles_simple import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
+from cosmos_workflow.ui.tabs.jobs_handlers import (
+    cancel_clear_confirmation,
+    cancel_kill_confirmation,
+    execute_clear_queue,
+    execute_kill_job,
+    show_clear_confirmation,
+    show_kill_confirmation,
+)
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_handlers import (
     cancel_delete_prompts,
@@ -1699,6 +1707,66 @@ def create_ui():
                     fn=start_log_streaming,
                     outputs=outputs,
                 )
+
+        # Queue Control Events
+        if "kill_job_btn" in components:
+            # Kill job button shows confirmation
+            components["kill_job_btn"].click(
+                fn=show_kill_confirmation,
+                outputs=[
+                    components.get("kill_confirmation"),
+                    components.get("kill_preview"),
+                ],
+            )
+
+            # Cancel kill button
+            components["cancel_kill_btn"].click(
+                fn=cancel_kill_confirmation,
+                outputs=components.get("kill_confirmation"),
+            )
+
+            # Confirm kill button
+            components["confirm_kill_btn"].click(
+                fn=execute_kill_job,
+                outputs=[
+                    components.get("kill_confirmation"),
+                    components.get("job_status"),
+                ],
+            ).then(
+                fn=check_running_jobs,
+                outputs=[
+                    components.get("running_jobs_display"),
+                    components.get("job_status"),
+                ],
+            )
+
+        if "clear_queue_btn" in components:
+            # Clear queue button shows confirmation
+            components["clear_queue_btn"].click(
+                fn=show_clear_confirmation,
+                outputs=[
+                    components.get("clear_confirmation"),
+                    components.get("clear_preview"),
+                ],
+            )
+
+            # Cancel clear button
+            components["cancel_clear_btn"].click(
+                fn=cancel_clear_confirmation,
+                outputs=components.get("clear_confirmation"),
+            )
+
+            # Confirm clear button
+            components["confirm_clear_btn"].click(
+                fn=execute_clear_queue,
+                outputs=[
+                    components.get("clear_confirmation"),
+                    components.get("job_status"),
+                ],
+            ).then(
+                fn=get_queue_status,
+                outputs=components.get("queue_status"),
+            )
 
         # Load initial data
         initial_outputs = get_components(

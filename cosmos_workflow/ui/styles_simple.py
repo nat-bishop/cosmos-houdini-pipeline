@@ -70,33 +70,73 @@ def get_custom_css():
     /* Ensure the prompts table specifically has proper scrolling */
     #prompts-table-wrapper {
         max-height: 400px !important;
-        overflow: hidden !important;
+        overflow: visible !important;  /* No scrolling on outer wrapper */
         margin-bottom: 12px !important;
     }
 
     #prompts-table-wrapper > div {
         max-height: 400px !important;
-        overflow: hidden !important;
+        overflow: visible !important;  /* No scrolling on intermediate divs */
     }
 
     /* Target the dataframe directly by ID */
     #prompts-dataframe {
         max-height: 380px !important;
-        overflow: auto !important;
+        overflow: visible !important;  /* Let inner elements handle scrolling */
         display: block !important;
     }
 
-    /* The wrap class is what Gradio uses for the scrollable area */
+    /* The wrap class is what Gradio uses for the scrollable area - only vertical scroll */
     #prompts-dataframe .wrap {
         max-height: 380px !important;
         overflow-y: auto !important;
-        overflow-x: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
     }
 
     /* Gradio specific table container */
     #prompts-dataframe .table-wrap {
         max-height: 380px !important;
         overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Make table columns fit without horizontal scroll */
+    #prompts-dataframe table {
+        width: 100% !important;
+        table-layout: fixed !important;  /* Force columns to fit */
+    }
+
+    /* Adjust column widths for better fit */
+    #prompts-dataframe th:nth-child(1),
+    #prompts-dataframe td:nth-child(1) {
+        width: 5% !important;  /* Checkbox column */
+    }
+
+    #prompts-dataframe th:nth-child(2),
+    #prompts-dataframe td:nth-child(2) {
+        width: 25% !important;  /* ID column */
+    }
+
+    #prompts-dataframe th:nth-child(3),
+    #prompts-dataframe td:nth-child(3) {
+        width: 20% !important;  /* Name column */
+    }
+
+    #prompts-dataframe th:nth-child(4),
+    #prompts-dataframe td:nth-child(4) {
+        width: 35% !important;  /* Prompt Text column */
+    }
+
+    #prompts-dataframe th:nth-child(5),
+    #prompts-dataframe td:nth-child(5) {
+        width: 15% !important;  /* Created column */
+    }
+
+    /* Ensure text wraps in cells instead of causing horizontal scroll */
+    #prompts-dataframe td {
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        white-space: normal !important;
     }
 
     .gr-dataframe thead {

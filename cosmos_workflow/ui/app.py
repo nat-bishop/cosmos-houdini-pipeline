@@ -1134,8 +1134,6 @@ def create_ui():
 
         # Global refresh function
         def global_refresh_all(
-            current_prompts_table=None,
-            is_auto_refresh=False,
             # Inputs tab filters
             inputs_search="",
             inputs_has_filter="all",
@@ -1152,11 +1150,9 @@ def create_ui():
             runs_search="",
             runs_limit=50,
         ):
-            """Refresh all data across all tabs.
+            """Refresh all data across all tabs while preserving filters.
 
             Args:
-                current_prompts_table: Current prompts table data
-                is_auto_refresh: If True, preserve selections during auto-refresh
                 inputs_search: Search text for inputs
                 inputs_has_filter: Has videos filter for inputs
                 inputs_date_filter: Date filter for inputs
@@ -1176,11 +1172,6 @@ def create_ui():
                 # Get current status
                 status = f"✅ Connected | Last refresh: {datetime.now(timezone.utc).strftime('%H:%M:%S')}"
 
-                # Get current selections before refreshing
-                selected_ids = []
-                if is_auto_refresh and current_prompts_table is not None:
-                    selected_ids = get_selections_from_table(current_prompts_table)
-
                 # Load all data with filter parameters
                 inputs_data, inputs_count = load_input_gallery(
                     inputs_search,
@@ -1198,22 +1189,6 @@ def create_ui():
                 runs_gallery, runs_table, runs_stats = load_runs_data(
                     runs_status_filter, runs_date_filter, runs_search, runs_limit
                 )
-
-                # For auto-refresh, restore selections
-                if is_auto_refresh and selected_ids and prompts_data is not None:
-                    import pandas as pd
-
-                    if isinstance(prompts_data, pd.DataFrame):
-                        # DataFrame format - restore selections based on prompt IDs
-                        for idx, row in prompts_data.iterrows():
-                            prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
-                            prompts_data.iloc[idx, 0] = prompt_id in selected_ids
-                    elif isinstance(prompts_data, list):
-                        # List format - restore selections
-                        for row in prompts_data:
-                            if len(row) > 1:
-                                prompt_id = str(row[1])
-                                row[0] = prompt_id in selected_ids
 
                 return (
                     status,  # refresh_status
@@ -1240,156 +1215,11 @@ def create_ui():
                     "Error loading data",
                 )
 
-        # Function to extract selections from prompts table
-        def get_selections_from_table(prompts_table):
-            """Extract selected prompt IDs from the table."""
-            if prompts_table is None:
-                return []
+        # Header/Manual Refresh Events
 
-            selected_ids = []
-            import pandas as pd
-
-            if isinstance(prompts_table, pd.DataFrame):
-                # DataFrame format
-                for _idx, row in prompts_table.iterrows():
-                    if row.iloc[0]:  # If selected (first column is checkbox)
-                        prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
-                        if prompt_id:
-                            selected_ids.append(prompt_id)
-            else:
-                # List format
-                for row in prompts_table:
-                    if row[0]:  # If selected
-                        prompt_id = str(row[1]) if len(row) > 1 else ""
-                        if prompt_id:
-                            selected_ids.append(prompt_id)
-
-            return selected_ids
-
-        # Header/Global Refresh Events
-        if "global_refresh_timer" in components and "ops_prompts_table" in components:
-            # Auto-refresh: preserve selections and filters from ALL tabs
-            refresh_inputs = [components["ops_prompts_table"]]
-
-            # Add Inputs tab filter inputs
-            if "inputs_search" in components:
-                refresh_inputs.append(components["inputs_search"])
-            if "inputs_has_filter" in components:
-                refresh_inputs.append(components["inputs_has_filter"])
-            if "inputs_date_filter" in components:
-                refresh_inputs.append(components["inputs_date_filter"])
-            if "inputs_sort" in components:
-                refresh_inputs.append(components["inputs_sort"])
-            if "inputs_unused_only" in components:
-                refresh_inputs.append(components["inputs_unused_only"])
-
-            # Add Prompts tab filter inputs
-            if "prompts_search" in components:
-                refresh_inputs.append(components["prompts_search"])
-            if "prompts_enhanced_filter" in components:
-                refresh_inputs.append(components["prompts_enhanced_filter"])
-            if "prompts_date_filter" in components:
-                refresh_inputs.append(components["prompts_date_filter"])
-
-            # Add Runs tab filter inputs
-            if "runs_status_filter" in components:
-                refresh_inputs.append(components["runs_status_filter"])
-            if "runs_date_filter" in components:
-                refresh_inputs.append(components["runs_date_filter"])
-            if "runs_search" in components:
-                refresh_inputs.append(components["runs_search"])
-            if "runs_limit" in components:
-                refresh_inputs.append(components["runs_limit"])
-
-            # Build outputs list including all tab components
-            refresh_outputs = [
-                components["refresh_status"],
-                components["input_gallery"],
-            ]
-
-            # Add inputs count if exists
-            if "inputs_results_count" in components:
-                refresh_outputs.append(components["inputs_results_count"])
-
-            refresh_outputs.extend(
-                [
-                    components["ops_prompts_table"],
-                    components["running_jobs_display"],
-                    components["job_status"],
-                ]
-            )
-
-            # Add Runs tab outputs if they exist
-            if "runs_gallery" in components:
-                refresh_outputs.append(components["runs_gallery"])
-            if "runs_table" in components:
-                refresh_outputs.append(components["runs_table"])
-            if "runs_stats" in components:
-                refresh_outputs.append(components["runs_stats"])
-
-            # Create the lambda with proper parameter handling
-            def refresh_handler(*args):
-                # Unpack arguments based on what's available
-                idx = 0
-                table = args[idx] if len(args) > idx else None
-                idx += 1
-
-                # Inputs filters
-                i_search = args[idx] if len(args) > idx else ""
-                idx += 1
-                i_has = args[idx] if len(args) > idx else "all"
-                idx += 1
-                i_date = args[idx] if len(args) > idx else "all"
-                idx += 1
-                i_sort = args[idx] if len(args) > idx else "name_asc"
-                idx += 1
-                i_unused = args[idx] if len(args) > idx else False
-                idx += 1
-
-                # Prompts filters
-                p_search = args[idx] if len(args) > idx else ""
-                idx += 1
-                p_enhanced = args[idx] if len(args) > idx else "all"
-                idx += 1
-                p_date = args[idx] if len(args) > idx else "all"
-                idx += 1
-
-                # Runs filters
-                r_status = args[idx] if len(args) > idx else "all"
-                idx += 1
-                r_date = args[idx] if len(args) > idx else "all"
-                idx += 1
-                r_search = args[idx] if len(args) > idx else ""
-                idx += 1
-                r_limit = args[idx] if len(args) > idx else 50
-
-                return global_refresh_all(
-                    table,
-                    is_auto_refresh=True,
-                    inputs_search=i_search,
-                    inputs_has_filter=i_has,
-                    inputs_date_filter=i_date,
-                    inputs_sort=i_sort,
-                    inputs_unused_only=i_unused,
-                    prompts_search=p_search,
-                    prompts_enhanced_filter=p_enhanced,
-                    prompts_date_filter=p_date,
-                    runs_status_filter=r_status,
-                    runs_date_filter=r_date,
-                    runs_search=r_search,
-                    runs_limit=r_limit,
-                )
-
-            components["global_refresh_timer"].tick(
-                fn=refresh_handler,
-                inputs=refresh_inputs,
-                outputs=refresh_outputs,
-            )
-
-        if "manual_refresh_btn" in components and "ops_prompts_table" in components:
-            # Manual refresh: preserve filters but clear selections
-            # Use same inputs as auto-refresh
-            manual_refresh_inputs = [components["ops_prompts_table"]]
+        if "manual_refresh_btn" in components:
+            # Manual refresh: preserve filters
+            manual_refresh_inputs = []
 
             # Add Inputs tab filter inputs
             if "inputs_search" in components:
@@ -1422,24 +1252,19 @@ def create_ui():
                 manual_refresh_inputs.append(components["runs_limit"])
 
             # Build outputs list including all tab components
-            manual_refresh_outputs = [
-                components["refresh_status"],
-                components["input_gallery"],
-            ]
-
-            # Add inputs count if exists
+            manual_refresh_outputs = []
+            if "refresh_status" in components:
+                manual_refresh_outputs.append(components["refresh_status"])
+            if "input_gallery" in components:
+                manual_refresh_outputs.append(components["input_gallery"])
             if "inputs_results_count" in components:
                 manual_refresh_outputs.append(components["inputs_results_count"])
-
-            manual_refresh_outputs.extend(
-                [
-                    components["ops_prompts_table"],
-                    components["running_jobs_display"],
-                    components["job_status"],
-                ]
-            )
-
-            # Add Runs tab outputs if they exist
+            if "ops_prompts_table" in components:
+                manual_refresh_outputs.append(components["ops_prompts_table"])
+            if "running_jobs_display" in components:
+                manual_refresh_outputs.append(components["running_jobs_display"])
+            if "job_status" in components:
+                manual_refresh_outputs.append(components["job_status"])
             if "runs_gallery" in components:
                 manual_refresh_outputs.append(components["runs_gallery"])
             if "runs_table" in components:
@@ -1447,12 +1272,10 @@ def create_ui():
             if "runs_stats" in components:
                 manual_refresh_outputs.append(components["runs_stats"])
 
-            # Create the lambda with proper parameter handling (same as auto-refresh)
+            # Create the handler with proper parameter unpacking
             def manual_refresh_handler(*args):
                 # Unpack arguments based on what's available
                 idx = 0
-                table = args[idx] if len(args) > idx else None
-                idx += 1
 
                 # Inputs filters
                 i_search = args[idx] if len(args) > idx else ""
@@ -1484,8 +1307,6 @@ def create_ui():
                 r_limit = args[idx] if len(args) > idx else 50
 
                 return global_refresh_all(
-                    table,
-                    is_auto_refresh=False,
                     inputs_search=i_search,
                     inputs_has_filter=i_has,
                     inputs_date_filter=i_date,

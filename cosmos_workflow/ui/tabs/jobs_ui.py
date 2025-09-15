@@ -6,6 +6,7 @@ Business logic remains in the main app.py file.
 """
 
 import gradio as gr
+
 from cosmos_workflow.ui.log_viewer import LogViewer
 
 

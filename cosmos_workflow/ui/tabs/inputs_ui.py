@@ -85,8 +85,8 @@ def create_inputs_tab_ui(config):
 
             # Right: Input Details with tabs
             with gr.Column(scale=1):
-                # Hidden field to store selected directory path
-                components["selected_dir_path"] = gr.Textbox(visible=False)
+                # State to store selected directory path (not a hidden textbox)
+                components["selected_dir_path"] = gr.State()
 
                 # Keep preview_group for compatibility but hidden
                 with gr.Group(visible=False) as components["preview_group"]:

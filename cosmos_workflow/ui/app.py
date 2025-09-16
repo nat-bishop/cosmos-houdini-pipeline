@@ -268,7 +268,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     """Handle input selection from gallery with real video metadata extraction."""
     if evt.index is None:
         return (
-            gr.update(value=""),  # selected_dir_path
+            "",  # selected_dir_path - State component needs raw value
             gr.update(visible=False),  # preview_group (compatibility)
             gr.update(visible=False),  # input_tabs_group
             gr.update(value=""),  # input_name
@@ -286,7 +286,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     directories = get_input_directories()
     if evt.index >= len(directories):
         return (
-            gr.update(value=""),  # selected_dir_path
+            "",  # selected_dir_path - State component needs raw value
             gr.update(visible=False),  # preview_group (compatibility)
             gr.update(visible=False),  # input_tabs_group
             gr.update(value=""),  # input_name
@@ -365,7 +365,7 @@ def on_input_select(evt: gr.SelectData, gallery_data):
     video_dir_value = selected_dir["path"].replace("\\", "/")
 
     return (
-        gr.update(value=selected_dir["path"]),  # selected_dir_path
+        selected_dir["path"],  # selected_dir_path - State component needs raw value, not gr.update
         gr.update(visible=False),  # preview_group (compatibility)
         gr.update(visible=True),  # input_tabs_group
         gr.update(value=name),  # input_name
@@ -1813,7 +1813,9 @@ def create_ui():
 
             components["view_prompts_for_input_btn"].click(
                 fn=prepare_prompts_navigation_from_input,
-                inputs=[components["selected_dir_path"]],  # Use the selected directory path
+                inputs=[
+                    components["selected_dir_path"]
+                ],  # Use the State component which stores the path
                 outputs=[
                     components["refresh_status"],  # Status message (reuse refresh status)
                     components["prompts_search"],  # Update search field in prompts tab

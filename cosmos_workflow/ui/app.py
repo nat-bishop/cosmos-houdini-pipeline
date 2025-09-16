@@ -1782,7 +1782,7 @@ def create_ui():
             )
 
         # Navigation from Inputs to Prompts tab
-        if "view_prompts_for_input_btn" in components and "input_name" in components:
+        if "view_prompts_for_input_btn" in components and "selected_dir_path" in components:
 
             def prepare_prompts_navigation_from_input(input_name):
                 """Navigate to Prompts tab with search filter for input directory."""
@@ -1813,7 +1813,7 @@ def create_ui():
 
             components["view_prompts_for_input_btn"].click(
                 fn=prepare_prompts_navigation_from_input,
-                inputs=[components["input_name"]],
+                inputs=[components["selected_dir_path"]],  # Use the selected directory path
                 outputs=[
                     components.get(
                         "refresh_status", gr.Textbox()

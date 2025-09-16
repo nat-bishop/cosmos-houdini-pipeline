@@ -506,6 +506,8 @@ class GPUExecutor:
             logger.info("Downloaded output to {}", local_file)
         except Exception as e:
             logger.error("Failed to download output: {}", e)
+            # Re-raise the exception so the failure is properly reported
+            raise RuntimeError(f"Failed to download output file: {e}") from e
 
         # Also download the log file
         remote_log = f"{remote_output_dir}/run.log"

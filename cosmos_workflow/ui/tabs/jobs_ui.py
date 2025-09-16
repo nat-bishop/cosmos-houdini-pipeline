@@ -56,12 +56,13 @@ Currently idle - no jobs running
                 # Auto-refresh timer (inactive by default)
                 components["queue_timer"] = gr.Timer(value=2.0, active=False)
 
-                # Hidden component for running jobs display (used by handlers)
+                # Container details display
                 components["running_jobs_display"] = gr.Textbox(
-                    label="Running Jobs",
+                    label="Container Details",
                     value="No active containers found",
                     interactive=False,
-                    visible=False,
+                    visible=True,
+                    lines=6,
                 )
 
                 # Queue Control Section

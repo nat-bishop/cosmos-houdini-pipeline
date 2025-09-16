@@ -181,7 +181,7 @@ def ui(port, host, share, reload, watch):
             click.echo(f"📌 Open browser to: http://{host}:{port}")
 
         interface = create_ui()
-        interface.launch(
+        interface.queue().launch(
             server_name=host,
             server_port=port,
             share=share,

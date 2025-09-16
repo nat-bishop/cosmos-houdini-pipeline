@@ -619,7 +619,7 @@ class CosmosAPI:
                 stream_output=stream_output,
             )
 
-            # Check if operation started in background
+            # Check if operation started in background (for future async implementation)
             if result.get("status") == "started":
                 # Don't update to completed yet - monitor will handle it
                 logger.info("Run {} started in background", run["id"])
@@ -629,18 +629,29 @@ class CosmosAPI:
                     "message": result.get("message", "Operation started in background"),
                 }
 
-            # Legacy synchronous completion (shouldn't happen with new implementation)
-            # Update run with results
-            self.service.update_run(run["id"], outputs=result)
-            self.service.update_run_status(run["id"], "completed")
-            logger.info("Run {} completed successfully", run["id"])
+            # Check if operation completed synchronously
+            elif result.get("status") == "completed":
+                # Update run with results
+                self.service.update_run(run["id"], outputs=result)
+                self.service.update_run_status(run["id"], "completed")
+                logger.info("Run {} completed successfully", run["id"])
 
-            return {
-                "run_id": run["id"],
-                "output_path": result.get("output_path"),
-                "duration_seconds": result.get("duration_seconds"),
-                "status": "success",
-            }
+                return {
+                    "run_id": run["id"],
+                    "output_path": result.get("output_path"),
+                    "duration_seconds": result.get("duration_seconds"),
+                    "status": "completed",
+                }
+
+            # Unexpected status
+            else:
+                logger.warning("Unexpected status from execute_run: {}", result.get("status"))
+                return {
+                    "run_id": run["id"],
+                    "output_path": result.get("output_path"),
+                    "duration_seconds": result.get("duration_seconds"),
+                    "status": result.get("status", "unknown"),
+                }
 
         except Exception as e:
             logger.exception("Run {} failed", run["id"])

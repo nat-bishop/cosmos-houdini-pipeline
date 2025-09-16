@@ -946,11 +946,8 @@ def load_runs_for_multiple_prompts(
         # Build prompt names for filter display
         prompt_names = []
         for pid in prompt_ids:
-            if pid in prompt_map:
-                name = prompt_map[pid].get("name", pid[:8])
-                prompt_names.append(f"{name} ({pid[:8]}...)")
-            else:
-                prompt_names.append(f"{pid[:8]}...")
+            # Always use the full prompt ID
+            prompt_names.append(pid)
 
         return gallery_data, table_data, stats, prompt_names
 

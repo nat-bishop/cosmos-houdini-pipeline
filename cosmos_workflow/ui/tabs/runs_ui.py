@@ -31,12 +31,10 @@ def create_runs_tab_ui():
                 components["runs_nav_filter_row"] = gr.Row(visible=False)
                 with components["runs_nav_filter_row"]:
                     with gr.Column(scale=3):
-                        components["runs_prompt_filter"] = gr.Dropdown(
-                            label="Filtering by Prompts",
-                            choices=[],  # Will be populated dynamically
-                            value=None,
-                            interactive=False,  # Non-interactive display only
-                            info="Showing runs for selected prompts",
+                        # Use Markdown to display filter info more clearly
+                        components["runs_prompt_filter"] = gr.Markdown(
+                            value="",  # Will be populated dynamically
+                            elem_classes=["filter-info-box"],
                         )
                     with gr.Column(scale=1):
                         components["clear_nav_filter_btn"] = gr.Button(

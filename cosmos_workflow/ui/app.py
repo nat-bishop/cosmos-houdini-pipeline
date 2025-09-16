@@ -1144,6 +1144,19 @@ def create_ui():
                 stats = pending_data.get("stats", "No data")
                 prompt_names = pending_data.get("prompt_names", [])
 
+                # Format prompt names for display
+                if prompt_names:
+                    filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+                    # Show up to 3 prompt IDs - full IDs, no truncation
+                    display_names = []
+                    for name in prompt_names[:3]:
+                        display_names.append(f"• {name}")
+                    filter_display += "\n".join(display_names)
+                    if len(prompt_names) > 3:
+                        filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+                else:
+                    filter_display = ""
+
                 # Clear the pending data and update display
                 return (
                     nav_state,  # Keep the navigation state as-is
@@ -1152,11 +1165,7 @@ def create_ui():
                     table_data,  # Update table
                     stats,  # Update stats
                     gr.update(visible=bool(prompt_names)),  # Show filter indicator if filtering
-                    gr.update(
-                        choices=prompt_names,
-                        value=prompt_names[0] if prompt_names else None,
-                        interactive=False,
-                    ),  # Update filter dropdown
+                    gr.update(value=filter_display),  # Update filter display with formatted text
                 )
 
             # Check if we're navigating to Runs tab (index 2) with pending filter
@@ -1192,6 +1201,19 @@ def create_ui():
                         "source_tab": None,
                     }
 
+                    # Format prompt names for display
+                    if prompt_names:
+                        filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+                        # Show up to 3 prompt IDs - full IDs, no truncation
+                        display_names = []
+                        for name in prompt_names[:3]:
+                            display_names.append(f"• {name}")
+                        filter_display += "\n".join(display_names)
+                        if len(prompt_names) > 3:
+                            filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+                    else:
+                        filter_display = ""
+
                     # Show filter indicator with prompt names
                     return (
                         cleared_nav_state,  # Clear navigation state
@@ -1201,10 +1223,8 @@ def create_ui():
                         stats if stats else "No data",  # Update stats
                         gr.update(visible=True),  # Show filter indicator row
                         gr.update(
-                            choices=prompt_names if prompt_names else [],
-                            value=prompt_names if prompt_names else None,
-                            interactive=False,
-                        ),  # Update filter dropdown
+                            value=filter_display
+                        ),  # Update filter display with formatted text
                     )
 
             # Check if we're navigating to Runs tab without filter - load default data
@@ -2024,7 +2044,7 @@ def create_ui():
                     components.get("runs_stats"),
                 ],
             ).then(
-                fn=lambda: (gr.update(visible=False), gr.update(choices=[], value=None)),
+                fn=lambda: (gr.update(visible=False), gr.update(value="")),
                 inputs=[],
                 outputs=[
                     components.get("runs_nav_filter_row"),

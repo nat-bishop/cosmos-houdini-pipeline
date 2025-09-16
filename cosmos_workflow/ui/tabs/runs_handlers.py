@@ -172,21 +172,28 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
         # First collect all video paths
         for run in filtered_runs:
             if run.get("status") == "completed":
-                # Extract output video from files array
                 outputs = run.get("outputs", {})
-                files = outputs.get("files", []) if isinstance(outputs, dict) else []
-
-                # Find the output.mp4 file
                 output_video = None
-                for file_path in files:
-                    if file_path.endswith("output.mp4"):
-                        # Normalize path for Windows
-                        output_video = Path(file_path)
-                        if output_video.exists():
-                            break
 
-                if output_video:
-                    video_paths.append((output_video, run))
+                # New structure: outputs.output_path
+                if isinstance(outputs, dict) and "output_path" in outputs:
+                    output_path = outputs["output_path"]
+                    if output_path and output_path.endswith(".mp4"):
+                        # Normalize path separators for cross-platform compatibility
+                        output_video = Path(output_path)
+                        if output_video.exists():
+                            video_paths.append((output_video, run))
+
+                # Old structure: outputs.files array
+                elif isinstance(outputs, dict) and "files" in outputs:
+                    files = outputs.get("files", [])
+                    for file_path in files:
+                        if file_path.endswith("output.mp4"):
+                            # Normalize path for Windows
+                            output_video = Path(file_path)
+                            if output_video.exists():
+                                video_paths.append((output_video, run))
+                                break
 
         # Generate thumbnails in parallel for speed
         if video_paths:
@@ -373,17 +380,25 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             return [gr.update(visible=False)] + [gr.update()] * 16
 
         # Extract details
-        # Get output video from files array
+        # Get output video - handle both old and new output structures
         outputs = run_details.get("outputs", {})
-        files = outputs.get("files", []) if isinstance(outputs, dict) else []
-
-        # Find the output.mp4 file
         output_video = ""
-        for file_path in files:
-            if file_path.endswith("output.mp4"):
-                # Normalize path for Windows
-                output_video = str(Path(file_path))
-                break
+
+        # New structure: outputs.output_path
+        if isinstance(outputs, dict) and "output_path" in outputs:
+            output_path = outputs["output_path"]
+            if output_path and output_path.endswith(".mp4"):
+                # Normalize path separators for cross-platform compatibility
+                output_video = str(Path(output_path))
+
+        # Old structure: outputs.files array
+        elif isinstance(outputs, dict) and "files" in outputs:
+            files = outputs.get("files", [])
+            for file_path in files:
+                if file_path.endswith("output.mp4"):
+                    # Normalize path for Windows
+                    output_video = str(Path(file_path))
+                    break
 
         logger.info("Output video path: {}", output_video)
 
@@ -863,21 +878,28 @@ def load_runs_for_multiple_prompts(
         # First collect all video paths
         for run in filtered_runs:
             if run.get("status") == "completed":
-                # Extract output video from files array
                 outputs = run.get("outputs", {})
-                files = outputs.get("files", []) if isinstance(outputs, dict) else []
-
-                # Find the output.mp4 file
                 output_video = None
-                for file_path in files:
-                    if file_path.endswith("output.mp4"):
-                        # Normalize path for Windows
-                        output_video = Path(file_path)
-                        if output_video.exists():
-                            break
 
-                if output_video:
-                    video_paths.append((output_video, run))
+                # New structure: outputs.output_path
+                if isinstance(outputs, dict) and "output_path" in outputs:
+                    output_path = outputs["output_path"]
+                    if output_path and output_path.endswith(".mp4"):
+                        # Normalize path separators for cross-platform compatibility
+                        output_video = Path(output_path)
+                        if output_video.exists():
+                            video_paths.append((output_video, run))
+
+                # Old structure: outputs.files array
+                elif isinstance(outputs, dict) and "files" in outputs:
+                    files = outputs.get("files", [])
+                    for file_path in files:
+                        if file_path.endswith("output.mp4"):
+                            # Normalize path for Windows
+                            output_video = Path(file_path)
+                            if output_video.exists():
+                                video_paths.append((output_video, run))
+                                break
 
         # Generate thumbnails in parallel for speed
         if video_paths:

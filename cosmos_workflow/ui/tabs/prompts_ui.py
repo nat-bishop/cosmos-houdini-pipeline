@@ -127,59 +127,56 @@ def create_prompts_tab_ui():
 
             # Right: Split view for details and operations
             with gr.Column(scale=2, elem_classes=["split-right"]):
-                # Prompt Details Section
-                with gr.Group(elem_classes=["detail-card"], visible=True):
-                    gr.Markdown("#### 📝 Prompt Details")
-
-                    components["selected_prompt_id"] = gr.Textbox(
-                        label="Prompt ID",
-                        interactive=False,
-                        elem_classes=["loading-skeleton"],
-                    )
-
-                    with gr.Row():
-                        components["selected_prompt_name"] = gr.Textbox(
-                            label="Name",
-                            interactive=False,
-                            scale=3,
-                        )
-                        components["selected_prompt_enhanced"] = gr.Checkbox(
-                            label="✨ Enhanced",
-                            interactive=False,
-                            scale=1,
-                        )
-
-                    components["selected_prompt_text"] = gr.Textbox(
-                        label="Prompt Text",
-                        lines=3,
-                        interactive=False,
-                    )
-
-                    components["selected_prompt_negative"] = gr.Textbox(
-                        label="Negative Prompt",
-                        lines=2,
-                        interactive=False,
-                    )
-
-                    with gr.Row():
-                        components["selected_prompt_created"] = gr.Textbox(
-                            label="Created",
-                            interactive=False,
-                            scale=1,
-                        )
-                        components["selected_prompt_video_dir"] = gr.Textbox(
-                            label="Video Directory",
-                            interactive=False,
-                            scale=2,
-                        )
-
-                # Operation Controls Section
-                gr.Markdown("#### ⚡ Operation Controls")
-
-                # Tabs for different operations
+                # Unified tabs for Prompt Details, Inference, and Prompt Enhance
                 with gr.Tabs():
+                    # Prompt Details tab
+                    with gr.Tab("📝 Prompt Details"):
+                        gr.Markdown("##### Prompt Information")
+
+                        components["selected_prompt_id"] = gr.Textbox(
+                            label="Prompt ID",
+                            interactive=False,
+                            elem_classes=["loading-skeleton"],
+                        )
+
+                        with gr.Row():
+                            components["selected_prompt_name"] = gr.Textbox(
+                                label="Name",
+                                interactive=False,
+                                scale=3,
+                            )
+                            components["selected_prompt_enhanced"] = gr.Checkbox(
+                                label="✨ Enhanced",
+                                interactive=False,
+                                scale=1,
+                            )
+
+                        components["selected_prompt_text"] = gr.Textbox(
+                            label="Prompt Text",
+                            lines=3,
+                            interactive=False,
+                        )
+
+                        components["selected_prompt_negative"] = gr.Textbox(
+                            label="Negative Prompt",
+                            lines=2,
+                            interactive=False,
+                        )
+
+                        with gr.Row():
+                            components["selected_prompt_created"] = gr.Textbox(
+                                label="Created",
+                                interactive=False,
+                                scale=1,
+                            )
+                            components["selected_prompt_video_dir"] = gr.Textbox(
+                                label="Video Directory",
+                                interactive=False,
+                                scale=2,
+                            )
+
                     # Inference tab
-                    with gr.Tab("Inference"):
+                    with gr.Tab("🚀 Inference"):
                         gr.Markdown("##### Inference Parameters")
 
                         with gr.Group():
@@ -284,7 +281,7 @@ def create_prompts_tab_ui():
                         components["inference_status"] = gr.Markdown("")
 
                     # Prompt Enhance tab
-                    with gr.Tab("Prompt Enhance"):
+                    with gr.Tab("✨ Prompt Enhance"):
                         gr.Markdown("##### Enhancement Settings")
 
                         with gr.Group():

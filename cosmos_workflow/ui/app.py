@@ -1113,6 +1113,10 @@ def create_ui():
         )
         components["navigation_state"] = navigation_state
 
+        # State to store selected prompt IDs (avoids dataframe preprocessing issues)
+        selected_prompt_ids_state = gr.State(value=[])
+        components["selected_prompt_ids_state"] = selected_prompt_ids_state
+
         # ============================================
         # Event Handlers
         # ============================================
@@ -1609,9 +1613,10 @@ def create_ui():
                 )
 
         # Navigation to Runs tab with filtering
+        # NOTE: tabs is a variable, not a component - we just need to check it exists
         if (
             "view_runs_btn" in components
-            and "tabs" in components
+            and tabs is not None  # Check tabs variable exists, not in components
             and "runs_gallery" in components
             and "runs_table" in components
             and "runs_stats" in components
@@ -1619,14 +1624,13 @@ def create_ui():
             and "runs_prompt_filter" in components
         ):
 
-            def prepare_runs_navigation(table_data):
-                """Prepare navigation state for runs tab filtering."""
-                from cosmos_workflow.ui.tabs.prompts_handlers import get_selected_prompt_ids
+            def prepare_runs_navigation(selected_ids):
+                """Navigate to Runs tab with filtering - combined state update and data loading."""
+                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
                 from cosmos_workflow.utils.logging import logger
 
-                # Get selected prompt IDs
-                selected_ids = get_selected_prompt_ids(table_data)
-                logger.info("prepare_runs_navigation: selected_ids={}", selected_ids)
+                # Selected IDs are now passed directly from state
+                logger.info(f"prepare_runs_navigation called with selected_ids: {selected_ids}")
 
                 if not selected_ids:
                     return (
@@ -1636,7 +1640,12 @@ def create_ui():
                             "source_tab": None,
                         },  # Clear navigation state
                         "⚠️ Please select at least one prompt before viewing runs.",
-                        gr.update(),  # Don't switch tabs
+                        gr.update(),  # Don't switch tabs (keep current)
+                        gr.update(),  # Don't update runs_gallery
+                        gr.update(),  # Don't update runs_table
+                        gr.update(),  # Don't update runs_stats
+                        gr.update(),  # Don't update runs_nav_filter_row
+                        gr.update(),  # Don't update runs_prompt_filter
                     )
 
                 # Cap at 20 prompts for performance
@@ -1648,50 +1657,95 @@ def create_ui():
                         f"✅ Navigating to Runs tab with {len(selected_ids)} selected prompt(s)..."
                     )
 
-                # Create navigation state for tab switching
-                navigation_state = {
-                    "filter_type": "prompt_ids",
+                # Load filtered data IMMEDIATELY (not in tab handler)
+                logger.info(f"Loading runs data for prompts: {selected_ids}")
+                gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
+                    selected_ids, "all", "all", "all", "", 50
+                )
+
+                # Ensure table_data is a list for Gradio dataframe
+                if table_data is None:
+                    table_data = []
+                elif isinstance(table_data, dict):
+                    table_data = table_data.get("data", [])
+
+                logger.info(
+                    f"Loaded {len(table_data) if table_data else 0} runs for filtered prompts"
+                )
+
+                # Set navigation state with filter information
+                nav_state_with_filter = {
+                    "filter_type": "prompts",
                     "filter_values": selected_ids,
                     "source_tab": "prompts",
                 }
 
-                logger.info("Setting navigation state: {}", navigation_state)
+                # Prepare filter display
+                prompt_choices = prompt_names if prompt_names else []
 
                 return (
-                    navigation_state,  # Set navigation state for tab switch
+                    nav_state_with_filter,  # Pass navigation state with filter info
                     status_msg,
-                    gr.update(selected=2),  # Switch to Runs tab (index 2)
+                    2,  # Switch to Runs tab (index 2) - just return the index
+                    gallery_data if gallery_data else [],  # Update gallery with filtered data
+                    table_data
+                    if table_data
+                    else [],  # Update table with filtered data - ensure it's a list
+                    stats if stats else "No data",  # Update stats
+                    gr.update(visible=True),  # Show filter indicator
+                    gr.update(
+                        value=prompt_choices[0] if prompt_choices else "", choices=prompt_choices
+                    ),  # Update filter dropdown
                 )
 
-            # Set navigation state ONLY, let tab handler load the data
+            # Combined navigation and data loading to avoid race conditions
+            # Use the state that tracks selected IDs properly
             components["view_runs_btn"].click(
                 fn=prepare_runs_navigation,
-                inputs=[components["ops_prompts_table"]],
+                inputs=[selected_prompt_ids_state],
                 outputs=[
-                    navigation_state,  # Update navigation state for tab switch
+                    navigation_state,  # Update navigation state
                     components["selection_count"],  # Update status message
-                    tabs,  # Switch tabs
+                    selected_tab_index,  # Update selected tab index (hidden number component)
+                    components["runs_gallery"],  # Update runs gallery with filtered data
+                    components["runs_table"],  # Update runs table with filtered data
+                    components["runs_stats"],  # Update runs stats
+                    components["runs_nav_filter_row"],  # Show/hide filter indicator
+                    components["runs_prompt_filter"],  # Update filter dropdown
                 ],
-                js="""
-                () => {
-                    // Click the Runs tab button to visually switch tabs
-                    setTimeout(() => {
-                        const tabs = document.querySelectorAll('.tab-nav button, button[role="tab"]');
-                        if (tabs.length >= 3) {
-                            tabs[2].click(); // Click the third tab (Runs)
-                        }
-                    }, 100);
-                    return [];
-                }
-                """,
+                js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[2]?.click(); }, 100); return []; }",
+                queue=False,
             )
 
         # Update selection count when selection changes
         if "ops_prompts_table" in components:
+
+            def update_selection_and_state(table_data):
+                """Update selection count and store selected IDs in state."""
+                from cosmos_workflow.ui.tabs.prompts_handlers import get_selected_prompt_ids
+                from cosmos_workflow.utils.logging import logger
+
+                # Get selection count display
+                count_display = prompts_update_selection_count(table_data)
+
+                # Get selected IDs for state
+                selected_ids = get_selected_prompt_ids(table_data)
+                logger.info(f"update_selection_and_state: selected_ids={selected_ids}")
+
+                return count_display, selected_ids
+
+            # Track both row selection and checkbox changes
             components["ops_prompts_table"].select(
-                fn=prompts_update_selection_count,
+                fn=update_selection_and_state,
                 inputs=[components["ops_prompts_table"]],
-                outputs=[components["selection_count"]],
+                outputs=[components["selection_count"], selected_prompt_ids_state],
+            )
+
+            # Also track when checkboxes are changed
+            components["ops_prompts_table"].change(
+                fn=update_selection_and_state,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[components["selection_count"], selected_prompt_ids_state],
             )
 
         if "run_inference_btn" in components and "ops_prompts_table" in components:

@@ -742,12 +742,15 @@ def load_runs_for_multiple_prompts(
         limit: Maximum number of results
 
     Returns:
-        Tuple of (gallery_data, table_data, stats)
+        Tuple of (gallery_data, table_data, stats, prompt_names)
     """
     try:
         if not prompt_ids:
             # No prompts specified, load all runs
-            return load_runs_data(status_filter, date_filter, type_filter, search_text, limit)
+            gallery, table, stats = load_runs_data(
+                status_filter, date_filter, type_filter, search_text, limit
+            )
+            return gallery, table, stats, []  # Add empty prompt_names for consistency
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -755,7 +758,7 @@ def load_runs_for_multiple_prompts(
         ops = CosmosAPI()
         if not ops:
             logger.warning("CosmosAPI not initialized")
-            return [], [], "No data available"
+            return [], [], "No data available", []  # Add empty prompt_names for consistency
 
         # Collect runs from all specified prompts
         all_runs = []

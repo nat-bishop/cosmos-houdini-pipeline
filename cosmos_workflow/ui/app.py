@@ -56,7 +56,6 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     cancel_delete_prompts,
     clear_selection,
     confirm_delete_prompts,
-    navigate_to_runs,
     preview_delete_prompts,
     select_all_prompts,
 )
@@ -1166,7 +1165,8 @@ def create_ui():
                         gr.update(visible=True),  # Show filter indicator row
                         gr.update(
                             choices=prompt_names if prompt_names else [],
-                            value=prompt_names if prompt_names else [],
+                            value=prompt_names if prompt_names else None,
+                            interactive=False,
                         ),  # Update filter dropdown
                     )
 
@@ -1619,15 +1619,14 @@ def create_ui():
             and "runs_prompt_filter" in components
         ):
 
-            def navigate_and_filter_runs(table_data):
-                """Navigate to runs tab and filter by selected prompts."""
+            def prepare_runs_navigation(table_data):
+                """Prepare navigation state for runs tab filtering."""
                 from cosmos_workflow.ui.tabs.prompts_handlers import get_selected_prompt_ids
-                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
                 from cosmos_workflow.utils.logging import logger
 
                 # Get selected prompt IDs
                 selected_ids = get_selected_prompt_ids(table_data)
-                logger.info("navigate_and_filter_runs: selected_ids={}", selected_ids)
+                logger.info("prepare_runs_navigation: selected_ids={}", selected_ids)
 
                 if not selected_ids:
                     return (
@@ -1636,11 +1635,6 @@ def create_ui():
                             "filter_values": [],
                             "source_tab": None,
                         },  # Clear navigation state
-                        gr.update(),  # Don't change gallery
-                        gr.update(),  # Don't change table
-                        gr.update(),  # Don't change stats
-                        gr.update(visible=False),  # Hide filter indicator
-                        gr.update(),  # Don't change filter dropdown
                         "⚠️ Please select at least one prompt before viewing runs.",
                         gr.update(),  # Don't switch tabs
                     )
@@ -1654,24 +1648,6 @@ def create_ui():
                         f"✅ Navigating to Runs tab with {len(selected_ids)} selected prompt(s)..."
                     )
 
-                # Load the filtered runs data
-                logger.info("Loading runs for prompt IDs: {}", selected_ids)
-                gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
-                    selected_ids, "all", "all", "all", "", 50
-                )
-
-                # Ensure table_data is properly formatted for Gradio dataframe
-                if not table_data or not isinstance(table_data, list):
-                    # Create empty dataframe structure
-                    table_data = {
-                        "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
-                        "data": [],
-                    }
-                elif isinstance(table_data, list) and len(table_data) > 0:
-                    # Convert list to proper dataframe format
-                    headers = ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"]
-                    table_data = {"headers": headers, "data": table_data}
-
                 # Create navigation state for tab switching
                 navigation_state = {
                     "filter_type": "prompt_ids",
@@ -1683,27 +1659,31 @@ def create_ui():
 
                 return (
                     navigation_state,  # Set navigation state for tab switch
-                    gallery_data if gallery_data else [],  # Update gallery with filtered data
-                    table_data,  # Update table with filtered data (now properly formatted)
-                    stats if stats else "No data",  # Update stats
-                    gr.update(visible=True),  # Show filter indicator
-                    gr.update(
-                        choices=prompt_names if prompt_names else [],
-                        value=prompt_names if prompt_names else [],
-                    ),  # Update filter dropdown
                     status_msg,
                     gr.update(selected=2),  # Switch to Runs tab (index 2)
                 )
 
-            # Click event that sets navigation state and switches tab
+            # Set navigation state ONLY, let tab handler load the data
             components["view_runs_btn"].click(
-                fn=navigate_to_runs,
+                fn=prepare_runs_navigation,
                 inputs=[components["ops_prompts_table"]],
                 outputs=[
-                    navigation_state,  # Update navigation state
-                    tabs,  # Switch tabs
+                    navigation_state,  # Update navigation state for tab switch
                     components["selection_count"],  # Update status message
+                    tabs,  # Switch tabs
                 ],
+                js="""
+                () => {
+                    // Click the Runs tab button to visually switch tabs
+                    setTimeout(() => {
+                        const tabs = document.querySelectorAll('.tab-nav button, button[role="tab"]');
+                        if (tabs.length >= 3) {
+                            tabs[2].click(); // Click the third tab (Runs)
+                        }
+                    }, 100);
+                    return [];
+                }
+                """,
             )
 
         # Update selection count when selection changes

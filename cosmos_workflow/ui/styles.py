@@ -72,10 +72,22 @@ def get_custom_css():
         height: 100%;
         background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
         transition: left 0.5s;
+        pointer-events: none;  /* Ensure it doesn't block interactions */
+        z-index: 1;  /* Keep it above background but below text */
     }
 
     button.gr-button:hover::before {
         left: 100%;
+    }
+
+    /* Fix for Create Prompt button to show Gradio spinner */
+    #create_prompt_btn {
+        overflow: visible !important;  /* Allow spinner to show */
+    }
+
+    /* Remove the shine animation for this button to avoid conflicts */
+    #create_prompt_btn::before {
+        display: none !important;
     }
 
     /* Gallery enhancements with hover effects */

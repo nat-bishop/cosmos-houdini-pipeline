@@ -101,6 +101,13 @@ class LogViewer:
         """Clear all logs."""
         self.entries.clear()
 
+    def get_text(self) -> str:
+        """Get plain text output for display in Textbox with autoscroll."""
+        lines = []
+        for entry in self.entries:
+            lines.append(f"{entry['time']} {entry['text']}")
+        return "\n".join(lines)
+
     def get_stats(self) -> dict:
         """Get quick statistics about the logs."""
         total = len(self.entries)

@@ -89,9 +89,15 @@ Currently idle - no jobs running
 
             with gr.Column(scale=3):
                 gr.Markdown("#### 📝 Log Output")
-                components["log_display"] = gr.HTML(
-                    value=log_viewer.get_html(),
+                components["log_display"] = gr.Textbox(
+                    value="",
+                    label=None,
+                    interactive=False,
+                    lines=25,
+                    max_lines=25,
+                    autoscroll=True,
                     elem_id="log_display",
+                    container=False,
                 )
 
                 # Clear logs button

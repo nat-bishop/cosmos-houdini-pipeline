@@ -206,9 +206,13 @@ def create_inputs_tab_ui(config):
                             )
 
                             components["create_prompt_btn"] = gr.Button(
-                                "✨ Create Prompt", variant="primary", size="lg"
+                                "✨ Create Prompt",
+                                variant="primary",
+                                size="lg",
+                                elem_id="create_prompt_btn",
                             )
 
-                            components["create_status"] = gr.Markdown("")
+                            # Invisible component for progress spinner to overlay
+                            components["create_progress_area"] = gr.HTML("", visible=False)
 
     return components

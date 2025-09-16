@@ -418,10 +418,12 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
     try:
         # Validate inputs
         if not prompt_text or not prompt_text.strip():
-            return "❌ Error: Prompt text is required"
+            gr.Error("Prompt text is required")
+            return ""
 
         if not video_dir or not video_dir.strip():
-            return "❌ Error: Video directory is required"
+            gr.Error("Video directory is required")
+            return ""
 
         # Convert to Path and validate
         video_path = Path(video_dir.strip())
@@ -443,15 +445,21 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
         # Success message with prompt ID
         prompt_id = prompt.get("id", "unknown")
         prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
-        return f"✅ Created prompt **{prompt_id}**\nName: {prompt_name}"
+
+        # Show success notification
+        gr.Info(f"Created prompt: {prompt_id} - {prompt_name}")
+        return ""  # Return empty string for the invisible output component
 
     except FileNotFoundError as e:
-        return f"❌ Error: {e}"
+        gr.Error(str(e))
+        return ""
     except ValueError as e:
-        return f"❌ Error: {e}"
+        gr.Error(str(e))
+        return ""
     except Exception as e:
         logger.error("Failed to create prompt: {}", e)
-        return f"❌ Error creating prompt: {e}"
+        gr.Error(f"Failed to create prompt: {e}")
+        return ""
 
 
 # ============================================================================
@@ -1718,6 +1726,7 @@ def create_ui():
                 )
 
         if "create_prompt_btn" in components:
+            # Create prompt with Gradio's built-in progress indicator
             components["create_prompt_btn"].click(
                 fn=create_prompt,
                 inputs=[
@@ -1726,7 +1735,9 @@ def create_ui():
                     components["create_name"],
                     components["create_negative"],
                 ],
-                outputs=[components["create_status"]],
+                outputs=[components.get("create_progress_area")],  # Invisible area for spinner
+                show_progress="full",  # This enables Gradio's built-in button spinner
+                queue=True,  # Explicitly enable queue for progress to work
             )
 
         # Prompts Tab Events

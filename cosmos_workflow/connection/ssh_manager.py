@@ -110,7 +110,13 @@ class SSHManager:
                     line = line.strip()
                     if line:
                         logger.debug("STDOUT: {}", line)
-                        print(line, flush=True)  # Print to console for real-time streaming
+                        # Safe print with encoding handling for Windows
+                        try:
+                            print(line, flush=True)  # Print to console for real-time streaming
+                        except UnicodeEncodeError:
+                            # Fallback: encode with 'replace' to avoid crashes
+                            safe_line = line.encode("ascii", "replace").decode("ascii")
+                            print(safe_line, flush=True)
                         stdout_lines.append(line)
 
                 # Collect stderr
@@ -120,7 +126,15 @@ class SSHManager:
                     for line in stderr_lines:
                         if line.strip():
                             logger.warning("STDERR: {}", line.strip())
-                            print(f"[ERROR] {line.strip()}", flush=True)  # Print errors to console
+                            # Safe print with encoding handling for Windows
+                            try:
+                                print(
+                                    f"[ERROR] {line.strip()}", flush=True
+                                )  # Print errors to console
+                            except UnicodeEncodeError:
+                                # Fallback: encode with 'replace' to avoid crashes
+                                safe_line = line.strip().encode("ascii", "replace").decode("ascii")
+                                print(f"[ERROR] {safe_line}", flush=True)
             else:
                 # Collect all output at once
                 stdout_output = stdout.read().decode().strip()

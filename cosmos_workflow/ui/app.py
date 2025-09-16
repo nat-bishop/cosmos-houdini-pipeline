@@ -1815,12 +1815,8 @@ def create_ui():
                 fn=prepare_prompts_navigation_from_input,
                 inputs=[components["selected_dir_path"]],  # Use the selected directory path
                 outputs=[
-                    components.get(
-                        "refresh_status", gr.Textbox()
-                    ),  # Status message (reuse refresh status)
-                    components.get(
-                        "prompts_search", gr.Textbox()
-                    ),  # Update search field in prompts tab
+                    components["refresh_status"],  # Status message (reuse refresh status)
+                    components["prompts_search"],  # Update search field in prompts tab
                     selected_tab_index,  # Update selected tab index
                 ],
                 js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[1]?.click(); }, 100); return []; }",
@@ -1828,8 +1824,8 @@ def create_ui():
             ).then(
                 # After updating search, reload the prompts table with the new search term
                 fn=lambda search_term: load_ops_prompts(50, search_term, "all", "all"),
-                inputs=[components.get("prompts_search", gr.Textbox())],
-                outputs=[components.get("ops_prompts_table")],
+                inputs=[components["prompts_search"]],
+                outputs=[components["ops_prompts_table"]],
             )
 
         # Update selection count when selection changes

@@ -95,6 +95,9 @@ def create_prompts_tab_ui():
                         components["delete_selected_btn"] = gr.Button(
                             "🗑️ Delete Selected", size="sm", variant="stop"
                         )
+                        components["view_runs_btn"] = gr.Button(
+                            "→ View Runs", size="sm", variant="primary", visible=True
+                        )
                         components["selection_count"] = gr.Markdown(
                             "**0** prompts selected", elem_classes=["selection-counter"]
                         )

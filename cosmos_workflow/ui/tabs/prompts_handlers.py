@@ -92,25 +92,37 @@ def update_selection_count(table_data):
         import pandas as pd
 
         if table_data is None:
+            logger.debug("update_selection_count: table_data is None")
             return "**0** prompts selected"
 
         # Handle DataFrame format
         if isinstance(table_data, pd.DataFrame):
             if table_data.empty:
+                logger.debug("update_selection_count: DataFrame is empty")
                 return "**0** prompts selected"
             # Count True values in first column
             count = table_data.iloc[:, 0].sum()
-            return f"**{count}** prompts selected"
+            logger.info("update_selection_count: DataFrame count={}", count)
+            if count == 1:
+                return f"**{count}** prompt selected"
+            else:
+                return f"**{count}** prompts selected"
 
         # Handle list format
         elif isinstance(table_data, list):
             if len(table_data) == 0:
+                logger.debug("update_selection_count: List is empty")
                 return "**0** prompts selected"
             # Count checked rows (first column is checkbox)
             count = sum(1 for row in table_data if row[0])
-            return f"**{count}** prompts selected"
+            logger.info("update_selection_count: List count={}", count)
+            if count == 1:
+                return f"**{count}** prompt selected"
+            else:
+                return f"**{count}** prompts selected"
 
         else:
+            logger.debug("update_selection_count: Unknown data type: {}", type(table_data))
             return "**0** prompts selected"
 
     except Exception as e:
@@ -307,3 +319,48 @@ def confirm_delete_prompts(prompt_ids_string, delete_outputs):
 def cancel_delete_prompts():
     """Cancel prompt deletion."""
     return "Deletion cancelled", gr.update(visible=False)
+
+
+def navigate_to_runs(table_data):
+    """Navigate to Runs tab with selected prompts as filter."""
+    try:
+        selected_ids = get_selected_prompt_ids(table_data)
+
+        if not selected_ids:
+            return (
+                {
+                    "filter_type": None,
+                    "filter_values": [],
+                    "source_tab": None,
+                },  # Clear navigation state
+                gr.update(selected=2),  # Switch to Runs tab (index 2, zero-based)
+                "No prompts selected for navigation",
+            )
+
+        # Cap at 20 prompts for performance
+        if len(selected_ids) > 20:
+            selected_ids = selected_ids[:20]
+            status_msg = f"Navigating with first 20 of {len(selected_ids)} selected prompts"
+        else:
+            status_msg = f"Navigating to runs for {len(selected_ids)} selected prompt(s)"
+
+        # Return navigation state update
+        navigation_state = {
+            "filter_type": "prompt_ids",
+            "filter_values": selected_ids,
+            "source_tab": "prompts",
+        }
+
+        return (
+            navigation_state,  # Update navigation state
+            gr.update(selected=2),  # Switch to Runs tab (index 2, zero-based)
+            status_msg,
+        )
+
+    except Exception as e:
+        logger.error("Error navigating to runs: {}", str(e))
+        return (
+            {"filter_type": None, "filter_values": [], "source_tab": None},
+            gr.update(),  # Don't change tab
+            f"Error navigating: {e}",
+        )

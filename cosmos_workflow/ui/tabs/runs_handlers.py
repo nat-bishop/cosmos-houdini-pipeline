@@ -258,7 +258,12 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
         import traceback
 
         logger.error("Error loading runs data: {}\n{}", str(e), traceback.format_exc())
-        return [], [], "Error loading data"
+        # Return empty but properly formatted data
+        empty_table = {
+            "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
+            "data": [],
+        }
+        return [], empty_table, "Error loading data"
 
 
 def on_runs_gallery_select(evt: gr.SelectData):
@@ -718,3 +723,243 @@ def update_runs_selection_info(table_data, evt: gr.SelectData):
         return "No run selected", ""
     except Exception:
         return "No run selected", ""
+
+
+def load_runs_for_multiple_prompts(
+    prompt_ids, status_filter, date_filter, type_filter, search_text, limit
+):
+    """Load runs data for multiple prompt IDs.
+
+    TODO: Optimize this to use a single query with IN clause in the future.
+    Currently makes multiple API calls for simplicity and to avoid backend changes.
+
+    Args:
+        prompt_ids: List of prompt IDs to filter by
+        status_filter: Status filter to apply
+        date_filter: Date range filter
+        type_filter: Run type filter
+        search_text: Search text
+        limit: Maximum number of results
+
+    Returns:
+        Tuple of (gallery_data, table_data, stats)
+    """
+    try:
+        if not prompt_ids:
+            # No prompts specified, load all runs
+            return load_runs_data(status_filter, date_filter, type_filter, search_text, limit)
+
+        # Create CosmosAPI instance
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+        if not ops:
+            logger.warning("CosmosAPI not initialized")
+            return [], [], "No data available"
+
+        # Collect runs from all specified prompts
+        all_runs = []
+        prompt_map = {}  # Map prompt_id to prompt data for quick lookup
+
+        # Cap at 20 prompts for performance
+        prompt_ids = prompt_ids[:20]
+
+        for prompt_id in prompt_ids:
+            try:
+                # Get prompt data
+                prompt = ops.get_prompt(prompt_id)
+                if prompt:
+                    prompt_map[prompt_id] = prompt
+
+                # Get runs for this prompt
+                runs = ops.list_runs(
+                    prompt_id=prompt_id, status=None if status_filter == "all" else status_filter
+                )
+
+                # Add prompt text to each run
+                for run in runs:
+                    if not run.get("prompt_text"):
+                        run["prompt_text"] = prompt.get("prompt_text", "") if prompt else ""
+
+                all_runs.extend(runs)
+
+            except Exception as e:
+                logger.error("Error loading runs for prompt {}: {}", prompt_id, str(e))
+                continue
+
+        # Sort by created_at descending
+        all_runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+
+        # Apply limit
+        if len(all_runs) > limit:
+            all_runs = all_runs[:limit]
+
+        # Apply date filter
+        now = datetime.now(timezone.utc)
+        filtered_runs = []
+
+        for run in all_runs:
+            # Parse run creation date
+            try:
+                created_str = run.get("created_at", "")
+                if created_str:
+                    # Handle both timezone-aware and naive dates
+                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                        # Has timezone info
+                        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    else:
+                        # No timezone info - assume UTC
+                        created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+                else:
+                    created = now
+            except Exception:
+                created = now
+
+            # Apply date filter
+            date_match = False
+            if date_filter == "today":
+                date_match = created.date() == now.date()
+            elif date_filter == "yesterday":
+                yesterday = now - timedelta(days=1)
+                date_match = created.date() == yesterday.date()
+            elif date_filter == "last_7_days":
+                seven_days_ago = now - timedelta(days=7)
+                date_match = created >= seven_days_ago
+            elif date_filter == "last_30_days":
+                thirty_days_ago = now - timedelta(days=30)
+                date_match = created >= thirty_days_ago
+            else:  # all
+                date_match = True
+
+            # Apply type filter
+            type_match = False
+            if type_filter == "all":
+                type_match = True
+            else:
+                model_type = run.get("model_type", "transfer")
+                type_match = type_filter == model_type
+
+            # Add to filtered runs if both filters match
+            if date_match and type_match:
+                filtered_runs.append(run)
+
+        # Apply text search
+        if search_text:
+            search_lower = search_text.lower()
+            filtered_runs = [
+                run
+                for run in filtered_runs
+                if search_lower in run.get("id", "").lower()
+                or search_lower in run.get("prompt_text", "").lower()
+            ]
+
+        # Build gallery data with thumbnails (only completed runs)
+        gallery_data = []
+        video_paths = []
+
+        # First collect all video paths
+        for run in filtered_runs:
+            if run.get("status") == "completed":
+                # Extract output video from files array
+                outputs = run.get("outputs", {})
+                files = outputs.get("files", []) if isinstance(outputs, dict) else []
+
+                # Find the output.mp4 file
+                output_video = None
+                for file_path in files:
+                    if file_path.endswith("output.mp4"):
+                        # Normalize path for Windows
+                        output_video = Path(file_path)
+                        if output_video.exists():
+                            break
+
+                if output_video:
+                    video_paths.append((output_video, run))
+
+        # Generate thumbnails in parallel for speed
+        if video_paths:
+            futures = []
+            for video_path, run in video_paths[:50]:  # Limit to 50 for performance
+                future = THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path)
+                futures.append((future, run))
+
+            # Collect results
+            for future, run in futures:
+                try:
+                    thumb_path = future.result(timeout=3)
+                    if thumb_path:
+                        prompt_text = run.get("prompt_text", "")
+                        # Include full run ID for selection handler
+                        full_id = run.get("id", "")
+                        label = f"{full_id}||{prompt_text[:30]}..."
+                        gallery_data.append((thumb_path, label))
+                except Exception as e:
+                    logger.debug("Failed to generate thumbnail: {}", str(e))
+
+        # Build table data
+        table_data = []
+        for run in filtered_runs:
+            run_id = run.get("id", "")
+            status = run.get("status", "unknown")
+            prompt_id = run.get("prompt_id", "")
+            model_type = run.get("model_type", "transfer")
+
+            # Calculate duration
+            duration = "N/A"
+            if run.get("created_at") and run.get("completed_at"):
+                try:
+                    # Handle both timezone-aware and naive dates for start time
+                    created_str = run["created_at"]
+                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                        start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    else:
+                        start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+
+                    # Handle both timezone-aware and naive dates for end time
+                    completed_str = run["completed_at"]
+                    if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
+                        end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
+                    else:
+                        end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
+                    duration_delta = end - start
+                    duration = str(duration_delta).split(".")[0]
+                except Exception as e:
+                    logger.debug("Failed to calculate duration: {}", str(e))
+
+            created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+
+            # Updated columns: Run ID, Status, Prompt ID, Run Type, Duration, Created
+            table_data.append([run_id, status, prompt_id, model_type, duration, created])
+
+        # Build statistics
+        stats = f"""
+        **Filtering by:** {len(prompt_ids)} prompt(s)
+        **Total Runs:** {len(filtered_runs)}
+        **Completed:** {sum(1 for r in filtered_runs if r.get("status") == "completed")}
+        **Running:** {sum(1 for r in filtered_runs if r.get("status") == "running")}
+        **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}
+        """
+
+        # Build prompt names for filter display
+        prompt_names = []
+        for pid in prompt_ids:
+            if pid in prompt_map:
+                name = prompt_map[pid].get("name", pid[:8])
+                prompt_names.append(f"{name} ({pid[:8]}...)")
+            else:
+                prompt_names.append(f"{pid[:8]}...")
+
+        return gallery_data, table_data, stats, prompt_names
+
+    except Exception as e:
+        import traceback
+
+        logger.error(
+            "Error loading runs for multiple prompts: {}\n{}", str(e), traceback.format_exc()
+        )
+        # Return empty but properly formatted data
+        empty_table = {
+            "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
+            "data": [],
+        }
+        return [], empty_table, "Error loading data", []

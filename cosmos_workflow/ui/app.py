@@ -56,8 +56,12 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     cancel_delete_prompts,
     clear_selection,
     confirm_delete_prompts,
+    navigate_to_runs,
     preview_delete_prompts,
     select_all_prompts,
+)
+from cosmos_workflow.ui.tabs.prompts_handlers import (
+    update_selection_count as prompts_update_selection_count,
 )
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
 from cosmos_workflow.ui.tabs.runs_handlers import (
@@ -1081,7 +1085,7 @@ def create_ui():
         components.update(header_components)
 
         # Create tabs
-        with gr.Tabs():
+        with gr.Tabs() as tabs:
             # Create each tab UI
             inputs_components = create_inputs_tab_ui(config)
             components.update(inputs_components)
@@ -1095,9 +1099,139 @@ def create_ui():
             jobs_components = create_jobs_tab_ui()
             components.update(jobs_components)
 
+        components["tabs"] = tabs
+
+        # ============================================
+        # Navigation State Management
+        # ============================================
+        # State for cross-tab navigation and filtering
+        navigation_state = gr.State(
+            value={
+                "filter_type": None,  # "prompt_ids" or None
+                "filter_values": [],  # List of IDs being filtered
+                "source_tab": None,  # Where navigation originated from
+            }
+        )
+        components["navigation_state"] = navigation_state
+
         # ============================================
         # Event Handlers
         # ============================================
+
+        # Tab navigation handler - check for navigation state when switching tabs
+        def handle_tab_select(tab_index, nav_state):
+            """Handle tab selection and apply navigation filters."""
+            # tab_index is now directly a number
+            logger.info("handle_tab_select called: tab={}, nav_state={}", tab_index, nav_state)
+
+            # Check if we're navigating to Runs tab (index 2) with pending filter
+            if tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
+                prompt_ids = nav_state.get("filter_values", [])
+                logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
+
+                if prompt_ids:
+                    # Load runs for the filtered prompts
+                    from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
+
+                    # Load filtered data
+                    gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
+                        prompt_ids, "all", "all", "all", "", 50
+                    )
+
+                    # Table data should be a list of lists for Gradio dataframe
+                    # Only create empty list if data is None or invalid
+                    if table_data is None:
+                        table_data = []
+                    elif isinstance(table_data, dict):
+                        # If it's a dict (from error handling), extract the data
+                        table_data = table_data.get("data", [])
+
+                    logger.info(
+                        "Loaded {} runs for filtered prompts", len(table_data) if table_data else 0
+                    )
+
+                    # Clear navigation state after use to prevent re-filtering
+                    cleared_nav_state = {
+                        "filter_type": None,
+                        "filter_values": [],
+                        "source_tab": None,
+                    }
+
+                    # Show filter indicator with prompt names
+                    return (
+                        cleared_nav_state,  # Clear navigation state
+                        gallery_data if gallery_data else [],  # Update gallery
+                        table_data,  # Update table
+                        stats if stats else "No data",  # Update stats
+                        gr.update(visible=True),  # Show filter indicator row
+                        gr.update(
+                            choices=prompt_names if prompt_names else [],
+                            value=prompt_names if prompt_names else [],
+                        ),  # Update filter dropdown
+                    )
+
+            # Check if we're navigating to Runs tab without filter - load default data
+            elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
+                logger.info("Switching to Runs tab without filter - loading default data")
+                # Load default runs data
+                gallery_data, table_data, stats = load_runs_data("all", "all", "all", "", 50)
+
+                # Table data should be a list of lists for Gradio dataframe
+                # Only create empty list if data is None or invalid
+                if table_data is None:
+                    table_data = []
+                elif isinstance(table_data, dict):
+                    # If it's a dict (from error handling), extract the data
+                    table_data = table_data.get("data", [])
+
+                return (
+                    nav_state
+                    if nav_state
+                    else {
+                        "filter_type": None,
+                        "filter_values": [],
+                        "source_tab": None,
+                    },  # Keep current navigation state
+                    gallery_data if gallery_data else [],  # Update gallery with default data
+                    table_data,  # Update table with default data
+                    stats if stats else "No data",  # Update stats
+                    gr.update(visible=False),  # Hide filter indicator
+                    gr.update(),  # Don't change filter dropdown
+                )
+
+            # No navigation action needed for other tabs
+            return (
+                nav_state,  # Keep current navigation state
+                gr.update(),  # Don't change gallery
+                gr.update(),  # Don't change table
+                gr.update(),  # Don't change stats
+                gr.update(),  # Don't change filter indicator
+                gr.update(),  # Don't change filter dropdown
+            )
+
+        # Create a number component to track selected tab index
+        selected_tab_index = gr.Number(value=0, visible=False)
+
+        def update_tab_index(evt: gr.SelectData):
+            """Update the selected tab index when tabs change."""
+            return evt.index
+
+        tabs.select(
+            fn=update_tab_index,
+            inputs=[],
+            outputs=[selected_tab_index],
+        ).then(
+            fn=handle_tab_select,
+            inputs=[selected_tab_index, navigation_state],
+            outputs=[
+                navigation_state,
+                components.get("runs_gallery"),
+                components.get("runs_table"),
+                components.get("runs_stats"),
+                components.get("runs_nav_filter_row"),
+                components.get("runs_prompt_filter"),
+            ],
+        )
 
         # Import additional functions for runs tab
 
@@ -1417,7 +1551,7 @@ def create_ui():
                 inputs=[components["ops_prompts_table"]],
                 outputs=[
                     components["ops_prompts_table"],
-                    components.get("selection_count"),
+                    components["selection_count"],
                 ],
             )
 
@@ -1427,7 +1561,7 @@ def create_ui():
                 inputs=[components["ops_prompts_table"]],
                 outputs=[
                     components["ops_prompts_table"],
-                    components.get("selection_count"),
+                    components["selection_count"],
                 ],
             )
 
@@ -1473,6 +1607,112 @@ def create_ui():
                         components.get("prompts_delete_dialog"),
                     ],
                 )
+
+        # Navigation to Runs tab with filtering
+        if (
+            "view_runs_btn" in components
+            and "tabs" in components
+            and "runs_gallery" in components
+            and "runs_table" in components
+            and "runs_stats" in components
+            and "runs_nav_filter_row" in components
+            and "runs_prompt_filter" in components
+        ):
+
+            def navigate_and_filter_runs(table_data):
+                """Navigate to runs tab and filter by selected prompts."""
+                from cosmos_workflow.ui.tabs.prompts_handlers import get_selected_prompt_ids
+                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
+                from cosmos_workflow.utils.logging import logger
+
+                # Get selected prompt IDs
+                selected_ids = get_selected_prompt_ids(table_data)
+                logger.info("navigate_and_filter_runs: selected_ids={}", selected_ids)
+
+                if not selected_ids:
+                    return (
+                        {
+                            "filter_type": None,
+                            "filter_values": [],
+                            "source_tab": None,
+                        },  # Clear navigation state
+                        gr.update(),  # Don't change gallery
+                        gr.update(),  # Don't change table
+                        gr.update(),  # Don't change stats
+                        gr.update(visible=False),  # Hide filter indicator
+                        gr.update(),  # Don't change filter dropdown
+                        "⚠️ Please select at least one prompt before viewing runs.",
+                        gr.update(),  # Don't switch tabs
+                    )
+
+                # Cap at 20 prompts for performance
+                if len(selected_ids) > 20:
+                    selected_ids = selected_ids[:20]
+                    status_msg = f"✅ Navigating to Runs tab with first 20 of {len(selected_ids)} selected prompts..."
+                else:
+                    status_msg = (
+                        f"✅ Navigating to Runs tab with {len(selected_ids)} selected prompt(s)..."
+                    )
+
+                # Load the filtered runs data
+                logger.info("Loading runs for prompt IDs: {}", selected_ids)
+                gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
+                    selected_ids, "all", "all", "all", "", 50
+                )
+
+                # Ensure table_data is properly formatted for Gradio dataframe
+                if not table_data or not isinstance(table_data, list):
+                    # Create empty dataframe structure
+                    table_data = {
+                        "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
+                        "data": [],
+                    }
+                elif isinstance(table_data, list) and len(table_data) > 0:
+                    # Convert list to proper dataframe format
+                    headers = ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"]
+                    table_data = {"headers": headers, "data": table_data}
+
+                # Create navigation state for tab switching
+                navigation_state = {
+                    "filter_type": "prompt_ids",
+                    "filter_values": selected_ids,
+                    "source_tab": "prompts",
+                }
+
+                logger.info("Setting navigation state: {}", navigation_state)
+
+                return (
+                    navigation_state,  # Set navigation state for tab switch
+                    gallery_data if gallery_data else [],  # Update gallery with filtered data
+                    table_data,  # Update table with filtered data (now properly formatted)
+                    stats if stats else "No data",  # Update stats
+                    gr.update(visible=True),  # Show filter indicator
+                    gr.update(
+                        choices=prompt_names if prompt_names else [],
+                        value=prompt_names if prompt_names else [],
+                    ),  # Update filter dropdown
+                    status_msg,
+                    gr.update(selected=2),  # Switch to Runs tab (index 2)
+                )
+
+            # Click event that sets navigation state and switches tab
+            components["view_runs_btn"].click(
+                fn=navigate_to_runs,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[
+                    navigation_state,  # Update navigation state
+                    tabs,  # Switch tabs
+                    components["selection_count"],  # Update status message
+                ],
+            )
+
+        # Update selection count when selection changes
+        if "ops_prompts_table" in components:
+            components["ops_prompts_table"].select(
+                fn=prompts_update_selection_count,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[components["selection_count"]],
+            )
 
         if "run_inference_btn" in components and "ops_prompts_table" in components:
             inputs = get_components(
@@ -1690,6 +1930,31 @@ def create_ui():
                         components.get("runs_delete_dialog"),
                     ],
                 )
+
+        # Clear navigation filter button
+        if "clear_nav_filter_btn" in components:
+            components["clear_nav_filter_btn"].click(
+                fn=load_runs_data,  # Load all runs without filter
+                inputs=[
+                    components.get("runs_status_filter"),
+                    components.get("runs_date_filter"),
+                    components.get("runs_type_filter"),
+                    components.get("runs_search"),
+                    components.get("runs_limit"),
+                ],
+                outputs=[
+                    components.get("runs_gallery"),
+                    components.get("runs_table"),
+                    components.get("runs_stats"),
+                ],
+            ).then(
+                fn=lambda: (gr.update(visible=False), gr.update(choices=[], value=None)),
+                inputs=[],
+                outputs=[
+                    components.get("runs_nav_filter_row"),
+                    components.get("runs_prompt_filter"),
+                ],
+            )
 
         # Load logs button
         if all(k in components for k in ["runs_load_logs_btn", "runs_log_path", "runs_log_output"]):

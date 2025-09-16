@@ -1117,18 +1117,50 @@ def create_ui():
         selected_prompt_ids_state = gr.State(value=[])
         components["selected_prompt_ids_state"] = selected_prompt_ids_state
 
+        # State to hold pending navigation data (prevents race condition)
+        pending_nav_data = gr.State(value=None)
+        components["pending_nav_data"] = pending_nav_data
+
         # ============================================
         # Event Handlers
         # ============================================
 
         # Tab navigation handler - check for navigation state when switching tabs
-        def handle_tab_select(tab_index, nav_state):
+        def handle_tab_select(tab_index, nav_state, pending_data):
             """Handle tab selection and apply navigation filters."""
             # tab_index is now directly a number
-            logger.info("handle_tab_select called: tab={}, nav_state={}", tab_index, nav_state)
+            logger.info(
+                "handle_tab_select called: tab={}, nav_state={}, has_pending={}",
+                tab_index,
+                nav_state,
+                pending_data is not None,
+            )
+
+            # Check if there's pending navigation data (from View Runs button)
+            if tab_index == 2 and pending_data is not None:
+                logger.info("Using pending navigation data for Runs tab")
+                gallery_data = pending_data.get("gallery", [])
+                table_data = pending_data.get("table", [])
+                stats = pending_data.get("stats", "No data")
+                prompt_names = pending_data.get("prompt_names", [])
+
+                # Clear the pending data and update display
+                return (
+                    nav_state,  # Keep the navigation state as-is
+                    None,  # Clear pending data after consuming it
+                    gallery_data,  # Update gallery
+                    table_data,  # Update table
+                    stats,  # Update stats
+                    gr.update(visible=bool(prompt_names)),  # Show filter indicator if filtering
+                    gr.update(
+                        choices=prompt_names,
+                        value=prompt_names[0] if prompt_names else None,
+                        interactive=False,
+                    ),  # Update filter dropdown
+                )
 
             # Check if we're navigating to Runs tab (index 2) with pending filter
-            if tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
+            elif tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
                 prompt_ids = nav_state.get("filter_values", [])
                 logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
 
@@ -1163,6 +1195,7 @@ def create_ui():
                     # Show filter indicator with prompt names
                     return (
                         cleared_nav_state,  # Clear navigation state
+                        None,  # Clear pending data
                         gallery_data if gallery_data else [],  # Update gallery
                         table_data,  # Update table
                         stats if stats else "No data",  # Update stats
@@ -1196,6 +1229,7 @@ def create_ui():
                         "filter_values": [],
                         "source_tab": None,
                     },  # Keep current navigation state
+                    None,  # Clear pending data
                     gallery_data if gallery_data else [],  # Update gallery with default data
                     table_data,  # Update table with default data
                     stats if stats else "No data",  # Update stats
@@ -1206,6 +1240,7 @@ def create_ui():
             # No navigation action needed for other tabs
             return (
                 nav_state,  # Keep current navigation state
+                None,  # Clear pending data
                 gr.update(),  # Don't change gallery
                 gr.update(),  # Don't change table
                 gr.update(),  # Don't change stats
@@ -1226,9 +1261,10 @@ def create_ui():
             outputs=[selected_tab_index],
         ).then(
             fn=handle_tab_select,
-            inputs=[selected_tab_index, navigation_state],
+            inputs=[selected_tab_index, navigation_state, pending_nav_data],
             outputs=[
                 navigation_state,
+                pending_nav_data,  # Clear pending data after use
                 components.get("runs_gallery"),
                 components.get("runs_table"),
                 components.get("runs_stats"),
@@ -1625,7 +1661,7 @@ def create_ui():
         ):
 
             def prepare_runs_navigation(selected_ids):
-                """Navigate to Runs tab with filtering - combined state update and data loading."""
+                """Navigate to Runs tab with filtering - sets pending data to avoid race condition."""
                 from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
                 from cosmos_workflow.utils.logging import logger
 
@@ -1639,6 +1675,7 @@ def create_ui():
                             "filter_values": [],
                             "source_tab": None,
                         },  # Clear navigation state
+                        None,  # No pending data
                         "⚠️ Please select at least one prompt before viewing runs.",
                         gr.update(),  # Don't switch tabs (keep current)
                         gr.update(),  # Don't update runs_gallery
@@ -1657,7 +1694,7 @@ def create_ui():
                         f"✅ Navigating to Runs tab with {len(selected_ids)} selected prompt(s)..."
                     )
 
-                # Load filtered data IMMEDIATELY (not in tab handler)
+                # Load filtered data
                 logger.info(f"Loading runs data for prompts: {selected_ids}")
                 gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
                     selected_ids, "all", "all", "all", "", 50
@@ -1680,22 +1717,26 @@ def create_ui():
                     "source_tab": "prompts",
                 }
 
-                # Prepare filter display
-                prompt_choices = prompt_names if prompt_names else []
+                # Prepare pending data that will be consumed by handle_tab_select
+                pending_data = {
+                    "gallery": gallery_data if gallery_data else [],
+                    "table": table_data if table_data else [],
+                    "stats": stats if stats else "No data",
+                    "prompt_names": prompt_names if prompt_names else [],
+                }
 
+                # Return navigation state and pending data
+                # The actual components will be updated by handle_tab_select when it consumes pending_data
                 return (
-                    nav_state_with_filter,  # Pass navigation state with filter info
+                    nav_state_with_filter,  # Set navigation state
+                    pending_data,  # Set pending data for handle_tab_select to consume
                     status_msg,
-                    2,  # Switch to Runs tab (index 2) - just return the index
-                    gallery_data if gallery_data else [],  # Update gallery with filtered data
-                    table_data
-                    if table_data
-                    else [],  # Update table with filtered data - ensure it's a list
-                    stats if stats else "No data",  # Update stats
-                    gr.update(visible=True),  # Show filter indicator
-                    gr.update(
-                        value=prompt_choices[0] if prompt_choices else "", choices=prompt_choices
-                    ),  # Update filter dropdown
+                    2,  # Switch to Runs tab (index 2)
+                    gr.update(),  # Don't update gallery yet
+                    gr.update(),  # Don't update table yet
+                    gr.update(),  # Don't update stats yet
+                    gr.update(),  # Don't update filter row yet
+                    gr.update(),  # Don't update filter dropdown yet
                 )
 
             # Combined navigation and data loading to avoid race conditions
@@ -1705,6 +1746,7 @@ def create_ui():
                 inputs=[selected_prompt_ids_state],
                 outputs=[
                     navigation_state,  # Update navigation state
+                    pending_nav_data,  # Set pending data for handle_tab_select
                     components["selection_count"],  # Update status message
                     selected_tab_index,  # Update selected tab index (hidden number component)
                     components["runs_gallery"],  # Update runs gallery with filtered data

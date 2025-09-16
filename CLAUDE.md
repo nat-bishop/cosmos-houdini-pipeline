@@ -1,3 +1,4 @@
+My name is Nat
 ---
 
 ## System Overview
@@ -13,6 +14,7 @@ Orchestrates AI inference workflows on remote GPU infrastructure via SSH. Provid
   - [config/](cosmos_workflow/config/) — config and `config.toml`
   - [local_ai/](cosmos_workflow/local_ai/) — local AI utils
   - [cli/](cosmos_workflow/cli/) — CLI entry points
+  - [ui/](cosmos_workflow/ui/) — Gradio UI app
   - [utils/](cosmos_workflow/utils/) — helpers
 - [tests/](tests/) — pytest suite
 - [inputs/](inputs/) — inputs & prompt payloads

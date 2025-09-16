@@ -44,11 +44,8 @@ from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.ui.styles_simple import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_handlers import (
-    cancel_clear_confirmation,
     cancel_kill_confirmation,
-    execute_clear_queue,
     execute_kill_job,
-    show_clear_confirmation,
     show_kill_confirmation,
 )
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
@@ -752,30 +749,6 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
         ]
 
 
-def get_queue_status():
-    """Get current queue status information using CosmosAPI."""
-    try:
-        # Create fresh CosmosAPI instance
-        ops = CosmosAPI()
-        # Get running and pending runs
-        running_runs = ops.list_runs(status="running", limit=10)
-        pending_runs = ops.list_runs(status="pending", limit=10)
-
-        running_count = len(running_runs)
-        pending_count = len(pending_runs)
-
-        if running_count > 0:
-            current_run = running_runs[0]
-            return f"Running: {current_run.get('id', '')[:8]}... | Queue: {pending_count} pending"
-        elif pending_count > 0:
-            return f"Queue: {pending_count} pending | GPU: Ready"
-        else:
-            return "Queue: Empty | GPU: Available"
-    except Exception as e:
-        logger.error("Error getting queue status: {}", str(e))
-        return "Queue: Error getting status"
-
-
 def get_recent_runs(limit=5):
     """Get recent runs for the Jobs tab."""
     try:
@@ -1000,9 +973,14 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
 # ============================================================================
 
 
-def start_log_streaming():
-    """Generator that streams logs to the UI."""
-    log_viewer.clear()
+def start_log_streaming(auto_start=False):
+    """Generator that streams logs to the UI.
+
+    Args:
+        auto_start: If True, don't clear logs (useful for auto-start on tab switch)
+    """
+    if not auto_start:
+        log_viewer.clear()
 
     try:
         ops = CosmosAPI()
@@ -1034,42 +1012,145 @@ def start_log_streaming():
         yield f"Failed to start streaming: {e}", log_viewer.get_html()
 
 
+def refresh_jobs_on_tab_select(tab_idx):
+    """Refresh jobs status when switching to jobs tab."""
+    if tab_idx == 3:
+        # Refresh the jobs status
+        jobs_result = check_running_jobs()
+        return jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_html()
+    else:
+        # No update for other tabs
+        return gr.update(), gr.update(), gr.update(), gr.update()
+
+
+def refresh_and_stream():
+    """Refresh jobs status and start streaming if container is active."""
+    # First refresh the jobs status
+    jobs_result = check_running_jobs()
+
+    # Check if there's an active container
+    if "Ready to stream" in jobs_result[1]:
+        # Start streaming automatically
+        for status, logs in start_log_streaming(auto_start=True):
+            yield jobs_result[0], status, jobs_result[2], logs
+    else:
+        # Just return the refreshed status without streaming
+        yield jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_html()
+
+
 def check_running_jobs():
-    """Check for active containers on remote instance."""
+    """Check for active containers and system status on remote instance."""
     try:
         ops = CosmosAPI()
-        containers = ops.get_active_containers()
+        # Get comprehensive status like CLI does
+        status_info = ops.check_status()
 
-        if containers:
-            display_text = f"Found {len(containers)} active container(s)\n\n"
-            active_job_display = ""
+        # Build container details display
+        container_details_text = ""
 
-            for i, container in enumerate(containers):
-                display_text += f"Container: {container['container_id']}\n"
-                display_text += f"Image: {container.get('image', 'Unknown')}\n"
-                display_text += f"Status: {container.get('status', 'Unknown')}\n"
-                display_text += "-" * 40 + "\n"
+        # SSH Status
+        if status_info.get("ssh_status") == "connected":
+            container_details_text += "SSH Connection     ✓ Connected\n"
+        else:
+            container_details_text += "SSH Connection     ✗ Failed\n"
 
-                # Format the active job card display
-                if i == 0:  # Show first container as active job
-                    active_job_display = f"""**🟢 Active Job Running**
+        # Docker status
+        docker_info = status_info.get("docker_status", {})
+        if isinstance(docker_info, dict) and docker_info.get("docker_running"):
+            container_details_text += "Docker Daemon      ✓ Running\n"
+        else:
+            container_details_text += "Docker Daemon      ✗ Not running\n"
 
-**Container ID:** {container["container_id"][:12]}...
-**Image:** {container.get("image", "Unknown")}
-**Status:** {container.get("status", "Running")}
+        # GPU information
+        gpu_info = status_info.get("gpu_info", {})
+        if gpu_info:
+            gpu_name = gpu_info.get("name", "Unknown")
+            gpu_memory = gpu_info.get("memory_total", "Unknown")
+            container_details_text += f"GPU                {gpu_name} ({gpu_memory})\n"
+            container_details_text += (
+                f"CUDA Version       {gpu_info.get('cuda_version', 'Unknown')}\n"
+            )
+
+            # Add GPU utilization metrics
+            gpu_util = gpu_info.get("gpu_utilization")
+            if gpu_util:
+                container_details_text += f"GPU Usage          {gpu_util}\n"
+
+            # Add memory usage details
+            mem_used = gpu_info.get("memory_used")
+            mem_total = gpu_info.get("memory_total")
+            mem_util = gpu_info.get("memory_utilization")
+            if mem_used and mem_total and mem_util:
+                container_details_text += (
+                    f"Memory Usage       {mem_used} / {mem_total} ({mem_util})\n"
+                )
+        else:
+            container_details_text += "GPU                Not detected\n"
+
+        # Active run information
+        active_run = status_info.get("active_run")
+        active_job_display = ""
+
+        if active_run:
+            container_details_text += f"Active Operation   {active_run['model_type'].upper()}\n"
+            container_details_text += f"  Run ID           {active_run['id']}\n"
+            container_details_text += f"  Prompt ID        {active_run['prompt_id']}\n"
+            if active_run.get("started_at"):
+                container_details_text += f"  Started          {active_run['started_at']}\n"
+
+            # Format active job card
+            active_job_display = f"""**🟢 Active Job Running**
+
+**Operation:** {active_run["model_type"].upper()}
+**Run ID:** {active_run["id"]}
+**Prompt ID:** {active_run["prompt_id"]}
+**Status:** {active_run.get("status", "Running")}
+"""
+            if active_run.get("started_at"):
+                active_job_display += f"**Started:** {active_run['started_at']}"
+
+        # Container information
+        container = status_info.get("container")
+        if container:
+            container_name = container.get("name", "Unknown")
+            container_status = container.get("status", "Unknown")
+            container_id = container.get("id_short", container.get("id", "Unknown")[:12])
+
+            container_details_text += f"Running Container  {container_name}\n"
+            container_details_text += f"  Status           {container_status}\n"
+            container_details_text += f"  Container ID     {container_id}\n"
+
+            # If no active run info, create basic active job display from container
+            if not active_job_display:
+                active_job_display = f"""**🟢 Container Running**
+
+**Container:** {container_name}
+**ID:** {container_id}
+**Status:** {container_status}
 """
 
-            if len(containers) == 1:
-                status = "Ready to stream from active container"
-            else:
-                status = "Multiple containers active"
-
-            return display_text.strip(), status, active_job_display
+            status = "Ready to stream from active container"
         else:
-            no_job_display = """**No Active Job**
+            if active_run:
+                # Run without container - zombie run
+                container_details_text += (
+                    "Running Container  Missing! (Database shows active run)\n"
+                )
+                active_job_display = f"""**⚠️ Zombie Run Detected**
+
+**Run ID:** {active_run["id"]}
+Container missing - may need cleanup
+"""
+                status = "Container missing but run active in database"
+            else:
+                container_details_text += "Running Container  None\n"
+                active_job_display = """**No Active Job**
 
 Currently idle - no jobs running"""
-            return "No active containers found", "No containers to stream from", no_job_display
+                status = "No containers to stream from"
+
+        return container_details_text.strip(), status, active_job_display
+
     except Exception as e:
         error_display = f"""**⚠️ Error**
 
@@ -1159,6 +1240,42 @@ def create_ui():
                 pending_data is not None,
             )
 
+            # Auto-refresh Jobs tab when switching to it (index 3)
+            if tab_index == 3:
+                logger.info("Switching to Jobs tab - refreshing status")
+                # Refresh jobs data immediately
+                jobs_result = check_running_jobs()
+                # Also start streaming automatically if there's an active container
+                if "Ready to stream" in jobs_result[1]:
+                    logger.info("Active container detected - starting log stream")
+                    # Return the refreshed data
+                    return (
+                        nav_state,
+                        pending_data,
+                        gr.update(),  # runs_gallery - no update
+                        gr.update(),  # runs_table - no update
+                        gr.update(),  # runs_stats - no update
+                        gr.update(),  # runs_nav_filter_row - no update
+                        gr.update(),  # runs_prompt_filter - no update
+                        jobs_result[0],  # Update container details
+                        jobs_result[1],  # Update job status
+                        jobs_result[2],  # Update active job card
+                    )
+                else:
+                    # Just return the refreshed data without streaming
+                    return (
+                        nav_state,
+                        pending_data,
+                        gr.update(),  # runs_gallery - no update
+                        gr.update(),  # runs_table - no update
+                        gr.update(),  # runs_stats - no update
+                        gr.update(),  # runs_nav_filter_row - no update
+                        gr.update(),  # runs_prompt_filter - no update
+                        jobs_result[0],  # Update container details
+                        jobs_result[1],  # Update job status
+                        jobs_result[2],  # Update active job card
+                    )
+
             # Check if there's pending navigation data (from View Runs button)
             if tab_index == 2 and pending_data is not None:
                 logger.info("Using pending navigation data for Runs tab")
@@ -1189,6 +1306,9 @@ def create_ui():
                     stats,  # Update stats
                     gr.update(visible=bool(prompt_names)),  # Show filter indicator if filtering
                     gr.update(value=filter_display),  # Update filter display with formatted text
+                    gr.update(),  # Don't change running_jobs_display
+                    gr.update(),  # Don't change job_status
+                    gr.update(),  # Don't change active_job_card
                 )
 
             # Check if we're navigating to Runs tab (index 2) with pending filter
@@ -1248,6 +1368,9 @@ def create_ui():
                         gr.update(
                             value=filter_display
                         ),  # Update filter display with formatted text
+                        gr.update(),  # Don't change running_jobs_display
+                        gr.update(),  # Don't change job_status
+                        gr.update(),  # Don't change active_job_card
                     )
 
             # Check if we're navigating to Runs tab without filter - load default data
@@ -1278,6 +1401,9 @@ def create_ui():
                     stats if stats else "No data",  # Update stats
                     gr.update(visible=False),  # Hide filter indicator
                     gr.update(),  # Don't change filter dropdown
+                    gr.update(),  # Don't change running_jobs_display
+                    gr.update(),  # Don't change job_status
+                    gr.update(),  # Don't change active_job_card
                 )
 
             # No navigation action needed for other tabs
@@ -1289,6 +1415,9 @@ def create_ui():
                 gr.update(),  # Don't change stats
                 gr.update(),  # Don't change filter indicator
                 gr.update(),  # Don't change filter dropdown
+                gr.update(),  # Don't change running_jobs_display
+                gr.update(),  # Don't change job_status
+                gr.update(),  # Don't change active_job_card
             )
 
         # Create a number component to track selected tab index
@@ -1313,7 +1442,25 @@ def create_ui():
                 components.get("runs_stats"),
                 components.get("runs_nav_filter_row"),
                 components.get("runs_prompt_filter"),
+                components.get("running_jobs_display"),  # Add Jobs tab outputs
+                components.get("job_status"),
+                components.get("active_job_card"),
             ],
+        ).then(
+            # Auto-refresh when switching to Jobs tab
+            fn=refresh_jobs_on_tab_select,
+            inputs=[selected_tab_index],
+            outputs=[
+                components.get("running_jobs_display"),
+                components.get("job_status"),
+                components.get("active_job_card"),
+                components.get("log_display"),
+            ]
+            if all(
+                k in components
+                for k in ["running_jobs_display", "job_status", "active_job_card", "log_display"]
+            )
+            else [],
         )
 
         # Import additional functions for runs tab
@@ -2143,14 +2290,29 @@ def create_ui():
                 outputs=[components["runs_log_output"]],
             )
 
-        # Jobs & Queue Tab Events
+        # Active Jobs Tab Events
+        # Add stream button handler for manual refresh
         if "stream_btn" in components:
-            outputs = get_components("job_status", "log_display")
+
+            def manual_refresh_jobs():
+                """Manual refresh and stream for jobs tab."""
+                yield from refresh_and_stream()
+
+            outputs = get_components(
+                "running_jobs_display", "job_status", "active_job_card", "log_display"
+            )
             if outputs:
                 components["stream_btn"].click(
-                    fn=start_log_streaming,
+                    fn=manual_refresh_jobs,
                     outputs=outputs,
                 )
+
+        # Clear logs button
+        if "clear_logs_btn" in components and "log_viewer" in components:
+            components["clear_logs_btn"].click(
+                fn=lambda: (components["log_viewer"].clear(), components["log_viewer"].get_html()),
+                outputs=[components.get("log_display")],
+            )
 
         # Queue Control Events
         if "kill_job_btn" in components:
@@ -2183,34 +2345,6 @@ def create_ui():
                     components.get("job_status"),
                     components.get("active_job_card"),
                 ],
-            )
-
-        if "clear_queue_btn" in components:
-            # Clear queue button shows confirmation
-            components["clear_queue_btn"].click(
-                fn=show_clear_confirmation,
-                outputs=[
-                    components.get("clear_confirmation"),
-                    components.get("clear_preview"),
-                ],
-            )
-
-            # Cancel clear button
-            components["cancel_clear_btn"].click(
-                fn=cancel_clear_confirmation,
-                outputs=components.get("clear_confirmation"),
-            )
-
-            # Confirm clear button
-            components["confirm_clear_btn"].click(
-                fn=execute_clear_queue,
-                outputs=[
-                    components.get("clear_confirmation"),
-                    components.get("job_status"),
-                ],
-            ).then(
-                fn=get_queue_status,
-                outputs=components.get("queue_status"),
             )
 
         # Load initial data

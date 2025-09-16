@@ -899,92 +899,183 @@ class GPUExecutor:
                         local_output_dir = run_dir / "outputs"
                         local_output_dir.mkdir(exist_ok=True)
 
-                        # Download batch_results.json which contains the enhanced text
+                        # The script may save either batch_results.json (for batch mode) or prompt_upsampled.json (single mode)
+                        # Try both to be robust
                         remote_batch_results = f"{remote_output_dir}/batch_results.json"
+                        remote_prompt_upsampled = f"{remote_output_dir}/prompt_upsampled.json"
                         local_batch_results = local_output_dir / "batch_results.json"
+                        local_prompt_upsampled = local_output_dir / "prompt_upsampled.json"
 
+                        results = None
+                        enhanced_text = None
+
+                        # First try batch_results.json (expected for batch mode)
                         try:
+                            logger.info(
+                                "Checking for batch_results.json at: {}", remote_batch_results
+                            )
                             self.file_transfer.download_file(
                                 remote_batch_results, str(local_batch_results)
+                            )
+                            logger.info(
+                                "Successfully downloaded batch_results.json to: {}",
+                                local_batch_results,
                             )
 
                             # Extract enhanced text from results
                             results = self.json_handler.read_json(local_batch_results)
-                            if not results or len(results) == 0:
-                                raise RuntimeError(
-                                    "No enhanced results found in batch_results.json"
-                                )
-
-                            enhanced_text = results[0].get("upsampled_prompt", "")
-                            if not enhanced_text:
-                                raise RuntimeError("Enhanced text is empty")
-
-                            # Use the existing data repository service
-                            if not self.service:
-                                raise RuntimeError("DataRepository service not initialized")
-
-                            data_repo = self.service
-
-                            # Handle prompt creation/update based on create_new flag
-                            create_new = execution_config.get("create_new", True)
-                            prompt_id = prompt["id"]
-                            enhanced_prompt_id = None
-
-                            if create_new:
-                                # Create new enhanced prompt
-                                name = prompt.get("parameters", {}).get("name", "unnamed")
-                                enhanced_prompt = data_repo.create_prompt(
-                                    prompt_text=enhanced_text,
-                                    inputs=prompt.get("inputs", {}),
-                                    parameters={
-                                        **prompt.get("parameters", {}),
-                                        "name": f"{name}_enhanced",
-                                        "enhanced": True,
-                                        "parent_prompt_id": prompt_id,
-                                    },
-                                )
-                                enhanced_prompt_id = enhanced_prompt["id"]
+                            if results and len(results) > 0:
+                                enhanced_text = results[0].get("upsampled_prompt", "")
                                 logger.info(
-                                    "Created enhanced prompt {} from {} for run {}",
-                                    enhanced_prompt_id,
-                                    prompt_id,
-                                    run_id,
+                                    "Extracted enhanced text from batch_results.json (length: {} chars)",
+                                    len(enhanced_text) if enhanced_text else 0,
                                 )
-                            else:
-                                # Update existing prompt
-                                updated_params = {**prompt.get("parameters", {}), "enhanced": True}
-                                data_repo.update_prompt(
-                                    prompt_id,
-                                    prompt_text=enhanced_text,
-                                    parameters=updated_params,
-                                )
-                                enhanced_prompt_id = prompt_id
+                        except Exception as e:
+                            logger.info("batch_results.json not available: {}", e)
+
+                        # If batch_results.json failed, try prompt_upsampled.json
+                        if not enhanced_text:
+                            try:
                                 logger.info(
-                                    "Updated prompt {} with enhanced text for run {}",
-                                    prompt_id,
-                                    run_id,
+                                    "Checking for prompt_upsampled.json at: {}",
+                                    remote_prompt_upsampled,
+                                )
+                                self.file_transfer.download_file(
+                                    remote_prompt_upsampled, str(local_prompt_upsampled)
+                                )
+                                logger.info(
+                                    "Successfully downloaded prompt_upsampled.json to: {}",
+                                    local_prompt_upsampled,
                                 )
 
-                            # Return completed status with enhanced prompt ID
-                            return {
-                                "status": "completed",
-                                "message": "Enhancement completed successfully",
-                                "run_id": run_id,
-                                "enhanced_text": enhanced_text,
-                                "enhanced_prompt_id": enhanced_prompt_id,
-                                "original_prompt_id": prompt_id,
-                                "log_path": str(logs_dir / "enhancement.log"),
-                            }
+                                # Read single result format
+                                single_result = self.json_handler.read_json(local_prompt_upsampled)
+                                enhanced_text = single_result.get("upsampled_prompt", "")
+                                # Convert to batch format for consistency
+                                results = [single_result]
+                                logger.info(
+                                    "Extracted enhanced text from prompt_upsampled.json (length: {} chars)",
+                                    len(enhanced_text) if enhanced_text else 0,
+                                )
+                            except Exception as e:
+                                logger.info("prompt_upsampled.json not available: {}", e)
 
-                        except Exception as download_error:
-                            logger.error(
-                                "Failed to process enhancement outputs for run {}: {}",
-                                run_id,
-                                download_error,
-                            )
+                        # If still no results, list directory and error
+                        if not enhanced_text:
+                            # List remote directory contents for debugging
+                            try:
+                                logger.error(
+                                    "No results files found. Listing remote directory contents:"
+                                )
+                                list_cmd = f"ls -la {remote_output_dir}/"
+                                _, stdout, _ = self.ssh_manager.execute_command(
+                                    list_cmd, timeout=10
+                                )
+                                logger.info("Remote directory contents:\n{}", stdout)
+                            except Exception as list_error:
+                                logger.error("Failed to list remote directory: {}", list_error)
+
                             raise RuntimeError(
-                                f"Enhancement completed but output processing failed: {download_error}"
-                            ) from download_error
+                                f"No enhancement results found in {remote_output_dir}. "
+                                f"Expected batch_results.json or prompt_upsampled.json"
+                            )
+
+                        # Validate we got the enhanced text
+                        if not enhanced_text:
+                            logger.error(
+                                "Enhanced text is empty or null in results: {}",
+                                results[0] if results else "no results",
+                            )
+                            raise RuntimeError("Enhanced text is empty")
+
+                        logger.info(
+                            "Successfully extracted enhanced text (first 100 chars): {}...",
+                            enhanced_text[:100] if len(enhanced_text) > 100 else enhanced_text,
+                        )
+
+                        # Use the existing data repository service
+                        if not self.service:
+                            raise RuntimeError("DataRepository service not initialized")
+
+                        data_repo = self.service
+
+                        # Handle prompt creation/update based on create_new flag
+                        create_new = execution_config.get("create_new", True)
+                        prompt_id = prompt["id"]
+                        enhanced_prompt_id = None
+
+                        if create_new:
+                            # Create new enhanced prompt
+                            name = prompt.get("parameters", {}).get("name", "unnamed")
+                            enhanced_prompt = data_repo.create_prompt(
+                                prompt_text=enhanced_text,
+                                inputs=prompt.get("inputs", {}),
+                                parameters={
+                                    **prompt.get("parameters", {}),
+                                    "name": f"{name}_enhanced",
+                                    "enhanced": True,
+                                    "parent_prompt_id": prompt_id,
+                                },
+                            )
+                            enhanced_prompt_id = enhanced_prompt["id"]
+                            logger.info(
+                                "Created enhanced prompt {} from {} for run {}",
+                                enhanced_prompt_id,
+                                prompt_id,
+                                run_id,
+                            )
+                        else:
+                            # Update existing prompt
+                            updated_params = {**prompt.get("parameters", {}), "enhanced": True}
+                            data_repo.update_prompt(
+                                prompt_id,
+                                prompt_text=enhanced_text,
+                                parameters=updated_params,
+                            )
+                            enhanced_prompt_id = prompt_id
+                            logger.info(
+                                "Updated prompt {} with enhanced text for run {}",
+                                prompt_id,
+                                run_id,
+                            )
+
+                        # Update run in database with results
+                        logger.info("Updating database run {} with enhancement results", run_id)
+                        outputs = {
+                            "enhanced_text": enhanced_text,
+                            "original_prompt_id": prompt_id,
+                            "enhanced_prompt_id": enhanced_prompt_id,
+                            "enhancement_model": model,
+                            "enhanced_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        data_repo.update_run(run_id, outputs=outputs)
+                        data_repo.update_run_status(run_id, "completed")
+                        logger.info("Database updated successfully for run {}", run_id)
+
+                        # Download any log files if they exist
+                        try:
+                            remote_log = f"{remote_output_dir}/run.log"
+                            local_log = logs_dir / "enhancement.log"
+                            self.file_transfer.download_file(remote_log, str(local_log))
+                            logger.info("Downloaded run log to: {}", local_log)
+                        except Exception as log_error:
+                            logger.debug("No run log to download: {}", log_error)
+
+                        # Return completed status with enhanced prompt ID
+                        logger.info(
+                            "Enhancement run {} completed successfully. Enhanced prompt: {}",
+                            run_id,
+                            enhanced_prompt_id,
+                        )
+                        return {
+                            "status": "completed",
+                            "message": "Enhancement completed successfully",
+                            "run_id": run_id,
+                            "enhanced_text": enhanced_text,
+                            "enhanced_prompt_id": enhanced_prompt_id,
+                            "original_prompt_id": prompt_id,
+                            "log_path": str(logs_dir / "enhancement.log"),
+                        }
 
                     else:
                         # Unexpected status

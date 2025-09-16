@@ -478,6 +478,8 @@ def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="
             for p in filtered
             if search_lower in p.get("parameters", {}).get("name", "").lower()
             or search_lower in p.get("prompt_text", "").lower()
+            or search_lower
+            in p.get("inputs", {}).get("video", "").lower()  # Search in video directory
         ]
 
     # Apply enhanced filter
@@ -1777,6 +1779,57 @@ def create_ui():
                 ],
                 js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[2]?.click(); }, 100); return []; }",
                 queue=False,
+            )
+
+        # Navigation from Inputs to Prompts tab
+        if "view_prompts_for_input_btn" in components and "input_name" in components:
+
+            def prepare_prompts_navigation_from_input(input_name):
+                """Navigate to Prompts tab with search filter for input directory."""
+                from cosmos_workflow.utils.logging import logger
+
+                logger.info(
+                    f"prepare_prompts_navigation_from_input called with input_name: {input_name}"
+                )
+
+                if not input_name:
+                    return (
+                        "⚠️ Please select an input directory first.",
+                        gr.update(),  # Don't change search
+                        gr.update(),  # Don't switch tabs
+                    )
+
+                # Extract just the directory name (remove any path prefixes)
+                search_term = input_name.split("/")[-1] if "/" in input_name else input_name
+                search_term = search_term.split("\\")[-1] if "\\" in search_term else search_term
+
+                logger.info(f"Navigating to Prompts tab with search: {search_term}")
+
+                return (
+                    f"✅ Navigating to Prompts tab to show prompts using '{search_term}'...",
+                    gr.update(value=search_term),  # Update search field
+                    1,  # Switch to Prompts tab (index 1)
+                )
+
+            components["view_prompts_for_input_btn"].click(
+                fn=prepare_prompts_navigation_from_input,
+                inputs=[components["input_name"]],
+                outputs=[
+                    components.get(
+                        "refresh_status", gr.Textbox()
+                    ),  # Status message (reuse refresh status)
+                    components.get(
+                        "prompts_search", gr.Textbox()
+                    ),  # Update search field in prompts tab
+                    selected_tab_index,  # Update selected tab index
+                ],
+                js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[1]?.click(); }, 100); return []; }",
+                queue=False,
+            ).then(
+                # After updating search, reload the prompts table with the new search term
+                fn=lambda search_term: load_ops_prompts(50, search_term, "all", "all"),
+                inputs=[components.get("prompts_search", gr.Textbox())],
+                outputs=[components.get("ops_prompts_table")],
             )
 
         # Update selection count when selection changes

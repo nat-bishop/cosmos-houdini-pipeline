@@ -158,6 +158,13 @@ def create_inputs_tab_ui(config):
                                 container=False,  # Remove extra container padding
                             )
 
+                            # Add View Prompts button
+                            components["view_prompts_for_input_btn"] = gr.Button(
+                                "→ View Prompts Using This Input",
+                                variant="secondary",
+                                size="sm",
+                            )
+
                     # Create Prompt Tab
                     with gr.Tab("✨ Create Prompt"):
                         with gr.Group(elem_classes=["detail-card"]):

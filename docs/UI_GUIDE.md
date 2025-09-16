@@ -54,7 +54,7 @@ The interface is organized into five main tabs, each serving specific workflow n
 2. **🚀 Prompts**: Prompt management and operations
 3. **🎬 Outputs**: Generated video gallery
 4. **📊 Run History**: Comprehensive run management
-5. **📦 Jobs & Queue**: Real-time monitoring
+5. **📦 Active Jobs**: Real-time container monitoring
 
 ## Tab-by-Tab Guide
 
@@ -210,32 +210,38 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Confirmation System**: Prevent accidental bulk operations
 - **Progress Tracking**: Status updates during batch operations
 
-### 📦 Jobs & Queue Tab
+### 📦 Active Jobs Tab
 
-**Purpose**: Real-time monitoring of active jobs, queue status, and log streaming.
+**Purpose**: Real-time monitoring of active containers with comprehensive system status and log streaming.
 
-#### Queue Status Monitoring
-- **Current Queue**: Real-time queue status display
-- **GPU Status**: Current GPU utilization and availability
-- **Auto-refresh**: 2-second update intervals
-- **Execution Status**: Currently running operations
+#### Enhanced System Status Display
+- **SSH Connection Status**: Connection health monitoring with visual indicators
+- **Docker Daemon Status**: Docker service status on remote instance
+- **GPU Information**: Detailed GPU model, memory, CUDA version, and utilization metrics
+- **Active Container Details**: Container name, status, ID, and creation time
+- **Active Operation Tracking**: Current operation type (INFERENCE, UPSCALE, ENHANCE) with run and prompt IDs
+- **Auto-refresh on Tab Switch**: Automatically refreshes status when tab is selected
 
-#### Active Jobs Management
-- **Running Containers**: List of active Docker containers
-- **Container Details**: ID, image, status, creation time
-- **Job Refresh**: Manual refresh of active jobs
-- **Resource Monitoring**: GPU and container resource usage
+#### Container Monitoring
+- **Running Containers**: Real-time container status and lifecycle monitoring
+- **Container Details**: Comprehensive container information including name and status
+- **Zombie Run Detection**: Identifies and warns about orphaned containers or database inconsistencies
+- **Manual Refresh**: "🔄 Refresh & Stream" button for on-demand status updates
+- **Resource Monitoring**: GPU utilization and memory usage tracking
 
-#### Recent Runs Display
-- **Quick Overview**: Most recent run executions
-- **Status Indicators**: Visual status representation
-- **Execution Timeline**: Recent activity history
+#### Enhanced Log Streaming System
+- **Auto-start Log Streaming**: Automatically begins streaming when active containers are detected
+- **Real-time Log Output**: Live log streaming with improved text display and autoscroll
+- **Stream Controls**: Manual refresh and stream functionality
+- **Log Management**: Clear logs functionality with improved text formatting
+- **Enhanced Error Handling**: Better connection resilience and error reporting
 
-#### Log Streaming System
-- **Real-time Logs**: Live log streaming from active containers
-- **Stream Controls**: Start/stop streaming functionality
-- **Log Statistics**: Error counts, warning counts, total lines
-- **Log Management**: Clear logs and export options
+#### Active Job Cards
+- **Active Job Display**: Professional cards showing current operation details
+- **Operation Type**: Clear indication of INFERENCE, UPSCALE, or ENHANCE operations
+- **Run Information**: Run ID, prompt ID, start time, and current status
+- **Container Information**: Container name, ID, and status for running operations
+- **Idle State**: Clear "No Active Job" indication when system is idle
 
 ## Advanced Features
 

@@ -742,7 +742,7 @@ cosmos ui --share            # Create public share link
 - **Prompts**: Unified prompt management and operations with enhanced status indicators
 - **Outputs**: Generated video gallery with comprehensive metadata and download capabilities
 - **Run History**: Advanced run filtering, search, statistics, and batch management system
-- **Jobs & Queue**: Real-time job monitoring, queue status, and log streaming interface
+- **Active Jobs**: Real-time container monitoring with auto-refresh and log streaming interface
 
 **Run History Features:**
 - **Filtering System**: Filter by status (all/completed/running/pending/failed/cancelled), date range (all/today/yesterday/last 7 days/last 30 days)
@@ -1073,14 +1073,14 @@ result = ops.quick_inference("ps_abc123")
 # Returns: {"status": "completed", "output_path": "/outputs/...", "duration": 245.6}
 ```
 
-**Queue Management Integration**
+**Single Container Paradigm**
 ```python
-# Gradio UI uses queue to prevent concurrent GPU operations
-app.queue(
-    max_size=50,  # Maximum queued jobs
-    default_concurrency_limit=1,  # One job at a time
-    status_update_rate="auto"  # Real-time queue updates
-)
+# System enforces single container operations for reliable resource management
+# Active Jobs tab provides real-time monitoring of single running container
+# Auto-refresh and status monitoring ensure reliable operation tracking
+ops = CosmosAPI()
+status = ops.check_status()  # Comprehensive system status
+containers = ops.get_active_containers()  # Running container info
 ```
 
 ### Usage Examples
@@ -1172,7 +1172,7 @@ TIMEOUTS = {
 
 **Better User Experience**
 - Immediate completion feedback
-- Real-time progress in UI with queue status
+- Real-time progress in UI with container status monitoring
 - Clear success/failure indication
 - No more "check status later" workflows
 
@@ -1424,7 +1424,7 @@ run_data = service.create_run(
     "output_dir": "/outputs/run_001"
   },
   metadata={"user": "NAT", "priority": "high"},
-  initial_status="pending"  # or "queued", "running", etc.
+  initial_status="pending"  # or "running", "completed", "failed", etc.
 )
 # Returns: {"id": "rs_wxyz5678", "prompt_id": "ps_abcd1234", ...}
 
@@ -1468,7 +1468,7 @@ run = service.get_run("rs_wxyz5678")
 - Dictionary returns optimized for CLI display (not raw ORM objects)
 - Support for flexible JSON fields enabling future model extensibility
 - Deterministic prompt ID generation, UUID-based run ID generation
-- Configurable initial status for runs enabling queue management
+- Configurable initial status for runs enabling lifecycle management
 - Parameterized logging throughout for debugging and audit trails
 
 **Error Handling:**

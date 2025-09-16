@@ -232,7 +232,7 @@ Local Machine                                    Remote GPU Server (H100)
 - SSH-based Docker container management with synchronous execution
 - Automatic file transfer with integrity checks
 - Real-time log streaming from containers
-- Queue management for sequential resource utilization
+- Single container paradigm for reliable resource utilization
 - Graceful shutdown handling with container cleanup
 
 ### **Batch Processing Engine**
@@ -250,6 +250,7 @@ Local Machine                                    Remote GPU Server (H100)
 ### **Advanced Web Interface (Gradio)**
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
 - **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
+- **Active Jobs Tab**: Real-time container monitoring with auto-refresh and log streaming
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
@@ -257,7 +258,8 @@ Local Machine                                    Remote GPU Server (H100)
 - **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
 - **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback
-- **Theme System**: Professional design with gradient animations and glassmorphism effects
+- **Enhanced Status Display**: Comprehensive GPU, Docker, SSH status with detailed system information
+- **Auto-refresh Behavior**: Active Jobs tab refreshes automatically when selected
 - **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
 - **Graceful Shutdown**: Container cleanup on server termination
 

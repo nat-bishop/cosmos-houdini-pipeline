@@ -101,7 +101,7 @@
 
 ### Batch Processing Implementation
 - [ ] Create `cosmos batch` command
-- [ ] Implement queue management in DataRepository
+- [ ] Implement batch job management in DataRepository
 - [ ] Add progress tracking for batch jobs
 - [ ] Support resuming interrupted batches
 

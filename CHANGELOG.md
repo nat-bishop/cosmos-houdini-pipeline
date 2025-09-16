@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - Active Jobs Tab Improvements (2025-01-16)
+- **Jobs & Queue Tab Renamed to "Active Jobs"**
+  - Removed all queue-related functionality that never worked properly in production
+  - Eliminated queue_status, queue_summary_card, and clear_queue functionality
+  - Focused tab on actual running container monitoring and log streaming
+  - Updated tab name to accurately reflect current functionality
+
+- **Enhanced Auto-Refresh on Tab Switch**
+  - Active Jobs tab now automatically refreshes when selected
+  - Real-time container status updates when switching to the tab
+  - Auto-start log streaming when active containers are detected
+  - Improved user experience with immediate status feedback
+
+- **Comprehensive System Status Display**
+  - Enhanced GPU/container status display with detailed system information
+  - Shows SSH connection status, Docker daemon status, and GPU information
+  - Displays GPU utilization, memory usage, and CUDA version details
+  - Comprehensive active operation tracking with run IDs and timestamps
+  - Better detection and reporting of zombie runs and orphaned containers
+
+- **Improved Log Streaming**
+  - Enhanced log viewer integration with auto-start capability
+  - Better log display formatting using log_viewer.get_text() for autoscroll
+  - Improved error handling and connection resilience
+  - Clear streaming status messages and user feedback
+
+### Fixed - UI Reliability (2025-01-16)
+- **Queue System Removal**
+  - Removed non-functional queue management features
+  - Eliminated misleading queue status indicators
+  - Focused on actual container monitoring instead of theoretical queue state
+  - Simplified UI to reflect actual system capabilities
+
+- **Enhanced Error Handling**
+  - Better error messages for container connection issues
+  - Improved handling of missing containers or failed connections
+  - More reliable status checking and reporting
+  - Enhanced user feedback for system state changes
+
 ### Added - UI Enhancements and Run History System (2025-01-15)
 - **Comprehensive Run History Tab Implementation**
   - New comprehensive Run History tab with advanced filtering, search, and batch operations

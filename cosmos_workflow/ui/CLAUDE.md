@@ -9,7 +9,7 @@ This is a Gradio web interface for managing AI inference workflows. Gradio is a 
   - runs_ui.py — Run monitoring interface
   - runs_handlers.py — Event handlers for runs
   - inputs_ui.py — Input file management
-  - jobs_ui.py — Job queue interface
+  - jobs_ui.py — Active jobs monitoring interface
 - **components/** — Reusable UI components
   - header.py — App header
   - global_controls.py — Shared controls

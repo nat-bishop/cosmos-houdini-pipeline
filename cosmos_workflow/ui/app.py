@@ -17,7 +17,7 @@ Interface Tabs:
 - Prompts: Unified prompt management with enhanced status indicators
 - Outputs: Generated video gallery with comprehensive metadata
 - Run History: Advanced run filtering, statistics, and batch management
-- Jobs & Queue: Real-time monitoring and log streaming
+- Active Jobs: Real-time container monitoring with auto-refresh and log streaming
 
 The interface integrates with CosmosAPI for all operations, providing a complete
 workflow management system from input preparation to output generation.
@@ -987,7 +987,7 @@ def start_log_streaming(auto_start=False):
         containers = ops.get_active_containers()
 
         if not containers:
-            yield "No active containers found", log_viewer.get_html()
+            yield "No active containers found", log_viewer.get_text()
             return
 
         if len(containers) > 1:
@@ -997,19 +997,19 @@ def start_log_streaming(auto_start=False):
             container_id = containers[0]["container_id"]
             message = f"Streaming logs from container {container_id}"
 
-        yield message, log_viewer.get_html()
+        yield message, log_viewer.get_text()
 
         try:
             for log_line in ops.stream_logs_generator(container_id):
                 log_viewer.add_from_stream(log_line)
-                yield message, log_viewer.get_html()
+                yield message, log_viewer.get_text()
         except KeyboardInterrupt:
-            yield "Streaming stopped", log_viewer.get_html()
+            yield "Streaming stopped", log_viewer.get_text()
 
     except RuntimeError as e:
-        yield f"Error: {e}", log_viewer.get_html()
+        yield f"Error: {e}", log_viewer.get_text()
     except Exception as e:
-        yield f"Failed to start streaming: {e}", log_viewer.get_html()
+        yield f"Failed to start streaming: {e}", log_viewer.get_text()
 
 
 def refresh_jobs_on_tab_select(tab_idx):
@@ -1017,7 +1017,7 @@ def refresh_jobs_on_tab_select(tab_idx):
     if tab_idx == 3:
         # Refresh the jobs status
         jobs_result = check_running_jobs()
-        return jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_html()
+        return jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
     else:
         # No update for other tabs
         return gr.update(), gr.update(), gr.update(), gr.update()
@@ -1035,7 +1035,7 @@ def refresh_and_stream():
             yield jobs_result[0], status, jobs_result[2], logs
     else:
         # Just return the refreshed status without streaming
-        yield jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_html()
+        yield jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
 
 
 def check_running_jobs():
@@ -2310,7 +2310,7 @@ def create_ui():
         # Clear logs button
         if "clear_logs_btn" in components and "log_viewer" in components:
             components["clear_logs_btn"].click(
-                fn=lambda: (components["log_viewer"].clear(), components["log_viewer"].get_html()),
+                fn=lambda: (components["log_viewer"].clear(), components["log_viewer"].get_text()),
                 outputs=[components.get("log_display")],
             )
 

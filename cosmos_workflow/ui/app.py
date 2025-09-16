@@ -79,13 +79,6 @@ from cosmos_workflow.utils.logging import logger
 # Load configuration
 config = ConfigManager()
 
-# Initialize unified operations - using CosmosAPI like CLI does
-# Skip initialization during testing
-if os.environ.get("COSMOS_TEST_MODE") != "true":
-    ops = CosmosAPI(config=config)
-else:
-    ops = None  # Mock for testing
-
 # Initialize log viewer (reusing existing component)
 log_viewer = LogViewer(max_lines=2000)
 
@@ -105,6 +98,7 @@ def cleanup_on_shutdown(signum=None, frame=None):
         return
 
     try:
+        ops = CosmosAPI()
         result = ops.kill_containers()
         if result["killed_count"] > 0:
             logger.info("Killed {} container(s)", result["killed_count"])
@@ -390,6 +384,7 @@ def list_prompts(limit=50):
     """List prompts using CosmosAPI, formatted for display."""
     try:
         # Use CosmosAPI to list prompts
+        ops = CosmosAPI()
         prompts = ops.list_prompts(limit=limit)
 
         # Format for Gradio Dataframe display
@@ -438,6 +433,7 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
             video_path = Path(video_dir.strip())
 
         # Use CosmosAPI to create prompt (it handles validation)
+        ops = CosmosAPI()
         prompt = ops.create_prompt(
             prompt_text=prompt_text.strip(),
             video_dir=video_path,
@@ -542,8 +538,8 @@ def load_ops_prompts(limit=50, search_text="", enhanced_filter="all", date_filte
             date_filter,
         )
 
-        if not ops:
-            return []
+        # Create fresh CosmosAPI instance
+        ops = CosmosAPI()
 
         # Use CosmosAPI to get prompts (get more than limit to filter)
         prompts = ops.list_prompts(
@@ -692,42 +688,42 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                 gr.update(value=False),
             ]
 
-        # Use the global ops (CosmosAPI) to get full prompt details
-        if ops:
-            prompt_details = ops.get_prompt(prompt_id)
-            if prompt_details:
-                name = prompt_details.get("parameters", {}).get("name", "unnamed")
-                prompt_text = prompt_details.get("prompt_text", "")
-                negative_prompt = prompt_details.get("parameters", {}).get("negative_prompt", "")
-                created = (
-                    prompt_details.get("created_at", "")[:19]
-                    if prompt_details.get("created_at")
-                    else ""
-                )
-                enhanced = prompt_details.get("parameters", {}).get("enhanced", False)
+        # Use CosmosAPI to get full prompt details
+        ops = CosmosAPI()
+        prompt_details = ops.get_prompt(prompt_id)
+        if prompt_details:
+            name = prompt_details.get("parameters", {}).get("name", "unnamed")
+            prompt_text = prompt_details.get("prompt_text", "")
+            negative_prompt = prompt_details.get("parameters", {}).get("negative_prompt", "")
+            created = (
+                prompt_details.get("created_at", "")[:19]
+                if prompt_details.get("created_at")
+                else ""
+            )
+            enhanced = prompt_details.get("parameters", {}).get("enhanced", False)
 
-                # Get video directory from inputs
-                inputs = prompt_details.get("inputs", {})
-                video_dir = (
-                    inputs.get("video", "").replace("/color.mp4", "") if inputs.get("video") else ""
-                )
+            # Get video directory from inputs
+            inputs = prompt_details.get("inputs", {})
+            video_dir = (
+                inputs.get("video", "").replace("/color.mp4", "") if inputs.get("video") else ""
+            )
 
-                logger.info(
-                    "Returning prompt details: id=%s, name=%s, enhanced=%s",
-                    prompt_id,
-                    name,
-                    enhanced,
-                )
-                # Return gr.update() objects to force UI refresh
-                return [
-                    gr.update(value=prompt_id),
-                    gr.update(value=name),
-                    gr.update(value=prompt_text),
-                    gr.update(value=negative_prompt),
-                    gr.update(value=created),
-                    gr.update(value=video_dir),
-                    gr.update(value=enhanced),
-                ]
+            logger.info(
+                "Returning prompt details: id=%s, name=%s, enhanced=%s",
+                prompt_id,
+                name,
+                enhanced,
+            )
+            # Return gr.update() objects to force UI refresh
+            return [
+                gr.update(value=prompt_id),
+                gr.update(value=name),
+                gr.update(value=prompt_text),
+                gr.update(value=negative_prompt),
+                gr.update(value=created),
+                gr.update(value=video_dir),
+                gr.update(value=enhanced),
+            ]
 
         logger.warning("No prompt details found for {}", prompt_id)
         return [
@@ -759,24 +755,22 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
 def get_queue_status():
     """Get current queue status information using CosmosAPI."""
     try:
-        if ops:
-            # Get running and pending runs
-            running_runs = ops.list_runs(status="running", limit=10)
-            pending_runs = ops.list_runs(status="pending", limit=10)
+        # Create fresh CosmosAPI instance
+        ops = CosmosAPI()
+        # Get running and pending runs
+        running_runs = ops.list_runs(status="running", limit=10)
+        pending_runs = ops.list_runs(status="pending", limit=10)
 
-            running_count = len(running_runs)
-            pending_count = len(pending_runs)
+        running_count = len(running_runs)
+        pending_count = len(pending_runs)
 
-            if running_count > 0:
-                current_run = running_runs[0]
-                return (
-                    f"Running: {current_run.get('id', '')[:8]}... | Queue: {pending_count} pending"
-                )
-            elif pending_count > 0:
-                return f"Queue: {pending_count} pending | GPU: Ready"
-            else:
-                return "Queue: Empty | GPU: Available"
-        return "Queue: Status unavailable"
+        if running_count > 0:
+            current_run = running_runs[0]
+            return f"Running: {current_run.get('id', '')[:8]}... | Queue: {pending_count} pending"
+        elif pending_count > 0:
+            return f"Queue: {pending_count} pending | GPU: Ready"
+        else:
+            return "Queue: Empty | GPU: Available"
     except Exception as e:
         logger.error("Error getting queue status: {}", str(e))
         return "Queue: Error getting status"
@@ -785,20 +779,20 @@ def get_queue_status():
 def get_recent_runs(limit=5):
     """Get recent runs for the Jobs tab."""
     try:
-        if ops:
-            # Get most recent runs
-            runs = ops.list_runs(limit=limit)
+        # Create fresh CosmosAPI instance
+        ops = CosmosAPI()
+        # Get most recent runs
+        runs = ops.list_runs(limit=limit)
 
-            # Format for table display
-            table_data = []
-            for run in runs[:limit]:
-                run_id = run.get("id", "")[:8]
-                status = run.get("status", "unknown")
-                created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-                table_data.append([run_id, status, created])
+        # Format for table display
+        table_data = []
+        for run in runs[:limit]:
+            run_id = run.get("id", "")[:8]
+            status = run.get("status", "unknown")
+            created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+            table_data.append([run_id, status, created])
 
-            return table_data
-        return []
+        return table_data
     except Exception as e:
         logger.error("Error getting recent runs: {}", str(e))
         return []
@@ -822,6 +816,10 @@ def run_inference_on_selected(
     """Run inference on selected prompts with queue progress tracking."""
     if progress is None:
         progress = gr.Progress()
+
+    # Create fresh CosmosAPI instance for this operation
+    ops = CosmosAPI()
+
     try:
         # Get selected prompt IDs
         selected_ids = []
@@ -841,7 +839,7 @@ def run_inference_on_selected(
                         selected_ids.append(row[1])  # Prompt ID is second column
 
         if not selected_ids:
-            return "❌ No prompts selected", "Idle"
+            return "❌ No prompts selected"
 
         # Build weights dictionary
         weights = {
@@ -852,6 +850,9 @@ def run_inference_on_selected(
         }
 
         logger.info("Starting inference on {} prompts", len(selected_ids))
+
+        # Show immediate feedback
+        gr.Info(f"🚀 Starting inference on {len(selected_ids)} prompt(s)...")
 
         # Run inference based on count
         if len(selected_ids) == 1:
@@ -878,16 +879,13 @@ def run_inference_on_selected(
                 output_msg = f"✅ Inference completed for {selected_ids[0]}"
                 if result.get("output_path"):
                     output_msg += f"\n📁 Output: {result['output_path']}"
-                return (output_msg, "Idle")
+                return output_msg
             elif result.get("status") == "started":  # Legacy support
-                return (
-                    f"✅ Inference started for {selected_ids[0]}",
-                    f"Running: {result.get('run_id', 'unknown')}",
-                )
+                return f"✅ Inference started for {selected_ids[0]}"
             elif result.get("status") == "success":  # Legacy support
-                return ("✅ Inference completed successfully", "Idle")
+                return "✅ Inference completed successfully"
             else:
-                return (f"❌ Inference failed: {result.get('error', 'Unknown error')}", "Idle")
+                return f"❌ Inference failed: {result.get('error', 'Unknown error')}"
         else:
             # Batch inference
             progress(0.1, desc=f"Starting batch inference for {len(selected_ids)} prompts...")
@@ -907,20 +905,21 @@ def run_inference_on_selected(
             progress(1.0, desc="Batch inference complete!")
 
             successful = len(result.get("output_mapping", {}))
-            return (
-                f"✅ Batch inference completed: {successful}/{len(selected_ids)} successful",
-                "Idle",
-            )
+            return f"✅ Batch inference completed: {successful}/{len(selected_ids)} successful"
 
     except Exception as e:
         logger.error("Failed to run inference: {}", e)
-        return f"❌ Error: {e}", "Idle"
+        return f"❌ Error: {e}"
 
 
 def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progress=None):
     """Run enhancement on selected prompts with queue progress tracking."""
     if progress is None:
         progress = gr.Progress()
+
+    # Create fresh CosmosAPI instance for this operation
+    ops = CosmosAPI()
+
     try:
         # Handle force_overwrite parameter - it might be None or wrapped
         if force_overwrite is None:
@@ -954,6 +953,9 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
         # Always use pixtral model
         model = "pixtral"
         logger.info("Starting enhancement on {} prompts with model {}", len(selected_ids), model)
+
+        # Show immediate feedback
+        gr.Info(f"🌟 Starting enhancement on {len(selected_ids)} prompt(s)...")
 
         results = []
         errors = []
@@ -1003,6 +1005,7 @@ def start_log_streaming():
     log_viewer.clear()
 
     try:
+        ops = CosmosAPI()
         containers = ops.get_active_containers()
 
         if not containers:
@@ -1034,26 +1037,44 @@ def start_log_streaming():
 def check_running_jobs():
     """Check for active containers on remote instance."""
     try:
+        ops = CosmosAPI()
         containers = ops.get_active_containers()
 
         if containers:
             display_text = f"Found {len(containers)} active container(s)\n\n"
-            for container in containers:
+            active_job_display = ""
+
+            for i, container in enumerate(containers):
                 display_text += f"Container: {container['container_id']}\n"
                 display_text += f"Image: {container.get('image', 'Unknown')}\n"
                 display_text += f"Status: {container.get('status', 'Unknown')}\n"
                 display_text += "-" * 40 + "\n"
+
+                # Format the active job card display
+                if i == 0:  # Show first container as active job
+                    active_job_display = f"""**🟢 Active Job Running**
+
+**Container ID:** {container["container_id"][:12]}...
+**Image:** {container.get("image", "Unknown")}
+**Status:** {container.get("status", "Running")}
+"""
 
             if len(containers) == 1:
                 status = "Ready to stream from active container"
             else:
                 status = "Multiple containers active"
 
-            return display_text.strip(), status
+            return display_text.strip(), status, active_job_display
         else:
-            return "No active containers found", "No containers to stream from"
+            no_job_display = """**No Active Job**
+
+Currently idle - no jobs running"""
+            return "No active containers found", "No containers to stream from", no_job_display
     except Exception as e:
-        return f"Error: {e}", "Error checking containers"
+        error_display = f"""**⚠️ Error**
+
+{e}"""
+        return f"Error: {e}", "Error checking containers", error_display
 
 
 # ============================================================================
@@ -1343,7 +1364,8 @@ def create_ui():
                 prompts_data = load_ops_prompts(
                     50, prompts_search, prompts_enhanced_filter, prompts_date_filter
                 )
-                jobs_data = check_running_jobs()
+                jobs_result = check_running_jobs()
+                jobs_data = (jobs_result[0], jobs_result[1])  # Keep compatibility for other uses
 
                 # Load runs data with filters
                 runs_gallery, runs_table, runs_stats = load_runs_data(
@@ -1878,10 +1900,20 @@ def create_ui():
             )
             outputs = get_components("inference_status")
             if inputs and outputs:
+                # Run inference and then update Jobs & Queue status
                 components["run_inference_btn"].click(
                     fn=run_inference_on_selected,
                     inputs=inputs,
                     outputs=outputs,
+                ).then(
+                    # Update Jobs & Queue tab to show the running container
+                    fn=check_running_jobs,
+                    inputs=[],
+                    outputs=[
+                        components.get("running_jobs_display"),
+                        components.get("job_status"),
+                        components.get("active_job_card"),
+                    ],
                 )
 
         if "run_enhance_btn" in components:
@@ -2149,6 +2181,7 @@ def create_ui():
                 outputs=[
                     components.get("running_jobs_display"),
                     components.get("job_status"),
+                    components.get("active_job_card"),
                 ],
             )
 
@@ -2209,11 +2242,13 @@ def create_ui():
                 gallery_data, results_text = load_input_gallery()
                 prompts_data = load_ops_prompts(50)
                 # Only call check_running_jobs once
-                if ops:
+                try:
                     jobs_result = check_running_jobs()
                     jobs_display = jobs_result[0]
                     job_status = jobs_result[1]
-                else:
+                    # Note: active_job_card (jobs_result[2]) is not used here for initial load
+                except Exception as e:
+                    logger.debug("Could not check running jobs: {}", e)
                     jobs_display = "No containers"
                     job_status = "Not connected"
                 return gallery_data, results_text, prompts_data, jobs_display, job_status
@@ -2224,6 +2259,12 @@ def create_ui():
             )
         else:
             logger.warning("Could not set up initial data load - missing components")
+
+    # Enable queue for long-running operations (prevents timeout)
+    app.queue(
+        max_size=100,  # Maximum number of queued requests
+        default_concurrency_limit=1,  # Process one inference at a time
+    )
 
     return app
 
@@ -2250,4 +2291,4 @@ def get_demo():
 demo = get_demo()
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)  # noqa: S104
+    demo.queue().launch(server_name="0.0.0.0", server_port=7860)  # noqa: S104

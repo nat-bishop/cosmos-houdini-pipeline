@@ -60,6 +60,12 @@ def get_custom_css():
         color: white !important;
     }
 
+    /* Prompts tab container - allow natural height expansion */
+    .prompts-tab {
+        min-height: 600px;
+        overflow: visible !important;
+    }
+
     /* Tables */
     .gr-dataframe {
         border-radius: 8px !important;
@@ -67,14 +73,15 @@ def get_custom_css():
 
     /* Ensure the prompts table specifically has proper scrolling */
     #prompts-table-wrapper {
-        max-height: 700px !important;  /* Container height limit */
-        overflow: hidden !important;  /* Hide overflow on wrapper */
+        flex: 1;  /* Take available space in flex container */
+        min-height: 300px;  /* Minimum height for usability */
+        overflow: visible !important;  /* Allow content to flow naturally */
         margin-bottom: 12px !important;
     }
 
     #prompts-table-wrapper > div {
-        max-height: 700px !important;
-        overflow: hidden !important;  /* Hide overflow on intermediate divs */
+        height: 100%;  /* Take full height of parent */
+        overflow: visible !important;  /* Allow Gradio's internal scrolling to work */
     }
 
     /* Target the dataframe directly by ID */
@@ -280,15 +287,18 @@ def get_custom_css():
     .split-view {
         display: flex;
         gap: 16px;
-        height: calc(100vh - 200px);
+        max-height: calc(100vh - 250px);  /* Changed from height to max-height for flexibility */
+        min-height: 400px;  /* Ensure minimum height */
     }
 
     .split-left {
         flex: 1.5;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
-        max-height: calc(100vh - 200px);
+        overflow-y: auto;  /* Allow scrolling */
+        overflow-x: hidden;  /* Prevent horizontal scroll */
+        max-height: inherit;  /* Inherit max-height from parent */
+        min-height: 400px;  /* Ensure minimum height */
     }
 
     /* Ensure proper layout for the prompts library group */
@@ -296,7 +306,8 @@ def get_custom_css():
         display: flex;
         flex-direction: column;
         flex: 1;
-        overflow: hidden;
+        overflow: visible;  /* Allow content to be scrollable by parent */
+        min-height: 0;  /* Allow flexbox to shrink properly */
     }
 
     .split-right {
@@ -304,6 +315,8 @@ def get_custom_css():
         border-left: 1px solid var(--border-color);
         padding-left: 16px;
         overflow-y: auto;
+        max-height: inherit;  /* Inherit max-height from parent */
+        min-height: 400px;  /* Ensure minimum height */
     }
 
     /* CRITICAL: Ensure dropdowns work properly */
@@ -384,6 +397,20 @@ def get_custom_css():
         background: rgba(0, 0, 0, 0.02);
     }
 
+    /* Delete confirmation container - outside split view */
+    .delete-confirmation-container {
+        margin-top: 20px;
+        padding: 20px;
+        border: 2px solid rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.05);
+        border-radius: 8px;
+    }
+
+    .delete-confirmation-container h3 {
+        color: #ef4444;
+        margin-bottom: 16px;
+    }
+
     /* Run details styling */
     .run-detail-header {
         padding: 16px;
@@ -401,8 +428,12 @@ def get_custom_css():
     }
 
     /* Remove any global overflow hidden that might affect dropdowns */
-    * {
-        overflow: initial;
+    /* NOTE: Removed global * selector as it breaks scrolling behavior */
+    /* Only reset overflow on specific elements that need it */
+    .gr-dropdown,
+    .gr-dropdown *,
+    .dropdown-arrow {
+        overflow: visible !important;
     }
 
     /* Only apply overflow where specifically needed */

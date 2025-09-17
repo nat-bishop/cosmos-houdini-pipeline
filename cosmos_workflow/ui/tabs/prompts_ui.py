@@ -102,29 +102,6 @@ def create_prompts_tab_ui():
                             "**0** prompts selected", elem_classes=["selection-counter"]
                         )
 
-                    # Delete confirmation dialog
-                    with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
-                        "prompts_delete_dialog"
-                    ]:
-                        components["prompts_delete_preview"] = gr.Markdown()
-                        components["prompts_delete_outputs_checkbox"] = gr.Checkbox(
-                            label="Delete output files",
-                            value=False,
-                            info="Check to permanently delete all output files. Leave unchecked to preserve files.",
-                        )
-                        components["prompts_delete_ids_hidden"] = gr.Textbox(visible=False)
-                        with gr.Row():
-                            components["prompts_confirm_delete_btn"] = gr.Button(
-                                "⚠️ Confirm Delete",
-                                variant="stop",
-                                size="sm",
-                            )
-                            components["prompts_cancel_delete_btn"] = gr.Button(
-                                "Cancel",
-                                variant="secondary",
-                                size="sm",
-                            )
-
             # Right: Split view for details and operations
             with gr.Column(scale=2, elem_classes=["split-right"]):
                 # Unified tabs for Prompt Details, Inference, and Prompt Enhance
@@ -310,5 +287,31 @@ def create_prompts_tab_ui():
                         )
 
                         components["enhance_status"] = gr.Markdown("")
+
+        # Delete confirmation dialog - placed outside split view for better layout
+        with gr.Group(
+            visible=False, elem_classes=["delete-confirmation-container", "detail-card"]
+        ) as components["prompts_delete_dialog"]:
+            gr.Markdown("### ⚠️ Confirm Deletion")
+            components["prompts_delete_preview"] = gr.Textbox(
+                label="Prompts to Delete", interactive=False, lines=5, max_lines=20, show_label=True
+            )
+            components["prompts_delete_outputs_checkbox"] = gr.Checkbox(
+                label="Delete output files",
+                value=False,
+                info="Check to permanently delete all output files. Leave unchecked to preserve files.",
+            )
+            components["prompts_delete_ids_hidden"] = gr.Textbox(visible=False)
+            with gr.Row():
+                components["prompts_confirm_delete_btn"] = gr.Button(
+                    "⚠️ Confirm Delete",
+                    variant="stop",
+                    size="sm",
+                )
+                components["prompts_cancel_delete_btn"] = gr.Button(
+                    "Cancel",
+                    variant="secondary",
+                    size="sm",
+                )
 
     return components

@@ -1819,6 +1819,7 @@ def create_ui():
                     components.get("prompts_delete_outputs_checkbox"),
                     components.get("prompts_delete_ids_hidden"),
                 ],
+                scroll_to_output=True,  # Scroll to the delete confirmation dialog
             )
 
             # Step 2: Confirm deletion

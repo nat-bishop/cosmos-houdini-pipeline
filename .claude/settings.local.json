@@ -22,7 +22,8 @@
       "mcp__playwright__browser_evaluate",
       "Bash(python:*)",
       "mcp__playwright__browser_press_key",
-      "Read(F:\\Art\\cosmos-transfer1/**)"
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Bash(./scripts/ssh_lambda.sh:*)"
     ],
     "deny": [],
     "ask": [

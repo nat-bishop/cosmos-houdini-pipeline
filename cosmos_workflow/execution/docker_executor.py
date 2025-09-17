@@ -40,6 +40,45 @@ class DockerExecutor:
             except Exception:
                 logger.debug("Using default docker timeout: {} seconds", self.docker_timeout)
 
+    def _create_fallback_log(
+        self, run_id: str, error_message: str, stderr: str = "", exit_code: int | None = None
+    ) -> None:
+        """Create a fallback log file when Docker fails to start.
+
+        This ensures that even when Docker fails with exit code 125 or other startup
+        issues, there's still a log file with error information for debugging.
+
+        Args:
+            run_id: The run ID for this operation
+            error_message: Error message to include in the log
+            stderr: Standard error output from Docker command
+            exit_code: Exit code from Docker command
+        """
+        try:
+            # Create remote log directory and file using correct format
+            remote_log_dir = f"{self.remote_dir}/outputs/run_{run_id}/logs"
+            remote_log_path = f"{remote_log_dir}/{run_id}.log"
+
+            # Ensure log directory exists
+            self.remote_executor.create_directory(remote_log_dir)
+
+            # Build error log content
+            from datetime import datetime, timezone
+
+            error_log = "[ERROR] Docker failed to start\n"
+            error_log += f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n"
+            if exit_code is not None:
+                error_log += f"Exit Code: {exit_code}\n"
+            error_log += f"Error: {error_message}\n"
+            if stderr:
+                error_log += f"\n=== Docker stderr ===\n{stderr}\n"
+
+            # Write the error log to remote
+            self.remote_executor.write_file(remote_log_path, error_log)
+            logger.info("Created fallback log at: %s", remote_log_path)
+        except Exception as e:
+            logger.error("Failed to create fallback log: %s", e)
+
     def run_inference(
         self,
         prompt_file: Path,
@@ -336,6 +375,7 @@ class DockerExecutor:
 
             # Build the docker command
             command = builder.build()
+            logger.debug("Executing Docker command for enhancement: %s", command)
 
             # Run synchronously (blocking)
             logger.info("Starting prompt enhancement on GPU...")
@@ -357,6 +397,14 @@ class DockerExecutor:
                     "batch_filename": batch_filename,
                 }
             else:
+                # Create fallback log for Docker failures, especially exit code 125
+                if exit_code == 125 and run_id:
+                    self._create_fallback_log(
+                        run_id=run_id,
+                        error_message=f"Docker failed to start container for enhancement {batch_filename}",
+                        stderr=stderr if stderr else "",
+                        exit_code=exit_code,
+                    )
                 return {
                     "status": "failed",
                     "exit_code": exit_code,
@@ -414,6 +462,7 @@ class DockerExecutor:
 
         # Run synchronously (blocking)
         command = builder.build()
+        logger.debug("Executing Docker command for inference: %s", command)
 
         # Execute and wait for completion
         exit_code, stdout, stderr = self.ssh_manager.execute_command(
@@ -430,6 +479,15 @@ class DockerExecutor:
                 logger.error("STDERR: {}", stderr)
             if stdout and not stream_output:  # Don't duplicate if already streamed
                 logger.info("STDOUT: {}", stdout)
+
+            # Create fallback log for Docker failures, especially exit code 125
+            if exit_code == 125:
+                self._create_fallback_log(
+                    run_id=run_id,
+                    error_message=f"Docker failed to start container for inference {prompt_name}",
+                    stderr=stderr,
+                    exit_code=exit_code,
+                )
 
         logger.info("Inference completed with exit code %d", exit_code)
         return exit_code
@@ -485,6 +543,7 @@ class DockerExecutor:
 
         # Run synchronously (blocking)
         command = builder.build()
+        logger.debug("Executing Docker command for upscaling: %s", command)
 
         # Execute and wait for completion
         exit_code, stdout, stderr = self.ssh_manager.execute_command(
@@ -501,6 +560,15 @@ class DockerExecutor:
                 logger.error("STDERR: {}", stderr)
             if stdout and not stream_output:  # Don't duplicate if already streamed
                 logger.info("STDOUT: {}", stdout)
+
+            # Create fallback log for Docker failures, especially exit code 125
+            if exit_code == 125:
+                self._create_fallback_log(
+                    run_id=run_id,
+                    error_message=f"Docker failed to start container for upscaling {video_path}",
+                    stderr=stderr,
+                    exit_code=exit_code,
+                )
 
         logger.info("Upscaling completed with exit code %d", exit_code)
         return exit_code
@@ -806,6 +874,7 @@ class DockerExecutor:
 
         # Run the command in background
         command = builder.build()
+        logger.debug("Executing Docker command for batch inference: %s", command)
         background_command = f"nohup {command} > /dev/null 2>&1 &"
 
         # This returns immediately since we're running in background

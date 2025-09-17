@@ -91,9 +91,11 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
             logger.warning("CosmosAPI not initialized")
             return [], [], "No data available"
 
-        # Query runs with status filter
+        # Query more runs initially to ensure filters have enough data to work with
+        # We fetch up to 500 runs to search through, then limit display results later
+        max_search_limit = 500
         all_runs = ops.list_runs(
-            status=None if status_filter == "all" else status_filter, limit=int(limit)
+            status=None if status_filter == "all" else status_filter, limit=max_search_limit
         )
 
         # Enrich runs with prompt text
@@ -164,6 +166,13 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
                 if search_lower in run.get("id", "").lower()
                 or search_lower in run.get("prompt_text", "").lower()
             ]
+
+        # Store total count before limiting for statistics
+        total_filtered = len(filtered_runs)
+
+        # Now limit to the user's Max Results setting
+        display_limit = int(limit)
+        filtered_runs = filtered_runs[:display_limit]
 
         # Build gallery data with thumbnails (only completed runs)
         gallery_data = []
@@ -252,7 +261,7 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
 
         # Build statistics
         stats = f"""
-        **Total Runs:** {len(filtered_runs)}
+        **Total Matching:** {total_filtered} (showing {len(filtered_runs)})
         **Completed:** {sum(1 for r in filtered_runs if r.get("status") == "completed")}
         **Running:** {sum(1 for r in filtered_runs if r.get("status") == "running")}
         **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}
@@ -789,7 +798,7 @@ def load_runs_for_multiple_prompts(
                 if prompt:
                     prompt_map[prompt_id] = prompt
 
-                # Get runs for this prompt
+                # Get runs for this prompt - fetch more to allow filtering
                 runs = ops.list_runs(
                     prompt_id=prompt_id, status=None if status_filter == "all" else status_filter
                 )
@@ -807,10 +816,6 @@ def load_runs_for_multiple_prompts(
 
         # Sort by created_at descending
         all_runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-
-        # Apply limit
-        if len(all_runs) > limit:
-            all_runs = all_runs[:limit]
 
         # Apply date filter
         now = datetime.now(timezone.utc)
@@ -870,6 +875,13 @@ def load_runs_for_multiple_prompts(
                 if search_lower in run.get("id", "").lower()
                 or search_lower in run.get("prompt_text", "").lower()
             ]
+
+        # Store total count before limiting for statistics
+        total_filtered = len(filtered_runs)
+
+        # Now limit to the user's Max Results setting
+        display_limit = int(limit)
+        filtered_runs = filtered_runs[:display_limit]
 
         # Build gallery data with thumbnails (only completed runs)
         gallery_data = []
@@ -959,7 +971,7 @@ def load_runs_for_multiple_prompts(
         # Build statistics
         stats = f"""
         **Filtering by:** {len(prompt_ids)} prompt(s)
-        **Total Runs:** {len(filtered_runs)}
+        **Total Matching:** {total_filtered} (showing {len(filtered_runs)})
         **Completed:** {sum(1 for r in filtered_runs if r.get("status") == "completed")}
         **Running:** {sum(1 for r in filtered_runs if r.get("status") == "running")}
         **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}

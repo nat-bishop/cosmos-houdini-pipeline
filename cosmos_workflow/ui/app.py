@@ -2134,12 +2134,27 @@ def create_ui():
                 "runs_details_group",
                 "runs_detail_id",
                 "runs_detail_status",
+                # Content block visibility
+                "runs_main_content_transfer",
+                "runs_main_content_enhance",
+                "runs_main_content_upscale",
+                # Transfer content components
                 "runs_input_video_1",
                 "runs_input_video_2",
                 "runs_input_video_3",
                 "runs_input_video_4",
                 "runs_output_video",
                 "runs_prompt_text",
+                # Enhancement content components
+                "runs_original_prompt_enhance",
+                "runs_enhanced_prompt_enhance",
+                "runs_enhance_stats",
+                # Upscale content components
+                "runs_output_video_upscale",
+                "runs_original_video_upscale",
+                "runs_upscale_stats",
+                "runs_upscale_prompt",
+                # Info tab components
                 "runs_info_id",
                 "runs_info_prompt_id",
                 "runs_info_status",
@@ -2150,6 +2165,7 @@ def create_ui():
                 "runs_info_completed",
                 "runs_info_output_path",
                 "runs_info_input_paths",
+                # Parameters and Logs
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",
@@ -2193,12 +2209,27 @@ def create_ui():
                 "runs_details_group",
                 "runs_detail_id",
                 "runs_detail_status",
+                # Content block visibility
+                "runs_main_content_transfer",
+                "runs_main_content_enhance",
+                "runs_main_content_upscale",
+                # Transfer content components
                 "runs_input_video_1",
                 "runs_input_video_2",
                 "runs_input_video_3",
                 "runs_input_video_4",
                 "runs_output_video",
                 "runs_prompt_text",
+                # Enhancement content components
+                "runs_original_prompt_enhance",
+                "runs_enhanced_prompt_enhance",
+                "runs_enhance_stats",
+                # Upscale content components
+                "runs_output_video_upscale",
+                "runs_original_video_upscale",
+                "runs_upscale_stats",
+                "runs_upscale_prompt",
+                # Info tab components
                 "runs_info_id",
                 "runs_info_prompt_id",
                 "runs_info_status",
@@ -2209,6 +2240,7 @@ def create_ui():
                 "runs_info_completed",
                 "runs_info_output_path",
                 "runs_info_input_paths",
+                # Parameters and Logs
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",

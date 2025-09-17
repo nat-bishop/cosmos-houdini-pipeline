@@ -183,74 +183,155 @@ def create_runs_tab_ui():
                     gr.Markdown("### 📋 Run Details")
 
                     with gr.Tabs():
-                        # Main Tab
+                        # Main Tab - Dynamic content based on model type
                         with gr.Tab("Main"):
-                            # Generated Output
-                            gr.Markdown("#### Generated Output")
-                            components["runs_output_video"] = gr.Video(
-                                label="Output Video",
-                                show_label=False,
-                                autoplay=True,
-                                loop=True,
-                                height=500,
-                            )
+                            # Transfer/Default content (visible by default)
+                            with gr.Column(visible=True) as components[
+                                "runs_main_content_transfer"
+                            ]:
+                                # Generated Output
+                                gr.Markdown("#### Generated Output")
+                                components["runs_output_video"] = gr.Video(
+                                    label="Output Video",
+                                    show_label=False,
+                                    autoplay=True,
+                                    loop=True,
+                                    height=500,
+                                )
 
-                            # Input Videos
-                            gr.Markdown("#### Input Videos")
+                                # Input Videos
+                                gr.Markdown("#### Input Videos")
 
-                            # Create individual video components for better control
-                            with gr.Row(equal_height=True):
-                                # Create 4 video slots (max possible: color, edge, depth, seg)
-                                with gr.Column(scale=1, min_width=200):
-                                    components["runs_input_video_1"] = gr.Video(
-                                        label="Video 1",
-                                        visible=False,
-                                        autoplay=False,
-                                        loop=True,
-                                        show_download_button=False,
-                                        interactive=False,
-                                        container=True,
-                                    )
-                                with gr.Column(scale=1, min_width=200):
-                                    components["runs_input_video_2"] = gr.Video(
-                                        label="Video 2",
-                                        visible=False,
-                                        autoplay=False,
-                                        loop=True,
-                                        show_download_button=False,
-                                        interactive=False,
-                                        container=True,
-                                    )
-                                with gr.Column(scale=1, min_width=200):
-                                    components["runs_input_video_3"] = gr.Video(
-                                        label="Video 3",
-                                        visible=False,
-                                        autoplay=False,
-                                        loop=True,
-                                        show_download_button=False,
-                                        interactive=False,
-                                        container=True,
-                                    )
-                                with gr.Column(scale=1, min_width=200):
-                                    components["runs_input_video_4"] = gr.Video(
-                                        label="Video 4",
-                                        visible=False,
-                                        autoplay=False,
-                                        loop=True,
-                                        show_download_button=False,
-                                        interactive=False,
-                                        container=True,
-                                    )
+                                # Create individual video components for better control
+                                with gr.Row(equal_height=True):
+                                    # Create 4 video slots (max possible: color, edge, depth, seg)
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_1"] = gr.Video(
+                                            label="Video 1",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_2"] = gr.Video(
+                                            label="Video 2",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_3"] = gr.Video(
+                                            label="Video 3",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_4"] = gr.Video(
+                                            label="Video 4",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
 
-                            # Full Prompt
-                            gr.Markdown("#### Full Prompt")
-                            components["runs_prompt_text"] = gr.Textbox(
-                                label="Prompt Text",
-                                show_label=False,
-                                lines=4,
-                                max_lines=10,
-                                interactive=False,
-                            )
+                                # Full Prompt
+                                gr.Markdown("#### Full Prompt")
+                                components["runs_prompt_text"] = gr.Textbox(
+                                    label="Prompt Text",
+                                    show_label=False,
+                                    lines=4,
+                                    max_lines=10,
+                                    interactive=False,
+                                )
+
+                            # Enhancement content (hidden by default)
+                            with gr.Column(visible=False) as components[
+                                "runs_main_content_enhance"
+                            ]:
+                                gr.Markdown("#### Prompt Enhancement Results")
+
+                                # Side-by-side prompts for comparison
+                                with gr.Row():
+                                    with gr.Column():
+                                        gr.Markdown("**Original Prompt**")
+                                        components["runs_original_prompt_enhance"] = gr.Textbox(
+                                            label="Original",
+                                            show_label=False,
+                                            lines=8,
+                                            max_lines=15,
+                                            interactive=False,
+                                        )
+                                    with gr.Column():
+                                        gr.Markdown("**Enhanced Prompt**")
+                                        components["runs_enhanced_prompt_enhance"] = gr.Textbox(
+                                            label="Enhanced",
+                                            show_label=False,
+                                            lines=8,
+                                            max_lines=15,
+                                            interactive=False,
+                                        )
+
+                                # Enhancement details
+                                gr.Markdown("#### Enhancement Details")
+                                components["runs_enhance_stats"] = gr.Markdown(
+                                    "Loading enhancement details...",
+                                    elem_classes=["detail-card"],
+                                )
+
+                            # Upscale content (hidden by default)
+                            with gr.Column(visible=False) as components[
+                                "runs_main_content_upscale"
+                            ]:
+                                # Upscaled Output
+                                gr.Markdown("#### Upscaled Output")
+                                components["runs_output_video_upscale"] = gr.Video(
+                                    label="Upscaled Video",
+                                    show_label=False,
+                                    autoplay=True,
+                                    loop=True,
+                                    height=500,
+                                )
+
+                                # Original vs Upscaled comparison
+                                with gr.Row():
+                                    with gr.Column():
+                                        gr.Markdown("**Original Video**")
+                                        components["runs_original_video_upscale"] = gr.Video(
+                                            label="Original",
+                                            show_label=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            height=250,
+                                        )
+                                    with gr.Column():
+                                        gr.Markdown("**Upscale Statistics**")
+                                        components["runs_upscale_stats"] = gr.Markdown(
+                                            "Loading upscale details...",
+                                            elem_classes=["detail-card"],
+                                        )
+
+                                # Prompt used for upscaling (if any)
+                                gr.Markdown("#### Upscaling Prompt")
+                                components["runs_upscale_prompt"] = gr.Textbox(
+                                    label="Prompt",
+                                    show_label=False,
+                                    lines=3,
+                                    max_lines=6,
+                                    interactive=False,
+                                    placeholder="No prompt used for this upscale",
+                                )
 
                             # Hidden components for compatibility
                             components["runs_detail_id"] = gr.Textbox(visible=False)

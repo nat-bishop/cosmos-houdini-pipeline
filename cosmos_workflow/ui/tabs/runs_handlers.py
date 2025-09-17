@@ -388,6 +388,10 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             logger.warning("No run_details found for run_id: {}", run_id)
             return [gr.update(visible=False)] + [gr.update()] * 16
 
+        # Get model type to determine which UI to show
+        model_type = run_details.get("model_type", "transfer")
+        logger.info("Run model type: {}", model_type)
+
         # Extract details
         # Get output video - handle both old and new output structures
         outputs = run_details.get("outputs", {})
@@ -553,10 +557,69 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 log_content = "Error reading log file"
 
         logger.info(
-            "Returning updates - visible: True, run_id: {}, output_video: {}", run_id, output_video
+            "Returning updates - visible: True, run_id: {}, output_video: {}, model_type: {}",
+            run_id,
+            output_video,
+            model_type,
         )
 
-        # Prepare individual video updates (up to 4 videos)
+        # Prepare model-specific content based on model type
+        # TO ADD NEW MODEL TYPES:
+        # 1. Add elif model_type == "your_type"
+        # 2. Set content visibility and prepare data
+        # 3. Add corresponding UI block in runs_ui.py
+
+        if model_type == "enhance":
+            # Enhancement runs: Hide transfer/upscale content, show enhance content
+            show_transfer_content = False
+            show_enhance_content = True
+            show_upscale_content = False
+
+            # Get original and enhanced prompts
+            original_prompt = exec_config.get("original_prompt_text", "")
+            enhanced_prompt = outputs.get("enhanced_text", "")
+
+            # Build enhancement statistics
+            enhancement_model = exec_config.get("model", "Unknown")
+            create_new = exec_config.get("create_new", True)
+            enhanced_at = outputs.get("enhanced_at", "")
+
+            enhance_stats_text = f"""
+            **Model Used:** {enhancement_model}
+            **Mode:** {"Created new prompt" if create_new else "Overwrote original"}
+            **Enhanced At:** {enhanced_at[:19] if enhanced_at else "Unknown"}
+            **Original Length:** {len(original_prompt)} characters
+            **Enhanced Length:** {len(enhanced_prompt)} characters
+            **Status:** {run_details.get("status", "unknown").title()}
+            """
+
+        elif model_type == "upscale":
+            # Upscale runs: Hide transfer/enhance content, show upscale content
+            show_transfer_content = False
+            show_enhance_content = False
+            show_upscale_content = True
+
+            # Get original video (source for upscaling)
+            source_run_id = exec_config.get("source_run_id", "")
+            input_video_source = exec_config.get("input_video_source", "")
+            control_weight = exec_config.get("control_weight", 0.5)
+            upscale_prompt = exec_config.get("prompt", "")
+
+            # Build upscale statistics
+            upscale_stats_text = f"""
+            **Control Weight:** {control_weight}
+            **Source:** {"Run " + source_run_id[:8] if source_run_id else "Direct video"}
+            **Duration:** {duration}
+            **Status:** {run_details.get("status", "unknown").title()}
+            """
+
+        else:
+            # Default/Transfer runs: Show transfer content, hide others
+            show_transfer_content = True
+            show_enhance_content = False
+            show_upscale_content = False
+
+        # Prepare individual video updates for transfer/default content
         video_updates = []
         for i in range(4):
             if i < len(input_videos):
@@ -574,6 +637,11 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             gr.update(visible=True),  # runs_details_group
             gr.update(value=run_id),  # runs_detail_id (hidden)
             gr.update(value=run_details.get("status", "")),  # runs_detail_status (hidden)
+            # Content block visibility
+            gr.update(visible=show_transfer_content),  # runs_main_content_transfer
+            gr.update(visible=show_enhance_content),  # runs_main_content_enhance
+            gr.update(visible=show_upscale_content),  # runs_main_content_upscale
+            # Transfer content components
             video_updates[0],  # runs_input_video_1
             video_updates[1],  # runs_input_video_2
             video_updates[2],  # runs_input_video_3
@@ -582,11 +650,39 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 value=output_video if output_video and Path(output_video).exists() else None
             ),  # runs_output_video
             gr.update(value=prompt_text),  # runs_prompt_text
+            # Enhancement content components
+            gr.update(
+                value=original_prompt if model_type == "enhance" else ""
+            ),  # runs_original_prompt_enhance
+            gr.update(
+                value=enhanced_prompt if model_type == "enhance" else ""
+            ),  # runs_enhanced_prompt_enhance
+            gr.update(
+                value=enhance_stats_text if model_type == "enhance" else ""
+            ),  # runs_enhance_stats
+            # Upscale content components
+            gr.update(
+                value=output_video
+                if model_type == "upscale" and output_video and Path(output_video).exists()
+                else None
+            ),  # runs_output_video_upscale
+            gr.update(
+                value=input_video_source if model_type == "upscale" and input_video_source else None
+            ),  # runs_original_video_upscale
+            gr.update(
+                value=upscale_stats_text if model_type == "upscale" else ""
+            ),  # runs_upscale_stats
+            gr.update(
+                value=upscale_prompt if model_type == "upscale" else ""
+            ),  # runs_upscale_prompt
+            # Info tab components (always the same)
             gr.update(value=run_id),  # runs_info_id
             gr.update(value=run_details.get("prompt_id", "")),  # runs_info_prompt_id
             gr.update(value=run_details.get("status", "")),  # runs_info_status
             gr.update(value=duration),  # runs_info_duration
-            gr.update(value=run_details.get("run_type", "inference")),  # runs_info_type
+            gr.update(
+                value=model_type
+            ),  # runs_info_type (now shows model_type instead of run_type)
             gr.update(value=prompt_name),  # runs_info_prompt_name
             gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
             gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
@@ -594,6 +690,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             gr.update(
                 value=input_paths_text.strip() if input_paths_text else "No input videos"
             ),  # runs_info_input_paths
+            # Parameters and Logs tabs
             gr.update(value=params),  # runs_params_json
             gr.update(value=log_path),  # runs_log_path
             gr.update(value=log_content),  # runs_log_output

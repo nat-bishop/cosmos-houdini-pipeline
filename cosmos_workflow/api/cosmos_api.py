@@ -220,6 +220,7 @@ class CosmosAPI:
             "batch_size": 1,
             "video_context": original["inputs"].get("video"),
             "create_new": create_new,
+            "original_prompt_text": original["prompt_text"],  # Preserve original text
         }
 
         # Create database run with model_type="enhance"

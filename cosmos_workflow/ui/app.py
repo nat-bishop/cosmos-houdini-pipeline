@@ -1233,6 +1233,10 @@ def create_ui():
         pending_nav_data = gr.State(value=None)
         components["pending_nav_data"] = pending_nav_data
 
+        # State to track last selected run ID to avoid unnecessary scrolling
+        last_selected_run_id = gr.State(value=None)
+        components["last_selected_run_id"] = last_selected_run_id
+
         # ============================================
         # Event Handlers
         # ============================================
@@ -2157,6 +2161,7 @@ def create_ui():
                     fn=on_runs_table_select,
                     inputs=[components["runs_table"]],
                     outputs=outputs,
+                    # Note: scroll_to_output removed to prevent scrolling when tab loads
                 )
             else:
                 missing_runs = [k for k in runs_output_keys if k not in components]
@@ -2171,6 +2176,7 @@ def create_ui():
                         fn=on_runs_table_select,
                         inputs=[components["runs_table"]],
                         outputs=available_outputs,
+                        # Note: scroll_to_output removed to prevent scrolling when tab loads
                     )
 
             # Update selection info when a row is selected
@@ -2214,6 +2220,7 @@ def create_ui():
                     fn=on_runs_gallery_select,
                     inputs=[],
                     outputs=outputs,
+                    # Note: scroll_to_output removed to prevent scrolling when tab loads
                 )
 
         # Delete selected run operation - Two-step process with preview

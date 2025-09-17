@@ -826,6 +826,108 @@ cosmos show run rs_upscale_xyz789
 - GPU cluster must have sufficient memory for 4K upscaling operations
 - Separate Docker container execution independent of inference processes
 
+### QueueService
+
+The QueueService provides job queue management for the Gradio UI, wrapping CosmosAPI to add queuing capabilities while maintaining the same synchronous execution model underneath.
+
+**Note:** The queue system is ONLY for the Gradio UI. The CLI continues to use direct CosmosAPI calls without queuing.
+
+#### Core Features
+
+```python
+from cosmos_workflow.services import QueueService
+from cosmos_workflow.api import CosmosAPI
+
+# Initialize queue service
+cosmos_api = CosmosAPI()
+queue_service = QueueService(cosmos_api=cosmos_api)
+
+# Add job to queue
+job_id = queue_service.add_job(
+    prompt_ids=["ps_abc123"],
+    job_type="inference",
+    config={
+        "weights": [0.3, 0.4, 0.2, 0.1],
+        "num_steps": 25,
+        "guidance_scale": 4.0
+    },
+    priority=50
+)
+
+# Check queue status
+status = queue_service.get_queue_status()
+print(f"Total queued: {status['total_queued']}")
+
+# Get job position
+position = queue_service.get_position(job_id)
+print(f"Position in queue: {position}")
+
+# Process next job (background processor handles this automatically)
+result = queue_service.process_next_job()
+```
+
+#### Supported Job Types
+
+**1. Single Inference (`job_type="inference"`):**
+- Processes single prompt using `CosmosAPI.quick_inference()`
+- Config supports: weights, num_steps, guidance_scale, seed, fps, sigma_max, blur_strength, canny_threshold
+
+**2. Batch Inference (`job_type="batch_inference"`):**
+- Processes multiple prompts using `CosmosAPI.batch_inference()`
+- Config supports: weights (shared), num_steps, and optional parameters
+- Efficient for processing multiple prompts together
+
+**3. Enhancement (`job_type="enhancement"`):**
+- Enhances prompts using `CosmosAPI.enhance_prompt()`
+- Config supports: create_new, model (enhancement_model), force_overwrite
+
+#### Queue Management
+
+```python
+# Start background processor for automatic job execution
+queue_service.start_background_processor()
+
+# Check if processor is running
+is_running = queue_service.is_processor_running()
+
+# Cancel a queued job (only works for "queued" status)
+cancelled = queue_service.cancel_job(job_id)
+
+# Clear completed/failed jobs
+cleared_count = queue_service.clear_completed_jobs()
+
+# Get estimated wait time
+wait_time = queue_service.get_estimated_wait_time(job_id)
+
+# Stop background processor
+queue_service.stop_background_processor()
+```
+
+#### Database Integration
+
+The QueueService uses the JobQueue model for persistence:
+
+```python
+# JobQueue model fields:
+# - id: Unique job identifier (job_xxxxx format)
+# - prompt_ids: JSON list of prompt IDs to process
+# - job_type: Type of operation (inference, batch_inference, enhancement)
+# - status: Current status (queued, running, completed, failed, cancelled)
+# - config: JSON configuration parameters
+# - created_at, started_at, completed_at: Timestamps
+# - result: JSON results after completion
+# - priority: Integer priority (higher = more important)
+```
+
+#### Key Design Principles
+
+- **UI-Only**: Queue system designed specifically for Gradio UI experience
+- **FIFO Processing**: Jobs processed in creation order (first in, first out)
+- **Synchronous Execution**: Maintains existing synchronous execution model
+- **Wrapper Pattern**: Wraps existing CosmosAPI methods without changing their behavior
+- **Background Processing**: Automatic job execution via background thread
+- **Status Persistence**: Queue state persisted in SQLite database
+
 ## Log Visualization
 
 The Cosmos Workflow System includes a comprehensive log visualization interface that provides real-time log streaming, advanced filtering, and interactive web-based viewing capabilities.
@@ -1349,6 +1451,12 @@ Manages secure database connections with automatic session handling.
 - Execution lifecycle tracking (pending → uploading → running → downloading → completed/failed)
 - JSON storage for execution configuration and outputs
 - Automatic timestamp management for audit trail
+
+**JobQueue Model:**
+- Queue management for Gradio UI job processing (CLI uses direct CosmosAPI calls)
+- Supports three job types: inference, batch_inference, enhancement
+- FIFO processing order with priority support for future enhancement
+- Complete status tracking: queued → running → completed/failed/cancelled
 
 
 #### Helper Functions
@@ -1924,6 +2032,50 @@ class Run(Base):
 - `downloading`: Retrieving results
 - `completed`: Successfully finished
 - `failed`: Error occurred
+
+### JobQueue Model
+Queue management for Gradio UI job processing (UI-only, CLI uses direct CosmosAPI calls).
+
+```python
+class JobQueue(Base):
+    id = Column(String, primary_key=True)                    # job_xxxxx format
+    prompt_ids = Column(JSON, nullable=False)                # List of prompt IDs to process
+    job_type = Column(String, nullable=False)                # inference, batch_inference, enhancement
+    status = Column(String, nullable=False)                  # queued→running→completed/failed/cancelled
+    config = Column(JSON, nullable=False)                    # Job-specific configuration
+    created_at = Column(DateTime(timezone=True))
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    result = Column(JSON, nullable=True)                     # Results/outputs after completion
+    priority = Column(Integer, default=50, nullable=True)    # Priority for future use
+```
+
+**Queue Status Lifecycle:**
+- `queued`: Job added to queue, awaiting processing
+- `running`: Job currently being executed
+- `completed`: Job finished successfully
+- `failed`: Job execution failed
+- `cancelled`: Job cancelled by user
+
+**Supported Job Types:**
+- `inference`: Single prompt inference using CosmosAPI.quick_inference()
+- `batch_inference`: Multiple prompt batch processing using CosmosAPI.batch_inference()
+- `enhancement`: Prompt enhancement using CosmosAPI.enhance_prompt()
+
+**Usage Pattern:**
+```python
+# Example job configuration for inference
+config = {
+    "weights": [0.3, 0.4, 0.2, 0.1],
+    "num_steps": 25,
+    "guidance_scale": 4.0,
+    "seed": 42
+}
+
+# Queue processing uses FIFO order
+# Background processor executes jobs automatically
+# Results stored in result field as JSON
+```
 
 ### Database Connection
 

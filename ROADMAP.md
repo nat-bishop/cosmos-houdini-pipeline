@@ -22,6 +22,15 @@
 - [ ] Current enhancement relationships stored in Run.outputs JSON creates complex queries
 - [ ] Consider simpler approaches: direct foreign keys or dedicated enhancement fields
 
+### Complete Job Queue Implementation
+- [x] Added JobQueue model to database/models.py for tracking queued operations
+- [x] Created QueueService in services/queue_service.py that wraps CosmosAPI
+- [x] Queue system implemented ONLY for Gradio UI - CLI uses direct CosmosAPI calls
+- [x] Support for three job types: inference, batch_inference, and enhancement
+- [x] Queue position tracking, job status, and background processing
+- [x] SQLite persistence with FIFO processing order
+- [x] Export QueueService from cosmos_workflow/services/__init__.py
+
 ### Complete Abstraction Layer Migration
 **Issue:** Multiple files bypass abstraction layers, calling SSH/Docker commands directly instead of using RemoteCommandExecutor/DockerCommandBuilder
 

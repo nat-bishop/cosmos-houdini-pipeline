@@ -255,6 +255,7 @@ Local Machine                                    Remote GPU Server (H100)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
 - **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
+- **Job Queue System**: Background job processing with queue visibility and position tracking (UI-only, CLI uses direct execution)
 - **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
 - **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Job Queue Implementation for Gradio UI (2025-01-17)
+- **JobQueue Database Model**
+  - Added JobQueue model to database/models.py for tracking queued operations
+  - Supports three job types: inference, batch_inference, and enhancement
+  - Provides queue position tracking, job status, and background processing
+  - Uses SQLite for persistence with FIFO processing order
+  - Includes priority field for future enhancement, timestamps for tracking
+
+- **QueueService for UI Job Management**
+  - Created QueueService in services/queue_service.py wrapping CosmosAPI
+  - Queue system is ONLY for the Gradio UI - CLI remains unchanged and uses direct CosmosAPI calls
+  - Background processor thread for automatic job execution
+  - Position tracking and estimated wait times for queued jobs
+  - Comprehensive job status management (queued, running, completed, failed, cancelled)
+  - Support for cancelling queued jobs and clearing completed ones
+
+- **Enhanced UI Queue Integration**
+  - QueueService wraps existing CosmosAPI calls to add queuing layer
+  - Maintains synchronous execution model while providing queue visibility
+  - Background processing handles job execution without blocking UI
+  - Complete job lifecycle tracking from queue to completion
+  - Error handling and recovery for failed queue operations
+
 ### Changed - Active Jobs Tab Improvements (2025-01-16)
 - **Jobs & Queue Tab Renamed to "Active Jobs"**
   - Removed all queue-related functionality that never worked properly in production

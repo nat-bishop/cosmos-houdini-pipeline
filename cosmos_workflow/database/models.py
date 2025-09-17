@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Text,
 )
@@ -157,3 +158,68 @@ class Run(Base):
 
     def __repr__(self):
         return f"<Run(id={self.id}, prompt={self.prompt_id}, status={self.status})>"
+
+
+class JobQueue(Base):
+    """JobQueue model for tracking queued operations in the UI.
+
+    This model is specifically for the Gradio UI's job queue system.
+    The CLI continues to use direct CosmosAPI calls without queuing.
+    """
+
+    __tablename__ = "job_queue"
+
+    # Core fields
+    id = Column(String, primary_key=True)
+    prompt_ids = Column(JSON, nullable=False)  # List of prompt IDs
+    job_type = Column(String, nullable=False)  # inference, batch_inference, enhancement
+    status = Column(String, nullable=False)  # queued, running, completed, failed, cancelled
+    config = Column(JSON, nullable=False)  # Job-specific configuration
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Optional fields
+    result = Column(JSON, nullable=True)  # Results/outputs after completion
+    priority = Column(Integer, default=50, nullable=True)  # Priority for future use
+
+    @validates("prompt_ids", "config")
+    def validate_json_fields(self, key, value):
+        """Validate that JSON fields are not None.
+
+        Args:
+            key: Name of the field being validated.
+            value: Value being assigned to the field.
+
+        Returns:
+            The validated value if it passes validation.
+
+        Raises:
+            ValueError: If the value is None.
+        """
+        if value is None:
+            raise ValueError(f"{key} cannot be None")
+        return value
+
+    @validates("status", "job_type")
+    def validate_required_strings(self, key, value):
+        """Validate that required string fields are not empty.
+
+        Args:
+            key: Name of the field being validated.
+            value: Value being assigned to the field.
+
+        Returns:
+            The validated value if it passes validation.
+
+        Raises:
+            ValueError: If the value is None or empty string.
+        """
+        if value is None or (isinstance(value, str) and not value.strip()):
+            raise ValueError(f"{key} cannot be None or empty")
+        return value
+
+    def __repr__(self):
+        return f"<JobQueue(id={self.id}, type={self.job_type}, status={self.status})>"

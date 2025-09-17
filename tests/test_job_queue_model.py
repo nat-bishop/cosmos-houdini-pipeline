@@ -26,7 +26,8 @@ class TestJobQueueModel:
     @pytest.fixture
     def db_session(self, test_db):
         """Get database session from test database."""
-        return test_db.get_session()
+        with test_db.get_session() as session:
+            yield session
 
     def test_create_job_with_required_fields(self, db_session):
         """User can create a job with all required fields."""
@@ -166,7 +167,7 @@ class TestJobQueueModel:
         position = next((i for i, j in enumerate(queued, 1) if j.id == "job_003"), None)
 
         # Assert
-        assert position == 2  # It's the 2nd queued job (job_001 and job_002 are before it)
+        assert position == 3  # It's the 3rd queued job (job_001, job_002, job_003 are queued)
 
     def test_job_error_tracking(self, db_session):
         """User can see why a job failed."""
@@ -320,14 +321,24 @@ class TestJobQueueModel:
 
     def test_job_validates_required_fields(self, db_session):
         """System prevents creating jobs without required fields."""
-        # Act & Assert
-        with pytest.raises((TypeError, ValueError)):
-            JobQueue(id="job_invalid_001")  # Missing required fields
+        from sqlalchemy.exc import IntegrityError
 
-        with pytest.raises((ValueError, KeyError, AttributeError)):
-            JobQueue(
-                prompt_ids=["ps_001"],  # Missing id
-                job_type="inference",
-                status="queued",
-                config={},
-            )
+        # Act & Assert - Test missing required JSON fields
+        with pytest.raises(IntegrityError):  # SQLAlchemy raises IntegrityError for NOT NULL
+            job = JobQueue(id="job_invalid_001")  # Missing required fields
+            db_session.add(job)
+            db_session.flush()  # This will trigger validation
+
+        # Need to rollback after the error
+        db_session.rollback()
+
+        # Test that we can create job without id but it fails on commit
+        job = JobQueue(
+            prompt_ids=["ps_001"],  # Missing id
+            job_type="inference",
+            status="queued",
+            config={},
+        )
+        db_session.add(job)
+        with pytest.raises(IntegrityError):  # Should fail when trying to commit without primary key
+            db_session.commit()

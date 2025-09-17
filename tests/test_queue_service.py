@@ -237,6 +237,85 @@ class TestQueueService:
             create_new=True,
         )
 
+    def test_process_upscale_job_from_run(self, queue_service, mock_cosmos_api):
+        """System processes upscale jobs from run ID correctly."""
+        # Arrange
+        queue_service.add_job(
+            prompt_ids=[],  # Upscale doesn't need prompt IDs
+            job_type="upscale",
+            config={
+                "video_source": "rs_abc123",
+                "control_weight": 0.7,
+                "prompt": "cinematic quality",
+            },
+        )
+
+        # Configure mock
+        mock_cosmos_api.upscale.return_value = {
+            "status": "success",
+            "upscale_run_id": "rs_upscale_456",
+            "output_path": "/outputs/upscaled_4k.mp4",
+        }
+
+        # Act
+        result = queue_service.process_next_job()
+
+        # Assert
+        assert result["status"] == "completed"
+        mock_cosmos_api.upscale.assert_called_once_with(
+            video_source="rs_abc123",
+            control_weight=0.7,
+            prompt="cinematic quality",
+        )
+
+    def test_process_upscale_job_from_video(self, queue_service, mock_cosmos_api):
+        """System processes upscale jobs from video file correctly."""
+        # Arrange
+        queue_service.add_job(
+            prompt_ids=[],  # Upscale doesn't need prompt IDs
+            job_type="upscale",
+            config={
+                "video_source": "/path/to/video.mp4",
+                "control_weight": 0.5,
+                # No prompt this time
+            },
+        )
+
+        # Configure mock
+        mock_cosmos_api.upscale.return_value = {
+            "status": "success",
+            "upscale_run_id": "rs_upscale_789",
+            "output_path": "/outputs/upscaled_4k.mp4",
+        }
+
+        # Act
+        result = queue_service.process_next_job()
+
+        # Assert
+        assert result["status"] == "completed"
+        mock_cosmos_api.upscale.assert_called_once_with(
+            video_source="/path/to/video.mp4",
+            control_weight=0.5,
+        )
+
+    def test_add_upscale_job_to_queue(self, queue_service):
+        """User can add an upscale job to the queue."""
+        # Arrange & Act
+        job_id = queue_service.add_job(
+            prompt_ids=[],  # Empty list for upscale
+            job_type="upscale",
+            config={
+                "video_source": "rs_test123",
+                "control_weight": 0.8,
+            },
+        )
+
+        # Assert
+        assert job_id.startswith("job_")
+        job_status = queue_service.get_job_status(job_id)
+        assert job_status["status"] == "queued"
+        assert job_status["type"] == "upscale"
+
     def test_job_failure_handling(self, queue_service, mock_cosmos_api):
         """System handles job failures gracefully."""
         # Arrange
@@ -336,16 +415,30 @@ class TestQueueService:
             job_type="batch_inference",
             config={"weights": {"vis": 0.5}},
         )
+        queue_service.add_job(
+            prompt_ids=[],
+            job_type="upscale",
+            config={"video_source": "rs_005", "control_weight": 0.6},
+        )
+
+        # Configure mock for upscale
+        mock_cosmos_api.upscale.return_value = {
+            "status": "success",
+            "upscale_run_id": "rs_upscale_test",
+            "output_path": "/outputs/upscaled.mp4",
+        }
 
         # Act
         queue_service.process_next_job()  # Process inference
         queue_service.process_next_job()  # Process enhancement
         queue_service.process_next_job()  # Process batch
+        queue_service.process_next_job()  # Process upscale
 
         # Assert
         mock_cosmos_api.quick_inference.assert_called_once()
         mock_cosmos_api.enhance_prompt.assert_called_once()
         mock_cosmos_api.batch_inference.assert_called_once()
+        mock_cosmos_api.upscale.assert_called_once()
 
     def test_get_estimated_wait_time(self, queue_service):
         """User can get estimated wait time for their job."""

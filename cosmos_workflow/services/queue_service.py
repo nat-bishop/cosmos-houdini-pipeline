@@ -254,6 +254,8 @@ class QueueService:
                     result = self._execute_batch_inference(job)
                 elif job.job_type == "enhancement":
                     result = self._execute_enhancement(job)
+                elif job.job_type == "upscale":
+                    result = self._execute_upscale(job)
                 else:
                     raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -368,6 +370,30 @@ class QueueService:
 
         # Execute enhancement
         result = self.cosmos_api.enhance_prompt(**kwargs)
+
+        return result
+
+    def _execute_upscale(self, job: JobQueue) -> dict[str, Any]:
+        """Execute upscale job."""
+        config = job.config or {}
+
+        # Build kwargs with parameters from config
+        kwargs = {
+            "video_source": config.get("video_source"),
+        }
+
+        # Add optional parameters
+        if "control_weight" in config:
+            kwargs["control_weight"] = config["control_weight"]
+        if "prompt" in config:
+            kwargs["prompt"] = config["prompt"]
+
+        # Validate required parameters
+        if not kwargs["video_source"]:
+            raise ValueError("No video_source provided for upscale job")
+
+        # Execute upscale
+        result = self.cosmos_api.upscale(**kwargs)
 
         return result
 

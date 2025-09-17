@@ -34,6 +34,8 @@ import gradio as gr
 
 from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.config import ConfigManager
+from cosmos_workflow.database import DatabaseConnection
+from cosmos_workflow.services.queue_service import QueueService
 
 # Import modular UI components
 from cosmos_workflow.ui.components.header import create_header_ui
@@ -41,6 +43,7 @@ from cosmos_workflow.ui.helpers import (
     extract_video_metadata,
 )
 from cosmos_workflow.ui.log_viewer import LogViewer
+from cosmos_workflow.ui.queue_handlers import QueueHandlers
 from cosmos_workflow.ui.styles_simple import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_handlers import (
@@ -79,12 +82,26 @@ config = ConfigManager()
 # Initialize log viewer (reusing existing component)
 log_viewer = LogViewer(max_lines=2000)
 
+# Initialize Queue Service for UI use
+queue_service = None
+queue_handlers = None
+
 
 # Simple shutdown cleanup using existing methods
 def cleanup_on_shutdown(signum=None, frame=None):
     """Kill containers on shutdown using existing CosmosAPI method."""
+    global queue_service
+
     if signum:
         logger.info("Shutting down gracefully...")
+
+    # Stop queue processor if running
+    if queue_service:
+        try:
+            queue_service.stop_background_processor()
+            logger.info("Stopped queue processor")
+        except Exception as e:
+            logger.error("Error stopping queue processor: {}", e)
 
     # Check config to see if we should cleanup containers
     ui_config = config.get_ui_config()
@@ -795,11 +812,10 @@ def run_inference_on_selected(
     progress=None,
 ):
     """Run inference on selected prompts with queue progress tracking."""
+    global queue_service
+
     if progress is None:
         progress = gr.Progress()
-
-    # Create fresh CosmosAPI instance for this operation
-    ops = CosmosAPI()
 
     try:
         # Get selected prompt IDs
@@ -832,61 +848,38 @@ def run_inference_on_selected(
 
         logger.info("Starting inference on {} prompts", len(selected_ids))
 
-        # Show immediate feedback
-        gr.Info(f"🚀 Starting inference on {len(selected_ids)} prompt(s)...")
+        # Prepare config for queue
+        config = {
+            "weights": weights,
+            "num_steps": int(steps),
+            "guidance_scale": guidance,
+            "seed": int(seed),
+            "fps": int(fps),
+            "sigma_max": sigma_max,
+            "blur_strength": blur_strength,
+            "canny_threshold": canny_threshold,
+        }
 
-        # Run inference based on count
-        if len(selected_ids) == 1:
-            # Single inference
-            progress(0.1, desc="Initializing inference...")
+        # Determine job type
+        job_type = "inference" if len(selected_ids) == 1 else "batch_inference"
 
-            result = ops.quick_inference(
-                prompt_id=selected_ids[0],
-                weights=weights,
-                stream_output=False,  # Don't stream to console in UI
-                num_steps=int(steps),
-                guidance_scale=guidance,
-                seed=int(seed),
-                fps=int(fps),
-                sigma_max=sigma_max,
-                blur_strength=blur_strength,
-                canny_threshold=canny_threshold,
-            )
+        # Add job to queue
+        job_id = queue_service.add_job(
+            prompt_ids=selected_ids,
+            job_type=job_type,
+            config=config,
+        )
 
-            progress(1.0, desc="Inference complete!")
+        # Get queue position
+        position = queue_service.get_position(job_id)
 
-            # Check for completed status (synchronous execution)
-            if result.get("status") == "completed":
-                output_msg = f"✅ Inference completed for {selected_ids[0]}"
-                if result.get("output_path"):
-                    output_msg += f"\n📁 Output: {result['output_path']}"
-                return output_msg
-            elif result.get("status") == "started":  # Legacy support
-                return f"✅ Inference started for {selected_ids[0]}"
-            elif result.get("status") == "success":  # Legacy support
-                return "✅ Inference completed successfully"
-            else:
-                return f"❌ Inference failed: {result.get('error', 'Unknown error')}"
+        # Show immediate feedback with queue position
+        if position:
+            gr.Info(f"🎯 Added to queue at position #{position} - Job ID: {job_id}")
+            return f"✅ Job {job_id} queued at position #{position}\n📋 {len(selected_ids)} prompt(s) will be processed"
         else:
-            # Batch inference
-            progress(0.1, desc=f"Starting batch inference for {len(selected_ids)} prompts...")
-
-            result = ops.batch_inference(
-                prompt_ids=selected_ids,
-                shared_weights=weights,
-                num_steps=int(steps),
-                guidance_scale=guidance,
-                seed=int(seed),
-                fps=int(fps),
-                sigma_max=sigma_max,
-                blur_strength=blur_strength,
-                canny_threshold=canny_threshold,
-            )
-
-            progress(1.0, desc="Batch inference complete!")
-
-            successful = len(result.get("output_mapping", {}))
-            return f"✅ Batch inference completed: {successful}/{len(selected_ids)} successful"
+            gr.Info(f"🚀 Job {job_id} starting immediately")
+            return f"✅ Job {job_id} starting now\n📋 Processing {len(selected_ids)} prompt(s)"
 
     except Exception as e:
         logger.error("Failed to run inference: {}", e)
@@ -895,11 +888,10 @@ def run_inference_on_selected(
 
 def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progress=None):
     """Run enhancement on selected prompts with queue progress tracking."""
+    global queue_service
+
     if progress is None:
         progress = gr.Progress()
-
-    # Create fresh CosmosAPI instance for this operation
-    ops = CosmosAPI()
 
     try:
         # Handle force_overwrite parameter - it might be None or wrapped
@@ -935,38 +927,36 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
         model = "pixtral"
         logger.info("Starting enhancement on {} prompts with model {}", len(selected_ids), model)
 
-        # Show immediate feedback
-        gr.Info(f"🌟 Starting enhancement on {len(selected_ids)} prompt(s)...")
-
-        results = []
-        errors = []
-
+        # Add all enhancement jobs to queue
+        job_ids = []
         for prompt_id in selected_ids:
-            try:
-                result = ops.enhance_prompt(
-                    prompt_id=prompt_id,
-                    create_new=create_new,
-                    enhancement_model=model,
-                    force_overwrite=force_overwrite,
-                )
+            config = {
+                "create_new": create_new,
+                "enhancement_model": model,
+                "force_overwrite": force_overwrite,
+            }
 
-                if result.get("status") in ["success", "started"]:
-                    results.append(prompt_id)
-                else:
-                    errors.append(f"{prompt_id}: {result.get('error', 'Unknown error')}")
+            job_id = queue_service.add_job(
+                prompt_ids=[prompt_id],
+                job_type="enhancement",
+                config=config,
+            )
+            job_ids.append(job_id)
 
-            except Exception as e:
-                errors.append(f"{prompt_id}: {e}")
+        # Get queue position for first job
+        position = queue_service.get_position(job_ids[0]) if job_ids else None
 
-        # Build status message
-        if errors:
-            error_msg = "\n".join(errors[:3])  # Show first 3 errors
-            if len(errors) > 3:
-                error_msg += f"\n... and {len(errors) - 3} more errors"
-            return f"⚠️ Enhanced {len(results)}/{len(selected_ids)} prompts\n{error_msg}"
+        # Show immediate feedback
+        if position:
+            gr.Info(
+                f"🌟 Added {len(job_ids)} enhancement job(s) to queue starting at position #{position}"
+            )
+            action = "create new" if create_new else "update"
+            return f"✅ Queued {len(job_ids)} enhancement job(s)\n📋 Will {action} {len(selected_ids)} prompt(s)\nFirst job at position #{position}"
         else:
-            action = "created new" if create_new else "updated"
-            return f"✅ Successfully {action} {len(results)} enhanced prompt(s)"
+            gr.Info(f"🌟 Starting {len(job_ids)} enhancement job(s) now")
+            action = "creating new" if create_new else "updating"
+            return f"✅ Started {len(job_ids)} enhancement job(s)\n📋 {action.title()} {len(selected_ids)} prompt(s)"
 
     except Exception as e:
         import traceback
@@ -1173,6 +1163,16 @@ Currently idle - no jobs running"""
 
 def create_ui():
     """Create the comprehensive Gradio interface using modular components."""
+    global queue_service, queue_handlers
+
+    # Initialize Queue Service with database
+    database_path = "outputs/cosmos.db"
+    db_connection = DatabaseConnection(database_path)
+    queue_service = QueueService(db_connection=db_connection)
+    queue_handlers = QueueHandlers(queue_service)
+
+    # Start the background processor
+    queue_service.start_background_processor()
 
     # Get custom CSS from styles module
     custom_css = get_custom_css()
@@ -2363,6 +2363,45 @@ def create_ui():
                     components.get("running_jobs_display"),
                     components.get("job_status"),
                     components.get("active_job_card"),
+                ],
+            )
+
+        # Queue Display Events
+        if "refresh_queue_btn" in components and queue_handlers:
+            # Refresh queue display
+            components["refresh_queue_btn"].click(
+                fn=queue_handlers.get_queue_display,
+                outputs=[
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                ],
+            )
+
+            # Clear completed jobs
+            components["clear_completed_btn"].click(
+                fn=queue_handlers.clear_completed_jobs,
+                outputs=components.get("job_status"),
+            ).then(
+                fn=queue_handlers.get_queue_display,
+                outputs=[
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                ],
+            )
+
+            # Auto-refresh queue every 2 seconds when on jobs tab
+            def auto_refresh_queue():
+                """Auto-refresh queue display."""
+                return queue_handlers.get_queue_display()
+
+            # Set up a timer for auto-refresh
+            # Create a timer that triggers every 2 seconds
+            timer = gr.Timer(value=2, active=True)
+            timer.tick(
+                fn=auto_refresh_queue,
+                outputs=[
+                    components.get("queue_status"),
+                    components.get("queue_table"),
                 ],
             )
 

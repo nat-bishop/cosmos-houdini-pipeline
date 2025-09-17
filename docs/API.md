@@ -826,11 +826,19 @@ cosmos show run rs_upscale_xyz789
 - GPU cluster must have sufficient memory for 4K upscaling operations
 - Separate Docker container execution independent of inference processes
 
-### QueueService
+### QueueService - Production Job Queue System
 
-The QueueService provides job queue management for the Gradio UI, wrapping CosmosAPI to add queuing capabilities while maintaining the same synchronous execution model underneath.
+The QueueService provides comprehensive job queue management for the Gradio UI, implementing a production-ready queuing system that wraps CosmosAPI while maintaining thread safety and GPU conflict prevention.
 
-**Note:** The queue system is ONLY for the Gradio UI. The CLI continues to use direct CosmosAPI calls without queuing.
+**Architecture:** The queue system is EXCLUSIVELY for the Gradio UI. The CLI continues to use direct CosmosAPI calls without queuing, maintaining separate execution paths for different interfaces.
+
+**Key Features:**
+- **Thread-Safe Design**: Uses `_job_processing_lock` to prevent race conditions when claiming jobs
+- **GPU Conflict Prevention**: Checks actual running Docker containers before processing new jobs
+- **SQLite Persistence**: Queue state survives UI restarts and maintains complete job history
+- **FIFO Processing**: First-in, first-out job processing with position tracking
+- **Background Processing**: Automatic job execution without blocking UI interaction
+- **Single Container Paradigm**: Only one job runs at a time due to GPU limitations
 
 #### Core Features
 
@@ -869,17 +877,24 @@ result = queue_service.process_next_job()
 #### Supported Job Types
 
 **1. Single Inference (`job_type="inference"`):**
-- Processes single prompt using `CosmosAPI.quick_inference()`
-- Config supports: weights, num_steps, guidance_scale, seed, fps, sigma_max, blur_strength, canny_threshold
+- Executes single prompt inference with configurable parameters
+- Supports all control weights (visual, edge, depth, segmentation)
+- Configuration includes num_steps, guidance_scale, seed, fps, etc.
 
 **2. Batch Inference (`job_type="batch_inference"`):**
-- Processes multiple prompts using `CosmosAPI.batch_inference()`
-- Config supports: weights (shared), num_steps, and optional parameters
-- Efficient for processing multiple prompts together
+- Processes multiple prompts together for efficiency (40% faster)
+- Shared weights configuration applied to all prompts in batch
+- Automatic output splitting into individual run directories
 
-**3. Enhancement (`job_type="enhancement"`):**
-- Enhances prompts using `CosmosAPI.enhance_prompt()`
-- Config supports: create_new, model (enhancement_model), force_overwrite
+**3. AI Enhancement (`job_type="enhancement"`):**
+- Uses Pixtral model for intelligent prompt enhancement
+- Supports create_new and force_overwrite modes
+- Configuration includes enhancement model selection
+
+**4. Video Upscaling (`job_type="upscale"`):**
+- 4K upscaling of any video source (not just inference outputs)
+- Supports optional prompt guidance for AI-directed enhancement
+- Configuration includes video_source, control_weight, and optional prompt
 
 #### Queue Management
 
@@ -1454,9 +1469,11 @@ Manages secure database connections with automatic session handling.
 
 **JobQueue Model:**
 - Queue management for Gradio UI job processing (CLI uses direct CosmosAPI calls)
-- Supports three job types: inference, batch_inference, enhancement
+- Supports four job types: inference, batch_inference, enhancement, upscale
 - FIFO processing order with priority support for future enhancement
 - Complete status tracking: queued → running → completed/failed/cancelled
+- SQLite persistence ensures queue survives UI restarts and maintains job history
+- Thread-safe design with atomic job claiming to prevent race conditions
 
 
 #### Helper Functions

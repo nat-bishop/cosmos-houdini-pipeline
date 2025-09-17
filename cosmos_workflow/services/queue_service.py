@@ -54,6 +54,9 @@ class QueueService:
         self._stop_processor = threading.Event()
         self._processor_lock = threading.Lock()
 
+        # Lock for job processing to prevent race conditions
+        self._job_processing_lock = threading.Lock()
+
         logger.info("QueueService initialized")
 
     def _get_session(self) -> Session:
@@ -177,7 +180,11 @@ class QueueService:
             if running_job:
                 elapsed = None
                 if running_job.started_at:
-                    elapsed = (datetime.now(timezone.utc) - running_job.started_at).seconds
+                    # Ensure started_at has timezone info
+                    started_at = running_job.started_at
+                    if started_at.tzinfo is None:
+                        started_at = started_at.replace(tzinfo=timezone.utc)
+                    elapsed = (datetime.now(timezone.utc) - started_at).seconds
 
                 status["running"] = {
                     "id": running_job.id,
@@ -226,25 +233,67 @@ class QueueService:
         Returns:
             Result dictionary with job_id and status
         """
+        # Use lock to prevent race condition when checking and claiming jobs
+        with self._job_processing_lock:
+            # CRITICAL: Check for actual running containers first
+            # This ensures we don't start jobs while GPU is busy
+            try:
+                active_containers = self.cosmos_api.get_active_containers()
+                if active_containers:
+                    logger.debug(
+                        "Skipping processing - container %s is running on GPU",
+                        active_containers[0].get("container_id", "unknown"),
+                    )
+                    return None
+            except Exception as e:
+                logger.warning("Could not check active containers: %s", e)
+                # Continue anyway - let it fail downstream if there's an issue
+
+            session = self._get_session()
+            try:
+                # Force read of latest data from database
+                session.expire_all()
+
+                # Check if there's already a running job (only one at a time)
+                running_job = session.query(JobQueue).filter_by(status="running").first()
+                if running_job:
+                    logger.debug("Skipping processing - job %s is already running", running_job.id)
+                    return None
+
+                # Get next queued job (FIFO)
+                job = (
+                    session.query(JobQueue)
+                    .filter_by(status="queued")
+                    .order_by(JobQueue.created_at)
+                    .first()
+                )
+
+                if not job:
+                    return None
+
+                # Mark as running with immediate commit to prevent race conditions
+                job.status = "running"
+                job.started_at = datetime.now(timezone.utc)
+                session.commit()
+                session.flush()  # Ensure changes are written
+
+                # Store job info for processing outside the lock
+                job_id = job.id
+
+            except Exception as e:
+                if self.db_connection and not self.db_session:
+                    session.close()
+                raise e
+
+            finally:
+                if self.db_connection and not self.db_session:
+                    session.close()
+
+        # Now process the job outside the lock so other threads can check status
         session = self._get_session()
         try:
-            # Get next queued job (FIFO)
-            job = (
-                session.query(JobQueue)
-                .filter_by(status="queued")
-                .order_by(JobQueue.created_at)
-                .first()
-            )
-
-            if not job:
-                return None
-
-            # Mark as running
-            job.status = "running"
-            job.started_at = datetime.now(timezone.utc)
-            session.commit()
-
-            logger.info("Processing job %s", job.id)
+            logger.info("Processing job %s", job_id)
+            job = session.query(JobQueue).filter_by(id=job_id).first()
 
             try:
                 # Execute based on job type

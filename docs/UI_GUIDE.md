@@ -212,7 +212,37 @@ The interface is organized into five main tabs, each serving specific workflow n
 
 ### 📦 Active Jobs Tab
 
-**Purpose**: Real-time monitoring of active containers with comprehensive system status and log streaming.
+**Purpose**: Real-time monitoring of active containers with comprehensive system status, job queue management, and log streaming.
+
+#### Production Job Queue System
+
+The Active Jobs tab features a comprehensive job queue system designed exclusively for the Gradio UI, providing organized job management while the CLI continues to use direct execution.
+
+**Key Features**:
+- **UI-Only Architecture**: Queue system is exclusively for the Gradio UI interface
+- **FIFO Processing**: First-in, first-out job processing with position tracking
+- **SQLite Persistence**: Queue state survives UI restarts and maintains complete job history
+- **Thread-Safe Design**: Prevents GPU conflicts through container checks and atomic job claiming
+- **Background Processing**: Automatic job execution without blocking UI interaction
+
+**Job Queue Display**:
+- **Queue Status**: Real-time display showing total queued jobs and current queue state
+- **Queue Table**: Interactive table showing job position, ID, type, status, elapsed time, and actions
+- **Position Tracking**: Shows queue position for each job with estimated wait times
+- **Job Details**: Select any job to view detailed configuration and status information
+
+**Supported Job Types**:
+- **Inference**: Single prompt inference with configurable parameters
+- **Batch Inference**: Multiple prompts processed together for efficiency (40% faster)
+- **Enhancement**: AI-powered prompt enhancement using Pixtral model
+- **Upscale**: Video upscaling operations with optional prompt guidance
+
+**Queue Management**:
+- **Automatic Processing**: Background processor continuously processes queued jobs
+- **Job Cancellation**: Cancel queued jobs (before they start running)
+- **Clear Completed**: Remove completed, failed, and cancelled jobs from queue
+- **Live Status Updates**: Real-time queue status with automatic refresh
+- **Position Monitoring**: Track your job's position and estimated wait time
 
 #### Enhanced System Status Display
 - **SSH Connection Status**: Connection health monitoring with visual indicators

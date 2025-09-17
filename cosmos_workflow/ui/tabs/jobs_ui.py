@@ -22,13 +22,47 @@ def create_jobs_tab_ui():
     log_viewer = LogViewer(max_lines=2000)
 
     with gr.Tab("🚀 Active Jobs", id=5) as components["jobs_tab"]:
-        gr.Markdown("### Active Job Monitoring & Logs")
-        gr.Markdown("Monitor active GPU jobs and view real-time execution logs")
+        gr.Markdown("### Job Queue & Active Job Monitoring")
+        gr.Markdown("View queued jobs, monitor active GPU jobs, and view real-time execution logs")
 
+        # Queue Display Section
         with gr.Row():
             with gr.Column(scale=1):
+                gr.Markdown("#### 📋 Job Queue")
+                components["queue_status"] = gr.Markdown("📋 Queue Status: Loading...")
+
+                # Queue table
+                components["queue_table"] = gr.Dataframe(
+                    headers=["#", "Job ID", "Type", "Status", "Time", "Action"],
+                    datatype=["str", "str", "str", "str", "str", "str"],
+                    value=[],
+                    interactive=False,
+                    wrap=True,
+                )
+
+                # Queue control buttons
+                with gr.Row():
+                    components["refresh_queue_btn"] = gr.Button(
+                        "🔄 Refresh", size="sm", variant="secondary"
+                    )
+                    components["clear_completed_btn"] = gr.Button(
+                        "🗑️ Clear Completed", size="sm", variant="secondary"
+                    )
+
+                # Job details section (for selected job)
+                gr.Markdown("#### 📝 Job Details")
+                components["job_details"] = gr.Markdown("Select a job to view details")
+                components["cancel_job_btn"] = gr.Button(
+                    "❌ Cancel Selected Job",
+                    size="sm",
+                    variant="stop",
+                    visible=False,
+                )
+
+            with gr.Column(scale=2):
+                gr.Markdown("#### Current Execution")
+
                 # Active Job Section
-                gr.Markdown("#### 🚀 Active Job")
                 with gr.Group():
                     # Active Job Card
                     components["active_job_card"] = gr.Markdown(
@@ -87,7 +121,9 @@ Currently idle - no jobs running
                     "🔄 Refresh & Stream", variant="primary", size="sm"
                 )
 
-            with gr.Column(scale=3):
+        # Log Output Section (full width below)
+        with gr.Row():
+            with gr.Column():
                 gr.Markdown("#### 📝 Log Output")
                 components["log_display"] = gr.Textbox(
                     value="",

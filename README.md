@@ -250,12 +250,19 @@ Local Machine                                    Remote GPU Server (H100)
 ### **Advanced Web Interface (Gradio)**
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
 - **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
-- **Active Jobs Tab**: Real-time container monitoring with auto-refresh and log streaming
+- **Active Jobs Tab**: Real-time container monitoring with auto-refresh, log streaming, and job queue management
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
 - **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
-- **Job Queue System**: Background job processing with queue visibility and position tracking (UI-only, CLI uses direct execution)
+- **Production Job Queue System**:
+  - **UI-Only Architecture**: Queue system exclusively for Gradio UI while CLI uses direct execution
+  - **FIFO Processing**: First-in, first-out job processing with position tracking and estimated wait times
+  - **Thread-Safe Design**: Prevents GPU conflicts through container checks and atomic job claiming
+  - **Persistent State**: SQLite-backed queue survives UI restarts and maintains job history
+  - **Live Monitoring**: Real-time queue status with job position, type, and elapsed time display
+  - **Complete Job Lifecycle**: Support for inference, batch inference, enhancement, and upscale operations
+  - **Background Processing**: Automatic job execution without blocking UI interaction
 - **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
 - **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback

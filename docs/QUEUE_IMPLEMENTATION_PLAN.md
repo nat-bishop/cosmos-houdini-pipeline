@@ -4,9 +4,15 @@
 
 **Status**: ✅ **Phase 1 COMPLETED** (2025-01-17)
 - JobQueue model implemented
-- QueueService fully functional
-- 28/31 tests passing (3 skipped due to SQLite concurrency)
+- QueueService fully functional with upscaling support
+- 31/34 tests passing (3 skipped due to SQLite concurrency)
 - Ready for UI integration
+
+**Latest Update**: 2025-01-17
+- Added upscaling as 4th job type
+- Full TDD implementation with comprehensive tests
+- Fixed circular import issues
+- Thread-safe session management implemented
 
 ## Quick Context
 - **What**: Add a visible job queue to the Gradio web UI for inference/enhancement operations
@@ -474,10 +480,34 @@ ORDER BY created_at;
 4. **No UI Integration**: Queue service built but not connected to UI yet
 
 ### 🔄 Next Steps (Phase 1.5 - UI Integration)
-1. Integrate QueueService into `cosmos_workflow/ui/app.py`
-2. Replace direct CosmosAPI calls with QueueService wrapper
-3. Add queue display components to Jobs tab
-4. Implement queue position notifications
+**Status**: NOT STARTED - Ready to begin
+
+**Required Implementation Tasks**:
+1. **Create `cosmos_workflow/ui/queue_handlers.py`**
+   - Queue status endpoint
+   - Job cancellation handler
+   - Queue position polling
+   - Clear completed jobs handler
+
+2. **Modify `cosmos_workflow/ui/app.py`**
+   - Initialize QueueService with DatabaseConnection
+   - Start background processor on app launch
+   - Replace direct CosmosAPI calls in `run_inference_on_selected()` (lines 782-894)
+   - Replace direct CosmosAPI calls in `run_enhance_on_selected()` (lines 896-977)
+   - Add queue support for upscale operations
+
+3. **Update `cosmos_workflow/ui/tabs/jobs_ui.py`**
+   - Add queue display table component
+   - Show position, job type, status, estimated time
+   - Add cancel button for queued jobs
+   - Add clear completed button
+   - Implement 2-second auto-refresh
+
+4. **Testing & Validation**
+   - Manual UI testing with multiple jobs
+   - Verify queue persistence across restarts
+   - Test cancellation functionality
+   - Validate error handling and recovery
 
 ### 📋 Phase 2 (Future - Batch Optimization)
 - Batch detection logic

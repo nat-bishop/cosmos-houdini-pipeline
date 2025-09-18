@@ -23,7 +23,9 @@
       "Bash(python:*)",
       "mcp__playwright__browser_press_key",
       "Read(F:\\Art\\cosmos-transfer1/**)",
-      "Bash(./scripts/ssh_lambda.sh:*)"
+      "Bash(./scripts/ssh_lambda.sh:*)",
+      "mcp__gradio__gradio_docs_mcp_load_gradio_docs",
+      "mcp__gradio__gradio_docs_mcp_search_gradio_docs"
     ],
     "deny": [],
     "ask": [

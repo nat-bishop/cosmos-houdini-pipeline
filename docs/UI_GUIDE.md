@@ -132,6 +132,7 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Input Traceability**: Links to original color, depth, and segmentation inputs
 - **Video Preview**: Direct video playback with download capabilities
 - **File Management**: Download and path display functionality
+- **Auto-Download Controls**: Automatic download of NVIDIA-generated control files (depth, normal, canny) for streamlined workflow
 
 ### 📊 Run History Tab
 
@@ -172,7 +173,7 @@ The interface is organized into five main tabs, each serving specific workflow n
 #### Interactive Run Table
 **Table Features**:
 - **Checkbox Selection**: Individual and batch selection capabilities
-- **Sortable Columns**: Run ID, Prompt, Status, Duration, Created, Output
+- **Sortable Columns**: Run ID, Prompt, Status, Duration, Created, Rating, Output
 - **Selection Controls**: Select All and Clear Selection buttons
 - **Batch Operations**: Delete selected runs (with confirmation)
 
@@ -182,6 +183,7 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Status**: Color-coded execution status
 - **Duration**: Calculated execution time for completed runs
 - **Created**: Timestamp of run creation
+- **Rating**: User rating (1-5 stars) for completed runs with quality assessment
 - **Output**: Indicates if output files exist
 
 #### Multi-Tab Run Details
@@ -196,6 +198,7 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Run Information**: ID, status, duration
 - **Prompt Details**: Name, full text content
 - **Timestamps**: Created and completed times
+- **User Rating**: Interactive star rating system (1-5 stars) for completed runs with automatic display refresh
 - **Status History**: Complete execution lifecycle
 
 **Parameters Tab**:
@@ -250,10 +253,12 @@ The Active Jobs tab features a comprehensive job queue system designed exclusive
 
 **Queue Management**:
 - **Automatic Processing**: Background processor continuously processes queued jobs
-- **Job Cancellation**: Cancel queued jobs (before they start running)
-- **Clear Completed**: Remove completed, failed, and cancelled jobs from queue
-- **Live Status Updates**: Real-time queue status with automatic refresh
+- **Job Cancellation**: Cancel queued jobs (before they start running) and selected jobs from queue table
+- **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed/cancelled jobs (keeps last 50)
+- **Enhanced Job Control**: Kill active jobs with proper database status updates to prevent zombie runs
+- **Live Status Updates**: Real-time queue status with 5-second auto-refresh timer
 - **Position Monitoring**: Track your job's position and estimated wait time
+- **Graceful Shutdown**: Marks running jobs as cancelled when app closes to maintain state consistency
 
 #### Enhanced System Status Display
 - **SSH Connection Status**: Connection health monitoring with visual indicators

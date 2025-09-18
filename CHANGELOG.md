@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Enhanced Queue Management System (2025-01-18)
+- **Automatic Job Cleanup and Database Management**
+  - Automatic deletion of successful jobs to prevent database bloat and improve performance
+  - Intelligent trimming of failed/cancelled jobs keeping last 50 for debugging purposes
+  - Removed "Clear Completed" button as system now handles cleanup automatically
+  - Enhanced database maintenance prevents queue table from growing indefinitely
+  - Optimized queue performance through automated cleanup cycles
+
+- **Enhanced Job Queue Functionality**
+  - Fixed job selection in queue table to properly show job details when selected
+  - Added "Cancel Selected Job" functionality for better job management
+  - Enhanced "Kill Active Job" to update database status and prevent zombie runs
+  - 5-second auto-refresh timer for real-time queue status updates
+  - Improved job lifecycle management with proper status transitions
+
+- **Graceful Shutdown and Error Handling**
+  - Added graceful shutdown handler to mark running jobs as cancelled when app closes
+  - Enhanced error handling for Docker container failures with fallback logging
+  - Improved job state consistency during unexpected shutdowns
+  - Better cleanup of resources when Gradio application terminates
+  - Prevents orphaned jobs that stay "running" forever after app restart
+
+### Added - User Rating System for Runs (2025-01-18)
+- **Complete Rating System Implementation**
+  - Added rating field (1-5 stars) to Run model in database schema
+  - Rating system integration in Runs tab UI allowing users to rate completed runs
+  - Rating displayed in runs table as numeric value (1-5) for quick assessment
+  - Ratings persist in database and are included in run exports for analytics
+  - Enhanced run tracking with user satisfaction metrics
+
+- **UI Rating Integration**
+  - Star rating component in run details for user feedback collection
+  - Rating display in runs table for quick visual assessment
+  - Automatic refresh of runs display after rating changes
+  - Rating system only available for completed runs to ensure meaningful feedback
+  - Seamless integration with existing run management workflow
+
+### Enhanced - Recent Gradio UI Improvements (2025-01-18)
+- **Auto-Download Control Files**
+  - Automatic download of NVIDIA-generated control files (depth, normal, canny)
+  - Enhanced workflow efficiency by automatically retrieving generated control files
+  - Improved file management for complex inference operations with multiple control inputs
+  - Streamlined post-processing workflow with automatic file organization
+
+- **Gallery Navigation Enhancements**
+  - Improved gallery navigation in Runs tab with enhanced user experience
+  - Better thumbnail handling and video preview functionality
+  - Enhanced metadata display for generated content
+  - Improved gallery performance with optimized loading and rendering
+
+- **Input-to-Runs Filtering and Navigation**
+  - Enhanced navigation from Inputs tab to see related runs
+  - Intelligent filtering system connecting inputs, prompts, and runs
+  - Improved workflow traceability from source inputs to final results
+  - Cross-tab navigation for better user experience and workflow management
+
+- **Model-Specific UI Displays**
+  - Dynamic UI parameter displays based on selected model type
+  - Model-specific parameter visibility and configuration options
+  - Enhanced user experience with contextual parameter controls
+  - Improved parameter validation and user guidance based on model requirements
+
+- **Enhanced Error Handling and Logging**
+  - Improved fallback logging for Docker container failures
+  - Enhanced error reporting and user feedback for failed operations
+  - Better diagnostic information for troubleshooting failed runs
+  - Comprehensive error handling across UI components for improved reliability
+
 ### Added - UI Navigation Enhancements (2025-01-17)
 - **"View Runs using this input" button in Inputs tab**
   - Added new button below "View Prompts using this input" button in Inputs tab

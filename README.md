@@ -265,13 +265,17 @@ Local Machine                                    Remote GPU Server (H100)
   - **Live Monitoring**: Real-time queue status with job position, type, and elapsed time display
   - **Complete Job Lifecycle**: Support for inference, batch inference, enhancement, and upscale operations
   - **Background Processing**: Automatic job execution without blocking UI interaction
+  - **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed jobs (keeps last 50)
+  - **Graceful Shutdown**: Properly marks running jobs as cancelled when app closes
+  - **Enhanced Job Management**: Cancel selected jobs, kill active jobs with database updates
 - **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
+- **User Rating System**: Rate completed runs with 1-5 stars for quality assessment and analytics
 - **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback
 - **Enhanced Status Display**: Comprehensive GPU, Docker, SSH status with detailed system information
 - **Auto-refresh Behavior**: Active Jobs tab refreshes automatically when selected
 - **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
-- **Graceful Shutdown**: Container cleanup on server termination
+- **Auto-Download Controls**: Automatic download of NVIDIA-generated control files (depth, normal, canny)
 
 ### **AI Enhancement Pipeline**
 - Prompt optimization using Pixtral model

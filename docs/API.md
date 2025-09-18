@@ -839,6 +839,10 @@ The QueueService provides comprehensive job queue management for the Gradio UI, 
 - **FIFO Processing**: First-in, first-out job processing with position tracking
 - **Background Processing**: Automatic job execution without blocking UI interaction
 - **Single Container Paradigm**: Only one job runs at a time due to GPU limitations
+- **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed/cancelled jobs (keeps last 50)
+- **Enhanced Job Control**: Cancel selected jobs from queue table and kill active jobs with database updates
+- **Auto-Refresh**: 5-second timer for real-time queue status updates
+- **Graceful Shutdown**: Marks running jobs as cancelled when app closes to maintain state consistency
 
 #### Core Features
 
@@ -2040,6 +2044,7 @@ class Run(Base):
     execution_config = Column(JSON, nullable=False)           # Runtime configuration
     outputs = Column(JSON, nullable=False)                    # Execution results
     run_metadata = Column(JSON, nullable=False)               # Additional metadata
+    rating = Column(Integer, nullable=True)                   # User rating (1-5 stars)
 ```
 
 **Status Lifecycle:**
@@ -2049,6 +2054,13 @@ class Run(Base):
 - `downloading`: Retrieving results
 - `completed`: Successfully finished
 - `failed`: Error occurred
+
+**Rating System:**
+- `rating`: Optional integer field (1-5 stars) for user quality assessment
+- Only available for completed runs to ensure meaningful feedback
+- Ratings persist in database and are included in run exports for analytics
+- Displayed in UI tables and run details for quick visual assessment
+- Supports quality tracking and improvement of inference parameters
 
 ### JobQueue Model
 Queue management for Gradio UI job processing (UI-only, CLI uses direct CosmosAPI calls).

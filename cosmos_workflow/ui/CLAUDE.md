@@ -6,15 +6,22 @@ This is a Gradio web interface for managing AI inference workflows. Gradio is a 
 - **app.py** — Main entry point, assembles all tabs
 - **tabs/** — Each major UI section
   - prompts_ui.py — Prompt management interface
-  - runs_ui.py — Run monitoring interface
+  - runs_ui.py — Run monitoring interface with rating system
   - runs_handlers.py — Event handlers for runs
   - inputs_ui.py — Input file management
-  - jobs_ui.py — Active jobs monitoring interface
+  - jobs_ui.py — Active jobs monitoring with enhanced queue management
 - **components/** — Reusable UI components
   - header.py — App header
   - global_controls.py — Shared controls
 - **styles.py** — Theme and styling
 - **helpers.py** — UI utility functions
+
+## Recent Enhanced Features
+- **Production Job Queue System**: Intelligent cleanup, graceful shutdown, enhanced job control
+- **User Rating System**: 1-5 star ratings for completed runs with database persistence
+- **Auto-Download Controls**: Automatic download of NVIDIA-generated control files
+- **Enhanced Navigation**: Cross-tab navigation and gallery browsing improvements
+- **Model-Specific Displays**: Dynamic UI parameter displays based on model type
 
 ## Design Philosophy
 

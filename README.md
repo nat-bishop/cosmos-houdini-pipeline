@@ -251,6 +251,8 @@ Local Machine                                    Remote GPU Server (H100)
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
 - **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
 - **Active Jobs Tab**: Real-time container monitoring with auto-refresh, log streaming, and job queue management
+- **Enhanced Navigation**: Cross-tab navigation from inputs to prompts to runs with seamless filtering
+- **Gallery Navigation**: Previous/Next buttons in Run Details for browsing through video results
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs

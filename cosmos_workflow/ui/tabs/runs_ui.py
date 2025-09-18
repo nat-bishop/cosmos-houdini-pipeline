@@ -180,7 +180,21 @@ def create_runs_tab_ui():
                 with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
                     "runs_details_group"
                 ]:
-                    gr.Markdown("### 📋 Run Details")
+                    # Header with navigation buttons
+                    with gr.Row():
+                        with gr.Column(scale=4):
+                            gr.Markdown("### 📋 Run Details")
+                        with gr.Column(scale=1):
+                            with gr.Row():
+                                components["runs_prev_btn"] = gr.Button(
+                                    "◀ Previous", size="sm", variant="secondary"
+                                )
+                                components["runs_next_btn"] = gr.Button(
+                                    "Next ▶", size="sm", variant="secondary"
+                                )
+
+                    # State to track current gallery selection index
+                    components["runs_selected_index"] = gr.State(0)
 
                     with gr.Tabs():
                         # Main Tab - Dynamic content based on model type

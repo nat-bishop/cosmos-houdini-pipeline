@@ -68,6 +68,11 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Metadata Display**: Resolution, duration, creation time, and file information
 - **Auto-fill Integration**: Selected inputs automatically populate prompt creation
 
+#### Navigation Features
+- **View Prompts Button**: "→ View Prompts Using This Input" - navigates to Prompts tab with filter applied
+- **View Runs Button**: "→ View Runs Using This Input" - navigates to Runs tab showing only runs from prompts that use the selected input directory
+- **Cross-Tab Navigation**: Seamless workflow from input discovery to prompt creation to run results
+
 #### Create Prompt Section
 - **Video Directory**: Auto-filled when selecting inputs, supports manual entry
 - **Prompt Text**: Main description for AI generation (supports multi-line)
@@ -181,6 +186,12 @@ The interface is organized into five main tabs, each serving specific workflow n
 
 #### Multi-Tab Run Details
 
+**Navigation Controls**:
+- **Previous/Next Buttons**: "◀ Previous" and "Next ▶" buttons in the Run Details header
+- **Gallery Navigation**: Navigate through gallery items without clicking individual thumbnails
+- **Index Tracking**: Uses State component to track current gallery position
+- **Seamless Browsing**: Browse through video results with keyboard-like navigation
+
 **General Tab**:
 - **Run Information**: ID, status, duration
 - **Prompt Details**: Name, full text content
@@ -274,6 +285,41 @@ The Active Jobs tab features a comprehensive job queue system designed exclusive
 - **Idle State**: Clear "No Active Job" indication when system is idle
 
 ## Advanced Features
+
+### Cross-Tab Navigation System
+
+The interface features a sophisticated navigation system that allows seamless workflow progression from input discovery to final results.
+
+#### Workflow Navigation Path
+1. **Inputs Tab**: Browse and select input video directories
+2. **Navigation to Prompts**: Use "→ View Prompts Using This Input" to see all prompts created from the selected input
+3. **Navigation to Runs**: Use "→ View Runs Using This Input" to see all runs generated from prompts using the selected input
+4. **Result Browsing**: Use Previous/Next buttons in Run Details to navigate through video results
+
+#### Navigation Features
+
+**From Inputs Tab**:
+- **View Prompts Button**: Filters Prompts tab to show only prompts created from the selected input directory
+- **View Runs Button**: Filters Runs tab to show only runs from prompts that use the selected input directory
+- **Automatic Filtering**: Navigation automatically applies appropriate filters and updates the target tab
+
+**In Run Details**:
+- **Previous Button (◀)**: Navigate to the previous item in the gallery
+- **Next Button (▶)**: Navigate to the next item in the gallery
+- **Index Tracking**: Maintains current position in gallery for consistent navigation
+- **Bounds Protection**: Previous button stops at the first item, Next button is handled by Gradio's bounds
+
+#### Implementation Details
+
+**Cross-Tab Navigation**:
+- Uses `prepare_runs_navigation_from_input()` function to find all prompts using the selected input directory
+- Calls existing `prepare_runs_navigation()` function to apply filtering and switch to Runs tab
+- Updates navigation state and applies filter indicators to show active filtering
+
+**Gallery Navigation**:
+- Uses `navigate_gallery_prev()` and `navigate_gallery_next()` functions in app.py
+- Maintains gallery selection index using Gradio State component
+- Updates gallery selection without requiring thumbnail clicks
 
 ### Enhanced Status System
 

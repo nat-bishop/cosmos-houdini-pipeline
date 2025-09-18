@@ -2329,12 +2329,52 @@ def create_ui():
             outputs = get_components(*runs_output_keys)
             if outputs:
                 logger.info("Connecting runs_gallery.select with {} outputs", len(outputs))
+                # Add the selected_index state as an output
+                outputs_with_index = [*outputs, components.get("runs_selected_index")]
+
+                # Modified handler that also tracks the index
+                def on_gallery_select_with_index(evt: gr.SelectData):
+                    result = on_runs_gallery_select(evt)
+                    # Add the selected index to the results
+                    return [*result, evt.index if evt else 0]
+
                 components["runs_gallery"].select(
-                    fn=on_runs_gallery_select,
+                    fn=on_gallery_select_with_index,
                     inputs=[],
-                    outputs=outputs,
+                    outputs=outputs_with_index,
                     # Note: scroll_to_output removed to prevent scrolling when tab loads
                 )
+
+        # Navigation buttons for gallery
+        if (
+            "runs_prev_btn" in components
+            and "runs_next_btn" in components
+            and "runs_selected_index" in components
+        ):
+            # Previous button handler
+            def navigate_gallery_prev(current_index):
+                """Navigate to previous item in gallery."""
+                new_index = max(0, current_index - 1)
+                return gr.update(selected_index=new_index), new_index
+
+            # Next button handler
+            def navigate_gallery_next(current_index):
+                """Navigate to next item in gallery."""
+                # We don't know the max, so just increment and let Gradio handle bounds
+                new_index = current_index + 1
+                return gr.update(selected_index=new_index), new_index
+
+            components["runs_prev_btn"].click(
+                fn=navigate_gallery_prev,
+                inputs=[components["runs_selected_index"]],
+                outputs=[components["runs_gallery"], components["runs_selected_index"]],
+            )
+
+            components["runs_next_btn"].click(
+                fn=navigate_gallery_next,
+                inputs=[components["runs_selected_index"]],
+                outputs=[components["runs_gallery"], components["runs_selected_index"]],
+            )
 
         # Delete selected run operation - Two-step process with preview
         if "runs_delete_selected_btn" in components and "runs_selected_id" in components:

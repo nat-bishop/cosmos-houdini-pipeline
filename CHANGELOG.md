@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - UI Navigation Enhancements (2025-01-17)
+- **"View Runs using this input" button in Inputs tab**
+  - Added new button below "View Prompts using this input" button in Inputs tab
+  - Located in `cosmos_workflow/ui/tabs/inputs_ui.py` (lines 168-173)
+  - When clicked, navigates to Runs tab and filters runs to show only those from prompts using the selected input directory
+  - Implementation uses `prepare_runs_navigation_from_input` function that finds all prompts using the input directory, then calls existing `prepare_runs_navigation` function
+  - Provides seamless navigation from input discovery to run results viewing
+
+- **Previous/Next navigation buttons in Run Details**
+  - Added "◀ Previous" and "Next ▶" buttons in Run Details header (lines 189-193 in `cosmos_workflow/ui/tabs/runs_ui.py`)
+  - Allows users to navigate through gallery items without clicking individual thumbnails
+  - Uses State component (`runs_selected_index`) to track current gallery index position
+  - Implementation includes `navigate_gallery_prev` and `navigate_gallery_next` functions in `cosmos_workflow/ui/app.py`
+  - Improves user experience by providing keyboard-like navigation through video results
+  - Previous button decrements index with lower bound protection (minimum index 0)
+  - Next button increments index and lets Gradio handle upper bounds automatically
+
 ### Added - Comprehensive Job Queue System for Gradio UI (2025-01-17)
 - **JobQueue Database Model and Architecture**
   - Added `JobQueue` model to `cosmos_workflow/database/models.py` for persisting queue state

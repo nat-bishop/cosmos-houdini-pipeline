@@ -509,6 +509,29 @@ class GPUExecutor:
             # Re-raise the exception so the failure is properly reported
             raise RuntimeError(f"Failed to download output file: {e}") from e
 
+        # Download any auto-generated control files (if they exist)
+        # These are created by the NVIDIA model when not provided in the spec
+        control_types = ["edge", "depth", "seg", "vis"]
+        for control_type in control_types:
+            # The NVIDIA model generates files as {control_type}_input_control.mp4
+            remote_control_file = f"{remote_output_dir}/{control_type}_input_control.mp4"
+            local_control_file = outputs_dir / f"{control_type}_input_control.mp4"
+
+            try:
+                self.file_transfer.download_file(remote_control_file, str(local_control_file))
+                logger.info(
+                    "Downloaded auto-generated {} control to {}", control_type, local_control_file
+                )
+            except FileNotFoundError:
+                # This is expected - not all runs generate all control types
+                logger.debug(
+                    "No auto-generated {} control found (expected if provided in spec)",
+                    control_type,
+                )
+            except Exception as e:
+                # Log but don't fail - control files are supplementary
+                logger.warning("Failed to download {} control file: {}", control_type, e)
+
         # Also download the log file
         remote_log = f"{remote_output_dir}/run.log"
         docker_log_path = outputs_dir / "run.log"  # Keep in outputs as backup
@@ -759,6 +782,38 @@ class GPUExecutor:
 
             self.file_transfer.download_file(remote_batch_output, str(local_output_file))
             logger.info("Downloaded output for run {} to {}", run_id, local_output_file)
+
+            # Download any auto-generated control files for this batch run
+            # Extract the video number from the batch output filename (e.g., video_000.mp4 -> 000)
+            import re
+
+            match = re.search(r"video_(\d+)\.mp4", remote_batch_output)
+            if match:
+                video_num = match.group(1)
+                control_types = ["edge", "depth", "seg", "vis"]
+                for control_type in control_types:
+                    # Batch control files are named like edge_input_control_000.mp4
+                    remote_control = remote_batch_output.replace(
+                        f"video_{video_num}.mp4", f"{control_type}_input_control_{video_num}.mp4"
+                    )
+                    local_control = outputs_dir / f"{control_type}_input_control.mp4"
+
+                    try:
+                        self.file_transfer.download_file(remote_control, str(local_control))
+                        logger.info("Downloaded batch {} control for run {}", control_type, run_id)
+                    except FileNotFoundError:
+                        logger.debug(
+                            "No batch {} control found for run {} (expected if provided)",
+                            control_type,
+                            run_id,
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            "Could not download batch {} control for run {}: {}",
+                            control_type,
+                            run_id,
+                            e,
+                        )
 
             # Also download the shared batch log to this run's directory
             remote_config = self.config_manager.get_remote_config()

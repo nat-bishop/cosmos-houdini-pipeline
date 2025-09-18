@@ -2558,6 +2558,62 @@ def create_ui():
                 ],
             )
 
+        # Queue table select handler (outside the refresh button check)
+        if "queue_table" in components and "job_details" in components and queue_handlers:
+
+            def on_queue_table_select(table_data, evt: gr.SelectData):
+                """Handle selection of a job from the queue table."""
+                try:
+                    logger.info("Queue table select event triggered")
+
+                    # Get selected row index
+                    row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
+                    logger.info("Selected row index: {}", row_idx)
+
+                    # Extract job ID from table (column 1 has Job ID)
+                    import pandas as pd
+
+                    if isinstance(table_data, pd.DataFrame):
+                        job_id = table_data.iloc[row_idx, 1]  # Job ID is in column 1
+                    else:
+                        job_id = table_data[row_idx][1] if row_idx < len(table_data) else None
+
+                    logger.info("Selected job ID: {}", job_id)
+
+                    if not job_id:
+                        return gr.update(value="No job selected"), gr.update(visible=False)
+
+                    # Get job details
+                    details = queue_handlers.get_job_details(job_id)
+
+                    # Check if this is a queued job (to show cancel button)
+                    # Extract status from the table data to determine if cancellable
+                    if isinstance(table_data, pd.DataFrame):
+                        status = table_data.iloc[row_idx, 3]  # Status is in column 3
+                    else:
+                        status = table_data[row_idx][3] if row_idx < len(table_data) else None
+
+                    # Show cancel button only for queued jobs
+                    show_cancel = status == "queued"
+
+                    return gr.update(value=details), gr.update(visible=show_cancel)
+
+                except Exception as e:
+                    logger.error("Error selecting job from queue: {}", e)
+                    return gr.update(value=f"Error loading job details: {e}"), gr.update(
+                        visible=False
+                    )
+
+            # Connect queue table select event
+            components["queue_table"].select(
+                fn=on_queue_table_select,
+                inputs=[components["queue_table"]],
+                outputs=[
+                    components.get("job_details"),
+                    components.get("cancel_job_btn"),
+                ],
+            )
+
         # Load initial data
         initial_outputs = get_components(
             "input_gallery",

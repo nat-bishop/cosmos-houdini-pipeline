@@ -71,6 +71,7 @@ from cosmos_workflow.ui.tabs.runs_handlers import (
     on_runs_gallery_select,
     on_runs_table_select,
     preview_delete_run,
+    save_run_rating,
     update_runs_selection_info,
 )
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
@@ -2277,6 +2278,7 @@ def create_ui():
                 "runs_info_duration",
                 "runs_info_type",
                 "runs_info_prompt_name",
+                "runs_info_rating",
                 "runs_info_created",
                 "runs_info_completed",
                 "runs_info_output_path",
@@ -2352,6 +2354,7 @@ def create_ui():
                 "runs_info_duration",
                 "runs_info_type",
                 "runs_info_prompt_name",
+                "runs_info_rating",
                 "runs_info_created",
                 "runs_info_completed",
                 "runs_info_output_path",
@@ -2495,6 +2498,14 @@ def create_ui():
                 fn=load_run_logs,
                 inputs=[components["runs_log_path"]],
                 outputs=[components["runs_log_output"]],
+            )
+
+        # Rating change handler
+        if all(k in components for k in ["runs_info_rating", "runs_info_id"]):
+            components["runs_info_rating"].change(
+                fn=save_run_rating,
+                inputs=[components["runs_info_id"], components["runs_info_rating"]],
+                outputs=[components["runs_info_rating"]],
             )
 
         # Active Jobs Tab Events

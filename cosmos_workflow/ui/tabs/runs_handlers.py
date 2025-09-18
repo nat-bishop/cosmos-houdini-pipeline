@@ -229,7 +229,6 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
         for run in filtered_runs:
             run_id = run.get("id", "")
             status = run.get("status", "unknown")
-            prompt_id = run.get("prompt_id", "")
             model_type = run.get("model_type", "transfer")  # Default to transfer if not specified
 
             # Calculate duration
@@ -256,8 +255,12 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
 
             created = run.get("created_at", "")[:19] if run.get("created_at") else ""
 
-            # Updated columns: Run ID, Status, Prompt ID, Run Type, Duration, Created
-            table_data.append([run_id, status, prompt_id, model_type, duration, created])
+            # Get rating and display as number for compact table
+            rating = run.get("rating")
+            rating_display = str(rating) if rating else "-"
+
+            # Updated columns: Run ID, Status, Run Type, Duration, Rating, Created
+            table_data.append([run_id, status, model_type, duration, rating_display, created])
 
         # Build statistics
         stats = f"""
@@ -276,7 +279,7 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
         logger.error("Error loading runs data: {}\n{}", str(e), traceback.format_exc())
         # Return empty but properly formatted data
         empty_table = {
-            "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
+            "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Rating", "Created"],
             "data": [],
         }
         return [], empty_table, "Error loading data"
@@ -379,14 +382,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if not run_id or not ops:
             logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            return [gr.update(visible=False)] + [gr.update()] * 16
+            return [gr.update(visible=False)] + [gr.update()] * 17
 
         # Get full run details
         run_details = ops.get_run(run_id)
         logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            return [gr.update(visible=False)] + [gr.update()] * 16
+            return [gr.update(visible=False)] + [gr.update()] * 17
 
         # Get model type to determine which UI to show
         model_type = run_details.get("model_type", "transfer")
@@ -423,6 +426,9 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             prompt = ops.get_prompt(run_details["prompt_id"])
             if prompt:
                 prompt_text = prompt.get("prompt_text", "")
+
+        # Get rating if present
+        rating_value = run_details.get("rating", None)
 
         # Get input videos and control weights
         input_videos = []
@@ -684,6 +690,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 value=model_type
             ),  # runs_info_type (now shows model_type instead of run_type)
             gr.update(value=prompt_name),  # runs_info_prompt_name
+            gr.update(value=rating_value),  # runs_info_rating
             gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
             gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
             gr.update(value=output_video if output_video else "Not found"),  # runs_info_output_path
@@ -698,7 +705,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 21
+        return [gr.update(visible=False)] + [gr.update()] * 22
 
 
 def load_run_logs(log_path):
@@ -713,6 +720,28 @@ def load_run_logs(log_path):
         return content
     except Exception as e:
         return f"Error reading log file: {e}"
+
+
+def save_run_rating(run_id, rating_value):
+    """Save the rating for a run when changed."""
+    try:
+        if not run_id:
+            return gr.update()  # No run selected
+
+        # Create CosmosAPI instance
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+        if ops:
+            # Save the rating
+            ops.set_run_rating(run_id, rating_value)
+            logger.info("Set rating {} for run {}", rating_value, run_id)
+            # Return same value to confirm update
+            return gr.update(value=rating_value)
+
+    except Exception as e:
+        logger.error("Error saving rating: {}", str(e))
+        return gr.update()  # Return unchanged on error
 
 
 def preview_delete_run(selected_run_id):
@@ -1062,8 +1091,12 @@ def load_runs_for_multiple_prompts(
 
             created = run.get("created_at", "")[:19] if run.get("created_at") else ""
 
-            # Updated columns: Run ID, Status, Prompt ID, Run Type, Duration, Created
-            table_data.append([run_id, status, prompt_id, model_type, duration, created])
+            # Get rating and display as number for compact table
+            rating = run.get("rating")
+            rating_display = str(rating) if rating else "-"
+
+            # Updated columns: Run ID, Status, Run Type, Duration, Rating, Created
+            table_data.append([run_id, status, model_type, duration, rating_display, created])
 
         # Build statistics
         stats = f"""

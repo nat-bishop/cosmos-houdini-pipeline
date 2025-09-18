@@ -117,6 +117,9 @@ class Run(Base):
     log_path = Column(String(500), nullable=True)  # Local log file path
     error_message = Column(Text, nullable=True)  # Brief error description
 
+    # User feedback
+    rating = Column(Integer, nullable=True)  # User rating 1-5, NULL for unrated
+
     # Relationships
     prompt = relationship("Prompt", back_populates="runs")
 

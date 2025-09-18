@@ -283,6 +283,8 @@ class DataRepository:
             result["started_at"] = run.started_at.isoformat()
         if run.completed_at:
             result["completed_at"] = run.completed_at.isoformat()
+        if run.rating is not None:
+            result["rating"] = run.rating
 
         return result
 
@@ -377,7 +379,7 @@ class DataRepository:
         if not run_id or run_id.isspace():
             raise ValueError("run_id cannot be empty")
 
-        # Validate allowed fields (now includes log_path and error_message)
+        # Validate allowed fields (now includes log_path, error_message, and rating)
         allowed_fields = {
             "outputs",
             "metadata",
@@ -385,6 +387,7 @@ class DataRepository:
             "run_metadata",
             "log_path",
             "error_message",
+            "rating",
         }
         invalid_fields = set(kwargs.keys()) - allowed_fields
         if invalid_fields:
@@ -412,6 +415,12 @@ class DataRepository:
 
                         if run.completed_at is None:
                             run.completed_at = datetime.now(timezone.utc)
+                elif key == "rating":
+                    # Validate rating is between 1-5 or None
+                    if value is not None and (not isinstance(value, int) or value < 1 or value > 5):
+                        raise ValueError(
+                            f"Rating must be an integer between 1-5 or None, got: {value}"
+                        )
                 setattr(run, key, value)
 
             session.flush()  # Flush to ensure updated_at is set

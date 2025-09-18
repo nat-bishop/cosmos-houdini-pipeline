@@ -787,6 +787,24 @@ class CosmosAPI:
         """
         return self.service.get_run(run_id)
 
+    def set_run_rating(self, run_id: str, rating: int | None) -> dict[str, Any] | None:
+        """Set or clear the rating for a run.
+
+        Args:
+            run_id: The run ID to rate
+            rating: Integer rating 1-5, or None to clear rating
+
+        Returns:
+            Updated run dictionary or None if not found
+
+        Raises:
+            ValueError: If rating is not None and not between 1-5
+        """
+        if rating is not None and (not isinstance(rating, int) or rating < 1 or rating > 5):
+            raise ValueError(f"Rating must be an integer between 1-5 or None, got: {rating}")
+
+        return self.service.update_run(run_id, rating=rating)
+
     def get_prompt_with_runs(self, prompt_id: str) -> dict[str, Any] | None:
         """Get a prompt with all its associated runs.
 

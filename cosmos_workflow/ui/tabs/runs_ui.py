@@ -142,9 +142,9 @@ def create_runs_tab_ui():
                                 headers=[
                                     "Run ID",
                                     "Status",
-                                    "Prompt ID",
                                     "Run Type",
                                     "Duration",
+                                    "Rating",
                                     "Created",
                                 ],
                                 datatype=["str", "str", "str", "str", "str", "str"],
@@ -380,6 +380,20 @@ def create_runs_tab_ui():
                             components["runs_info_prompt_name"] = gr.Textbox(
                                 label="Prompt Name",
                                 interactive=False,
+                            )
+
+                            # Star Rating
+                            components["runs_info_rating"] = gr.Radio(
+                                choices=[
+                                    ("⭐", 1),
+                                    ("⭐⭐", 2),
+                                    ("⭐⭐⭐", 3),
+                                    ("⭐⭐⭐⭐", 4),
+                                    ("⭐⭐⭐⭐⭐", 5),
+                                ],
+                                label="Rating",
+                                value=None,
+                                interactive=True,
                             )
 
                             with gr.Row():

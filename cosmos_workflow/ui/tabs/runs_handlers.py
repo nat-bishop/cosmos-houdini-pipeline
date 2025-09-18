@@ -1083,14 +1083,5 @@ def load_runs_for_multiple_prompts(
         return gallery_data, table_data, stats, prompt_names
 
     except Exception as e:
-        import traceback
-
-        logger.error(
-            "Error loading runs for multiple prompts: {}\n{}", str(e), traceback.format_exc()
-        )
-        # Return empty but properly formatted data
-        empty_table = {
-            "headers": ["Run ID", "Status", "Prompt ID", "Type", "Duration", "Created"],
-            "data": [],
-        }
-        return [], empty_table, "Error loading data", []
+        logger.error("Error loading runs for multiple prompts: {}", str(e))
+        return [], [], "Error loading runs", []

@@ -2015,6 +2015,87 @@ def create_ui():
                 outputs=[components["ops_prompts_table"]],
             )
 
+        # Navigation from Inputs to Runs tab
+        if "view_runs_for_input_btn" in components and "selected_dir_path" in components:
+
+            def prepare_runs_navigation_from_input(input_path):
+                """Navigate to Runs tab with filtering by input directory."""
+                from cosmos_workflow.api.cosmos_api import CosmosAPI
+                from cosmos_workflow.utils.logging import logger
+
+                logger.info(
+                    f"prepare_runs_navigation_from_input called with input_path: {input_path}"
+                )
+
+                if not input_path:
+                    return (
+                        gr.update(),  # navigation_state - no update
+                        gr.update(),  # pending_nav_data - no update
+                        "⚠️ Please select an input directory first.",  # status message
+                        gr.update(),  # selected_tab_index - no update
+                        gr.update(),  # runs_gallery - no update
+                        gr.update(),  # runs_table - no update
+                        gr.update(),  # runs_stats - no update
+                        gr.update(visible=False),  # runs_nav_filter_row - keep hidden
+                        gr.update(),  # runs_prompt_filter - no update
+                    )
+
+                # Get all prompts and filter by input directory (same logic as View Prompts)
+                ops = CosmosAPI()
+                all_prompts = ops.list_prompts(limit=1000)
+
+                # Extract directory name from path
+                input_name = input_path.split("/")[-1] if "/" in input_path else input_path
+                input_name = input_name.split("\\")[-1] if "\\" in input_name else input_name
+
+                # Find prompts that use this input directory
+                matching_prompt_ids = []
+                for prompt in all_prompts:
+                    inputs = prompt.get("inputs", {})
+                    video_path = inputs.get("video", "")
+                    # Check if the input name appears in the video path
+                    if input_name in video_path:
+                        matching_prompt_ids.append(prompt.get("id"))
+
+                logger.info(
+                    f"Found {len(matching_prompt_ids)} prompts using input directory '{input_name}'"
+                )
+
+                if not matching_prompt_ids:
+                    return (
+                        gr.update(),  # navigation_state
+                        gr.update(),  # pending_nav_data
+                        f"No prompts found using input '{input_name}'",  # status
+                        gr.update(),  # selected_tab_index
+                        gr.update(),  # runs_gallery
+                        gr.update(),  # runs_table
+                        gr.update(),  # runs_stats
+                        gr.update(visible=False),  # runs_nav_filter_row
+                        gr.update(),  # runs_prompt_filter
+                    )
+
+                # Now call the existing prepare_runs_navigation with these prompt IDs
+                # This will handle all the filtering and navigation properly
+                return prepare_runs_navigation(matching_prompt_ids)
+
+            components["view_runs_for_input_btn"].click(
+                fn=prepare_runs_navigation_from_input,
+                inputs=[components["selected_dir_path"]],
+                outputs=[
+                    navigation_state,  # Update navigation state
+                    pending_nav_data,  # Set pending data for handle_tab_select
+                    components["refresh_status"],  # Status message
+                    selected_tab_index,  # Update selected tab index
+                    components["runs_gallery"],  # Update runs gallery with filtered data
+                    components["runs_table"],  # Update runs table with filtered data
+                    components["runs_stats"],  # Update runs stats
+                    components["runs_nav_filter_row"],  # Show filter indicator
+                    components["runs_prompt_filter"],  # Show filter text
+                ],
+                js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[2]?.click(); }, 100); return []; }",
+                queue=False,
+            )
+
         # Update selection count when selection changes
         if "ops_prompts_table" in components:
 

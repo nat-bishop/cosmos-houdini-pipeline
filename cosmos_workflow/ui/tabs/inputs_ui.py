@@ -165,6 +165,13 @@ def create_inputs_tab_ui(config):
                                 size="sm",
                             )
 
+                            # Add View Runs button
+                            components["view_runs_for_input_btn"] = gr.Button(
+                                "→ View Runs Using This Input",
+                                variant="secondary",
+                                size="sm",
+                            )
+
                     # Create Prompt Tab
                     with gr.Tab("✨ Create Prompt"):
                         with gr.Group(elem_classes=["detail-card"]):

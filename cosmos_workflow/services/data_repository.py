@@ -541,6 +541,7 @@ class DataRepository:
                         "created_at": run.created_at.isoformat(),
                         "started_at": run.started_at.isoformat() if run.started_at else None,
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                        "rating": run.rating,  # Include the rating field
                     }
 
                     # Only include runs that match the requested status filter
@@ -705,6 +706,7 @@ class DataRepository:
                         "created_at": run.created_at.isoformat(),
                         "started_at": run.started_at.isoformat() if run.started_at else None,
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                        "rating": run.rating,  # Include the rating field
                     }
                     result["runs"].append(run_dict)
 

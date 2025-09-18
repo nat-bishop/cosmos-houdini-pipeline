@@ -722,11 +722,17 @@ def load_run_logs(log_path):
         return f"Error reading log file: {e}"
 
 
-def save_run_rating(run_id, rating_value):
-    """Save the rating for a run when changed."""
+def save_run_rating(
+    run_id, rating_value, status_filter, date_filter, type_filter, search_text, limit
+):
+    """Save the rating for a run when changed and refresh the runs display."""
     try:
         if not run_id:
-            return gr.update()  # No run selected
+            # Just refresh the display without saving
+            gallery_data, table_data, stats = load_runs_data(
+                status_filter, date_filter, type_filter, search_text, limit
+            )
+            return gr.update(), gallery_data, table_data, stats
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -736,12 +742,22 @@ def save_run_rating(run_id, rating_value):
             # Save the rating
             ops.set_run_rating(run_id, rating_value)
             logger.info("Set rating {} for run {}", rating_value, run_id)
-            # Return same value to confirm update
-            return gr.update(value=rating_value)
+
+            # Refresh the runs display to show the updated rating in the table
+            gallery_data, table_data, stats = load_runs_data(
+                status_filter, date_filter, type_filter, search_text, limit
+            )
+
+            # Return the rating value and refreshed display data
+            return gr.update(value=rating_value), gallery_data, table_data, stats
 
     except Exception as e:
         logger.error("Error saving rating: {}", str(e))
-        return gr.update()  # Return unchanged on error
+        # On error, still refresh display but don't change rating
+        gallery_data, table_data, stats = load_runs_data(
+            status_filter, date_filter, type_filter, search_text, limit
+        )
+        return gr.update(), gallery_data, table_data, stats
 
 
 def preview_delete_run(selected_run_id):

@@ -2501,11 +2501,38 @@ def create_ui():
             )
 
         # Rating change handler
-        if all(k in components for k in ["runs_info_rating", "runs_info_id"]):
+        if all(
+            k in components
+            for k in [
+                "runs_info_rating",
+                "runs_info_id",
+                "runs_status_filter",
+                "runs_date_filter",
+                "runs_type_filter",
+                "runs_search",
+                "runs_limit",
+                "runs_gallery",
+                "runs_table",
+                "runs_stats",
+            ]
+        ):
             components["runs_info_rating"].change(
                 fn=save_run_rating,
-                inputs=[components["runs_info_id"], components["runs_info_rating"]],
-                outputs=[components["runs_info_rating"]],
+                inputs=[
+                    components["runs_info_id"],
+                    components["runs_info_rating"],
+                    components["runs_status_filter"],
+                    components["runs_date_filter"],
+                    components["runs_type_filter"],
+                    components["runs_search"],
+                    components["runs_limit"],
+                ],
+                outputs=[
+                    components["runs_info_rating"],
+                    components["runs_gallery"],
+                    components["runs_table"],
+                    components["runs_stats"],
+                ],
             )
 
         # Active Jobs Tab Events

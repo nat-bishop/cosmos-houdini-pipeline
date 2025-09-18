@@ -89,11 +89,46 @@ queue_handlers = None
 
 # Simple shutdown cleanup using existing methods
 def cleanup_on_shutdown(signum=None, frame=None):
-    """Kill containers on shutdown using existing CosmosAPI method."""
+    """Kill containers and cleanup running jobs on shutdown."""
     global queue_service
 
     if signum:
         logger.info("Shutting down gracefully...")
+
+    # Mark any running jobs as cancelled before stopping queue processor
+    # This prevents zombie jobs that can't complete without the app
+    if queue_service:
+        try:
+            from datetime import datetime, timezone
+
+            from cosmos_workflow.database.models import JobQueue
+
+            # Get a database session
+            if queue_service.db_session:
+                session = queue_service.db_session
+            else:
+                session = queue_service.db_connection.Session()
+
+            try:
+                # Find and cancel all running jobs
+                running_jobs = session.query(JobQueue).filter(JobQueue.status == "running").all()
+
+                if running_jobs:
+                    for job in running_jobs:
+                        job.status = "cancelled"
+                        job.completed_at = datetime.now(timezone.utc)
+                        job.result = {"reason": "Application shutdown"}
+                        logger.info("Marking running job {} as cancelled due to shutdown", job.id)
+
+                    session.commit()
+                    logger.info("Cancelled {} running job(s) on shutdown", len(running_jobs))
+
+            finally:
+                if not queue_service.db_session:
+                    session.close()
+
+        except Exception as e:
+            logger.error("Error cancelling running jobs on shutdown: {}", e)
 
     # Stop queue processor if running
     if queue_service:
@@ -2530,26 +2565,41 @@ def create_ui():
                 ],
             )
 
-            # Clear completed jobs
-            components["clear_completed_btn"].click(
-                fn=queue_handlers.clear_completed_jobs,
-                outputs=components.get("job_status"),
-            ).then(
-                fn=queue_handlers.get_queue_display,
-                outputs=[
-                    components.get("queue_status"),
-                    components.get("queue_table"),
-                ],
-            )
+            # Cancel selected job
+            if "cancel_job_btn" in components and "selected_job_id" in components:
 
-            # Auto-refresh queue every 2 seconds when on jobs tab
+                def cancel_selected_job(job_id):
+                    """Cancel the selected job and refresh the queue."""
+                    if not job_id:
+                        return "No job selected", None, []
+
+                    # Cancel the job
+                    result = queue_handlers.cancel_job(job_id)
+
+                    # Refresh queue display
+                    status_text, table_data = queue_handlers.get_queue_display()
+
+                    # Return updated displays
+                    return result, status_text, table_data
+
+                components["cancel_job_btn"].click(
+                    fn=cancel_selected_job,
+                    inputs=components["selected_job_id"],
+                    outputs=[
+                        components.get("job_status"),
+                        components.get("queue_status"),
+                        components.get("queue_table"),
+                    ],
+                )
+
+            # Auto-refresh queue every 5 seconds when on jobs tab
             def auto_refresh_queue():
                 """Auto-refresh queue display."""
                 return queue_handlers.get_queue_display()
 
             # Set up a timer for auto-refresh
-            # Create a timer that triggers every 2 seconds
-            timer = gr.Timer(value=2, active=True)
+            # Create a timer that triggers every 5 seconds (less frequent to avoid conflicts)
+            timer = gr.Timer(value=5, active=True)
             timer.tick(
                 fn=auto_refresh_queue,
                 outputs=[
@@ -2581,7 +2631,7 @@ def create_ui():
                     logger.info("Selected job ID: {}", job_id)
 
                     if not job_id:
-                        return gr.update(value="No job selected"), gr.update(visible=False)
+                        return gr.update(value="No job selected"), gr.update(visible=False), None
 
                     # Get job details
                     details = queue_handlers.get_job_details(job_id)
@@ -2596,12 +2646,14 @@ def create_ui():
                     # Show cancel button only for queued jobs
                     show_cancel = status == "queued"
 
-                    return gr.update(value=details), gr.update(visible=show_cancel)
+                    return gr.update(value=details), gr.update(visible=show_cancel), job_id
 
                 except Exception as e:
                     logger.error("Error selecting job from queue: {}", e)
-                    return gr.update(value=f"Error loading job details: {e}"), gr.update(
-                        visible=False
+                    return (
+                        gr.update(value=f"Error loading job details: {e}"),
+                        gr.update(visible=False),
+                        None,
                     )
 
             # Connect queue table select event
@@ -2611,6 +2663,7 @@ def create_ui():
                 outputs=[
                     components.get("job_details"),
                     components.get("cancel_job_btn"),
+                    components.get("selected_job_id"),
                 ],
             )
 

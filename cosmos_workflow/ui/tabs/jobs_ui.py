@@ -33,25 +33,22 @@ def create_jobs_tab_ui():
 
                 # Queue table
                 components["queue_table"] = gr.Dataframe(
-                    headers=["#", "Job ID", "Type", "Status", "Time", "Action"],
-                    datatype=["str", "str", "str", "str", "str", "str"],
+                    headers=["#", "Job ID", "Type", "Status", "Time"],
+                    datatype=["str", "str", "str", "str", "str"],
                     value=[],
                     interactive=False,
                     wrap=True,
                 )
 
-                # Queue control buttons
-                with gr.Row():
-                    components["refresh_queue_btn"] = gr.Button(
-                        "🔄 Refresh", size="sm", variant="secondary"
-                    )
-                    components["clear_completed_btn"] = gr.Button(
-                        "🗑️ Clear Completed", size="sm", variant="secondary"
-                    )
+                # Queue control button
+                components["refresh_queue_btn"] = gr.Button(
+                    "🔄 Refresh", size="sm", variant="secondary"
+                )
 
                 # Job details section (for selected job)
                 gr.Markdown("#### 📝 Job Details")
                 components["job_details"] = gr.Markdown("Select a job to view details")
+                components["selected_job_id"] = gr.State(None)  # Track selected job
                 components["cancel_job_btn"] = gr.Button(
                     "❌ Cancel Selected Job",
                     size="sm",

@@ -46,13 +46,46 @@ def cancel_kill_confirmation():
 
 
 def execute_kill_job():
-    """Execute the kill job operation."""
+    """Execute the kill job operation and update job status in database."""
     try:
         api = CosmosAPI()
+
+        # First get the active containers to find the run IDs
+        containers = api.get_active_containers()
+        run_ids = []
+        if containers:
+            for container in containers:
+                # Extract run ID from container name (format: cosmos_*_rs_xxxxx)
+                container_name = container.get("name", "")
+                if "_rs_" in container_name:
+                    run_id = "rs_" + container_name.split("_rs_")[1][:32]
+                    run_ids.append(run_id)
+
+        # Kill the containers
         result = api.kill_containers()
 
         if result["status"] == "success":
-            message = f"Successfully killed {result['killed_count']} container(s)"
+            # Update the database to mark runs as cancelled
+            from cosmos_workflow.database.connection import DatabaseConnection
+            from cosmos_workflow.services.queue_service import QueueService
+
+            database_path = "outputs/cosmos.db"
+            db_connection = DatabaseConnection(database_path)
+            queue_service = QueueService(db_connection=db_connection)
+
+            # Mark any running jobs as cancelled
+            if run_ids:
+                for run_id in run_ids:
+                    # Find the job with this run_id and mark it as cancelled
+                    jobs = queue_service.get_all_jobs()
+                    for job in jobs:
+                        if job.get("result", {}).get("run_id") == run_id:
+                            queue_service.update_job_status(job["id"], "cancelled")
+                            logger.info("Marked job %s as cancelled for run %s", job["id"], run_id)
+
+            message = (
+                f"Successfully killed {result['killed_count']} container(s) and updated job status"
+            )
             logger.info(message)
             return (
                 gr.update(visible=False),  # Hide confirmation dialog

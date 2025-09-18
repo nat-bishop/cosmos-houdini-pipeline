@@ -58,7 +58,6 @@ class QueueHandlers:
                         f"{job.get('elapsed_time', 0)}s ago"
                         if job.get("elapsed_time")
                         else "just started",
-                        "—",  # No cancel for running
                     ]
                 )
 
@@ -71,7 +70,6 @@ class QueueHandlers:
                         job["type"],
                         "queued",
                         f"{job['prompt_count']} prompt(s)",
-                        "✖",  # Cancel button will be added in UI
                     ]
                 )
 
@@ -100,22 +98,6 @@ class QueueHandlers:
             logger.error("Error cancelling job %s: %s", job_id, e)
             return f"❌ Error cancelling job: {e}"
 
-    def clear_completed_jobs(self) -> str:
-        """Clear all completed jobs from the database.
-
-        Returns:
-            Status message
-        """
-        try:
-            cleared = self.queue_service.clear_completed_jobs()
-            if cleared > 0:
-                return f"🗑️ Cleared {cleared} completed job(s)"
-            else:
-                return "No completed jobs to clear"
-        except Exception as e:
-            logger.error("Error clearing completed jobs: %s", e)
-            return f"❌ Error clearing jobs: {e}"
-
     def get_job_details(self, job_id: str) -> str:
         """Get detailed information about a specific job.
 
@@ -131,31 +113,34 @@ class QueueHandlers:
                 return f"Job {job_id} not found"
 
             # Use the returned dict directly
+            # Get job type from either job_type or type field
+            job_type = job_info.get("job_type") or job_info.get("type", "inference")
+
             details = f"""**Job ID:** {job_id}
-**Type:** {job_info.get("job_type", "unknown")}
+**Type:** {job_type}
 **Status:** {job_info.get("status", "unknown")}
 **Priority:** {job_info.get("priority", 50)}
 **Created:** {self._format_time(job_info.get("created_at"))}"""
 
             if job_info.get("started_at"):
-                details += f"\n**Started:** {self._format_time(job_info.get('started_at'))}"
+                details += f"  \n**Started:** {self._format_time(job_info.get('started_at'))}"
 
             if job_info.get("completed_at"):
-                details += f"\n**Completed:** {self._format_time(job_info.get('completed_at'))}"
+                details += f"  \n**Completed:** {self._format_time(job_info.get('completed_at'))}"
 
             if job_info.get("status") == "queued":
                 position = self.queue_service.get_position(job_id)
                 if position:
-                    details += f"\n**Queue Position:** #{position}"
+                    details += f"  \n**Queue Position:** #{position}"
                     # Estimate wait time (assuming ~2 minutes per job)
                     estimated_wait = position * 120
                     details += (
-                        f"\n**Estimated Wait:** ~{estimated_wait // 60}m {estimated_wait % 60}s"
+                        f"  \n**Estimated Wait:** ~{estimated_wait // 60}m {estimated_wait % 60}s"
                     )
 
             if job_info.get("result") and job_info.get("status") == "failed":
                 error = job_info.get("result", {}).get("error", "Unknown error")
-                details += f"\n**Error:** {error}"
+                details += f"  \n**Error:** {error}"
 
             return details
 

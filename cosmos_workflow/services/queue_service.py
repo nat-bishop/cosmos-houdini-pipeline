@@ -316,6 +316,11 @@ class QueueService:
 
                 logger.info("Completed job %s", job.id)
 
+                # Delete successful job immediately - run record has all the info
+                session.delete(job)
+                session.commit()
+                logger.info("Cleaned up completed job %s", job.id)
+
                 return {
                     "job_id": job.id,
                     "status": "completed",
@@ -330,6 +335,9 @@ class QueueService:
                 session.commit()
 
                 logger.error("Failed job %s: %s", job.id, e)
+
+                # Trim old failed/cancelled jobs to keep only recent ones
+                self._trim_failed_jobs(session, max_keep=50)
 
                 return {
                     "job_id": job.id,
@@ -472,33 +480,49 @@ class QueueService:
             session.commit()
 
             logger.info("Cancelled job %s", job_id)
+
+            # Trim old failed/cancelled jobs to keep only recent ones
+            self._trim_failed_jobs(session, max_keep=50)
+
             return True
         finally:
             if self.db_connection and not self.db_session:
                 session.close()
 
-    def clear_completed_jobs(self) -> int:
-        """Clear completed jobs from the queue.
+    def _trim_failed_jobs(self, session, max_keep: int = 50) -> int:
+        """Trim failed and cancelled jobs to keep only the most recent ones.
+
+        Args:
+            session: Database session to use
+            max_keep: Maximum number of failed/cancelled jobs to keep
 
         Returns:
-            Number of jobs cleared
+            Number of jobs deleted
         """
-        session = self._get_session()
         try:
-            # Delete completed and cancelled jobs
-            count = (
+            # Get IDs of jobs to keep (most recent N failed/cancelled jobs)
+            keep_jobs = (
+                session.query(JobQueue.id)
+                .filter(JobQueue.status.in_(["failed", "cancelled"]))
+                .order_by(JobQueue.created_at.desc())
+                .limit(max_keep)
+                .subquery()
+            )
+
+            # Delete older failed/cancelled jobs not in the keep list
+            deleted_count = (
                 session.query(JobQueue)
-                .filter(JobQueue.status.in_(["completed", "cancelled", "failed"]))
+                .filter(JobQueue.status.in_(["failed", "cancelled"]), ~JobQueue.id.in_(keep_jobs))
                 .delete(synchronize_session=False)
             )
 
-            session.commit()
+            if deleted_count > 0:
+                logger.info("Trimmed %d old failed/cancelled jobs", deleted_count)
 
-            logger.info("Cleared %d completed jobs", count)
-            return count
-        finally:
-            if self.db_connection and not self.db_session:
-                session.close()
+            return deleted_count
+        except Exception as e:
+            logger.error("Error trimming failed jobs: %s", e)
+            return 0
 
     def get_estimated_wait_time(self, job_id: str) -> int | None:
         """Estimate wait time for a job in seconds.

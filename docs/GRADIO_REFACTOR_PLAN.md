@@ -1,26 +1,31 @@
-# Gradio UI Refactoring Implementation Plan (v2.0)
+# Gradio UI Refactoring Implementation Plan (v3.0)
 
 ## Executive Summary
 
-Pragmatic refactoring of the Cosmos Workflow Gradio UI from a monolithic 2,786-line `app.py` into a simpler, modular structure. Focus on practical improvements without over-engineering.
+Completing the partial refactoring of Cosmos Workflow Gradio UI. Focus on extracting event handlers from the 2,910-line `app.py` to achieve a maintainable, testable structure.
 
-## Current State Analysis
+## Current State Analysis (Updated)
 
-### File Size Issues
-- **app.py**: 2,786 lines (critical)
-  - `create_ui()` function: 1,574 lines
-  - 78 Gradio components
-  - 48 event bindings
-  - 17 inline functions
-- **runs_handlers.py**: 1,134 lines (too large)
-- **Total UI module**: ~4,500 lines
+### Recent Progress
+- ✅ UI components separated into `tabs/*_ui.py` files
+- ✅ Directory structure created (`handlers/`, `tabs/`, `components/`)
+- ⚠️ Event handlers still in app.py (main bottleneck)
+- ⚠️ `inline_handlers.py` started but incomplete
 
-### Key Problems
-1. Monolithic structure makes testing difficult
-2. Event handlers mixed with UI creation
-3. Business logic embedded in UI code
-4. Duplicate code across handlers
-5. Difficult to navigate and maintain
+### File Size Status
+- **app.py**: 2,910 lines (grown due to new features)
+  - Still contains all event wiring
+  - 48+ event bindings
+  - 17+ inline functions
+- **tabs/runs_handlers.py**: 1,192 lines (needs splitting)
+- **Total UI module**: ~5,000 lines
+
+### Key Remaining Problems
+1. Event handlers still mixed in app.py
+2. Inline functions not extracted
+3. runs_handlers.py still monolithic
+4. Event wiring logic scattered throughout app.py
+5. Testing still difficult due to coupling
 
 ## Design Philosophy
 
@@ -77,154 +82,176 @@ tests/unit/ui/
 - **Flat structure** - Maximum 2 levels deep
 - **One file per tab** - Unless it exceeds 500 lines
 
-## Implementation Phases (3 Phases, 5-7 Days Total)
+## Revised Implementation Phases (2 Phases, 3-4 Days Total)
 
-### Phase 1: Extract & Organize (2 days)
-**Goal**: Quick wins to reduce app.py size and improve organization
+### Phase 1: Complete Event Handler Extraction (1-2 days)
+**Goal**: Move ALL event handlers and wiring out of app.py
 
-#### Day 1: Extract Inline Functions & Split Large Files
-- [ ] Move 17 inline functions from `create_ui()` to `ui/handlers/inline_handlers.py`
-  - Group by functionality (navigation, refresh, queue, etc.)
-  - Keep function signatures identical for easy migration
-- [ ] Split `runs_handlers.py` (1,134 lines) into:
-  - `handlers/runs_gallery.py` (~300 lines)
-  - `handlers/runs_table.py` (~300 lines)
-  - `handlers/runs_crud.py` (~300 lines)
-  - Remove ~200 lines of duplication
-- [ ] Test: Ensure app still runs
+#### Priority 1: Extract Event Handlers to Tab Files
+Since UI is already separated, move event handlers to their corresponding tab files:
 
-**Example extraction:**
+- [ ] **Enhance `tabs/prompts.py`** (new consolidated file):
+  - Merge `prompts_ui.py` + `prompts_handlers.py`
+  - Move ALL prompt-related event handlers from app.py
+  - Include event wiring in the tab creation function
+
+- [ ] **Enhance `tabs/runs.py`** (new consolidated file):
+  - Merge `runs_ui.py` + relevant parts of `runs_handlers.py`
+  - Move ALL runs-related event handlers from app.py
+  - Split current `runs_handlers.py` functions as needed
+
+- [ ] **Enhance `tabs/jobs.py`** (new consolidated file):
+  - Merge `jobs_ui.py` + `jobs_handlers.py`
+  - Move ALL jobs-related event handlers from app.py
+
+- [ ] **Keep `tabs/inputs.py`** as-is (already consolidated)
+
+**New Consolidated Tab Pattern:**
 ```python
-# From app.py inline function
-def handle_tab_select(tab_index, nav_state):
-    # 50 lines of code...
-
-# To handlers/navigation.py
-def handle_tab_select(tab_index, nav_state):
-    # Same 50 lines, now testable
-```
-
-**Expected Impact**:
-- app.py: -500 lines
-- runs_handlers: -200 lines via DRY
-- **Total: -700 lines**
-
-#### Day 2: Extract Utilities & Remove Duplication
-- [ ] Create `ui/utils/formatters.py`:
-  - Extract data formatting (dates, file sizes, status badges)
-  - Consolidate duplicate formatting code
-- [ ] Create `ui/utils/validators.py`:
-  - Extract input validation
-  - Consolidate validation patterns
-- [ ] Update imports throughout
-- [ ] Run tests
-
-**Expected Impact**: -300 lines of duplicate code
-
-### Phase 2: Modularize Tabs (2-3 days)
-**Goal**: Extract each tab to its own module
-
-#### Day 3-4: Extract Tab Modules
-- [ ] Create `ui/tabs/` directory
-- [ ] Extract each tab to a single file:
-  - `tabs/inputs.py` - Complete inputs tab (~400 lines)
-  - `tabs/prompts.py` - Complete prompts tab (~500 lines)
-  - `tabs/jobs.py` - Complete jobs tab (~300 lines)
-  - `tabs/runs.py` - Complete runs tab (~600 lines)
-
-**Tab Module Pattern (Simple & Clear):**
-```python
-# ui/tabs/prompts.py
+# tabs/prompts.py - Complete self-contained tab
 import gradio as gr
 from cosmos_workflow.api import CosmosAPI
 
-def create_prompts_tab(api: CosmosAPI):
-    """Create the prompts tab UI and wire events."""
+def create_prompts_tab(api, components_dict=None):
+    """Create complete prompts tab with UI, handlers, and wiring."""
 
-    # Local helper functions (not classes!)
-    def load_prompts_data():
-        # Tab-specific logic
-        pass
+    # Local state if needed
+    selected_prompts = gr.State([])
+
+    # Event handlers (moved from app.py)
+    def load_prompts_data(search, filter):
+        """Load and filter prompts."""
+        prompts = api.list_prompts()
+        # Filter logic here
+        return format_for_table(prompts)
 
     def handle_prompt_select(evt):
-        # Event handler
-        pass
+        """Handle row selection."""
+        # Selection logic here
+        return gr.update(...)
 
-    # Create UI
-    with gr.Tab("Prompts") as tab:
-        # UI components
-        table = gr.Dataframe(...)
-        button = gr.Button(...)
+    def handle_delete_prompts(table_data):
+        """Delete selected prompts."""
+        selected = get_selected_from_table(table_data)
+        for prompt_id in selected:
+            api.delete_prompt(prompt_id)
+        return load_prompts_data()
 
-        # Wire events (explicit and clear)
-        button.click(handle_prompt_select, inputs=[...], outputs=[...])
+    # Build UI
+    with gr.Tab("🚀 Prompts") as tab:
+        # Create components
+        search = gr.Textbox(label="Search")
+        table = gr.Dataframe(headers=["☑", "ID", "Name", "Text"])
+        delete_btn = gr.Button("Delete Selected")
+
+        # Wire events HERE in the tab
+        search.change(load_prompts_data, inputs=[search], outputs=[table])
+        table.select(handle_prompt_select, outputs=[selected_prompts])
+        delete_btn.click(handle_delete_prompts, inputs=[table], outputs=[table])
+
+        # Store references if needed for cross-tab communication
+        if components_dict:
+            components_dict["prompts_table"] = table
+            components_dict["prompts_search"] = search
 
     return tab
-
-# No classes unless they add clear value!
 ```
 
-- [ ] Update `app.py` to use tab modules:
+- [ ] **Simplify app.py**:
 ```python
-# app.py becomes simple:
-from ui.tabs import inputs, prompts, runs, jobs
+# app.py becomes ~200 lines:
+from cosmos_workflow.api import CosmosAPI
+from cosmos_workflow.services.queue_service import QueueService
+from cosmos_workflow.ui.tabs import prompts, runs, jobs, inputs
+import gradio as gr
 
 def create_ui():
+    # Initialize services
     api = CosmosAPI()
+    queue = QueueService()
 
-    with gr.Blocks() as app:
-        inputs.create_inputs_tab(api)
-        prompts.create_prompts_tab(api)
-        runs.create_runs_tab(api)
-        jobs.create_jobs_tab(queue_service)
+    # Shared components for cross-tab communication
+    components = {}
+
+    with gr.Blocks(title="Cosmos Workflow") as app:
+        # Create header
+        gr.Markdown("# Cosmos Workflow Manager")
+
+        # Create tabs
+        with gr.Tabs():
+            inputs.create_inputs_tab(api, components)
+            prompts.create_prompts_tab(api, components)
+            runs.create_runs_tab(api, components)
+            jobs.create_jobs_tab(queue, components)
+
+        # Handle any cross-tab wiring (minimal)
+        # Only for features like "View Runs" from prompts tab
+        if "prompts_view_runs_btn" in components:
+            components["prompts_view_runs_btn"].click(
+                lambda: gr.update(selected=2),  # Switch to runs tab
+                outputs=[components["tabs"]]
+            )
 
     return app
 ```
 
 **Expected Impact**:
-- app.py: -1,800 lines (moves to tabs/)
-- app.py final size: ~200 lines
-- Each tab file: 300-600 lines (manageable)
+- app.py: From 2,910 to ~200 lines (-93%)
+- Each tab file: 600-800 lines (self-contained)
+- Much easier testing and maintenance
 
-### Phase 3: Testing & Polish (1-2 days)
-**Goal**: Add tests and finalize structure
+### Phase 2: Cleanup & Optimization (1-2 days)
+**Goal**: Clean up redundancies and add tests
 
-#### Day 5-6: Testing & Documentation
-- [ ] Write tests for extracted handlers:
-  - `test_handlers.py` - Test pure functions
-  - `test_formatters.py` - Test utilities
-  - `test_tabs.py` - Test tab creation
-- [ ] Add docstrings to all functions
-- [ ] Update CLAUDE.md with new structure
-- [ ] Create simple integration test:
+#### Day 3: Consolidate and Clean
+- [ ] **Remove redundant files**:
+  - Delete separate `*_ui.py` and `*_handlers.py` files after merging
+  - Clean up `handlers/inline_handlers.py` if not needed
+
+- [ ] **Split runs_handlers.py** (still at 1,192 lines):
+  - Extract thumbnail generation to `utils/thumbnails.py`
+  - Extract data loading to `tabs/runs.py` directly
+  - Remove duplicate functions
+
+- [ ] **Extract common utilities**:
+  - `utils/formatters.py` - Date, size, status formatting
+  - `utils/validators.py` - Input validation
+  - `utils/tables.py` - Common table operations (if needed)
+
+#### Day 4: Testing
+- [ ] **Write focused tests**:
 ```python
-def test_app_creates():
-    """Ensure app still creates without errors."""
-    app = create_ui()
-    assert app is not None
+# tests/unit/ui/test_tabs.py
+def test_prompts_tab_creation():
+    """Test that prompts tab creates without errors."""
+    api = Mock()
+    tab = create_prompts_tab(api)
+    assert tab is not None
+
+# tests/unit/ui/test_handlers.py
+def test_prompt_deletion_handler():
+    """Test prompt deletion logic."""
+    api = Mock()
+    # Test the handler function directly
+    result = handle_delete_prompts(mock_table_data, api)
+    assert api.delete_prompt.called
 ```
 
-#### Optional Day 7: Component Extraction (only if needed)
-- [ ] **Only if** there's significant duplication:
-  - Extract common table patterns to `components/tables.py`
-  - Extract common form patterns to `components/forms.py`
-- [ ] **Skip if** it adds complexity without clear benefit
+- [ ] **Update documentation**:
+  - Update UI CLAUDE.md with new structure
+  - Document cross-tab communication pattern
+  - Add examples of how to add new features
 
-**Testing Focus:**
-- Unit tests for handlers (pure functions)
-- Integration test that app creates
-- Manual testing of critical workflows
+## Success Metrics (Updated)
 
-## Success Metrics
-
-| Metric | Current | Target | Realistic? |
-|--------|---------|--------|------------|
-| app.py size | 2,786 lines | ~200 lines | ✅ Yes |
-| Largest file | 2,786 lines | <600 lines | ✅ Yes |
-| Total lines | ~4,500 | ~3,500 (-22%) | ✅ Yes |
-| Test coverage | ~5% | 40% | ✅ Yes |
-| Functions > 100 lines | 15 | <5 | ✅ Yes |
-| Duplicate code | ~400 lines | <100 lines | ✅ Yes |
+| Metric | Current | Target | Priority |
+|--------|---------|--------|----------|
+| app.py size | 2,910 lines | ~200 lines | 🔴 Critical |
+| Event handlers in app.py | 48+ | 3-5 (cross-tab only) | 🔴 Critical |
+| Largest file | runs_handlers.py (1,192) | <800 lines | 🟡 Important |
+| Test coverage | ~5% | 30% | 🟡 Important |
+| Duplicate code | ~400 lines | <100 lines | 🟢 Nice to have |
+| Tab self-containment | 0% | 95% | 🔴 Critical |
 
 **Note**: Focus on practical improvements, not percentages. Better organization is more valuable than line count.
 
@@ -380,8 +407,27 @@ If you need results immediately:
 4. **Test continuously** - Run app after each change
 5. **Stop when good enough** - Perfect is the enemy of done
 
+## Key Changes from v2.0 to v3.0
+
+### What's Already Done
+- ✅ UI components separated into `tabs/*_ui.py`
+- ✅ Directory structure created
+- ✅ Some handlers extracted to separate files
+
+### What Still Needs Work
+- 🔴 **Event handlers still in app.py** (main bottleneck)
+- 🔴 **Event wiring scattered throughout app.py**
+- 🟡 **runs_handlers.py still too large**
+- 🟡 **Duplicate code not extracted**
+
+### Revised Approach
+1. **Consolidate instead of separate** - Merge `*_ui.py` + `*_handlers.py` into single tab files
+2. **Self-contained tabs** - Each tab handles its own events
+3. **Minimal cross-tab wiring** - Only in app.py when absolutely necessary
+4. **Focus on extraction** - Move code out of app.py, don't add new abstractions
+
 ---
 
 *Last Updated: 2024*
-*Version: 2.0 - Simplified & Pragmatic*
-*Philosophy: "Make it work, make it right, make it fast" - in that order*
+*Version: 3.0 - Focused on completing partial refactor*
+*Philosophy: "Finish what was started, don't add complexity"*

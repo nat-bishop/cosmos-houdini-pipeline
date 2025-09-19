@@ -613,12 +613,21 @@ class GPUExecutor:
                 self.file_transfer.upload_file(batch_file, remote_batch_location)
 
                 # Upload any videos to run-specific paths as expected by JSONL format
-                for run_id, prompt_dict in runs_and_prompts:
-                    video_path = prompt_dict.get("inputs", {}).get("video")
-                    if video_path and Path(video_path).exists():
-                        # Upload to runs/{run_id}/inputs/videos/ as referenced in JSONL
-                        remote_video_dir = f"{remote_config.remote_dir}/runs/{run_id}/inputs/videos"
-                        self.file_transfer.upload_file(Path(video_path), remote_video_dir)
+                for run_dict, prompt_dict in runs_and_prompts:
+                    run_id = run_dict["id"]
+                    inputs = prompt_dict.get("inputs", {})
+
+                    # Upload ALL input files (video, seg, depth, edge, etc.)
+                    for input_type, input_path in inputs.items():
+                        if input_path and Path(input_path).exists():
+                            # Upload to runs/{run_id}/inputs/videos/ as referenced in JSONL
+                            remote_video_dir = (
+                                f"{remote_config.remote_dir}/runs/{run_id}/inputs/videos"
+                            )
+                            logger.info(
+                                "Uploading {} for run {}: {}", input_type, run_id, input_path
+                            )
+                            self.file_transfer.upload_file(Path(input_path), remote_video_dir)
 
                 # Run batch inference
                 batch_result = self.docker_executor.run_batch_inference(
@@ -759,8 +768,8 @@ class GPUExecutor:
             batch_name: Name of the batch for logging
         """
         # Create local run directory structure first (outside try block)
-        # Note: run_id already includes "run_" prefix (e.g., "run_123")
-        local_run_dir = Path("outputs") / run_id
+        # Note: run_id does NOT include "run_" prefix, it's like "rs_xxxxx"
+        local_run_dir = Path("outputs") / f"run_{run_id}"
         local_run_dir.mkdir(parents=True, exist_ok=True)
 
         outputs_dir = local_run_dir / "outputs"

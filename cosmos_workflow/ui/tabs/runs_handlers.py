@@ -518,13 +518,23 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                             continue
 
                     # If no prompt input, check for AI-generated control
-                    generated_path = Path(
+                    # Try indexed version first (from batch inference), then non-indexed (backward compat)
+                    indexed_path = Path(
+                        f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control_0.mp4"
+                    )
+                    non_indexed_path = Path(
                         f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control.mp4"
                     )
-                    if generated_path.exists():
-                        input_videos.append((str(generated_path), label_with_weight))
+
+                    if indexed_path.exists():
+                        input_videos.append((str(indexed_path), label_with_weight))
                         logger.info(
-                            "Using AI-generated {} control: {}", control_key, generated_path
+                            "Using AI-generated {} control (indexed): {}", control_key, indexed_path
+                        )
+                    elif non_indexed_path.exists():
+                        input_videos.append((str(non_indexed_path), label_with_weight))
+                        logger.info(
+                            "Using AI-generated {} control: {}", control_key, non_indexed_path
                         )
                     else:
                         logger.warning(

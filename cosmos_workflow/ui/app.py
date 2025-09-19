@@ -939,8 +939,9 @@ def run_inference_on_selected(
             "canny_threshold": canny_threshold,
         }
 
-        # Determine job type
-        job_type = "inference" if len(selected_ids) == 1 else "batch_inference"
+        # Always use batch inference for consistency (even for single prompts)
+        # This ensures consistent file naming and processing
+        job_type = "batch_inference"
 
         # Add job to queue
         job_id = queue_service.add_job(

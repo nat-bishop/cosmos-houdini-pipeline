@@ -638,6 +638,10 @@ class GPUExecutor:
                 if batch_result["status"] == "failed":
                     raise RuntimeError(f"Batch execution failed: {batch_result.get('error')}")
 
+                # Batch now runs synchronously, so should have completed status
+                if batch_result.get("status") != "completed":
+                    raise RuntimeError(f"Unexpected batch status: {batch_result.get('status')}")
+
                 # Split outputs to individual run directories
                 output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
 

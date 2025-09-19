@@ -838,22 +838,34 @@ class DockerExecutor:
         remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         self.remote_executor.create_directory(remote_output_dir)
 
-        # Execute batch inference using bash script
+        # Execute batch inference using bash script (blocking)
         logger.info("Starting batch inference on GPU. This may take a while...")
-        logger.info("Use 'cosmos status --stream' to monitor progress")
-        logger.info("Launching batch inference in background...")
+        logger.info("Running batch inference synchronously...")
+
         self._run_batch_inference_script(
             batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
         )
 
-        logger.info("Batch inference started successfully for {}", batch_name)
-        logger.info("The process is now running in the background on the GPU")
+        # Get output files after completion
+        output_files = self._get_batch_output_files(batch_name)
 
-        return {
-            "batch_name": batch_name,
-            "output_dir": remote_output_dir,
-            "status": "started",
-        }
+        if output_files:
+            logger.info("Batch inference completed successfully for {}", batch_name)
+            logger.info("Generated {} output files", len(output_files))
+            return {
+                "batch_name": batch_name,
+                "output_dir": remote_output_dir,
+                "status": "completed",
+                "output_files": output_files,
+            }
+        else:
+            logger.error("Batch inference completed but no output files found")
+            return {
+                "batch_name": batch_name,
+                "output_dir": remote_output_dir,
+                "status": "failed",
+                "error": "No output files generated",
+            }
 
     def _run_batch_inference_script(
         self,
@@ -882,14 +894,23 @@ class DockerExecutor:
         container_name = f"cosmos_batch_{batch_name[:8]}"
         builder.with_name(container_name)
 
-        # Run the command in background
+        # Run the command synchronously (blocking, same as single inference)
         command = builder.build()
         logger.debug("Executing Docker command for batch inference: %s", command)
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Batch inference started in background")
+        # Execute and wait for completion (blocking)
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=3600,  # 1 hour timeout for batch inference
+            stream_output=False,  # Could be made configurable
+        )
+
+        if exit_code != 0:
+            logger.error("Batch inference failed with exit code {}", exit_code)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+        else:
+            logger.info("Batch inference completed successfully")
 
     def _get_batch_output_files(self, batch_name: str) -> list[str]:
         """Get list of output files from batch inference."""

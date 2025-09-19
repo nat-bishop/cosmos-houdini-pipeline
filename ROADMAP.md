@@ -226,6 +226,27 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 
 ## 📚 Priority 4: Documentation & Tooling
 
+### Future Enhancements
+
+#### Proper Cancellation Status Propagation
+**Issue:** When killing containers with SIGKILL, the system shows a RuntimeError for exit code 137 in console logs (but functionality works correctly)
+
+**Current Behavior:**
+- Docker kill returns exit code 137 (SIGKILL) which is expected behavior
+- System treats this as an error and logs RuntimeError, but continues functioning
+- Jobs are correctly marked as cancelled in database
+
+**Future Implementation Tasks:**
+- [ ] Add "cancelled" as distinct status from "failed" throughout execution chain
+- [ ] Handle SIGKILL (137) vs SIGTERM (143) exit codes differently
+- [ ] Prevent race conditions between kill operations and job processing
+- [ ] Update gpu_executor.py to handle cancelled status without raising exceptions
+- [ ] Propagate cancellation status through CosmosAPI to UI layer
+
+**Note:** Currently addressed with minimal fix that accepts exit code 137 as valid. Full implementation would require architectural changes across multiple layers.
+
+## 📚 Priority 5: Documentation & Tooling
+
 ### User Documentation
 - [ ] Create step-by-step setup guide
 - [ ] Document all CLI commands with examples

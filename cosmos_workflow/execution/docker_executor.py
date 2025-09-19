@@ -769,7 +769,17 @@ class DockerExecutor:
 
             # Kill all containers
             kill_cmd = DockerCommandBuilder.build_kill_command(container_ids)
-            self.ssh_manager.execute_command_success(kill_cmd, stream_output=False)
+
+            # Use execute_command instead of execute_command_success because docker kill
+            # returns exit code 137 (SIGKILL) which is expected behavior, not an error
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                kill_cmd, stream_output=False
+            )
+
+            # Exit code 137 means the container was killed with SIGKILL (expected)
+            # Exit code 0 means the kill command succeeded normally
+            if exit_code not in [0, 137]:
+                raise RuntimeError(f"Failed to kill containers: {stderr}")
 
             logger.info("Killed {} containers: {}", len(container_ids), container_ids)
 

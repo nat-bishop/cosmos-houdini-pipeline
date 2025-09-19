@@ -233,16 +233,16 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
                 try:
                     thumb_path = future.result(timeout=3)
                     if thumb_path:
-                        prompt_text = run.get("prompt_text", "")
                         # Include rating and run ID in label for gallery
                         full_id = run.get("id", "")
                         rating = run.get("rating")
                         if rating:
                             star_display = "★" * rating + "☆" * (5 - rating)
                         else:
-                            star_display = "No Rating"
-                        # Keep run ID in label but hidden with separator for selection
-                        label = f"{star_display} - {prompt_text[:30]}...||{full_id}"
+                            star_display = "☆☆☆☆☆"  # Show empty stars instead of "No Rating"
+                        # Keep run ID hidden with separator for selection
+                        # The gallery will display the label but we still need the ID for selection
+                        label = f"{star_display}||{full_id}"
                         gallery_data.append((thumb_path, label))
                 except Exception:  # noqa: S110
                     pass  # Skip failed thumbnails
@@ -317,7 +317,7 @@ def on_runs_gallery_select(evt: gr.SelectData):
             logger.warning("No evt, hiding details")
             return [gr.update(visible=False)] + [gr.update()] * 16
 
-        # The label now contains rating and run ID in format "rating - prompt...||full_run_id"
+        # The label now contains only rating and run ID in format "★★★☆☆||full_run_id"
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
@@ -1117,16 +1117,16 @@ def load_runs_for_multiple_prompts(
                 try:
                     thumb_path = future.result(timeout=3)
                     if thumb_path:
-                        prompt_text = run.get("prompt_text", "")
                         # Include rating and run ID in label for gallery
                         full_id = run.get("id", "")
                         rating = run.get("rating")
                         if rating:
                             star_display = "★" * rating + "☆" * (5 - rating)
                         else:
-                            star_display = "No Rating"
-                        # Keep run ID in label but hidden with separator for selection
-                        label = f"{star_display} - {prompt_text[:30]}...||{full_id}"
+                            star_display = "☆☆☆☆☆"  # Show empty stars instead of "No Rating"
+                        # Keep run ID hidden with separator for selection
+                        # The gallery will display the label but we still need the ID for selection
+                        label = f"{star_display}||{full_id}"
                         gallery_data.append((thumb_path, label))
                 except Exception as e:
                     logger.debug("Failed to generate thumbnail: {}", str(e))

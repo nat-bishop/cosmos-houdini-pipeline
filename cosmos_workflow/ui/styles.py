@@ -566,34 +566,95 @@ def get_custom_css():
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25) !important;
     }
 
-    /* Star Rating System */
-    #star_rating_container {
-        gap: 4px !important;
-        align-items: center !important;
-        justify-content: center !important;
+    /* Gallery label styling */
+    #runs_gallery .caption-label {
+        font-size: 0.95rem !important;
+        text-align: center !important;
     }
 
-    .star-btn {
-        background: transparent !important;
+    /* Star Rating System - Ultra compact buttons without any backgrounds */
+    .star-btn,
+    .star-btn.gr-button,
+    button.star-btn,
+    .compact-star-btn,
+    #star_1, #star_2, #star_3, #star_4, #star_5 {
+        background: none !important;
+        background-color: transparent !important;
+        background-image: none !important;
         border: none !important;
-        font-size: 1.5rem !important;
-        padding: 0 4px !important;
-        min-width: 32px !important;
+        box-shadow: none !important;
+        font-size: 1.1rem !important;
+        padding: 0 !important;
+        width: 20px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
+        min-height: 20px !important;
+        height: 20px !important;
+        line-height: 20px !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
-        color: #666 !important;
+        color: #888 !important;
+        margin: 0 1px !important;
+        display: inline-block !important;
+        flex-shrink: 0 !important;
+        overflow: visible !important;
+        text-align: center !important;
     }
 
-    .star-btn:hover {
-        transform: scale(1.2) !important;
+    /* Override ALL Gradio button styling for stars */
+    #star_1.gr-button, #star_2.gr-button, #star_3.gr-button,
+    #star_4.gr-button, #star_5.gr-button {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        width: 20px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
+    }
+
+    .star-btn:hover,
+    .compact-star-btn:hover,
+    #star_1:hover, #star_2:hover, #star_3:hover, #star_4:hover, #star_5:hover {
+        transform: scale(1.15) !important;
+        color: #ffd700 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .star-btn.filled,
+    .compact-star-btn.filled {
         color: #ffd700 !important;
     }
 
-    .star-btn.filled {
-        color: #ffd700 !important;
-    }
-
-    .star-btn.filled:hover {
+    .star-btn.filled:hover,
+    .compact-star-btn.filled:hover {
         color: #ffed4e !important;
+        background: transparent !important;
+    }
+
+    /* Force stars and nav buttons to stay on one row */
+    #runs_details_group .gr-row {
+        flex-wrap: nowrap !important;
+    }
+
+    /* Ensure the button container doesn't wrap */
+    #runs_details_group .gr-row .gr-column:last-child .gr-row {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 2px !important;
+    }
+
+    /* Navigation buttons inline - keep Previous and Next on same row */
+    .runs-details-nav-buttons {
+        display: flex !important;
+        gap: 4px !important;
+        align-items: center !important;
+    }
+
+    .runs-details-nav-buttons button {
+        white-space: nowrap !important;
+        min-width: fit-content !important;
     }
     """

@@ -196,40 +196,88 @@ def create_runs_tab_ui():
                 with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
                     "runs_details_group"
                 ]:
-                    # Header with navigation buttons
+                    # Header with all controls on a single row
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.Markdown("### 📋 Run Details")
-                        with gr.Column(scale=2):
-                            # Star rating buttons (moved here from Info tab)
-                            with gr.Row(elem_id="star_rating_container"):
+                        with gr.Column(scale=3):
+                            # All controls in a single row with explicit styling
+                            gr.HTML("""
+                                <div style='display: flex; align-items: center; gap: 4px; flex-wrap: nowrap;'>
+                                    <style>
+                                        .compact-star-btn {
+                                            background: none !important;
+                                            border: none !important;
+                                            padding: 0 !important;
+                                            margin: 0 !important;
+                                            width: 20px !important;
+                                            height: 20px !important;
+                                            min-width: 20px !important;
+                                            max-width: 20px !important;
+                                            cursor: pointer !important;
+                                            font-size: 1.2rem !important;
+                                            line-height: 1 !important;
+                                            color: #888 !important;
+                                            display: inline-block !important;
+                                            box-shadow: none !important;
+                                            flex-shrink: 0 !important;
+                                        }
+                                        .compact-star-btn:hover {
+                                            color: #ffd700 !important;
+                                            transform: scale(1.1) !important;
+                                        }
+                                    </style>
+                                </div>
+                            """)
+                            with gr.Row():
+                                # Star rating buttons with minimal width
                                 components["star_1"] = gr.Button(
-                                    "☆", size="sm", elem_id="star_1", elem_classes=["star-btn"]
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_1",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
                                 )
                                 components["star_2"] = gr.Button(
-                                    "☆", size="sm", elem_id="star_2", elem_classes=["star-btn"]
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_2",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
                                 )
                                 components["star_3"] = gr.Button(
-                                    "☆", size="sm", elem_id="star_3", elem_classes=["star-btn"]
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_3",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
                                 )
                                 components["star_4"] = gr.Button(
-                                    "☆", size="sm", elem_id="star_4", elem_classes=["star-btn"]
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_4",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
                                 )
                                 components["star_5"] = gr.Button(
-                                    "☆", size="sm", elem_id="star_5", elem_classes=["star-btn"]
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_5",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
                                 )
-                                # Hidden component to store actual rating value
-                                components["runs_info_rating"] = gr.Number(
-                                    visible=False, value=0, precision=0
-                                )
-                        with gr.Column(scale=1):
-                            with gr.Row():
+                                # Small spacer
+                                gr.HTML("<div style='width: 10px;'></div>")
+                                # Navigation buttons
                                 components["runs_prev_btn"] = gr.Button(
                                     "◀ Previous", size="sm", variant="secondary"
                                 )
                                 components["runs_next_btn"] = gr.Button(
                                     "Next ▶", size="sm", variant="secondary"
                                 )
+
+                    # Hidden component to store actual rating value
+                    components["runs_info_rating"] = gr.Number(visible=False, value=0, precision=0)
 
                     # State to track current gallery selection index
                     components["runs_selected_index"] = gr.State(0)

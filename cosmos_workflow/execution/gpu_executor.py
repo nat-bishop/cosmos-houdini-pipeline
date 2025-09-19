@@ -561,6 +561,7 @@ class GPUExecutor:
     def execute_batch_runs(
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+        batch_name: str | None = None,
     ) -> dict[str, Any]:
         """Execute multiple runs as a batch on the GPU.
 
@@ -589,10 +590,13 @@ class GPUExecutor:
 
         logger.info("Executing batch of {} runs on GPU", len(runs_and_prompts))
 
-        # Generate batch name from first run ID
-        batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
+        # Use provided batch name or generate one
+        if not batch_name:
+            batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
+
         batch_dir = Path("outputs") / batch_name
         batch_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Using batch name: {}", batch_name)
 
         # Prepare batch data using the JSONL format for batch inference
         # Use the batch-specific format with control_overrides structure
@@ -607,6 +611,17 @@ class GPUExecutor:
             with self.ssh_manager:
                 # Upload batch file and videos
                 remote_config = self.config_manager.get_remote_config()
+
+                # Upload batch_inference.sh script to bashscripts/ like inference.sh
+                scripts_dir = Path(__file__).parent.parent.parent / "scripts"
+                remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
+
+                batch_script = scripts_dir / "batch_inference.sh"
+                if batch_script.exists():
+                    logger.info("Uploading batch_inference.sh script to remote bashscripts")
+                    self.file_transfer.upload_file(batch_script, remote_scripts_dir)
+                else:
+                    logger.warning("batch_inference.sh script not found at {}", batch_script)
 
                 # Upload batch file to inputs/batches/ as expected by batch_inference.sh
                 remote_batch_location = f"{remote_config.remote_dir}/inputs/batches"
@@ -636,6 +651,18 @@ class GPUExecutor:
                 )
 
                 if batch_result["status"] == "failed":
+                    # Try to download the fallback log for debugging
+                    remote_log_path = (
+                        f"{remote_config.remote_dir}/outputs/{batch_name}/batch_run.log"
+                    )
+                    local_log_path = batch_dir / "batch_run.log"
+                    try:
+                        logger.info("Attempting to download fallback log from {}", remote_log_path)
+                        self.file_transfer.download_file(remote_log_path, local_log_path)
+                        logger.info("Downloaded fallback log to {}", local_log_path)
+                    except Exception as e:
+                        logger.warning("Could not download fallback log: {}", e)
+
                     raise RuntimeError(f"Batch execution failed: {batch_result.get('error')}")
 
                 # Batch now runs synchronously, so should have completed status
@@ -648,12 +675,22 @@ class GPUExecutor:
                 # Ensure batch output directory exists locally
                 outputs_dir = batch_dir / "outputs"
                 outputs_dir.mkdir(exist_ok=True)
+                logger.debug("Created batch output directory: {}", outputs_dir)
 
                 # Download all output files to batch directory
                 remote_output_dir = batch_result.get(
                     "output_dir", f"{remote_config.remote_dir}/outputs/{batch_name}"
                 )
                 output_files = batch_result.get("output_files", [])
+                logger.info(
+                    "Downloading {} output files from {}", len(output_files), remote_output_dir
+                )
+                logger.info(
+                    "Batch {} output structure: {} videos in {}",
+                    batch_name,
+                    len(output_files),
+                    batch_dir,
+                )
 
                 for remote_file in output_files:
                     # Extract just the filename
@@ -662,7 +699,16 @@ class GPUExecutor:
 
                     try:
                         self.file_transfer.download_file(remote_file, str(local_file))
-                        logger.info("Downloaded {} to {}", filename, local_file)
+                        if local_file.exists():
+                            file_size = local_file.stat().st_size
+                            logger.info(
+                                "Downloaded {} to {} (size: {} bytes)",
+                                filename,
+                                local_file,
+                                file_size,
+                            )
+                        else:
+                            logger.warning("Download completed but file not found: {}", local_file)
                     except Exception as e:
                         logger.error("Failed to download {}: {}", filename, e)
 
@@ -676,7 +722,9 @@ class GPUExecutor:
                     logger.warning("Could not download batch log: {}", e)
 
                 # Update database for each run to point to files in batch directory
-                logger.info("Updating database with batch output paths")
+                logger.info(
+                    "Updating database for {} runs in batch {}", len(runs_and_prompts), batch_name
+                )
                 for i, (run_dict, _) in enumerate(runs_and_prompts):
                     run_id = run_dict["id"]
 
@@ -688,13 +736,23 @@ class GPUExecutor:
                         "batch_index": i,
                         "completed_at": datetime.now(timezone.utc).isoformat(),
                     }
+                    logger.debug(
+                        "Storing batch output for run {}: {}", run_id, outputs["output_path"]
+                    )
 
                     # Check if control files exist and add them
                     control_types = ["edge", "depth", "seg", "vis"]
+                    found_controls = []
                     for control_type in control_types:
                         control_file = outputs_dir / f"{control_type}_input_control_{i:03d}.mp4"
                         if control_file.exists():
                             outputs[f"{control_type}_control"] = str(control_file)
+                            found_controls.append(control_type)
+
+                    if found_controls:
+                        logger.debug(
+                            "Found control files for run {}: {}", run_id, ", ".join(found_controls)
+                        )
 
                     # Update run in database
                     self.service.update_run(run_id, outputs=outputs)

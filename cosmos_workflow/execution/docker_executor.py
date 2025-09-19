@@ -87,9 +87,9 @@ class DockerExecutor:
 
             # Write the error log to remote
             self.remote_executor.write_file(remote_log_path, error_log)
-            logger.info("Created fallback log at: %s", remote_log_path)
+            logger.info("Created fallback log at: {}", remote_log_path)
         except Exception as e:
-            logger.error("Failed to create fallback log: %s", e)
+            logger.error("Failed to create fallback log: {}", e)
 
     def run_inference(
         self,
@@ -907,7 +907,7 @@ class DockerExecutor:
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
-        cmd = f"/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
+        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking

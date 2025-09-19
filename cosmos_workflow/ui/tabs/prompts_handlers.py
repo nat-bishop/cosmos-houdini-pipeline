@@ -153,6 +153,7 @@ def get_selected_prompt_ids(table_data):
             if row[0]:  # If checkbox is checked
                 selected_ids.append(row[1])  # ID is in second column
 
+    logger.debug("Selected %d prompts from table", len(selected_ids))
     return selected_ids
 
 

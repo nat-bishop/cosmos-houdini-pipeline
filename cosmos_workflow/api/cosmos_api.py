@@ -729,8 +729,8 @@ class CosmosAPI:
                 logger.warning("Skipping prompt {}: {}", prompt_id, e)
                 continue
 
-        # Execute as batch
-        batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts)
+        # Execute as batch with the batch_id we generated
+        batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts, batch_name=batch_id)
 
         # Update run statuses
         for run, _ in runs_and_prompts:

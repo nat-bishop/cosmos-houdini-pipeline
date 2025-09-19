@@ -91,6 +91,9 @@ class QueueService:
         """
         job_id = f"job_{uuid.uuid4().hex[:12]}"
 
+        logger.info("Adding {} job to queue with {} prompts", job_type, len(prompt_ids))
+        logger.debug("Job config: {}", config)
+
         job = JobQueue(
             id=job_id,
             prompt_ids=prompt_ids,
@@ -104,7 +107,9 @@ class QueueService:
         try:
             session.add(job)
             session.commit()
-            logger.info("Added job %s to queue", job_id)
+            logger.info(
+                "Added job {} to queue (type: {}, prompts: {})", job_id, job_type, len(prompt_ids)
+            )
             return job_id
         finally:
             # Close session if it was created by us
@@ -235,16 +240,20 @@ class QueueService:
         """
         # Use lock to prevent race condition when checking and claiming jobs
         with self._job_processing_lock:
+            logger.debug("Checking for next job to process")
             # CRITICAL: Check for actual running containers first
             # This ensures we don't start jobs while GPU is busy
             try:
                 active_containers = self.cosmos_api.get_active_containers()
                 if active_containers:
+                    container_id = active_containers[0].get("container_id", "unknown")
                     logger.debug(
-                        "Skipping processing - container %s is running on GPU",
-                        active_containers[0].get("container_id", "unknown"),
+                        "Skipping processing - container {} is running on GPU",
+                        container_id,
                     )
+                    logger.info("GPU busy with container {}, skipping job processing", container_id)
                     return None
+                logger.debug("No active containers, GPU is available")
             except Exception as e:
                 logger.warning("Could not check active containers: %s", e)
                 # Continue anyway - let it fail downstream if there's an issue
@@ -269,13 +278,17 @@ class QueueService:
                 )
 
                 if not job:
+                    logger.debug("No queued jobs found")
                     return None
+
+                logger.info("Found queued job {} (type: {})", job.id, job.job_type)
 
                 # Mark as running with immediate commit to prevent race conditions
                 job.status = "running"
                 job.started_at = datetime.now(timezone.utc)
                 session.commit()
                 session.flush()  # Ensure changes are written
+                logger.info("Marked job {} as running", job.id)
 
                 # Store job info for processing outside the lock
                 job_id = job.id
@@ -292,11 +305,18 @@ class QueueService:
         # Now process the job outside the lock so other threads can check status
         session = self._get_session()
         try:
-            logger.info("Processing job %s", job_id)
+            logger.info(
+                "Processing job {} (type: {})",
+                job_id,
+                job.job_type if "job" in locals() else "unknown",
+            )
             job = session.query(JobQueue).filter_by(id=job_id).first()
 
             try:
                 # Execute based on job type
+                logger.debug(
+                    "Executing {} job {} with config: {}", job.job_type, job_id, job.config
+                )
                 if job.job_type == "inference":
                     result = self._execute_inference(job)
                 elif job.job_type == "batch_inference":
@@ -314,12 +334,15 @@ class QueueService:
                 job.result = result
                 session.commit()
 
-                logger.info("Completed job %s", job.id)
+                elapsed = (
+                    (job.completed_at - job.started_at).total_seconds() if job.started_at else 0
+                )
+                logger.info("Completed job {} in {:.1f} seconds", job.id, elapsed)
 
                 # Delete successful job immediately - run record has all the info
                 session.delete(job)
                 session.commit()
-                logger.info("Cleaned up completed job %s", job.id)
+                logger.info("Cleaned up completed job {} from queue", job.id)
 
                 return {
                     "job_id": job.id,
@@ -334,7 +357,7 @@ class QueueService:
                 job.result = {"error": str(e)}
                 session.commit()
 
-                logger.error("Failed job %s: %s", job.id, e)
+                logger.error("Failed job {} (type: {}): {}", job.id, job.job_type, e, exc_info=True)
 
                 # Trim old failed/cancelled jobs to keep only recent ones
                 self._trim_failed_jobs(session, max_keep=50)
@@ -463,15 +486,20 @@ class QueueService:
         Returns:
             True if cancelled, False if not cancellable
         """
+        logger.debug("Attempting to cancel job %s", job_id)
         session = self._get_session()
         try:
             job = session.query(JobQueue).filter_by(id=job_id).first()
 
             if not job:
+                logger.warning("Cannot cancel job {}: not found", job_id)
                 return False
 
             # Can only cancel queued jobs
             if job.status != "queued":
+                logger.warning(
+                    "Cannot cancel job {}: status is {} (not queued)", job_id, job.status
+                )
                 return False
 
             job.status = "cancelled"
@@ -479,7 +507,11 @@ class QueueService:
             job.result = {"reason": "User cancelled"}
             session.commit()
 
-            logger.info("Cancelled job %s", job_id)
+            logger.info(
+                "Cancelled job {} (was position {} in queue)",
+                job_id,
+                self.get_position(job_id) or 0,
+            )
 
             # Trim old failed/cancelled jobs to keep only recent ones
             self._trim_failed_jobs(session, max_keep=50)
@@ -517,7 +549,7 @@ class QueueService:
             )
 
             if deleted_count > 0:
-                logger.info("Trimmed %d old failed/cancelled jobs", deleted_count)
+                logger.info("Trimmed {} old failed/cancelled jobs", deleted_count)
 
             return deleted_count
         except Exception as e:
@@ -546,29 +578,37 @@ class QueueService:
         """Start background thread to process queue."""
         with self._processor_lock:
             if self._processor_thread and self._processor_thread.is_alive():
-                logger.warning("Background processor already running")
+                logger.warning(
+                    "Background processor already running (thread: {})", self._processor_thread.name
+                )
                 return
 
             self._stop_processor.clear()
             self._processor_thread = threading.Thread(
                 target=self._process_queue_loop,
                 daemon=True,
+                name="QueueProcessor",
             )
             self._processor_thread.start()
-            logger.info("Started background processor")
+            logger.info("Started background processor thread: {}", self._processor_thread.name)
 
     def stop_background_processor(self) -> None:
         """Stop background processor thread."""
         with self._processor_lock:
             if not self._processor_thread:
+                logger.debug("Background processor not running, nothing to stop")
                 return
 
+            logger.info("Stopping background processor thread: {}", self._processor_thread.name)
             self._stop_processor.set()
             if self._processor_thread.is_alive():
                 self._processor_thread.join(timeout=5)
+                if self._processor_thread.is_alive():
+                    logger.warning("Background processor thread did not stop within 5 seconds")
+                else:
+                    logger.info("Background processor thread stopped successfully")
 
             self._processor_thread = None
-            logger.info("Stopped background processor")
 
     def is_processor_running(self) -> bool:
         """Check if background processor is running.
@@ -586,6 +626,7 @@ class QueueService:
     def _process_queue_loop(self) -> None:
         """Background loop to process queued jobs."""
         logger.info("Background processor loop started")
+        idle_cycles = 0
 
         while not self._stop_processor.is_set():
             try:
@@ -593,13 +634,19 @@ class QueueService:
                 result = self.process_next_job()
 
                 if result:
-                    logger.info("Processed job: %s", result["job_id"])
+                    logger.info(
+                        "Processed job: {} with status {}", result["job_id"], result["status"]
+                    )
+                    idle_cycles = 0
                 else:
                     # No jobs, sleep briefly
+                    idle_cycles += 1
+                    if idle_cycles % 30 == 1:  # Log every ~60 seconds of idle time
+                        logger.debug("Queue processor idle (no jobs or GPU busy)")
                     time.sleep(2)
 
             except Exception as e:
-                logger.error("Error in background processor: %s", e, exc_info=True)
+                logger.error("Error in background processor: {}", e, exc_info=True)
                 time.sleep(5)  # Back off on error
 
         logger.info("Background processor loop stopped")

@@ -82,6 +82,16 @@ def generate_thumbnail_fast(video_path, thumb_size=(384, 216)):
 def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, rating_filter=None):
     """Load runs data for table with filtering and populate video grid."""
     try:
+        logger.debug(
+            "Loading runs data with filters: status={}, date={}, type={}, search={}, limit={}, rating={}",
+            status_filter,
+            date_filter,
+            type_filter,
+            search_text,
+            limit,
+            rating_filter,
+        )
+
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
 
@@ -97,6 +107,7 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
         all_runs = ops.list_runs(
             status=None if status_filter == "all" else status_filter, limit=max_search_limit
         )
+        logger.info("Fetched {} runs from database", len(all_runs))
 
         # Enrich runs with prompt text
         for run in all_runs:
@@ -160,15 +171,23 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
         # Apply text search
         if search_text:
             search_lower = search_text.lower()
+            initial_count = len(filtered_runs)
             filtered_runs = [
                 run
                 for run in filtered_runs
                 if search_lower in run.get("id", "").lower()
                 or search_lower in run.get("prompt_text", "").lower()
             ]
+            logger.debug(
+                "Text search '{}' reduced runs from {} to {}",
+                search_text,
+                initial_count,
+                len(filtered_runs),
+            )
 
         # Apply rating filter
         if rating_filter and rating_filter != "all":
+            initial_count = len(filtered_runs)
             if rating_filter == "unrated":
                 # Filter for runs with no rating
                 filtered_runs = [run for run in filtered_runs if not run.get("rating")]
@@ -183,6 +202,12 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
                     for run in filtered_runs
                     if run.get("rating") and run.get("rating") >= min_rating
                 ]
+            logger.debug(
+                "Rating filter '{}' reduced runs from {} to {}",
+                rating_filter,
+                initial_count,
+                len(filtered_runs),
+            )
 
         # Store total count before limiting for statistics
         total_filtered = len(filtered_runs)
@@ -194,41 +219,78 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
         # Build gallery data with thumbnails (only completed runs)
         gallery_data = []
         video_paths = []
+        completed_runs = [r for r in filtered_runs if r.get("status") == "completed"]
+        logger.debug("Processing {} completed runs for gallery", len(completed_runs))
 
         # First collect all video paths
+        missing_videos = []
         for run in filtered_runs:
             if run.get("status") == "completed":
                 outputs = run.get("outputs", {})
                 output_video = None
+                run_id = run.get("id", "unknown")
 
                 # New structure: outputs.output_path
                 if isinstance(outputs, dict) and "output_path" in outputs:
                     output_path = outputs["output_path"]
+                    logger.debug(
+                        "Run {} using new structure with output_path: {}", run_id, output_path
+                    )
                     if output_path and output_path.endswith(".mp4"):
                         # Normalize path separators for cross-platform compatibility
+                        raw_path = output_path
                         output_video = Path(output_path)
+                        if str(raw_path) != str(output_video):
+                            logger.debug("Path normalized from '{} to '{}'", raw_path, output_video)
                         if output_video.exists():
                             video_paths.append((output_video, run))
+                            logger.debug("Found output video for run {}: {}", run_id, output_video)
+                        else:
+                            missing_videos.append((run_id, output_path))
+                            logger.warning(
+                                "Output video not found for run {}: {}", run_id, output_path
+                            )
 
                 # Old structure: outputs.files array
                 elif isinstance(outputs, dict) and "files" in outputs:
                     files = outputs.get("files", [])
+                    logger.debug(
+                        "Run {} using old structure with files array ({} files)", run_id, len(files)
+                    )
                     for file_path in files:
                         if file_path.endswith("output.mp4"):
                             # Normalize path for Windows
                             output_video = Path(file_path)
                             if output_video.exists():
                                 video_paths.append((output_video, run))
-                                break
+                                logger.debug(
+                                    "Found output video for run {}: {}", run_id, output_video
+                                )
+                            else:
+                                missing_videos.append((run_id, file_path))
+                                logger.warning(
+                                    "Output video not found for run {}: {}", run_id, file_path
+                                )
+                            break
+                else:
+                    logger.debug("Run {} has no recognized output structure", run_id)
+
+        if missing_videos:
+            logger.warning(
+                "Missing videos for {} runs: {}", len(missing_videos), missing_videos[:5]
+            )  # Log first 5 for brevity
 
         # Generate thumbnails in parallel for speed
         if video_paths:
+            logger.info("Generating thumbnails for {} videos (max 50)", min(len(video_paths), 50))
             futures = []
             for video_path, run in video_paths[:50]:  # Limit to 50 for performance
                 future = THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path)
                 futures.append((future, run))
 
             # Collect results
+            successful_thumbs = 0
+            failed_thumbs = 0
             for future, run in futures:
                 try:
                     thumb_path = future.result(timeout=3)
@@ -244,8 +306,19 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
                         # The gallery will display the label but we still need the ID for selection
                         label = f"{star_display}||{full_id}"
                         gallery_data.append((thumb_path, label))
-                except Exception:  # noqa: S110
-                    pass  # Skip failed thumbnails
+                        successful_thumbs += 1
+                    else:
+                        failed_thumbs += 1
+                except Exception as e:
+                    failed_thumbs += 1
+                    logger.debug("Failed to generate thumbnail: {}", str(e))
+
+            logger.info(
+                "Gallery built: {} thumbnails generated, {} failed from {} completed runs",
+                successful_thumbs,
+                failed_thumbs,
+                len(completed_runs),
+            )
 
         # Build table data
         table_data = []
@@ -286,12 +359,23 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
             table_data.append([run_id, status, model_type, duration, rating_display, created])
 
         # Build statistics
+        completed_count = sum(1 for r in filtered_runs if r.get("status") == "completed")
+        running_count = sum(1 for r in filtered_runs if r.get("status") == "running")
+        failed_count = sum(1 for r in filtered_runs if r.get("status") == "failed")
+
         stats = f"""
         **Total Matching:** {total_filtered} (showing {len(filtered_runs)})
-        **Completed:** {sum(1 for r in filtered_runs if r.get("status") == "completed")}
-        **Running:** {sum(1 for r in filtered_runs if r.get("status") == "running")}
-        **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}
+        **Completed:** {completed_count}
+        **Running:** {running_count}
+        **Failed:** {failed_count}
         """
+
+        logger.info(
+            "Runs data loaded: {} total, {} shown, {} gallery items",
+            total_filtered,
+            len(filtered_runs),
+            len(gallery_data),
+        )
 
         # Return gallery data, table data and stats
         return gallery_data, table_data, stats
@@ -527,6 +611,9 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                     )
 
                     if indexed_path.exists():
+                        logger.debug(
+                            "Found indexed control file for {}: {}", control_key, indexed_path
+                        )
                         input_videos.append((str(indexed_path), label_with_weight))
                         logger.info(
                             "Using AI-generated {} control (indexed): {}", control_key, indexed_path
@@ -754,14 +841,21 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 def load_run_logs(log_path):
     """Load full log file content."""
     try:
-        if not log_path or not Path(log_path).exists():
+        if not log_path:
+            logger.debug("No log path specified for load_run_logs")
             return "No log file available"
 
+        if not Path(log_path).exists():
+            logger.warning("Log file not found: {}", log_path)
+            return "No log file available"
+
+        logger.debug("Loading logs from {}", log_path)
         with open(log_path) as f:
             content = f.read()
 
         return content
     except Exception as e:
+        logger.error("Error reading log file {}: {}", log_path, str(e))
         return f"Error reading log file: {e}"
 
 
@@ -1054,15 +1148,23 @@ def load_runs_for_multiple_prompts(
         # Apply text search
         if search_text:
             search_lower = search_text.lower()
+            initial_count = len(filtered_runs)
             filtered_runs = [
                 run
                 for run in filtered_runs
                 if search_lower in run.get("id", "").lower()
                 or search_lower in run.get("prompt_text", "").lower()
             ]
+            logger.debug(
+                "Text search '{}' reduced runs from {} to {}",
+                search_text,
+                initial_count,
+                len(filtered_runs),
+            )
 
         # Apply rating filter
         if rating_filter and rating_filter != "all":
+            initial_count = len(filtered_runs)
             if rating_filter == "unrated":
                 # Filter for runs with no rating
                 filtered_runs = [run for run in filtered_runs if not run.get("rating")]
@@ -1077,6 +1179,12 @@ def load_runs_for_multiple_prompts(
                     for run in filtered_runs
                     if run.get("rating") and run.get("rating") >= min_rating
                 ]
+            logger.debug(
+                "Rating filter '{}' reduced runs from {} to {}",
+                rating_filter,
+                initial_count,
+                len(filtered_runs),
+            )
 
         # Store total count before limiting for statistics
         total_filtered = len(filtered_runs)
@@ -1088,32 +1196,66 @@ def load_runs_for_multiple_prompts(
         # Build gallery data with thumbnails (only completed runs)
         gallery_data = []
         video_paths = []
+        completed_runs = [r for r in filtered_runs if r.get("status") == "completed"]
+        logger.debug("Processing {} completed runs for gallery", len(completed_runs))
 
         # First collect all video paths
+        missing_videos = []
         for run in filtered_runs:
             if run.get("status") == "completed":
                 outputs = run.get("outputs", {})
                 output_video = None
+                run_id = run.get("id", "unknown")
 
                 # New structure: outputs.output_path
                 if isinstance(outputs, dict) and "output_path" in outputs:
                     output_path = outputs["output_path"]
+                    logger.debug(
+                        "Run {} using new structure with output_path: {}", run_id, output_path
+                    )
                     if output_path and output_path.endswith(".mp4"):
                         # Normalize path separators for cross-platform compatibility
+                        raw_path = output_path
                         output_video = Path(output_path)
+                        if str(raw_path) != str(output_video):
+                            logger.debug("Path normalized from '{} to '{}'", raw_path, output_video)
                         if output_video.exists():
                             video_paths.append((output_video, run))
+                            logger.debug("Found output video for run {}: {}", run_id, output_video)
+                        else:
+                            missing_videos.append((run_id, output_path))
+                            logger.warning(
+                                "Output video not found for run {}: {}", run_id, output_path
+                            )
 
                 # Old structure: outputs.files array
                 elif isinstance(outputs, dict) and "files" in outputs:
                     files = outputs.get("files", [])
+                    logger.debug(
+                        "Run {} using old structure with files array ({} files)", run_id, len(files)
+                    )
                     for file_path in files:
                         if file_path.endswith("output.mp4"):
                             # Normalize path for Windows
                             output_video = Path(file_path)
                             if output_video.exists():
                                 video_paths.append((output_video, run))
-                                break
+                                logger.debug(
+                                    "Found output video for run {}: {}", run_id, output_video
+                                )
+                            else:
+                                missing_videos.append((run_id, file_path))
+                                logger.warning(
+                                    "Output video not found for run {}: {}", run_id, file_path
+                                )
+                            break
+                else:
+                    logger.debug("Run {} has no recognized output structure", run_id)
+
+        if missing_videos:
+            logger.warning(
+                "Missing videos for {} runs: {}", len(missing_videos), missing_videos[:5]
+            )  # Log first 5 for brevity
 
         # Generate thumbnails in parallel for speed
         if video_paths:

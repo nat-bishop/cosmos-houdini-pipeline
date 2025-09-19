@@ -16,18 +16,22 @@ logger = logging.getLogger(__name__)
 def show_kill_confirmation():
     """Show the kill job confirmation dialog."""
     try:
+        logger.debug("Showing kill confirmation dialog")
         # Check if there's actually an active job
         api = CosmosAPI()
         containers = api.get_active_containers()
 
         if containers and len(containers) > 0:
             container = containers[0]
-            preview_text = f"This will kill container: {container['container_id'][:12]}..."
+            container_id = container["container_id"][:12]
+            logger.info("Preparing to kill container: %s", container_id)
+            preview_text = f"This will kill container: {container_id}..."
             return (
                 gr.update(visible=True),  # Show confirmation dialog
                 preview_text,  # Update preview text
             )
         else:
+            logger.debug("No active containers found to kill")
             return (
                 gr.update(visible=False),  # Keep dialog hidden
                 "No active containers to kill",
@@ -42,24 +46,28 @@ def show_kill_confirmation():
 
 def cancel_kill_confirmation():
     """Cancel the kill job confirmation."""
+    logger.debug("Kill confirmation cancelled by user")
     return gr.update(visible=False)
 
 
 def execute_kill_job():
     """Execute the kill job operation and update job status in database."""
     try:
+        logger.info("Executing kill job operation")
         api = CosmosAPI()
 
         # First get the active containers to find the run IDs
         containers = api.get_active_containers()
         run_ids = []
         if containers:
+            logger.debug("Found %d active containers", len(containers))
             for container in containers:
                 # Extract run ID from container name (format: cosmos_*_rs_xxxxx)
                 container_name = container.get("name", "")
                 if "_rs_" in container_name:
                     run_id = "rs_" + container_name.split("_rs_")[1][:32]
                     run_ids.append(run_id)
+                    logger.debug("Extracted run ID: %s from container: %s", run_id, container_name)
 
         # Kill the containers
         result = api.kill_containers()

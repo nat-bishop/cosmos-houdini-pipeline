@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Critical Bug Fixes (2025-01-19)
+- **Batch Inference Infrastructure Fixes**
+  - Fixed batch inference execution failing with "No such file or directory" errors
+  - Added proper CRLF to LF conversion for batch_inference.sh script on Windows
+  - Added required --controlnet_specs parameter with base spec for NVIDIA batch inference
+  - Fixed batch output download to handle video_X subdirectory structure (outputs/batch_xxx/video_0/output.mp4)
+  - Fixed control files to handle _0 suffix naming convention for batch operations
+  - Corrected log paths for batch runs to use shared batch log instead of individual run paths
+
+- **Enhancement Run System Fixes**
+  - Removed incorrect thread-local storage implementation in QueueService that was causing SSH connection failures
+  - Fixed duplicate prompt creation bug where enhanced prompts were being created twice
+  - Removed legacy code path in cosmos_api.enhance_prompt() and replaced with proper error handling
+  - Now only accepts "started" or "completed" status from execute_enhancement_run, fails fast on unexpected status
+  - Fixed queue service spamming "GPU busy" messages during long operations
+
+### Added - UI Feature Enhancement (2025-01-19)
+- **Run Status Filter in Prompts Tab**
+  - Added "Run Status" dropdown filter with options: "All", "No Runs", "Has Runs"
+  - Helps identify unused prompts and manage prompt lifecycle efficiently
+  - Filter works in combination with existing filters (search, enhanced status, date range)
+  - Enables better prompt organization and workflow management
+  - Improves user experience by highlighting prompts that haven't been used for inference yet
+
 ### Added - Enhanced Queue Management System (2025-01-18)
 - **Automatic Job Cleanup and Database Management**
   - Automatic deletion of successful jobs to prevent database bloat and improve performance

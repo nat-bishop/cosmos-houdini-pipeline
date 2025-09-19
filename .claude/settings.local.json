@@ -25,7 +25,10 @@
       "Read(F:\\Art\\cosmos-transfer1/**)",
       "Bash(./scripts/ssh_lambda.sh:*)",
       "mcp__gradio__gradio_docs_mcp_load_gradio_docs",
-      "mcp__gradio__gradio_docs_mcp_search_gradio_docs"
+      "mcp__gradio__gradio_docs_mcp_search_gradio_docs",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)",
+      "Read(F:\\Art\\cosmos-transfer1/**)"
     ],
     "deny": [],
     "ask": [

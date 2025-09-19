@@ -563,7 +563,9 @@ def create_prompt(prompt_text, video_dir, name, negative_prompt):
 # ============================================================================
 
 
-def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="all"):
+def filter_prompts(
+    prompts, search_text="", enhanced_filter="all", runs_filter="all", date_filter="all"
+):
     """Apply filters to prompts list."""
     filtered = prompts
 
@@ -584,6 +586,28 @@ def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="
         filtered = [p for p in filtered if p.get("parameters", {}).get("enhanced", False)]
     elif enhanced_filter == "not_enhanced":
         filtered = [p for p in filtered if not p.get("parameters", {}).get("enhanced", False)]
+
+    # Apply runs filter
+    if runs_filter != "all":
+        # Get run counts for each prompt
+        from cosmos_workflow.api import CosmosAPI
+
+        ops = CosmosAPI()
+
+        # Build a mapping of prompt_id -> run count
+        prompt_run_counts = {}
+        for prompt in filtered:
+            prompt_id = prompt.get("id")
+            if prompt_id:
+                # Get runs for this prompt
+                runs = ops.list_runs(prompt_id=prompt_id, limit=1)  # Just check if any exist
+                prompt_run_counts[prompt_id] = len(runs)
+
+        # Filter based on run counts
+        if runs_filter == "no_runs":
+            filtered = [p for p in filtered if prompt_run_counts.get(p.get("id"), 0) == 0]
+        elif runs_filter == "has_runs":
+            filtered = [p for p in filtered if prompt_run_counts.get(p.get("id"), 0) > 0]
 
     # Apply date filter
     if date_filter != "all":
@@ -627,15 +651,18 @@ def filter_prompts(prompts, search_text="", enhanced_filter="all", date_filter="
     return filtered
 
 
-def load_ops_prompts(limit=50, search_text="", enhanced_filter="all", date_filter="all"):
+def load_ops_prompts(
+    limit=50, search_text="", enhanced_filter="all", runs_filter="all", date_filter="all"
+):
     """Load prompts for operations table with selection column and filtering."""
     try:
         # Debug logging
         logger.info(
-            "load_ops_prompts called with: limit={}, search_text='{}', enhanced_filter='{}', date_filter='{}'",
+            "load_ops_prompts called with: limit={}, search_text='{}', enhanced_filter='{}', runs_filter='{}', date_filter='{}'",
             limit,
             search_text,
             enhanced_filter,
+            runs_filter,
             date_filter,
         )
 
@@ -645,12 +672,17 @@ def load_ops_prompts(limit=50, search_text="", enhanced_filter="all", date_filte
         # Use CosmosAPI to get prompts (get more than limit to filter)
         prompts = ops.list_prompts(
             limit=limit * 3
-            if search_text or enhanced_filter != "all" or date_filter != "all"
+            if search_text
+            or enhanced_filter != "all"
+            or runs_filter != "all"
+            or date_filter != "all"
             else limit
         )
 
         # Apply filters
-        filtered_prompts = filter_prompts(prompts, search_text, enhanced_filter, date_filter)
+        filtered_prompts = filter_prompts(
+            prompts, search_text, enhanced_filter, runs_filter, date_filter
+        )
         logger.info("Filtered {} prompts to {} results", len(prompts), len(filtered_prompts))
 
         # Limit results
@@ -1566,6 +1598,7 @@ def create_ui():
             # Prompts tab filters
             prompts_search="",
             prompts_enhanced_filter="all",
+            prompts_runs_filter="all",
             prompts_date_filter="all",
             # Runs tab filters
             runs_status_filter="all",
@@ -1582,6 +1615,7 @@ def create_ui():
                 inputs_sort: Sort order for inputs
                 prompts_search: Search text for prompts filtering
                 prompts_enhanced_filter: Enhanced status filter for prompts
+                prompts_runs_filter: Run status filter for prompts
                 prompts_date_filter: Date range filter for prompts
                 runs_status_filter: Status filter for runs
                 runs_date_filter: Date filter for runs
@@ -1601,7 +1635,11 @@ def create_ui():
                     inputs_sort,
                 )
                 prompts_data = load_ops_prompts(
-                    50, prompts_search, prompts_enhanced_filter, prompts_date_filter
+                    50,
+                    prompts_search,
+                    prompts_enhanced_filter,
+                    prompts_runs_filter,
+                    prompts_date_filter,
                 )
                 jobs_result = check_running_jobs()
                 jobs_data = (jobs_result[0], jobs_result[1])  # Keep compatibility for other uses
@@ -1660,6 +1698,8 @@ def create_ui():
                 manual_refresh_inputs.append(components["prompts_search"])
             if "prompts_enhanced_filter" in components:
                 manual_refresh_inputs.append(components["prompts_enhanced_filter"])
+            if "prompts_runs_filter" in components:
+                manual_refresh_inputs.append(components["prompts_runs_filter"])
             if "prompts_date_filter" in components:
                 manual_refresh_inputs.append(components["prompts_date_filter"])
 
@@ -1714,6 +1754,8 @@ def create_ui():
                 idx += 1
                 p_enhanced = args[idx] if len(args) > idx else "all"
                 idx += 1
+                p_runs = args[idx] if len(args) > idx else "all"
+                idx += 1
                 p_date = args[idx] if len(args) > idx else "all"
                 idx += 1
 
@@ -1734,6 +1776,7 @@ def create_ui():
                     inputs_sort=i_sort,
                     prompts_search=p_search,
                     prompts_enhanced_filter=p_enhanced,
+                    prompts_runs_filter=p_runs,
                     prompts_date_filter=p_date,
                     runs_status_filter=r_status,
                     runs_date_filter=r_date,
@@ -1859,6 +1902,7 @@ def create_ui():
             "ops_limit",
             "prompts_search",
             "prompts_enhanced_filter",
+            "prompts_runs_filter",
             "prompts_date_filter",
         )
         if prompts_filter_inputs and "ops_prompts_table" in components:
@@ -1866,6 +1910,7 @@ def create_ui():
             for filter_component in [
                 "prompts_search",
                 "prompts_enhanced_filter",
+                "prompts_runs_filter",
                 "prompts_date_filter",
             ]:
                 if filter_component in components:

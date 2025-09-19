@@ -1,5 +1,79 @@
 # API Reference
 
+## Recent Updates (2025-01-19)
+
+### Batch Inference Improvements
+
+The batch inference system has been significantly enhanced with several critical fixes:
+
+#### Fixed Issues
+- **Script Compatibility**: Resolved CRLF/LF line ending issues on Windows that caused "No such file or directory" errors
+- **Parameter Requirements**: Added required `--controlnet_specs` parameter with base specification for NVIDIA batch inference
+- **Output Structure**: Fixed batch output handling to properly process video_X subdirectory structure
+- **File Naming**: Updated control file handling to support _0 suffix naming convention from batch operations
+- **Logging**: Corrected log path handling to use shared batch logs instead of individual run logs
+
+#### Technical Implementation
+```
+# Batch inference now properly handles output structure
+outputs/batch_xxx/
+├── video_0/
+│   ├── output.mp4          # Main output video
+│   ├── depth_input_control_0.mp4   # Generated depth control
+│   ├── edge_input_control_0.mp4    # Generated edge control
+│   └── seg_input_control_0.mp4     # Generated segmentation control
+├── video_1/
+│   └── ...
+└── execution.log           # Shared batch log
+```
+
+### Enhancement System Fixes
+
+The prompt enhancement system has been stabilized with these critical fixes:
+
+#### Threading and Connection Issues
+- **Removed Thread-Local Storage**: Eliminated incorrect thread-local implementation in QueueService that caused SSH connection failures
+- **Connection Stability**: Enhanced SSH connection management for long-running enhancement operations
+- **Message Filtering**: Fixed queue service spamming "GPU busy" messages during operations
+
+#### Duplicate Creation Prevention
+```python
+# Fixed duplicate prompt creation in enhancement workflow
+def enhance_prompt(self, prompt_id, create_new=True, force_overwrite=False):
+    # Now properly handles status validation
+    if status not in ["started", "completed"]:
+        raise ValueError(f"Unexpected enhancement status: {status}")
+    # Prevents duplicate prompt creation
+    if create_new and not force_overwrite:
+        # Validates before creation
+```
+
+#### Error Handling Improvements
+- **Status Validation**: Now only accepts "started" or "completed" status from execute_enhancement_run
+- **Fast Failure**: Fails immediately on unexpected status instead of attempting recovery
+- **Legacy Code Removal**: Cleaned up deprecated code paths that caused inconsistent behavior
+
+### UI Filter Enhancement
+
+Added new "Run Status" filter in Prompts tab for improved workflow management:
+
+#### Filter Options
+- **All**: Shows all prompts regardless of run status
+- **No Runs**: Shows only prompts that haven't been used for inference yet
+- **Has Runs**: Shows only prompts that have associated inference runs
+
+#### Implementation Details
+```python
+# Filter logic for run status
+def filter_prompts_by_run_status(prompts, run_status_filter):
+    if run_status_filter == "No Runs":
+        return [p for p in prompts if not p.get("run_count", 0)]
+    elif run_status_filter == "Has Runs":
+        return [p for p in prompts if p.get("run_count", 0) > 0]
+    else:  # "All"
+        return prompts
+```
+
 Complete API documentation for the Cosmos Workflow System.
 
 ## Table of Contents

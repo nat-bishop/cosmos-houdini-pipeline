@@ -255,6 +255,7 @@ Local Machine                                    Remote GPU Server (H100)
 - **Gallery Navigation**: Previous/Next buttons in Run Details for browsing through video results
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
+- **Prompt Management**: "Run Status" filter to identify unused prompts vs prompts with existing runs for better workflow organization
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
 - **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
 - **Production Job Queue System**:

@@ -96,6 +96,10 @@ The interface is organized into five main tabs, each serving specific workflow n
 
 #### Enhanced Prompt Details
 - **Enhanced Status Indicator**: ✨ Enhanced checkbox shows AI-enhanced prompts
+- **Run Status Filter**: New "Run Status" dropdown with options:
+  - **All**: Shows all prompts regardless of usage
+  - **No Runs**: Shows only unused prompts (helpful for identifying untested prompts)
+  - **Has Runs**: Shows only prompts that have been used for inference
 - **Comprehensive Information**: ID, name, text, negative prompt, creation time
 - **Video Directory**: Shows source input directory for traceability
 - **Enhanced Prompts**: Clear visual distinction for AI-improved prompts
@@ -116,6 +120,15 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Interactive Table**: Checkbox selection with real-time count display
 - **Clear Selection**: One-click deselection of all items
 - **Batch Processing**: Run operations on multiple selected prompts
+- **Workflow Management**: Use "Run Status" filter to identify prompts ready for inference or cleanup
+
+#### Run Status Filter Usage
+The "Run Status" filter helps manage prompt lifecycle:
+- **"No Runs"**: Identify newly created prompts that haven't been tested yet
+- **"Has Runs"**: Focus on prompts with existing results for analysis or re-runs
+- **"All"**: Standard view showing all prompts
+
+This filter works in combination with other filters (search, enhanced status, date range) for precise prompt management.
 
 ### 🎬 Outputs Tab
 

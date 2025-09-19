@@ -47,6 +47,19 @@ def create_prompts_tab_ui():
                             scale=1,
                         )
 
+                        components["prompts_runs_filter"] = gr.Dropdown(
+                            label="Run Status",
+                            choices=[
+                                ("All", "all"),
+                                ("No Runs", "no_runs"),
+                                ("Has Runs", "has_runs"),
+                            ],
+                            value="all",
+                            interactive=True,
+                            filterable=False,
+                            scale=1,
+                        )
+
                         components["prompts_date_filter"] = gr.Dropdown(
                             label="Date Range",
                             choices=[

@@ -55,7 +55,50 @@
 - [ ] Add proper cleanup on exit
 - [ ] Implement thread tracking
 
-## 🚀 Priority 2: Performance & Reliability
+## 🚀 Priority 2: Architecture Refactoring
+
+### Operation-Centric Architecture Migration
+**Issue:** Adding a single database field requires changes to 5-8 files due to excessive coupling between layers. God objects (GPUExecutor: 1437 lines, DataRepository: 1462 lines) handle too many responsibilities.
+
+**Goal:** Reduce coupling so changes affect only 2 files: the operation and its test. Each operation owns its complete workflow.
+
+**Implementation:** See [docs/ARCHITECTURE_REFACTOR.md](docs/ARCHITECTURE_REFACTOR.md) for detailed 8-phase migration plan.
+
+**Phase 1 - Create Operation Framework:**
+- [ ] Create cosmos_workflow/operations/ directory
+- [ ] Implement BaseOperation class with enforced patterns
+- [ ] Create InferenceOperation as proof of concept
+- [ ] Update CosmosAPI.quick_inference() to use InferenceOperation
+- [ ] Verify tests pass with new operation
+
+**Phase 2 - Migrate Remaining Operations:**
+- [ ] Create EnhanceOperation (prompt enhancement)
+- [ ] Create UpscaleOperation (video upscaling)
+- [ ] Create BatchOperation (handles N runs → 1 Docker)
+- [ ] Update CosmosAPI to use all operations
+
+**Phase 3 - Remove Pass-Through Layer:**
+- [ ] Delete DataRepository (1462 lines of pass-through)
+- [ ] Move database logic directly into operations
+- [ ] Update all references
+
+**Phase 4 - Simplify CosmosAPI:**
+- [ ] Reduce to thin routing layer (~300 lines)
+- [ ] Remove business logic (moved to operations)
+- [ ] Keep only request routing and response formatting
+
+**Phase 5 - Split GPUExecutor:**
+- [ ] Move Docker operations to remote/ directory
+- [ ] Move SSH operations to remote/ directory
+- [ ] Delete GPUExecutor (functionality absorbed)
+
+**Benefits:**
+- Adding a field: Change operation + test only (2 files vs 5-8)
+- Clear ownership: Each operation owns its workflow
+- Testable: Mock at operation boundaries
+- Maintainable: ~300-500 lines per operation vs 1400+ line god objects
+
+## 🚀 Priority 3: Performance & Reliability
 
 ### Simplify Container Status Monitoring
 **Consideration:** Running inference.sh/prompt-enhance.sh/etc. scripts from the local machine instead of inside Docker containers could simplify the status checking system
@@ -98,7 +141,7 @@
 - [ ] Configure environment variables and secrets
 - [ ] Add health check verification
 
-## 🛠️ Priority 3: Code Quality
+## 🛠️ Priority 4: Code Quality
 
 ### Reduce Method Complexity
 - [ ] Refactor `enhance_prompt` (136 lines) into smaller methods
@@ -162,9 +205,7 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 - [ ] Validate wrapper usage
 - [ ] Add to CI pipeline
 
-## 📚 Priority 4: Documentation & Tooling
-
-### Future Enhancements
+## 📚 Priority 5: Future Enhancements
 
 #### Proper Cancellation Status Propagation
 **Issue:** When killing containers with SIGKILL, the system shows a RuntimeError for exit code 137 in console logs (but functionality works correctly)
@@ -183,7 +224,7 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 
 **Note:** Currently addressed with minimal fix that accepts exit code 137 as valid. Full implementation would require architectural changes across multiple layers.
 
-## 📚 Priority 5: Documentation & Tooling
+## 📚 Priority 6: Documentation & Tooling
 
 ### User Documentation
 - [ ] Create step-by-step setup guide
@@ -205,4 +246,4 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 
 ---
 
-*Last Updated: 2025-01-08*
+*Last Updated: 2025-01-19*

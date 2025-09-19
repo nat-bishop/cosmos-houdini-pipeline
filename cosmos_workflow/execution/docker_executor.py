@@ -41,7 +41,12 @@ class DockerExecutor:
                 logger.debug("Using default docker timeout: {} seconds", self.docker_timeout)
 
     def _create_fallback_log(
-        self, run_id: str, error_message: str, stderr: str = "", exit_code: int | None = None
+        self,
+        run_id: str,
+        error_message: str,
+        stderr: str = "",
+        exit_code: int | None = None,
+        is_batch: bool = False,
     ) -> None:
         """Create a fallback log file when Docker fails to start.
 
@@ -49,15 +54,22 @@ class DockerExecutor:
         issues, there's still a log file with error information for debugging.
 
         Args:
-            run_id: The run ID for this operation
+            run_id: The run ID for this operation (or batch name for batch runs)
             error_message: Error message to include in the log
             stderr: Standard error output from Docker command
             exit_code: Exit code from Docker command
+            is_batch: Whether this is for a batch run (changes directory structure)
         """
         try:
             # Create remote log directory and file using correct format
-            remote_log_dir = f"{self.remote_dir}/outputs/run_{run_id}/logs"
-            remote_log_path = f"{remote_log_dir}/{run_id}.log"
+            if is_batch:
+                # For batch, use batch directory structure
+                remote_log_dir = f"{self.remote_dir}/outputs/{run_id}"
+                remote_log_path = f"{remote_log_dir}/batch_run.log"
+            else:
+                # For single runs, use run directory structure
+                remote_log_dir = f"{self.remote_dir}/outputs/run_{run_id}/logs"
+                remote_log_path = f"{remote_log_dir}/{run_id}.log"
 
             # Ensure log directory exists
             self.remote_executor.create_directory(remote_log_dir)
@@ -824,11 +836,6 @@ class DockerExecutor:
         """
         logger.info("Running batch inference {} with {} GPU(s)", batch_name, num_gpu)
 
-        # Setup logging paths
-        remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
-        # Ensure remote log directory exists
-        self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
-
         # Check if batch file exists
         batch_path = f"{self.remote_dir}/inputs/batches/{batch_jsonl_file}"
         if not self.remote_executor.file_exists(batch_path):
@@ -842,9 +849,22 @@ class DockerExecutor:
         logger.info("Starting batch inference on GPU. This may take a while...")
         logger.info("Running batch inference synchronously...")
 
-        self._run_batch_inference_script(
-            batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
+        # Run without the remote_log_path - the script itself handles logging
+        exit_code = self._run_batch_inference_script(
+            batch_name, batch_jsonl_file, num_gpu, cuda_devices
         )
+
+        # Handle exit codes like single inference
+        if exit_code != 0:
+            logger.error("Batch inference failed with exit code {}", exit_code)
+            # Create fallback log for failures
+            self._create_fallback_log(
+                run_id=batch_name,
+                error_message=f"Batch inference {batch_name} failed with exit code {exit_code}",
+                stderr="Check batch_run.log for details",
+                exit_code=exit_code,
+                is_batch=True,
+            )
 
         # Get output files after completion
         output_files = self._get_batch_output_files(batch_name)
@@ -873,9 +893,12 @@ class DockerExecutor:
         batch_jsonl_file: str,
         num_gpu: int,
         cuda_devices: str,
-        remote_log_path: str | None = None,
-    ) -> None:
-        """Run batch inference using the bash script in background."""
+    ) -> int:
+        """Run batch inference using the bash script synchronously.
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -883,11 +906,8 @@ class DockerExecutor:
         builder.add_volume(self.remote_dir, "/workspace")
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
-        # Build command with optional logging
+        # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
         cmd = f"/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
-        if remote_log_path:
-            cmd = f'({cmd}) 2>&1 | tee {remote_log_path}; echo "[COSMOS_COMPLETE]" >> {remote_log_path}'
-
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking
@@ -911,6 +931,8 @@ class DockerExecutor:
                 logger.error("STDERR: {}", stderr)
         else:
             logger.info("Batch inference completed successfully")
+
+        return exit_code
 
     def _get_batch_output_files(self, batch_name: str) -> list[str]:
         """Get list of output files from batch inference."""

@@ -642,26 +642,70 @@ class GPUExecutor:
                 if batch_result.get("status") != "completed":
                     raise RuntimeError(f"Unexpected batch status: {batch_result.get('status')}")
 
-                # Split outputs to individual run directories
-                output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
+                # Download all batch outputs to batch directory (simpler approach)
+                logger.info("Downloading batch outputs to local batch directory")
 
-                # Download outputs for each run from batch output directory
-                for run_dict, _ in runs_and_prompts:
+                # Ensure batch output directory exists locally
+                outputs_dir = batch_dir / "outputs"
+                outputs_dir.mkdir(exist_ok=True)
+
+                # Download all output files to batch directory
+                remote_output_dir = batch_result.get(
+                    "output_dir", f"{remote_config.remote_dir}/outputs/{batch_name}"
+                )
+                output_files = batch_result.get("output_files", [])
+
+                for remote_file in output_files:
+                    # Extract just the filename
+                    filename = Path(remote_file).name
+                    local_file = outputs_dir / filename
+
+                    try:
+                        self.file_transfer.download_file(remote_file, str(local_file))
+                        logger.info("Downloaded {} to {}", filename, local_file)
+                    except Exception as e:
+                        logger.error("Failed to download {}: {}", filename, e)
+
+                # Download the batch log file
+                remote_log = f"{remote_output_dir}/batch_run.log"
+                local_log = batch_dir / "batch_run.log"
+                try:
+                    self.file_transfer.download_file(remote_log, str(local_log))
+                    logger.info("Downloaded batch log to {}", local_log)
+                except Exception as e:
+                    logger.warning("Could not download batch log: {}", e)
+
+                # Update database for each run to point to files in batch directory
+                logger.info("Updating database with batch output paths")
+                for i, (run_dict, _) in enumerate(runs_and_prompts):
                     run_id = run_dict["id"]
-                    if run_id in output_mapping:
-                        mapping_info = output_mapping[run_id]
-                        if mapping_info["status"] in ["found", "assumed"]:
-                            # Download from batch output to individual run directory
-                            self._download_batch_output_for_run(
-                                run_id=run_id,
-                                remote_batch_output=mapping_info["remote_path"],
-                                batch_name=batch_name,
-                            )
+
+                    # Build outputs dictionary with paths in batch directory
+                    outputs = {
+                        "output_path": str(outputs_dir / f"video_{i:03d}.mp4"),
+                        "log_path": str(local_log),
+                        "batch_id": batch_name,
+                        "batch_index": i,
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
+                    # Check if control files exist and add them
+                    control_types = ["edge", "depth", "seg", "vis"]
+                    for control_type in control_types:
+                        control_file = outputs_dir / f"{control_type}_input_control_{i:03d}.mp4"
+                        if control_file.exists():
+                            outputs[f"{control_type}_control"] = str(control_file)
+
+                    # Update run in database
+                    self.service.update_run(run_id, outputs=outputs)
+                    self.service.update_run_status(run_id, "completed")
+                    logger.info("Updated run {} with batch output paths", run_id)
 
                 return {
                     "status": "success",
                     "batch_name": batch_name,
-                    "output_mapping": output_mapping,
+                    "run_count": len(runs_and_prompts),
+                    "output_dir": str(batch_dir),
                     "duration_seconds": batch_result.get("duration_seconds", 0),
                 }
 
@@ -673,190 +717,6 @@ class GPUExecutor:
                 "error": str(e),
                 "started_at": datetime.now(timezone.utc).isoformat(),
             }
-
-    @staticmethod
-    def _split_batch_outputs(
-        runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
-        batch_result: dict[str, Any],
-    ) -> dict[str, dict[str, Any]]:
-        """Split batch output files to individual run folders.
-
-        Args:
-            runs_and_prompts: Original run/prompt pairs
-            batch_result: Result from batch inference
-
-        Returns:
-            Mapping of run_id to output file info
-        """
-        output_mapping = {}
-        output_files = batch_result.get("output_files", [])
-        used_files = set()  # Track which files have been matched
-
-        # Match output files to runs
-        # NVIDIA batch inference typically names outputs with indices or prompt IDs
-        for i, (run_dict, _) in enumerate(runs_and_prompts):
-            run_id = run_dict["id"]
-
-            # Try to find matching output file
-            # NVIDIA batch inference outputs: video_000.mp4, video_001.mp4, etc.
-            matched_file = None
-            for output_file in output_files:
-                if output_file in used_files:
-                    continue  # Skip already matched files
-
-                file_name = Path(output_file).name
-                # Check for NVIDIA sequential naming pattern: video_XXX.mp4
-                # Also keep support for run_id in case of custom naming
-                if (
-                    file_name == f"video_{i:03d}.mp4"  # NVIDIA standard: video_000.mp4
-                    or file_name == f"video_{i}.mp4"  # Fallback: video_0.mp4
-                    or run_id in file_name  # Custom: contains run_id
-                ):
-                    matched_file = output_file
-                    used_files.add(output_file)
-                    logger.info(
-                        "Matched output {} to run {} (index {})",
-                        file_name,
-                        run_id,
-                        i,
-                    )
-                    break
-
-            if matched_file:
-                output_mapping[run_id] = {
-                    "remote_path": matched_file,
-                    "batch_index": i,
-                    "status": "found",
-                }
-            else:
-                # If no match found, try sequential matching with unused files
-                available_files = [f for f in output_files if f not in used_files]
-                if available_files:
-                    matched_file = available_files[0]
-                    used_files.add(matched_file)
-                    logger.warning(
-                        "No pattern match for run {}, using fallback file: {}",
-                        run_id,
-                        Path(matched_file).name,
-                    )
-                    output_mapping[run_id] = {
-                        "remote_path": matched_file,
-                        "batch_index": i,
-                        "status": "assumed",
-                    }
-                else:
-                    logger.error(
-                        "No output file found for run {} (index {})",
-                        run_id,
-                        i,
-                    )
-                    output_mapping[run_id] = {
-                        "remote_path": None,
-                        "batch_index": i,
-                        "status": "missing",
-                    }
-
-        return output_mapping
-
-    def _download_batch_output_for_run(
-        self,
-        run_id: str,
-        remote_batch_output: str,
-        batch_name: str,
-    ) -> None:
-        """Download batch output file to individual run directory.
-
-        Args:
-            run_id: The run ID
-            remote_batch_output: Remote path to the batch output file (e.g., video_000.mp4)
-            batch_name: Name of the batch for logging
-        """
-        # Create local run directory structure first (outside try block)
-        # Note: run_id does NOT include "run_" prefix, it's like "rs_xxxxx"
-        local_run_dir = Path("outputs") / f"run_{run_id}"
-        local_run_dir.mkdir(parents=True, exist_ok=True)
-
-        outputs_dir = local_run_dir / "outputs"
-        outputs_dir.mkdir(exist_ok=True)
-
-        logs_dir = local_run_dir / "logs"
-        logs_dir.mkdir(exist_ok=True)
-
-        try:
-            # Download the batch output file and rename to standard name
-            local_output_file = outputs_dir / "output.mp4"
-
-            logger.info(
-                "Downloading batch output for run {}: {} -> {}",
-                run_id,
-                remote_batch_output,
-                local_output_file,
-            )
-
-            self.file_transfer.download_file(remote_batch_output, str(local_output_file))
-            logger.info("Downloaded output for run {} to {}", run_id, local_output_file)
-
-            # Download any auto-generated control files for this batch run
-            # Extract the video number from the batch output filename (e.g., video_000.mp4 -> 000)
-            import re
-
-            match = re.search(r"video_(\d+)\.mp4", remote_batch_output)
-            if match:
-                video_num = match.group(1)
-                control_types = ["edge", "depth", "seg", "vis"]
-                for control_type in control_types:
-                    # Batch control files are named like edge_input_control_000.mp4
-                    remote_control = remote_batch_output.replace(
-                        f"video_{video_num}.mp4", f"{control_type}_input_control_{video_num}.mp4"
-                    )
-                    local_control = outputs_dir / f"{control_type}_input_control.mp4"
-
-                    try:
-                        self.file_transfer.download_file(remote_control, str(local_control))
-                        logger.info("Downloaded batch {} control for run {}", control_type, run_id)
-                    except FileNotFoundError:
-                        logger.debug(
-                            "No batch {} control found for run {} (expected if provided)",
-                            control_type,
-                            run_id,
-                        )
-                    except Exception as e:
-                        logger.debug(
-                            "Could not download batch {} control for run {}: {}",
-                            control_type,
-                            run_id,
-                            e,
-                        )
-
-            # Also download the shared batch log to this run's directory
-            remote_config = self.config_manager.get_remote_config()
-            # The batch script saves log as batch_run.log in the batch output directory
-            remote_batch_log = f"{remote_config.remote_dir}/outputs/{batch_name}/batch_run.log"
-            local_batch_log = logs_dir / "batch.log"
-
-            try:
-                self.file_transfer.download_file(remote_batch_log, str(local_batch_log))
-                logger.info("Downloaded batch log for run {}", run_id)
-            except Exception as e:
-                # Batch log might not exist, which is okay
-                logger.debug("Could not download batch log for run {}: {}", run_id, e)
-
-            # Also create a run.log file that references the batch log for compatibility
-            run_log = logs_dir / "run.log"
-            run_log.write_text(
-                f"This run was executed as part of batch: {batch_name}\n"
-                f"See batch.log for execution details.\n"
-            )
-
-        except Exception as e:
-            logger.error(
-                "Failed to download batch output for run {}: {}",
-                run_id,
-                e,
-            )
-            # Create an error marker file so UI knows something went wrong
-            error_file = outputs_dir / "download_error.txt"
-            error_file.write_text(f"Failed to download output: {e}")
 
     # ========== Upsampling Methods ==========
 

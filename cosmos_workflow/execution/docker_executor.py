@@ -702,14 +702,25 @@ class DockerExecutor:
             Dict with GPU info if available:
                 - name: GPU model name
                 - memory_total: Total GPU memory
+                - memory_used: Used GPU memory
+                - memory_free: Free GPU memory
+                - memory_percentage: Actual memory usage percentage
+                - gpu_utilization: GPU compute utilization percentage
+                - temperature: Current GPU temperature
+                - power_draw: Current power draw
+                - power_limit: Power limit
+                - clock_current: Current GPU clock speed
+                - clock_max: Maximum GPU clock speed
+                - driver_version: NVIDIA driver version
                 - cuda_version: CUDA version
             None if GPU not available or nvidia-smi fails
         """
         try:
-            # Query GPU info using nvidia-smi
+            # Query GPU info using nvidia-smi - expanded to include temp, power, clocks
             cmd = (
                 "nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,"
-                "utilization.gpu,utilization.memory,driver_version "
+                "utilization.gpu,temperature.gpu,power.draw,power.limit,"
+                "clocks.current.graphics,clocks.max.graphics,driver_version "
                 "--format=csv,noheader,nounits"
             )
             output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
@@ -717,17 +728,30 @@ class DockerExecutor:
             if not output or not output.strip():
                 return None
 
-            # Parse CSV output (e.g., "Tesla T4, 15360, 469, 14891, 0, 3, 525.60.13")
+            # Parse CSV output - now 11 fields instead of 7
             parts = [p.strip() for p in output.strip().split(",")]
-            if len(parts) >= 7:
+            if len(parts) >= 11:
+                # Calculate actual memory percentage
+                try:
+                    mem_used_mb = float(parts[2])
+                    mem_total_mb = float(parts[1])
+                    memory_percentage = round((mem_used_mb / mem_total_mb) * 100, 1)
+                except (ValueError, ZeroDivisionError):
+                    memory_percentage = 0.0
+
                 gpu_info = {
                     "name": parts[0],
                     "memory_total": f"{parts[1]} MB",
                     "memory_used": f"{parts[2]} MB",
                     "memory_free": f"{parts[3]} MB",
+                    "memory_percentage": f"{memory_percentage}%",  # Actual capacity percentage
                     "gpu_utilization": f"{parts[4]}%",
-                    "memory_utilization": f"{parts[5]}%",
-                    "driver_version": parts[6],
+                    "temperature": f"{parts[5]}°C" if parts[5] != "[N/A]" else "N/A",
+                    "power_draw": f"{parts[6]} W" if parts[6] != "[N/A]" else "N/A",
+                    "power_limit": f"{parts[7]} W" if parts[7] != "[N/A]" else "N/A",
+                    "clock_current": f"{parts[8]} MHz" if parts[8] != "[N/A]" else "N/A",
+                    "clock_max": f"{parts[9]} MHz" if parts[9] != "[N/A]" else "N/A",
+                    "driver_version": parts[10],
                 }
 
                 # Try to get CUDA version

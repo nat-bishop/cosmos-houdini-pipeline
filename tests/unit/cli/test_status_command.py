@@ -21,7 +21,16 @@ class TestStatusCommand:
         status_info = {
             "ssh_status": "connected",
             "docker_status": {"docker_running": True},
-            "gpu_info": {"name": "NVIDIA A100", "memory_total": "40GB"},
+            "gpu_info": {
+                "name": "NVIDIA A100",
+                "memory_total": "40GB",
+                "memory_used": "8GB",
+                "memory_percentage": "20%",
+                "gpu_utilization": "75%",
+                "temperature": "65°C",
+                "power_draw": "250 W",
+                "power_limit": "400 W",
+            },
             "active_run": {
                 "id": "run_abc123",
                 "model_type": "transfer",
@@ -56,7 +65,7 @@ class TestStatusCommand:
         status_info = {
             "ssh_status": "connected",
             "docker_status": {"docker_running": True},
-            "gpu_info": {"name": "NVIDIA A100"},
+            "gpu_info": {"name": "NVIDIA A100", "memory_total": "40GB", "memory_percentage": "0%"},
             "active_run": None,
             "container": None,
         }
@@ -132,7 +141,7 @@ class TestStatusCommand:
         status_info = {
             "ssh_status": "connected",
             "docker_status": {"docker_running": True},
-            "gpu_info": {"name": "NVIDIA A100"},
+            "gpu_info": {"name": "NVIDIA A100", "memory_total": "40GB", "memory_percentage": "0%"},
             "container": {
                 "id": "container_old",
                 "name": "cosmos_container",

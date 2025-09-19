@@ -1186,14 +1186,31 @@ def check_running_jobs():
             if gpu_util:
                 container_details_text += f"GPU Usage          {gpu_util}\n"
 
-            # Add memory usage details
+            # Add memory usage details with actual percentage
             mem_used = gpu_info.get("memory_used")
             mem_total = gpu_info.get("memory_total")
-            mem_util = gpu_info.get("memory_utilization")
-            if mem_used and mem_total and mem_util:
+            mem_percentage = gpu_info.get("memory_percentage", "0%")
+            if mem_used and mem_total:
                 container_details_text += (
-                    f"Memory Usage       {mem_used} / {mem_total} ({mem_util})\n"
+                    f"Memory Usage       {mem_used} / {mem_total} ({mem_percentage})\n"
                 )
+
+            # Add temperature if available
+            temperature = gpu_info.get("temperature")
+            if temperature and temperature != "N/A":
+                container_details_text += f"Temperature        {temperature}\n"
+
+            # Add power metrics if available
+            power_draw = gpu_info.get("power_draw")
+            power_limit = gpu_info.get("power_limit")
+            if power_draw and power_draw != "N/A" and power_limit and power_limit != "N/A":
+                container_details_text += f"Power              {power_draw} / {power_limit}\n"
+
+            # Add clock speeds if available
+            clock_current = gpu_info.get("clock_current")
+            clock_max = gpu_info.get("clock_max")
+            if clock_current and clock_current != "N/A" and clock_max and clock_max != "N/A":
+                container_details_text += f"Clock Speed        {clock_current} / {clock_max}\n"
         else:
             container_details_text += "GPU                Not detected\n"
 
@@ -2773,11 +2790,24 @@ def create_ui():
                 ],
             )
 
+            # Auto-advance toggle
+            if "auto_advance_toggle" in components:
+
+                def toggle_auto_advance(enabled):
+                    """Toggle auto-advance for queue processing."""
+                    global queue_service
+                    queue_service.set_auto_advance(enabled)
+
+                components["auto_advance_toggle"].change(
+                    fn=toggle_auto_advance, inputs=[components["auto_advance_toggle"]], outputs=[]
+                )
+
             # Cancel selected job
             if "cancel_job_btn" in components and "selected_job_id" in components:
 
                 def cancel_selected_job(job_id):
                     """Cancel the selected job and refresh the queue."""
+                    # Handle None gracefully - minimal fix for the error
                     if not job_id:
                         return "No job selected", None, []
 

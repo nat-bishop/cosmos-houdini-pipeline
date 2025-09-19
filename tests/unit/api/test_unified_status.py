@@ -173,7 +173,13 @@ class TestEnhancedCheckStatus:
         base_status = {
             "ssh_status": "connected",
             "docker_status": {"docker_running": True},
-            "gpu_info": {"name": "NVIDIA A100", "memory_total": "40GB"},
+            "gpu_info": {
+                "name": "NVIDIA A100",
+                "memory_total": "40GB",
+                "memory_used": "12GB",
+                "memory_percentage": "30%",
+                "gpu_utilization": "85%",
+            },
         }
         mock_executor_instance.check_remote_status.return_value = base_status
 

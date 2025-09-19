@@ -43,7 +43,7 @@ port = 7860  # Default Gradio port
 host = "0.0.0.0"  # Bind to all interfaces for SSH tunnel access
 share = false  # Don't create public Gradio share links
 refresh_interval = 5  # Auto-refresh interval in seconds (2-30)
-cleanup_containers_on_exit = false  # Kill running containers when UI exits
+cleanup_containers_on_exit = true  # Kill running containers when UI exits
 auto_reload = true  # Enable auto-reload when files change (development mode)
 watch_dirs = ["cosmos_workflow"]  # Directories to watch for changes when auto_reload is true
 

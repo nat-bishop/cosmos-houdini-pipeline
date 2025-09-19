@@ -65,23 +65,39 @@ def execute_kill_job():
         result = api.kill_containers()
 
         if result["status"] == "success":
-            # Update the database to mark runs as cancelled
-            from cosmos_workflow.database.connection import DatabaseConnection
-            from cosmos_workflow.services.queue_service import QueueService
+            # Update the database to mark ALL running jobs as cancelled
+            # This ensures we don't leave any zombie jobs
+            from datetime import datetime, timezone
+
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+
+            from cosmos_workflow.database.models import JobQueue
 
             database_path = "outputs/cosmos.db"
-            db_connection = DatabaseConnection(database_path)
-            queue_service = QueueService(db_connection=db_connection)
+            engine = create_engine(f"sqlite:///{database_path}")
+            Session = sessionmaker(bind=engine)
+            session = Session()
 
-            # Mark any running jobs as cancelled
-            if run_ids:
-                for run_id in run_ids:
-                    # Find the job with this run_id and mark it as cancelled
-                    jobs = queue_service.get_all_jobs()
-                    for job in jobs:
-                        if job.get("result", {}).get("run_id") == run_id:
-                            queue_service.update_job_status(job["id"], "cancelled")
-                            logger.info("Marked job %s as cancelled for run %s", job["id"], run_id)
+            try:
+                # Find and cancel ALL running jobs, not just those matching run IDs
+                # This is safer since containers might be killed but jobs still marked as running
+                running_jobs = session.query(JobQueue).filter(JobQueue.status == "running").all()
+
+                if running_jobs:
+                    for job in running_jobs:
+                        job.status = "cancelled"
+                        job.completed_at = datetime.now(timezone.utc)
+                        job.result = {"reason": "Container killed by user"}
+                        logger.info("Marked job %s as cancelled", job.id)
+
+                    session.commit()
+                    logger.info(
+                        "Cancelled %d running job(s) after killing containers", len(running_jobs)
+                    )
+
+            finally:
+                session.close()
 
             message = (
                 f"Successfully killed {result['killed_count']} container(s) and updated job status"

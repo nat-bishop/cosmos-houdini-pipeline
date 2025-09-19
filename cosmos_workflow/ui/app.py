@@ -97,6 +97,9 @@ def cleanup_on_shutdown(signum=None, frame=None):
 
     # Mark any running jobs as cancelled before stopping queue processor
     # This prevents zombie jobs that can't complete without the app
+    # Try queue_service first, but fall back to direct database access
+    db_cleaned = False
+
     if queue_service:
         try:
             from datetime import datetime, timezone
@@ -107,7 +110,7 @@ def cleanup_on_shutdown(signum=None, frame=None):
             if queue_service.db_session:
                 session = queue_service.db_session
             else:
-                session = queue_service.db_connection.Session()
+                session = queue_service.db_connection.SessionLocal()
 
             try:
                 # Find and cancel all running jobs
@@ -122,13 +125,54 @@ def cleanup_on_shutdown(signum=None, frame=None):
 
                     session.commit()
                     logger.info("Cancelled {} running job(s) on shutdown", len(running_jobs))
+                    db_cleaned = True
 
             finally:
                 if not queue_service.db_session:
                     session.close()
 
         except Exception as e:
-            logger.error("Error cancelling running jobs on shutdown: {}", e)
+            logger.error("Error cancelling running jobs via queue_service: {}", e)
+
+    # Fallback: Try direct database access if queue_service wasn't available or failed
+    if not db_cleaned:
+        try:
+            from datetime import datetime, timezone
+            from pathlib import Path
+
+            from cosmos_workflow.database import DatabaseConnection
+            from cosmos_workflow.database.models import JobQueue
+
+            # Try to connect directly to the database
+            db_path = Path("outputs/cosmos.db")
+            if db_path.exists():
+                db_connection = DatabaseConnection(str(db_path))
+                # Use SessionLocal instead of Session
+                session = db_connection.SessionLocal()
+
+                try:
+                    # Find and cancel all running jobs
+                    running_jobs = (
+                        session.query(JobQueue).filter(JobQueue.status == "running").all()
+                    )
+
+                    if running_jobs:
+                        for job in running_jobs:
+                            job.status = "cancelled"
+                            job.completed_at = datetime.now(timezone.utc)
+                            job.result = {"reason": "Application shutdown (fallback cleanup)"}
+                            logger.info("Marking running job {} as cancelled (fallback)", job.id)
+
+                        session.commit()
+                        logger.info(
+                            "Cancelled {} running job(s) via fallback method", len(running_jobs)
+                        )
+
+                finally:
+                    session.close()
+
+        except Exception as e:
+            logger.error("Error in fallback job cancellation: {}", e)
 
     # Stop queue processor if running
     if queue_service:

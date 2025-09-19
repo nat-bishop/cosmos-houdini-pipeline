@@ -721,6 +721,7 @@ class CosmosAPI:
                     prompt_id=prompt_id,
                     execution_config=execution_config,
                     model_type="transfer",  # Explicitly specify model type for inference
+                    metadata={"batch_id": batch_id},  # Pass batch_id for correct log path
                 )
                 logger.info("Created run {} for prompt {}", run["id"], prompt_id)
                 runs_and_prompts.append((run, prompt))

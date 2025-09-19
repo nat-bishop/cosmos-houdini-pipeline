@@ -820,6 +820,7 @@ class DockerExecutor:
         self,
         batch_name: str,
         batch_jsonl_file: str,
+        base_controlnet_spec: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
     ) -> dict[str, Any]:
@@ -828,6 +829,7 @@ class DockerExecutor:
         Args:
             batch_name: Name for the batch output directory
             batch_jsonl_file: Name of JSONL file with batch data (in inputs/batches/)
+            base_controlnet_spec: Name of base controlnet spec file (in inputs/batches/)
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
 
@@ -841,9 +843,13 @@ class DockerExecutor:
         if not self.remote_executor.file_exists(batch_path):
             raise FileNotFoundError(f"Batch file not found: {batch_path}")
 
-        # Create output directory
-        remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
-        self.remote_executor.create_directory(remote_output_dir)
+        # Check if base controlnet spec exists
+        spec_path = f"{self.remote_dir}/inputs/batches/{base_controlnet_spec}"
+        if not self.remote_executor.file_exists(spec_path):
+            raise FileNotFoundError(f"Base controlnet spec not found: {spec_path}")
+
+        # Don't create output directory here - let the batch_inference.sh script handle it
+        # to avoid permission conflicts between SSH user and Docker container user
 
         # Execute batch inference using bash script (blocking)
         logger.info("Starting batch inference on GPU. This may take a while...")
@@ -851,7 +857,7 @@ class DockerExecutor:
 
         # Run without the remote_log_path - the script itself handles logging
         exit_code = self._run_batch_inference_script(
-            batch_name, batch_jsonl_file, num_gpu, cuda_devices
+            batch_name, batch_jsonl_file, base_controlnet_spec, num_gpu, cuda_devices
         )
 
         # Handle exit codes like single inference
@@ -867,6 +873,7 @@ class DockerExecutor:
             )
 
         # Get output files after completion
+        remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         output_files = self._get_batch_output_files(batch_name)
 
         if output_files:
@@ -891,6 +898,7 @@ class DockerExecutor:
         self,
         batch_name: str,
         batch_jsonl_file: str,
+        base_controlnet_spec: str,
         num_gpu: int,
         cuda_devices: str,
     ) -> int:
@@ -907,7 +915,7 @@ class DockerExecutor:
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
-        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
+        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking

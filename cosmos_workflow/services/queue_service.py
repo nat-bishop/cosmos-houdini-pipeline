@@ -251,7 +251,7 @@ class QueueService:
                         "Skipping processing - container {} is running on GPU",
                         container_id,
                     )
-                    logger.info("GPU busy with container {}, skipping job processing", container_id)
+                    # Don't log at INFO level to avoid spam during long operations
                     return None
                 logger.debug("No active containers, GPU is available")
             except Exception as e:

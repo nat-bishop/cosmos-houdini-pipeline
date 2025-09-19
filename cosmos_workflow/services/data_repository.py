@@ -158,6 +158,13 @@ class DataRepository:
                     f"Invalid model_type '{model_type}'. Must be one of: {SUPPORTED_MODEL_TYPES}"
                 )
 
+            # Set log path based on whether this is a batch run
+            if metadata and metadata.get("batch_id"):
+                batch_id = metadata["batch_id"]
+                log_path = f"outputs/{batch_id}/batch_run.log"
+            else:
+                log_path = f"outputs/run_{run_id}/logs/{run_id}.log"
+
             # Create run
             run = Run(
                 id=run_id,
@@ -167,7 +174,7 @@ class DataRepository:
                 execution_config=execution_config,
                 outputs={},  # Empty initially
                 run_metadata=metadata,
-                log_path=f"outputs/run_{run_id}/logs/{run_id}.log",  # Set log path at creation
+                log_path=log_path,  # Use appropriate log path
             )
             session.add(run)
             session.flush()  # Flush to get created_at populated

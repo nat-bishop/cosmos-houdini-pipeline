@@ -606,6 +606,14 @@ class GPUExecutor:
         batch_file = batch_dir / "batch.jsonl"
         nvidia_format.write_batch_jsonl(batch_lines, batch_file)
 
+        # Create base controlnet spec for the batch
+        base_controlnet_spec = nvidia_format.create_batch_base_controlnet_spec(runs_and_prompts)
+        base_spec_file = batch_dir / "base_controlnet_spec.json"
+        nvidia_format.write_cosmos_json(base_controlnet_spec, base_spec_file)
+        logger.info(
+            "Created base controlnet spec with controls: {}", list(base_controlnet_spec.keys())
+        )
+
         # Execute batch on GPU
         try:
             with self.ssh_manager:
@@ -626,6 +634,10 @@ class GPUExecutor:
                 # Upload batch file to inputs/batches/ as expected by batch_inference.sh
                 remote_batch_location = f"{remote_config.remote_dir}/inputs/batches"
                 self.file_transfer.upload_file(batch_file, remote_batch_location)
+
+                # Upload base controlnet spec to inputs/batches/
+                self.file_transfer.upload_file(base_spec_file, remote_batch_location)
+                logger.info("Uploaded base controlnet spec to remote")
 
                 # Upload any videos to run-specific paths as expected by JSONL format
                 for run_dict, prompt_dict in runs_and_prompts:
@@ -648,6 +660,7 @@ class GPUExecutor:
                 batch_result = self.docker_executor.run_batch_inference(
                     batch_name=batch_name,
                     batch_jsonl_file=batch_file.name,
+                    base_controlnet_spec=base_spec_file.name,
                 )
 
                 if batch_result["status"] == "failed":

@@ -7,6 +7,7 @@ which should be imported and used throughout the application.
 
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from loguru import logger as _base_logger
@@ -18,25 +19,29 @@ _base_logger.remove()
 def init_logger(
     level: str | None = None,
     log_file: Path | None = None,
-    rotation: str = "100 MB",
-    retention: str = "7 days",
+    file_level: str | None = None,
+    retention: str = "30 days",
     colorize: bool = True,
 ) -> "logger":
     """Initialize and configure the logger.
 
     Args:
-        level: Log level (DEBUG, INFO, WARNING, ERROR). Defaults to env var or INFO.
+        level: Console log level (DEBUG, INFO, WARNING, ERROR). Defaults to env var or INFO.
         log_file: Optional file path for log output
-        rotation: When to rotate log file (size or time)
-        retention: How long to keep old log files
+        file_level: File log level. Defaults to same as console level.
+        retention: How long to keep old log files (note: only works with rotation enabled)
         colorize: Whether to colorize console output
 
     Returns:
         Configured logger instance
     """
-    # Determine log level
+    # Determine log levels
     if level is None:
         level = os.environ.get("LOG_LEVEL", "INFO")
+
+    if file_level is None:
+        # File defaults to same as console, but can be overridden
+        file_level = os.environ.get("FILE_LOG_LEVEL", level)
 
     # Console handler with clean format
     _base_logger.add(
@@ -55,14 +60,14 @@ def init_logger(
 
         _base_logger.add(
             log_file,
-            level="DEBUG",  # File gets everything
+            level=file_level,  # Configurable file log level
             format="[{time:YYYY-MM-DD HH:mm:ss}|{level}|{name}:{function}:{line}] {message}",
-            rotation=rotation,
-            retention=retention,
+            rotation=None,  # No rotation with date-based files to avoid Windows issues
+            retention=retention,  # Note: retention doesn't work without rotation
             encoding="utf8",
             backtrace=True,
             diagnose=True,  # Include variables in file logs
-            enqueue=True,  # Thread-safe logging to prevent Windows file locking issues
+            enqueue=True,  # Critical: Thread-safe and multiprocess-safe logging
         )
 
     return _base_logger
@@ -73,11 +78,12 @@ def init_logger(
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
 
-# Main application log with rotation
+# Date-based log file - each day gets its own file automatically
+# This avoids rotation issues while keeping logs organized
+log_filename = f"cosmos_{datetime.now(timezone.utc):%Y-%m-%d}.log"
 logger = init_logger(
-    log_file=log_dir / "cosmos_workflow.log",
-    rotation="10 MB",  # Smaller files for easier reading
-    retention="30 days",  # Keep longer for debugging
+    log_file=log_dir / log_filename,
+    retention="30 days",  # Clean up old daily logs after 30 days
 )
 
 
@@ -104,7 +110,7 @@ def get_run_logger(run_id: str, prompt_name: str) -> "logger":
         level="DEBUG",
         format="[{time:HH:mm:ss}|{level}|{extra[run_id]}] {message}",
         filter=lambda record: record["extra"].get("run_id") == run_id,
-        enqueue=True,  # Thread-safe logging to prevent Windows file locking issues
+        enqueue=True,  # Thread-safe and multiprocess-safe logging
     )
 
     return run_logger

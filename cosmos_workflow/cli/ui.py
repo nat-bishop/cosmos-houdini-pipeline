@@ -23,7 +23,7 @@ def kill_process_on_port(port: int) -> bool:
     """
     try:
         # Find PIDs using the port
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S602
             f"netstat -ano | findstr :{port}", shell=True, capture_output=True, text=True
         )
 
@@ -45,7 +45,7 @@ def kill_process_on_port(port: int) -> bool:
             logger.info("Killing process %s on port %s", pid, port)
             click.echo(f"  Terminating process {pid}...")
 
-            kill_result = subprocess.run(
+            kill_result = subprocess.run(  # noqa: S602
                 f"taskkill /F /PID {pid}", shell=True, capture_output=True, text=True
             )
 
@@ -62,7 +62,7 @@ def kill_process_on_port(port: int) -> bool:
         return False
 
 
-def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
+def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:  # noqa: S104
     """Check if a port is currently in use.
 
     Args:
@@ -75,7 +75,7 @@ def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             # Try to bind to the port
-            if host == "0.0.0.0":
+            if host == "0.0.0.0":  # noqa: S104
                 s.bind(("", port))
             else:
                 s.bind((host, port))
@@ -94,12 +94,27 @@ def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
     help="Enable/disable auto-reload (default: from config.toml)",
 )
 @click.option("--watch", multiple=True, help="Additional directories to watch for changes")
-def ui(port, host, share, reload, watch):
+@click.option("--debug", is_flag=True, help="Enable debug logging (verbose output)")
+def ui(port, host, share, reload, watch, debug):
     """Launch web interface for workflow management.
 
     With auto-reload enabled, the UI will automatically restart when
     source files change - useful for development.
     """
+    import os
+
+    # Set log level based on debug flag
+    if debug:
+        os.environ["LOG_LEVEL"] = "DEBUG"
+        os.environ["FILE_LOG_LEVEL"] = "DEBUG"
+        click.echo("🔍 Debug logging enabled (verbose output)")
+    else:
+        # Default to INFO if not already set
+        if "LOG_LEVEL" not in os.environ:
+            os.environ["LOG_LEVEL"] = "INFO"
+        if "FILE_LOG_LEVEL" not in os.environ:
+            os.environ["FILE_LOG_LEVEL"] = "INFO"
+
     # Load configuration
     config = ConfigManager()
     ui_config = config._config_data.get("ui", {})
@@ -145,6 +160,7 @@ def ui(port, host, share, reload, watch):
 
         click.echo("Starting Cosmos Workflow Manager UI with auto-reload...")
         click.echo(f"Watching directories: {', '.join(watch_dirs)}")
+        click.echo(f"📊 Log level: {os.environ.get('LOG_LEVEL', 'INFO')}")
         logger.info("Starting UI with auto-reload on %s:%s", host, port)
 
         # Path to the app module
@@ -162,7 +178,7 @@ def ui(port, host, share, reload, watch):
 
         try:
             # Run the gradio CLI
-            subprocess.run(cmd, check=False)
+            subprocess.run(cmd, check=False)  # noqa: S603
         except KeyboardInterrupt:
             click.echo("\nShutting down UI...")
         except Exception as e:
@@ -173,6 +189,7 @@ def ui(port, host, share, reload, watch):
         from cosmos_workflow.ui.app import create_ui
 
         click.echo(f"Starting Cosmos Workflow Manager UI on {host}:{port}...")
+        click.echo(f"📊 Log level: {os.environ.get('LOG_LEVEL', 'INFO')}")
         logger.info("Starting UI on %s:%s", host, port)
 
         if host == "0.0.0.0":  # noqa: S104

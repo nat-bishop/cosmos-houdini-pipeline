@@ -79,7 +79,7 @@ def generate_thumbnail_fast(video_path, thumb_size=(384, 216)):
     return None
 
 
-def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
+def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, rating_filter=None):
     """Load runs data for table with filtering and populate video grid."""
     try:
         # Create CosmosAPI instance
@@ -167,6 +167,23 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
                 or search_lower in run.get("prompt_text", "").lower()
             ]
 
+        # Apply rating filter
+        if rating_filter and rating_filter != "all":
+            if rating_filter == "unrated":
+                # Filter for runs with no rating
+                filtered_runs = [run for run in filtered_runs if not run.get("rating")]
+            elif rating_filter == 5:
+                # Exact 5 stars
+                filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
+            elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
+                # Range filters like "4+", "3+", etc.
+                min_rating = int(rating_filter[0])
+                filtered_runs = [
+                    run
+                    for run in filtered_runs
+                    if run.get("rating") and run.get("rating") >= min_rating
+                ]
+
         # Store total count before limiting for statistics
         total_filtered = len(filtered_runs)
 
@@ -217,9 +234,15 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit):
                     thumb_path = future.result(timeout=3)
                     if thumb_path:
                         prompt_text = run.get("prompt_text", "")
-                        # Include full run ID for selection handler, show shortened version visually
+                        # Include rating and run ID in label for gallery
                         full_id = run.get("id", "")
-                        label = f"{full_id}||{prompt_text[:30]}..."
+                        rating = run.get("rating")
+                        if rating:
+                            star_display = "★" * rating + "☆" * (5 - rating)
+                        else:
+                            star_display = "No Rating"
+                        # Keep run ID in label but hidden with separator for selection
+                        label = f"{star_display} - {prompt_text[:30]}...||{full_id}"
                         gallery_data.append((thumb_path, label))
                 except Exception:  # noqa: S110
                     pass  # Skip failed thumbnails
@@ -294,15 +317,15 @@ def on_runs_gallery_select(evt: gr.SelectData):
             logger.warning("No evt, hiding details")
             return [gr.update(visible=False)] + [gr.update()] * 16
 
-        # The label contains the run ID in format "full_run_id||prompt text..."
+        # The label now contains rating and run ID in format "rating - prompt...||full_run_id"
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
             return [gr.update(visible=False)] + [gr.update()] * 16
 
-        # Extract full run ID from label (before the || separator)
+        # Extract full run ID from label (after the || separator)
         if "||" in label:
-            full_run_id = label.split("||")[0].strip()
+            full_run_id = label.split("||")[-1].strip()  # Get the last part which is the run_id
             if full_run_id and full_run_id.startswith("rs_"):
                 # Create a fake table data and event to reuse the existing handler
                 fake_table_data = [[full_run_id]]
@@ -639,6 +662,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
         for video_path, label in input_videos:
             input_paths_text += f"{label}: {video_path}\n"
 
+        # Create star button updates based on rating
+        star_updates = []
+        for i in range(1, 6):
+            if rating_value and i <= rating_value:
+                star_updates.append(gr.update(value="★", elem_classes=["star-btn", "filled"]))
+            else:
+                star_updates.append(gr.update(value="☆", elem_classes=["star-btn"]))
+
         return [
             gr.update(visible=True),  # runs_details_group
             gr.update(value=run_id),  # runs_detail_id (hidden)
@@ -690,6 +721,8 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 value=model_type
             ),  # runs_info_type (now shows model_type instead of run_type)
             gr.update(value=prompt_name),  # runs_info_prompt_name
+            # Star rating buttons
+            *star_updates,  # star_1 through star_5
             gr.update(value=rating_value),  # runs_info_rating
             gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
             gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
@@ -705,7 +738,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 22
+        return [gr.update(visible=False)] + [gr.update()] * 27  # Updated count for star buttons
 
 
 def load_run_logs(log_path):
@@ -892,7 +925,7 @@ def update_runs_selection_info(table_data, evt: gr.SelectData):
 
 
 def load_runs_for_multiple_prompts(
-    prompt_ids, status_filter, date_filter, type_filter, search_text, limit
+    prompt_ids, status_filter, date_filter, type_filter, search_text, limit, rating_filter=None
 ):
     """Load runs data for multiple prompt IDs.
 
@@ -1018,6 +1051,23 @@ def load_runs_for_multiple_prompts(
                 or search_lower in run.get("prompt_text", "").lower()
             ]
 
+        # Apply rating filter
+        if rating_filter and rating_filter != "all":
+            if rating_filter == "unrated":
+                # Filter for runs with no rating
+                filtered_runs = [run for run in filtered_runs if not run.get("rating")]
+            elif rating_filter == 5:
+                # Exact 5 stars
+                filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
+            elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
+                # Range filters like "4+", "3+", etc.
+                min_rating = int(rating_filter[0])
+                filtered_runs = [
+                    run
+                    for run in filtered_runs
+                    if run.get("rating") and run.get("rating") >= min_rating
+                ]
+
         # Store total count before limiting for statistics
         total_filtered = len(filtered_runs)
 
@@ -1068,9 +1118,15 @@ def load_runs_for_multiple_prompts(
                     thumb_path = future.result(timeout=3)
                     if thumb_path:
                         prompt_text = run.get("prompt_text", "")
-                        # Include full run ID for selection handler
+                        # Include rating and run ID in label for gallery
                         full_id = run.get("id", "")
-                        label = f"{full_id}||{prompt_text[:30]}..."
+                        rating = run.get("rating")
+                        if rating:
+                            star_display = "★" * rating + "☆" * (5 - rating)
+                        else:
+                            star_display = "No Rating"
+                        # Keep run ID in label but hidden with separator for selection
+                        label = f"{star_display} - {prompt_text[:30]}...||{full_id}"
                         gallery_data.append((thumb_path, label))
                 except Exception as e:
                     logger.debug("Failed to generate thumbnail: {}", str(e))

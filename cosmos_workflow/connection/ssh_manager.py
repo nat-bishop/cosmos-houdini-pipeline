@@ -3,6 +3,7 @@
 Handles remote connections with proper error handling and connection pooling.
 """
 
+import warnings
 from contextlib import contextmanager
 from typing import Any
 
@@ -23,14 +24,21 @@ class SSHManager:
         """Establish SSH connection to remote instance."""
         try:
             self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+            # Use AutoAddPolicy to automatically accept unknown host keys
+            # This suppresses warnings while still being reasonable for internal infrastructure
+            # For production, consider using a known_hosts file instead
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            logger.info(
+            logger.debug(
                 "Connecting to {}:{}", self.ssh_options["hostname"], self.ssh_options["port"]
             )
-            self.ssh_client.connect(**self.ssh_options)
 
-            logger.info("SSH connection established successfully")
+            # Suppress paramiko transport warnings that still appear in console
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                self.ssh_client.connect(**self.ssh_options)
+
+            logger.debug("SSH connection established successfully")
 
         except Exception as e:
             logger.error("Failed to establish SSH connection: {}", e)
@@ -46,7 +54,7 @@ class SSHManager:
             self.ssh_client.close()
             self.ssh_client = None
 
-        logger.info("SSH connection closed")
+        logger.debug("SSH connection closed")
 
     def is_connected(self) -> bool:
         """Check if SSH connection is active."""

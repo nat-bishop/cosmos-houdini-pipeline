@@ -1017,7 +1017,7 @@ class CosmosAPI:
                 - image: Image name
                 - status: Container status
         """
-        logger.info("Getting active Docker containers")
+        logger.debug("Getting active Docker containers")
         self.orchestrator._initialize_services()
 
         try:

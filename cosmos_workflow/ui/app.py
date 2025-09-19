@@ -71,7 +71,6 @@ from cosmos_workflow.ui.tabs.runs_handlers import (
     on_runs_gallery_select,
     on_runs_table_select,
     preview_delete_run,
-    save_run_rating,
     update_runs_selection_info,
 )
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
@@ -1425,7 +1424,7 @@ def create_ui():
             elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
                 logger.info("Switching to Runs tab without filter - loading default data")
                 # Load default runs data
-                gallery_data, table_data, stats = load_runs_data("all", "all", "all", "", 50)
+                gallery_data, table_data, stats = load_runs_data("all", "all", "all", "", 50, "all")
 
                 # Table data should be a list of lists for Gradio dataframe
                 # Only create empty list if data is None or invalid
@@ -1564,7 +1563,12 @@ def create_ui():
 
                 # Load runs data with filters
                 runs_gallery, runs_table, runs_stats = load_runs_data(
-                    runs_status_filter, runs_date_filter, runs_type_filter, runs_search, runs_limit
+                    runs_status_filter,
+                    runs_date_filter,
+                    runs_type_filter,
+                    runs_search,
+                    runs_limit,
+                    "all",
                 )
 
                 return (
@@ -2228,6 +2232,7 @@ def create_ui():
                 components["runs_type_filter"],
                 components["runs_search"],
                 components["runs_limit"],
+                components.get("runs_rating_filter"),  # Rating filter from runs tab
             ]
             # Update gallery, table and stats
             filter_outputs = get_components("runs_gallery", "runs_table", "runs_stats")
@@ -2238,6 +2243,7 @@ def create_ui():
                     "runs_type_filter",
                     "runs_search",
                     "runs_limit",
+                    "runs_rating_filter",
                 ]:
                     components[filter_component].change(
                         fn=load_runs_data,
@@ -2278,6 +2284,12 @@ def create_ui():
                 "runs_info_duration",
                 "runs_info_type",
                 "runs_info_prompt_name",
+                # Star buttons
+                "star_1",
+                "star_2",
+                "star_3",
+                "star_4",
+                "star_5",
                 "runs_info_rating",
                 "runs_info_created",
                 "runs_info_completed",
@@ -2354,6 +2366,12 @@ def create_ui():
                 "runs_info_duration",
                 "runs_info_type",
                 "runs_info_prompt_name",
+                # Star buttons
+                "star_1",
+                "star_2",
+                "star_3",
+                "star_4",
+                "star_5",
                 "runs_info_rating",
                 "runs_info_created",
                 "runs_info_completed",
@@ -2448,6 +2466,7 @@ def create_ui():
                         components.get("runs_type_filter"),
                         components.get("runs_search"),
                         components.get("runs_limit"),
+                        components.get("runs_rating_filter"),
                     ],
                     outputs=[
                         components.get("runs_gallery"),
@@ -2477,6 +2496,7 @@ def create_ui():
                     components.get("runs_type_filter"),
                     components.get("runs_search"),
                     components.get("runs_limit"),
+                    components.get("runs_rating_filter"),
                 ],
                 outputs=[
                     components.get("runs_gallery"),
@@ -2500,10 +2520,15 @@ def create_ui():
                 outputs=[components["runs_log_output"]],
             )
 
-        # Rating change handler
+        # Star rating button handlers
         if all(
             k in components
             for k in [
+                "star_1",
+                "star_2",
+                "star_3",
+                "star_4",
+                "star_5",
                 "runs_info_rating",
                 "runs_info_id",
                 "runs_status_filter",
@@ -2516,24 +2541,79 @@ def create_ui():
                 "runs_stats",
             ]
         ):
-            components["runs_info_rating"].change(
-                fn=save_run_rating,
-                inputs=[
-                    components["runs_info_id"],
-                    components["runs_info_rating"],
-                    components["runs_status_filter"],
-                    components["runs_date_filter"],
-                    components["runs_type_filter"],
-                    components["runs_search"],
-                    components["runs_limit"],
-                ],
-                outputs=[
-                    components["runs_info_rating"],
-                    components["runs_gallery"],
-                    components["runs_table"],
-                    components["runs_stats"],
-                ],
-            )
+            # Function to handle star clicks and update display
+            def handle_star_click(
+                star_value,
+                run_id,
+                status_filter,
+                date_filter,
+                type_filter,
+                search_text,
+                limit,
+                rating_filter,
+            ):
+                """Handle star button click and save rating."""
+                if not run_id:
+                    # No run selected, return unchanged
+                    return [gr.update()] * 10
+
+                # Save the rating
+                ops = CosmosAPI()
+                if ops:
+                    ops.set_run_rating(run_id, star_value)
+                    logger.info("Set rating {} for run {}", star_value, run_id)
+
+                # Refresh the runs display
+                gallery_data, table_data, stats = load_runs_data(
+                    status_filter, date_filter, type_filter, search_text, limit, rating_filter
+                )
+
+                # Update star button displays
+                star_updates = []
+                for i in range(1, 6):
+                    if i <= star_value:
+                        star_updates.append(
+                            gr.update(value="★", elem_classes=["star-btn", "filled"])
+                        )
+                    else:
+                        star_updates.append(gr.update(value="☆", elem_classes=["star-btn"]))
+
+                return [
+                    *star_updates,  # 5 star buttons
+                    gr.update(value=star_value),  # runs_info_rating
+                    gallery_data,  # runs_gallery
+                    table_data,  # runs_table
+                    stats,  # runs_stats
+                ]
+
+            # Connect each star button
+            for i in range(1, 6):
+                star_btn = components[f"star_{i}"]
+                star_btn.click(
+                    fn=lambda run_id, sf, df, tf, st, lm, rf, star_val=i: handle_star_click(
+                        star_val, run_id, sf, df, tf, st, lm, rf
+                    ),
+                    inputs=[
+                        components["runs_info_id"],
+                        components["runs_status_filter"],
+                        components["runs_date_filter"],
+                        components["runs_type_filter"],
+                        components["runs_search"],
+                        components["runs_limit"],
+                        components.get("runs_rating_filter"),
+                    ],
+                    outputs=[
+                        components["star_1"],
+                        components["star_2"],
+                        components["star_3"],
+                        components["star_4"],
+                        components["star_5"],
+                        components["runs_info_rating"],
+                        components["runs_gallery"],
+                        components["runs_table"],
+                        components["runs_stats"],
+                    ],
+                )
 
         # Active Jobs Tab Events
         # Add stream button handler for manual refresh

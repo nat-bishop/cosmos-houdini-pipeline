@@ -565,4 +565,35 @@ def get_custom_css():
         transform: scale(1.02);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25) !important;
     }
+
+    /* Star Rating System */
+    #star_rating_container {
+        gap: 4px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .star-btn {
+        background: transparent !important;
+        border: none !important;
+        font-size: 1.5rem !important;
+        padding: 0 4px !important;
+        min-width: 32px !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        color: #666 !important;
+    }
+
+    .star-btn:hover {
+        transform: scale(1.2) !important;
+        color: #ffd700 !important;
+    }
+
+    .star-btn.filled {
+        color: #ffd700 !important;
+    }
+
+    .star-btn.filled:hover {
+        color: #ffed4e !important;
+    }
     """

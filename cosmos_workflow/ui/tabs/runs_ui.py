@@ -84,6 +84,22 @@ def create_runs_tab_ui():
                         interactive=True,
                     )
 
+                    components["runs_rating_filter"] = gr.Dropdown(
+                        choices=[
+                            ("All", "all"),
+                            ("5 stars", 5),
+                            ("4+ stars", "4+"),
+                            ("3+ stars", "3+"),
+                            ("2+ stars", "2+"),
+                            ("1+ stars", "1+"),
+                            ("Unrated", "unrated"),
+                        ],
+                        value="all",
+                        label="Rating Filter",
+                        info="Filter by star rating",
+                        interactive=True,
+                    )
+
                     components["runs_search"] = gr.Textbox(
                         label="Search",
                         placeholder="Search by prompt text or ID...",
@@ -182,8 +198,30 @@ def create_runs_tab_ui():
                 ]:
                     # Header with navigation buttons
                     with gr.Row():
-                        with gr.Column(scale=4):
+                        with gr.Column(scale=2):
                             gr.Markdown("### 📋 Run Details")
+                        with gr.Column(scale=2):
+                            # Star rating buttons (moved here from Info tab)
+                            with gr.Row(elem_id="star_rating_container"):
+                                components["star_1"] = gr.Button(
+                                    "☆", size="sm", elem_id="star_1", elem_classes=["star-btn"]
+                                )
+                                components["star_2"] = gr.Button(
+                                    "☆", size="sm", elem_id="star_2", elem_classes=["star-btn"]
+                                )
+                                components["star_3"] = gr.Button(
+                                    "☆", size="sm", elem_id="star_3", elem_classes=["star-btn"]
+                                )
+                                components["star_4"] = gr.Button(
+                                    "☆", size="sm", elem_id="star_4", elem_classes=["star-btn"]
+                                )
+                                components["star_5"] = gr.Button(
+                                    "☆", size="sm", elem_id="star_5", elem_classes=["star-btn"]
+                                )
+                                # Hidden component to store actual rating value
+                                components["runs_info_rating"] = gr.Number(
+                                    visible=False, value=0, precision=0
+                                )
                         with gr.Column(scale=1):
                             with gr.Row():
                                 components["runs_prev_btn"] = gr.Button(
@@ -380,20 +418,6 @@ def create_runs_tab_ui():
                             components["runs_info_prompt_name"] = gr.Textbox(
                                 label="Prompt Name",
                                 interactive=False,
-                            )
-
-                            # Star Rating
-                            components["runs_info_rating"] = gr.Radio(
-                                choices=[
-                                    ("⭐", 1),
-                                    ("⭐⭐", 2),
-                                    ("⭐⭐⭐", 3),
-                                    ("⭐⭐⭐⭐", 4),
-                                    ("⭐⭐⭐⭐⭐", 5),
-                                ],
-                                label="Rating",
-                                value=None,
-                                interactive=True,
                             )
 
                             with gr.Row():

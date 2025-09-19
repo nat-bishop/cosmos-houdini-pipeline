@@ -513,8 +513,8 @@ class GPUExecutor:
         # These are created by the NVIDIA model when not provided in the spec
         control_types = ["edge", "depth", "seg", "vis"]
         for control_type in control_types:
-            # The NVIDIA model generates files as {control_type}_input_control.mp4
-            remote_control_file = f"{remote_output_dir}/{control_type}_input_control.mp4"
+            # The NVIDIA model generates files as {control_type}_input_control_0.mp4
+            remote_control_file = f"{remote_output_dir}/{control_type}_input_control_0.mp4"
             local_control_file = outputs_dir / f"{control_type}_input_control.mp4"
 
             try:
@@ -690,7 +690,7 @@ class GPUExecutor:
                 outputs_dir.mkdir(exist_ok=True)
                 logger.debug("Created batch output directory: {}", outputs_dir)
 
-                # Download all output files to batch directory
+                # Download all output files to batch directory preserving subdirectory structure
                 remote_output_dir = batch_result.get(
                     "output_dir", f"{remote_config.remote_dir}/outputs/{batch_name}"
                 )
@@ -699,31 +699,62 @@ class GPUExecutor:
                     "Downloading {} output files from {}", len(output_files), remote_output_dir
                 )
                 logger.info(
-                    "Batch {} output structure: {} videos in {}",
+                    "Batch {} output structure: {} files in {}",
                     batch_name,
                     len(output_files),
                     batch_dir,
                 )
 
-                for remote_file in output_files:
-                    # Extract just the filename
-                    filename = Path(remote_file).name
-                    local_file = outputs_dir / filename
+                # Group files by video_X directory
+                from collections import defaultdict
 
-                    try:
-                        self.file_transfer.download_file(remote_file, str(local_file))
-                        if local_file.exists():
-                            file_size = local_file.stat().st_size
-                            logger.info(
-                                "Downloaded {} to {} (size: {} bytes)",
-                                filename,
-                                local_file,
-                                file_size,
-                            )
-                        else:
-                            logger.warning("Download completed but file not found: {}", local_file)
-                    except Exception as e:
-                        logger.error("Failed to download {}: {}", filename, e)
+                video_files = defaultdict(list)
+
+                for remote_file in output_files:
+                    # Extract video_X directory from path like /workspace/outputs/batch_xxx/video_0/output.mp4
+                    path_parts = Path(remote_file).parts
+                    # Find the video_X directory
+                    video_dir = None
+                    for part in path_parts:
+                        if part.startswith("video_"):
+                            video_dir = part
+                            break
+
+                    if video_dir:
+                        video_files[video_dir].append(remote_file)
+                    else:
+                        # Fallback for files directly in batch directory
+                        video_files[""].append(remote_file)
+
+                # Download files preserving video_X structure
+                for video_dir, files in sorted(video_files.items()):
+                    if video_dir:
+                        # Create video_X subdirectory
+                        video_output_dir = outputs_dir / video_dir
+                        video_output_dir.mkdir(exist_ok=True)
+                    else:
+                        video_output_dir = outputs_dir
+
+                    for remote_file in files:
+                        filename = Path(remote_file).name
+                        local_file = video_output_dir / filename
+
+                        try:
+                            self.file_transfer.download_file(remote_file, str(local_file))
+                            if local_file.exists():
+                                file_size = local_file.stat().st_size
+                                logger.info(
+                                    "Downloaded {} to {} (size: {} bytes)",
+                                    filename,
+                                    local_file,
+                                    file_size,
+                                )
+                            else:
+                                logger.warning(
+                                    "Download completed but file not found: {}", local_file
+                                )
+                        except Exception as e:
+                            logger.error("Failed to download {}: {}", filename, e)
 
                 # Download the batch log file
                 remote_log = f"{remote_output_dir}/batch_run.log"
@@ -741,23 +772,36 @@ class GPUExecutor:
                 for i, (run_dict, _) in enumerate(runs_and_prompts):
                     run_id = run_dict["id"]
 
-                    # Build outputs dictionary with paths in batch directory
+                    # Files are in video_X subdirectories
+                    video_subdir = outputs_dir / f"video_{i}"
+
+                    # Build outputs dictionary with paths in video_X subdirectory
+                    output_video_path = video_subdir / "output.mp4"
+
                     outputs = {
-                        "output_path": str(outputs_dir / f"video_{i:03d}.mp4"),
+                        "output_path": str(output_video_path),
                         "log_path": str(local_log),
                         "batch_id": batch_name,
                         "batch_index": i,
                         "completed_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    logger.debug(
-                        "Storing batch output for run {}: {}", run_id, outputs["output_path"]
-                    )
 
-                    # Check if control files exist and add them
+                    # Check if the output video exists
+                    if not output_video_path.exists():
+                        logger.warning(
+                            "Output video not found for run {}: {}", run_id, output_video_path
+                        )
+                    else:
+                        logger.debug(
+                            "Storing batch output for run {}: {}", run_id, outputs["output_path"]
+                        )
+
+                    # Check if control files exist with _0 suffix and add them
                     control_types = ["edge", "depth", "seg", "vis"]
                     found_controls = []
                     for control_type in control_types:
-                        control_file = outputs_dir / f"{control_type}_input_control_{i:03d}.mp4"
+                        # Control files have _0 suffix in batch outputs
+                        control_file = video_subdir / f"{control_type}_input_control_0.mp4"
                         if control_file.exists():
                             outputs[f"{control_type}_control"] = str(control_file)
                             found_controls.append(control_type)

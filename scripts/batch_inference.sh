@@ -20,7 +20,7 @@ cat > "outputs/${BATCH_NAME}/batch_spec.json" <<JSON
   "batch_input": "inputs/batches/${BATCH_JSONL}",
   "base_controlnet_spec": "inputs/batches/${BASE_CONTROLNET_SPEC}",
   "batch_size": $(wc -l < "inputs/batches/${BATCH_JSONL}"),
-  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder outputs/${BATCH_NAME} --controlnet_specs inputs/batches/${BASE_CONTROLNET_SPEC} --batch_input_path inputs/batches/${BATCH_JSONL} --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
+  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder outputs/${BATCH_NAME} --controlnet_specs inputs/batches/${BASE_CONTROLNET_SPEC} --batch_input_path inputs/batches/${BATCH_JSONL} --offload_text_encoder_model --num_gpus \$NUM_GPU",
   "environment": {
     "CUDA_VISIBLE_DEVICES": "\$CUDA_VISIBLE_DEVICES",
     "CHECKPOINT_DIR": "\$CHECKPOINT_DIR",
@@ -37,7 +37,6 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   --controlnet_specs "inputs/batches/${BASE_CONTROLNET_SPEC}" \
   --batch_input_path "inputs/batches/${BATCH_JSONL}" \
   --offload_text_encoder_model \
-  --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \
   2>&1 | tee "outputs/${BATCH_NAME}/batch_run.log"
 

@@ -943,15 +943,24 @@ class DockerExecutor:
         return exit_code
 
     def _get_batch_output_files(self, batch_name: str) -> list[str]:
-        """Get list of output files from batch inference."""
+        """Get list of output files from batch inference.
+
+        Batch outputs are structured as:
+        - outputs/{batch_name}/video_0/output.mp4
+        - outputs/{batch_name}/video_0/edge_input_control_0.mp4
+        - outputs/{batch_name}/video_1/output.mp4
+        - etc.
+        """
         output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         try:
-            # List all mp4 files in the output directory
+            # List all mp4 files recursively in video_X subdirectories
+            # Find all .mp4 files in any subdirectory
             result = self.ssh_manager.execute_command_success(
-                f"ls -1 {output_dir}/*.mp4 2>/dev/null || true", stream_output=False
+                f"find {output_dir} -type f -name '*.mp4' 2>/dev/null || true", stream_output=False
             )
             if result:
                 files = result.strip().split("\n")
+                # Filter out empty strings and return full paths
                 return [f for f in files if f]
             return []
         except Exception as e:

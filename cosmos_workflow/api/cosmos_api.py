@@ -18,7 +18,6 @@ Example:
 """
 
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -238,9 +237,11 @@ class CosmosAPI:
             # Execute enhancement on GPU using new method
             result = self.orchestrator.execute_enhancement_run(run, original)
 
-            # Check if operation started in background
-            if result.get("status") == "started":
-                # Don't update prompt yet - monitor will handle it
+            # Check result status from execute_enhancement_run
+            status = result.get("status")
+
+            if status == "started":
+                # Operation started in background - don't update prompt yet
                 logger.info("Enhancement run {} started in background", run["id"])
                 return {
                     "run_id": run["id"],
@@ -251,59 +252,39 @@ class CosmosAPI:
                     "original_prompt_id": prompt_id,
                 }
 
-            # Legacy synchronous completion (shouldn't happen with new implementation)
-            enhanced_text = result["enhanced_text"]
+            elif status == "completed":
+                # Enhancement completed and prompt already created by execute_enhancement_run
+                enhanced_prompt_id = result.get("enhanced_prompt_id")
+                enhanced_text = result.get("enhanced_text")
 
-            # Handle prompt creation/update based on create_new flag
-            if create_new:
-                # Create new enhanced prompt
-                name = original["parameters"].get("name", "unnamed")
-                enhanced = self.service.create_prompt(
-                    prompt_text=enhanced_text,
-                    inputs=original["inputs"],
-                    parameters={
-                        **original["parameters"],
-                        "name": f"{name}_enhanced",
-                        "enhanced": True,
-                    },
-                )
-                logger.info("Created enhanced prompt: {}", enhanced["id"])
-                enhanced_prompt_id = enhanced["id"]
+                if not enhanced_prompt_id:
+                    raise RuntimeError(
+                        f"Enhancement completed but no enhanced_prompt_id returned for run {run['id']}"
+                    )
+
+                # Prompt was already created by execute_enhancement_run
+                logger.info("Enhancement completed with prompt: {}", enhanced_prompt_id)
+
+                # The run was already updated by execute_enhancement_run,
+                # but we update status again to ensure consistency
+                self.service.update_run_status(run["id"], "completed")
+                logger.info("Enhancement run {} completed successfully", run["id"])
+
+                # Return in expected format
+                return {
+                    "run_id": run["id"],
+                    "enhanced_prompt_id": enhanced_prompt_id,
+                    "enhanced_text": enhanced_text,
+                    "original_prompt_id": prompt_id,
+                    "status": "success",
+                }
+
             else:
-                # Update existing prompt
-                self.service.update_prompt(
-                    prompt_id,
-                    prompt_text=enhanced_text,
-                    parameters={
-                        **original["parameters"],
-                        "enhanced": True,
-                    },
+                # Unexpected status - fail fast with clear error
+                raise RuntimeError(
+                    f"Unexpected enhancement status '{status}' for run {run['id']}. "
+                    f"Expected 'started' or 'completed'. Full result: {result}"
                 )
-                logger.info("Updated prompt {} with enhanced text", prompt_id)
-                enhanced_prompt_id = prompt_id
-
-            # Update run with outputs (including enhancement metadata)
-            outputs = {
-                "enhanced_text": enhanced_text,
-                "original_prompt_id": prompt_id,
-                "enhanced_prompt_id": enhanced_prompt_id,
-                "enhancement_model": enhancement_model,
-                "enhanced_at": datetime.now(timezone.utc).isoformat(),
-                "duration_seconds": result.get("duration_seconds", 0),
-                "timestamp": result.get("timestamp"),
-            }
-            self.service.update_run(run["id"], outputs=outputs)
-            self.service.update_run_status(run["id"], "completed")
-            logger.info("Enhancement run {} completed successfully", run["id"])
-
-            # Return in format expected by tests and CLI
-            return {
-                "run_id": run["id"],
-                "enhanced_prompt_id": enhanced_prompt_id,
-                "enhanced_text": enhanced_text,
-                "original_prompt_id": prompt_id,
-                "status": "success",
-            }
 
         except Exception as e:
             logger.exception("Enhancement run {} failed", run["id"])
@@ -733,11 +714,11 @@ class CosmosAPI:
         # Execute as batch with the batch_id we generated
         batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts, batch_name=batch_id)
 
-        # Update run statuses
-        for run, _ in runs_and_prompts:
-            if run["id"] in batch_result.get("output_mapping", {}):
-                self.service.update_run_status(run["id"], "completed")
-            else:
+        # Don't update run statuses here - they're already updated in GPUExecutor.execute_batch_runs
+        # The GPUExecutor marks each run as completed after downloading outputs
+        # Only mark as failed if the entire batch execution failed
+        if batch_result.get("status") == "failed":
+            for run, _ in runs_and_prompts:
                 self.service.update_run_status(run["id"], "failed")
 
         return batch_result

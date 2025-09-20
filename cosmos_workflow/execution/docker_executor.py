@@ -942,7 +942,7 @@ class DockerExecutor:
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
-        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size}"
+        cmd = f"bash /workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking

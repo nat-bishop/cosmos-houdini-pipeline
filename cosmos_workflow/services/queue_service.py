@@ -255,7 +255,7 @@ class QueueService:
                     return None
                 logger.debug("No active containers, GPU is available")
             except Exception as e:
-                logger.warning("Could not check active containers: %s", e)
+                logger.warning("Could not check active containers: {}", e)
                 # Continue anyway - let it fail downstream if there's an issue
 
             session = self._get_session()
@@ -266,7 +266,7 @@ class QueueService:
                 # Check if there's already a running job (only one at a time)
                 running_job = session.query(JobQueue).filter_by(status="running").first()
                 if running_job:
-                    logger.debug("Skipping processing - job %s is already running", running_job.id)
+                    logger.debug("Skipping processing - job {} is already running", running_job.id)
                     return None
 
                 # Get next queued job (FIFO)
@@ -486,7 +486,7 @@ class QueueService:
         Returns:
             True if cancelled, False if not cancellable
         """
-        logger.debug("Attempting to cancel job %s", job_id)
+        logger.debug("Attempting to cancel job {}", job_id)
         session = self._get_session()
         try:
             job = session.query(JobQueue).filter_by(id=job_id).first()
@@ -553,7 +553,7 @@ class QueueService:
 
             return deleted_count
         except Exception as e:
-            logger.error("Error trimming failed jobs: %s", e)
+            logger.error("Error trimming failed jobs: {}", e)
             return 0
 
     def get_estimated_wait_time(self, job_id: str) -> int | None:

@@ -631,6 +631,16 @@ class GPUExecutor:
                 if batch_script.exists():
                     logger.info("Uploading batch_inference.sh script to remote bashscripts")
                     self.file_transfer.upload_file(batch_script, remote_scripts_dir)
+                    # Set execute permissions on the script after upload
+                    remote_script_path = f"{remote_scripts_dir}/batch_inference.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on batch_inference.sh: {}", stderr
+                        )
+                    else:
+                        logger.debug("Set execute permissions on batch_inference.sh")
                 else:
                     logger.warning("batch_inference.sh script not found at {}", batch_script)
 

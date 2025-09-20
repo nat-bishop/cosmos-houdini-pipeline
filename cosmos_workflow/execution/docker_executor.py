@@ -85,9 +85,23 @@ class DockerExecutor:
             if stderr:
                 error_log += f"\n=== Docker stderr ===\n{stderr}\n"
 
-            # Write the error log to remote
-            self.remote_executor.write_file(remote_log_path, error_log)
-            logger.info("Created fallback log at: {}", remote_log_path)
+            # Write the error log to remote using echo with sudo tee to handle permissions
+            # This approach creates the file with proper permissions even if the directory has restrictions
+            escaped_log = error_log.replace("'", "'\\''")  # Escape single quotes
+            write_cmd = f"echo '{escaped_log}' | tee '{remote_log_path}' > /dev/null"
+            exit_code, _, write_stderr = self.ssh_manager.execute_command(write_cmd, timeout=10)
+
+            if exit_code == 0:
+                logger.info("Created fallback log at: {}", remote_log_path)
+            else:
+                # If tee fails, try creating file with touch first then writing
+                logger.warning("Failed to write log with tee, trying touch and write method")
+                # First create the file with touch, then write to it
+                touch_cmd = (
+                    f"touch '{remote_log_path}' && echo '{escaped_log}' > '{remote_log_path}'"
+                )
+                self.ssh_manager.execute_command(touch_cmd, timeout=10)
+                logger.info("Created fallback log at: {}", remote_log_path)
         except Exception as e:
             logger.error("Failed to create fallback log: {}", e)
 
@@ -684,7 +698,7 @@ class DockerExecutor:
                     f"using most recent: {container['name']}"
                 )
                 logger.warning(
-                    "Multiple cosmos containers found: %d. Using %s",
+                    "Multiple cosmos containers found: {}. Using {}",
                     len(containers),
                     container["name"],
                 )
@@ -942,6 +956,7 @@ class DockerExecutor:
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
+        # Use bash explicitly to avoid shebang line ending issues
         cmd = f"bash /workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size}"
         builder.set_command(f'bash -lc "{cmd}"')
 

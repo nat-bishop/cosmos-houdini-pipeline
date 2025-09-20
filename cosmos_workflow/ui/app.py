@@ -575,7 +575,8 @@ def filter_prompts(
         filtered = [
             p
             for p in filtered
-            if search_lower in p.get("parameters", {}).get("name", "").lower()
+            if search_lower in p.get("id", "").lower()  # Search in prompt ID
+            or search_lower in p.get("parameters", {}).get("name", "").lower()
             or search_lower in p.get("prompt_text", "").lower()
             or search_lower
             in p.get("inputs", {}).get("video", "").lower()  # Search in video directory
@@ -2781,8 +2782,22 @@ def create_ui():
 
         # Batch size control
         if "batch_size" in components:
+
+            def update_batch_size(size):
+                """Safely update batch size with error handling."""
+                if queue_service and size is not None:
+                    try:
+                        batch_size_int = int(float(size))  # Handle both int and float inputs
+                        if 1 <= batch_size_int <= 16:  # Validate range
+                            queue_service.set_batch_size(batch_size_int)
+                        else:
+                            logger.warning("Batch size %s out of range (1-16)", size)
+                    except (ValueError, TypeError) as e:
+                        logger.debug("Invalid batch size value: %s - %s", size, e)
+                return None
+
             components["batch_size"].change(
-                fn=lambda size: queue_service.set_batch_size(int(size)) if queue_service else None,
+                fn=update_batch_size,
                 inputs=components["batch_size"],
             )
 

@@ -330,6 +330,14 @@ class QueueService:
             )
             job = session.query(JobQueue).filter_by(id=job_id).first()
 
+            # Check if job still exists (might have been deleted/cancelled)
+            if not job:
+                logger.warning(
+                    "Job {} disappeared between lock acquisition and processing - possibly cancelled",
+                    job_id,
+                )
+                return None
+
             try:
                 # Execute based on job type
                 logger.debug(

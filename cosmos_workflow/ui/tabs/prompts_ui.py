@@ -30,7 +30,7 @@ def create_prompts_tab_ui():
                     with gr.Row(elem_classes=["batch-operation"]):
                         components["prompts_search"] = gr.Textbox(
                             label="Search",
-                            placeholder="Search by name or prompt text...",
+                            placeholder="Search by ID (ps_xxx), name, or prompt text...",
                             scale=2,
                         )
 

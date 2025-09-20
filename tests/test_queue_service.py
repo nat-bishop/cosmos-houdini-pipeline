@@ -212,6 +212,7 @@ class TestQueueService:
             prompt_ids=["ps_001", "ps_002"],
             shared_weights={"vis": 1.0},
             num_steps=25,
+            batch_size=4,  # Default batch size
         )
 
     def test_process_enhancement_job(self, queue_service, mock_cosmos_api):
@@ -464,8 +465,11 @@ class TestQueueService:
         assert wait_time is not None
         assert wait_time > 0  # Should have some wait time with 5 jobs ahead
 
+    @pytest.mark.skip(
+        reason="Completed jobs are now auto-deleted, clear_completed_jobs method removed"
+    )
     def test_clear_completed_jobs(self, queue_service, mock_cosmos_api):
-        """User can clear completed jobs from history."""
+        """Completed jobs are now automatically deleted."""
         # Arrange
         queue_service.add_job(
             prompt_ids=["ps_001"],
@@ -482,16 +486,12 @@ class TestQueueService:
         queue_service.process_next_job()
         queue_service.process_next_job()
 
-        # Act
-        cleared = queue_service.clear_completed_jobs()
-
-        # Assert
-        assert cleared == 2
+        # Assert - jobs are automatically deleted after completion
         status = queue_service.get_queue_status()
         assert status["total_queued"] == 0
 
     def test_job_result_persistence(self, queue_service, mock_cosmos_api):
-        """Job results are persisted and retrievable."""
+        """Completed jobs are auto-deleted but run records persist."""
         # Arrange
         mock_cosmos_api.quick_inference.return_value = {
             "status": "completed",
@@ -506,13 +506,14 @@ class TestQueueService:
         )
 
         # Act
-        queue_service.process_next_job()
+        result = queue_service.process_next_job()
         job_status = queue_service.get_job_status(job_id)
 
-        # Assert
-        assert job_status["status"] == "completed"
-        assert job_status["result"]["output_path"] == "/outputs/video.mp4"
-        assert job_status["result"]["duration"] == 180
+        # Assert - job is deleted but result is returned
+        assert job_status["status"] == "not_found"  # Job auto-deleted
+        assert result["status"] == "completed"
+        assert result["result"]["output_path"] == "/outputs/video.mp4"
+        assert result["result"]["duration"] == 180
 
     @pytest.mark.skip(reason="SQLite concurrency limitations in test environment")
     def test_concurrent_job_additions(self, mock_cosmos_api, test_db):

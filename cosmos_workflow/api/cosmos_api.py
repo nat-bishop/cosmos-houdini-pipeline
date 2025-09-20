@@ -650,6 +650,7 @@ class CosmosAPI:
         self,
         prompt_ids: list[str],
         shared_weights: dict[str, float] | None = None,
+        batch_size: int = 4,
         **kwargs,
     ) -> dict[str, Any]:
         """Run inference on multiple prompts as a batch, blocking until completion.
@@ -661,6 +662,7 @@ class CosmosAPI:
         Args:
             prompt_ids: List of prompt IDs to run
             shared_weights: Weights to use for all prompts (optional)
+            batch_size: Number of videos to process simultaneously on GPU (default: 4)
             **kwargs: Additional execution parameters (num_steps, guidance, seed, etc.)
 
         Returns:
@@ -712,7 +714,9 @@ class CosmosAPI:
                 continue
 
         # Execute as batch with the batch_id we generated
-        batch_result = self.orchestrator.execute_batch_runs(runs_and_prompts, batch_name=batch_id)
+        batch_result = self.orchestrator.execute_batch_runs(
+            runs_and_prompts, batch_name=batch_id, batch_size=batch_size
+        )
 
         # Don't update run statuses here - they're already updated in GPUExecutor.execute_batch_runs
         # The GPUExecutor marks each run as completed after downloading outputs

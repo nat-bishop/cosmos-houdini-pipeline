@@ -845,6 +845,7 @@ class DockerExecutor:
         batch_name: str,
         batch_jsonl_file: str,
         base_controlnet_spec: str,
+        batch_size: int = 4,
         num_gpu: int = 1,
         cuda_devices: str = "0",
     ) -> dict[str, Any]:
@@ -854,6 +855,7 @@ class DockerExecutor:
             batch_name: Name for the batch output directory
             batch_jsonl_file: Name of JSONL file with batch data (in inputs/batches/)
             base_controlnet_spec: Name of base controlnet spec file (in inputs/batches/)
+            batch_size: Number of videos to process simultaneously on GPU
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
 
@@ -881,7 +883,7 @@ class DockerExecutor:
 
         # Run without the remote_log_path - the script itself handles logging
         exit_code = self._run_batch_inference_script(
-            batch_name, batch_jsonl_file, base_controlnet_spec, num_gpu, cuda_devices
+            batch_name, batch_jsonl_file, base_controlnet_spec, batch_size, num_gpu, cuda_devices
         )
 
         # Handle exit codes like single inference
@@ -923,6 +925,7 @@ class DockerExecutor:
         batch_name: str,
         batch_jsonl_file: str,
         base_controlnet_spec: str,
+        batch_size: int,
         num_gpu: int,
         cuda_devices: str,
     ) -> int:
@@ -939,7 +942,7 @@ class DockerExecutor:
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
-        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices}"
+        cmd = f"/workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking

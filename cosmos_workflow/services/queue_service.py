@@ -57,7 +57,25 @@ class QueueService:
         # Lock for job processing to prevent race conditions
         self._job_processing_lock = threading.Lock()
 
+        # Batch processing settings
+        self.batch_size = 4  # Default batch size for GPU processing
+
         logger.info("QueueService initialized")
+
+    def set_batch_size(self, size: int) -> None:
+        """Update the batch size for GPU processing.
+
+        Args:
+            size: Batch size (number of videos to process simultaneously)
+        """
+        if size < 1:
+            raise ValueError("Batch size must be at least 1")
+        if size > 16:
+            logger.warning("Batch size %d may exceed GPU memory limits", size)
+
+        old_size = self.batch_size
+        self.batch_size = size
+        logger.info("Updated batch size from %d to %d", old_size, size)
 
     def _get_session(self) -> Session:
         """Get database session, using provided session or creating new one."""
@@ -421,6 +439,9 @@ class QueueService:
         for param in optional_params:
             if param in config:
                 kwargs[param] = config[param]
+
+        # Add batch_size from service setting
+        kwargs["batch_size"] = self.batch_size
 
         # Execute batch
         result = self.cosmos_api.batch_inference(**kwargs)

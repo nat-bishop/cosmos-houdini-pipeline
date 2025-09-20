@@ -562,6 +562,7 @@ class GPUExecutor:
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
         batch_name: str | None = None,
+        batch_size: int = 4,
     ) -> dict[str, Any]:
         """Execute multiple runs as a batch on the GPU.
 
@@ -570,6 +571,8 @@ class GPUExecutor:
 
         Args:
             runs_and_prompts: List of (run_dict, prompt_dict) tuples
+            batch_name: Optional custom batch name (auto-generated if not provided)
+            batch_size: Number of videos to process simultaneously on GPU (default: 4)
 
         Returns:
             Dictionary containing batch results with status and output_mapping
@@ -661,6 +664,7 @@ class GPUExecutor:
                     batch_name=batch_name,
                     batch_jsonl_file=batch_file.name,
                     base_controlnet_spec=base_spec_file.name,
+                    batch_size=batch_size,
                 )
 
                 if batch_result["status"] == "failed":

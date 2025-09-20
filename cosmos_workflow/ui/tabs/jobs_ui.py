@@ -82,6 +82,17 @@ Currently idle - no jobs running
                 # Job Control Section
                 gr.Markdown("#### ⚙️ Job Controls")
                 with gr.Group():
+                    # Batch size control
+                    with gr.Row():
+                        components["batch_size"] = gr.Number(
+                            label="Batch Size (GPU Processing)",
+                            value=4,
+                            minimum=1,
+                            maximum=16,
+                            step=1,
+                            info="Number of videos to process simultaneously on GPU",
+                        )
+
                     components["kill_job_btn"] = gr.Button(
                         "🛑 Kill Active Job",
                         variant="stop",

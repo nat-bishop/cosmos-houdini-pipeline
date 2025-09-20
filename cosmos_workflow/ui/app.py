@@ -2779,6 +2779,13 @@ def create_ui():
                 ],
             )
 
+        # Batch size control
+        if "batch_size" in components:
+            components["batch_size"].change(
+                fn=lambda size: queue_service.set_batch_size(int(size)) if queue_service else None,
+                inputs=components["batch_size"],
+            )
+
         # Queue Display Events
         if "refresh_queue_btn" in components and queue_handlers:
             # Refresh queue display

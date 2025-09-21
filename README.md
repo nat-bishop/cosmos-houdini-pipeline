@@ -258,14 +258,16 @@ Local Machine                                    Remote GPU Server (H100)
 - **Prompt Management**: "Run Status" filter to identify unused prompts vs prompts with existing runs for better workflow organization
 - **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
 - **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
-- **Production Job Queue System**:
+- **Simplified Production Job Queue System**:
   - **UI-Only Architecture**: Queue system exclusively for Gradio UI while CLI uses direct execution
+  - **Database-First Design**: Uses database transactions for atomic job claiming without application locks
   - **FIFO Processing**: First-in, first-out job processing with position tracking and estimated wait times
-  - **Thread-Safe Design**: Prevents GPU conflicts through container checks and atomic job claiming
+  - **Single Container Strategy**: Maintains one warm container preventing resource accumulation
+  - **Timer-Based Processing**: Gradio Timer component processes queue every 2 seconds without background threads
   - **Persistent State**: SQLite-backed queue survives UI restarts and maintains job history
   - **Live Monitoring**: Real-time queue status with job position, type, and elapsed time display
   - **Complete Job Lifecycle**: Support for inference, batch inference, enhancement, and upscale operations
-  - **Background Processing**: Automatic job execution without blocking UI interaction
+  - **Atomic Operations**: Database-level locking ensures only one process can claim jobs
   - **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed jobs (keeps last 50)
   - **Graceful Shutdown**: Properly marks running jobs as cancelled when app closes
   - **Enhanced Job Management**: Cancel selected jobs, kill active jobs with database updates

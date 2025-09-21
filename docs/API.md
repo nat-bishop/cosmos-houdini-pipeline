@@ -32,9 +32,9 @@ outputs/batch_xxx/
 The prompt enhancement system has been stabilized with these critical fixes:
 
 #### Threading and Connection Issues
-- **Removed Thread-Local Storage**: Eliminated incorrect thread-local implementation in QueueService that caused SSH connection failures
+- **Removed Thread-Local Storage**: Eliminated incorrect thread-local implementation in legacy QueueService that caused SSH connection failures
 - **Connection Stability**: Enhanced SSH connection management for long-running enhancement operations
-- **Message Filtering**: Fixed queue service spamming "GPU busy" messages during operations
+- **Message Filtering**: Fixed legacy queue service spamming "GPU busy" messages during operations
 
 #### Duplicate Creation Prevention
 ```python
@@ -900,11 +900,19 @@ cosmos show run rs_upscale_xyz789
 - GPU cluster must have sufficient memory for 4K upscaling operations
 - Separate Docker container execution independent of inference processes
 
-### QueueService - Production Job Queue System
+### SimplifiedQueueService - Streamlined Job Queue System
 
-The QueueService provides comprehensive job queue management for the Gradio UI, implementing a production-ready queuing system that wraps CosmosAPI while maintaining thread safety and GPU conflict prevention.
+The SimplifiedQueueService provides comprehensive job queue management for the Gradio UI, implementing a simplified, reliable queuing system that wraps CosmosAPI using database-level concurrency control instead of application locks.
 
 **Architecture:** The queue system is EXCLUSIVELY for the Gradio UI. The CLI continues to use direct CosmosAPI calls without queuing, maintaining separate execution paths for different interfaces.
+
+**Key Improvements Over Legacy QueueService:**
+- **No Threading Complexity**: Eliminates background threads and application-level locks
+- **Database-First Concurrency**: Uses `SELECT ... FOR UPDATE SKIP LOCKED` for atomic job claiming
+- **Single Warm Container**: Maintains one container preventing accumulation issues
+- **Timer-Based Processing**: Uses Gradio Timer component for 2-second intervals
+- **Linear Execution**: Simple, predictable execution flow
+- **Fresh Database Sessions**: Prevents stale data through session management
 
 **Key Features:**
 - **Thread-Safe Design**: Uses `_job_processing_lock` to prevent race conditions when claiming jobs
@@ -921,19 +929,21 @@ The QueueService provides comprehensive job queue management for the Gradio UI, 
 #### Core Features
 
 ```python
-from cosmos_workflow.services import QueueService
+from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
 from cosmos_workflow.api import CosmosAPI
+from cosmos_workflow.database import DatabaseConnection
 
-# Initialize queue service
+# Initialize simplified queue service
 cosmos_api = CosmosAPI()
-queue_service = QueueService(cosmos_api=cosmos_api)
+db_connection = DatabaseConnection()
+queue_service = SimplifiedQueueService(cosmos_api=cosmos_api, db_connection=db_connection)
 
 # Add job to queue
 job_id = queue_service.add_job(
     prompt_ids=["ps_abc123"],
     job_type="inference",
     config={
-        "weights": [0.3, 0.4, 0.2, 0.1],
+        "weights": {"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
         "num_steps": 25,
         "guidance_scale": 4.0
     },
@@ -948,9 +958,15 @@ print(f"Total queued: {status['total_queued']}")
 position = queue_service.get_position(job_id)
 print(f"Position in queue: {position}")
 
-# Process next job (background processor handles this automatically)
+# Process next job (timer-based processing handles this automatically)
 result = queue_service.process_next_job()
 ```
+
+### Legacy QueueService (Deprecated)
+
+**DEPRECATED**: The original QueueService has been replaced by SimplifiedQueueService. The legacy service is still available at `cosmos_workflow.services.queue_service.QueueService` but should not be used in new code.
+
+**Deprecation Notice**: Legacy QueueService will be removed in a future version. All new implementations should use SimplifiedQueueService for better reliability and simpler architecture.
 
 #### Supported Job Types
 
@@ -977,28 +993,28 @@ result = queue_service.process_next_job()
 #### Queue Management
 
 ```python
-# Start background processor for automatic job execution
-queue_service.start_background_processor()
-
-# Check if processor is running
-is_running = queue_service.is_processor_running()
+# Processing is handled automatically by Gradio Timer component
+# No need to start/stop background processors
 
 # Cancel a queued job (only works for "queued" status)
 cancelled = queue_service.cancel_job(job_id)
 
-# Clear completed/failed jobs
-cleared_count = queue_service.clear_completed_jobs()
+# Completed jobs are automatically cleaned up
+# No manual cleanup needed
 
 # Get estimated wait time
 wait_time = queue_service.get_estimated_wait_time(job_id)
 
-# Stop background processor
-queue_service.stop_background_processor()
+# Set batch size for GPU processing
+queue_service.set_batch_size(4)
+
+# Ensure container is ready for processing
+container_id = queue_service.ensure_container()
 ```
 
 #### Database Integration
 
-The QueueService uses the JobQueue model for persistence:
+The SimplifiedQueueService uses the JobQueue model for persistence with enhanced concurrency control:
 
 ```python
 # JobQueue model fields:

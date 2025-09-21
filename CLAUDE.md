@@ -34,9 +34,10 @@ Infrastructure details (location, provider, models) are configuration, not code.
   Always use for prompts, runs, inference, queries. This is the main facade.
   Never bypass this to use DataRepository or GPUExecutor directly.
 
-* **QueueService** — **UI-ONLY job queue management (wraps CosmosAPI)**
-  Provides queuing capabilities for Gradio UI while CLI uses direct CosmosAPI calls.
-  Thread-safe, persistent queue using SQLite. Prevents GPU conflicts through container checks.
+* **SimplifiedQueueService** — **UI-ONLY job queue management (wraps CosmosAPI)**
+  Provides simplified, reliable queuing capabilities for Gradio UI while CLI uses direct CosmosAPI calls.
+  Database-first design using SQLite with atomic job claiming. Prevents GPU conflicts through container checks.
+  Replaces legacy QueueService with simpler, more reliable architecture.
 
 * **SSHManager** — create/manage SSH sessions (infrastructure only).
   Use only for low-level SSH tasks. Never call `paramiko.SSHClient()` directly.

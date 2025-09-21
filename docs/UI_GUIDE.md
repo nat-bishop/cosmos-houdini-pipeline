@@ -243,14 +243,15 @@ This filter works in combination with other filters (search, enhanced status, da
 
 #### Production Job Queue System
 
-The Active Jobs tab features a comprehensive job queue system designed exclusively for the Gradio UI, providing organized job management while the CLI continues to use direct execution.
+The Active Jobs tab features a simplified, reliable job queue system designed exclusively for the Gradio UI, providing organized job management while the CLI continues to use direct execution. The system has been completely rebuilt to eliminate threading complexity and use database-level concurrency control.
 
 **Key Features**:
 - **UI-Only Architecture**: Queue system is exclusively for the Gradio UI interface
+- **Database-First Design**: Uses database transactions for atomic job claiming without application locks
 - **FIFO Processing**: First-in, first-out job processing with position tracking
 - **SQLite Persistence**: Queue state survives UI restarts and maintains complete job history
-- **Thread-Safe Design**: Prevents GPU conflicts through container checks and atomic job claiming
-- **Background Processing**: Automatic job execution without blocking UI interaction
+- **Single Container Strategy**: Maintains one warm container preventing resource accumulation
+- **Timer-Based Processing**: Uses Gradio Timer component for automatic processing every 2 seconds
 
 **Job Queue Display**:
 - **Queue Status**: Real-time display showing total queued jobs and current queue state
@@ -265,11 +266,12 @@ The Active Jobs tab features a comprehensive job queue system designed exclusive
 - **Upscale**: Video upscaling operations with optional prompt guidance
 
 **Queue Management**:
-- **Automatic Processing**: Background processor continuously processes queued jobs
+- **Timer-Based Processing**: Gradio Timer component automatically processes queued jobs every 2 seconds
+- **Atomic Job Claiming**: Database-level locking ensures only one process can claim jobs at a time
 - **Job Cancellation**: Cancel queued jobs (before they start running) and selected jobs from queue table
 - **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed/cancelled jobs (keeps last 50)
 - **Enhanced Job Control**: Kill active jobs with proper database status updates to prevent zombie runs
-- **Live Status Updates**: Real-time queue status with 5-second auto-refresh timer
+- **Live Status Updates**: Real-time queue status with timer-based refresh
 - **Position Monitoring**: Track your job's position and estimated wait time
 - **Graceful Shutdown**: Marks running jobs as cancelled when app closes to maintain state consistency
 

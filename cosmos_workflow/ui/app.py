@@ -35,7 +35,7 @@ import gradio as gr
 from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.config import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
-from cosmos_workflow.services.queue_service import QueueService
+from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
 
 # Import modular UI components
 from cosmos_workflow.ui.components.header import create_header_ui
@@ -107,10 +107,12 @@ def cleanup_on_shutdown(signum=None, frame=None):
             from cosmos_workflow.database.models import JobQueue
 
             # Get a database session
-            if queue_service.db_session:
-                session = queue_service.db_session
-            else:
+            # SimplifiedQueueService doesn't have db_session attribute
+            if hasattr(queue_service, "db_connection") and queue_service.db_connection:
                 session = queue_service.db_connection.SessionLocal()
+            else:
+                # Skip cleanup if no db connection
+                return
 
             try:
                 # Find and cancel all running jobs
@@ -128,8 +130,7 @@ def cleanup_on_shutdown(signum=None, frame=None):
                     db_cleaned = True
 
             finally:
-                if not queue_service.db_session:
-                    session.close()
+                session.close()
 
         except Exception as e:
             logger.error("Error cancelling running jobs via queue_service: {}", e)
@@ -174,13 +175,8 @@ def cleanup_on_shutdown(signum=None, frame=None):
         except Exception as e:
             logger.error("Error in fallback job cancellation: {}", e)
 
-    # Stop queue processor if running
-    if queue_service:
-        try:
-            queue_service.stop_background_processor()
-            logger.info("Stopped queue processor")
-        except Exception as e:
-            logger.error("Error stopping queue processor: {}", e)
+    # No background processor to stop in simplified version
+    # Queue processing is handled by Gradio timer
 
     # Check config to see if we should cleanup containers
     ui_config = config.get_ui_config()
@@ -1298,11 +1294,8 @@ def create_ui():
     # Initialize Queue Service with database
     database_path = "outputs/cosmos.db"
     db_connection = DatabaseConnection(database_path)
-    queue_service = QueueService(db_connection=db_connection)
+    queue_service = SimplifiedQueueService(db_connection=db_connection)
     queue_handlers = QueueHandlers(queue_service)
-
-    # Start the background processor
-    queue_service.start_background_processor()
 
     # Get custom CSS from styles module
     custom_css = get_custom_css()
@@ -2973,6 +2966,21 @@ def create_ui():
             )
         else:
             logger.warning("Could not set up initial data load - missing components")
+
+        # Set up automatic queue processing using a timer component
+        # This replaces the background thread from the old QueueService
+        def auto_process_queue():
+            """Process next job in queue automatically."""
+            global queue_service
+            if queue_service:
+                result = queue_service.process_next_job()
+                if result:
+                    logger.debug("Auto-processed job: {}", result.get("job_id"))
+            return None
+
+        # Create timer for automatic queue processing (inside gr.Blocks context)
+        timer = gr.Timer(2)  # Trigger every 2 seconds
+        timer.tick(fn=auto_process_queue, outputs=[])
 
     # Enable queue for long-running operations (prevents timeout)
     app.queue(

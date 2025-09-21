@@ -1,5 +1,12 @@
 """Queue Service for managing job queues in the Gradio UI.
 
+DEPRECATED: This QueueService has been replaced by SimplifiedQueueService.
+Use cosmos_workflow.services.simple_queue_service.SimplifiedQueueService instead.
+
+This legacy service is kept for compatibility but will be removed in a future version.
+The new SimplifiedQueueService provides better reliability through database-level
+concurrency control instead of application-level locks.
+
 THIS IS ONLY FOR THE GRADIO UI - The CLI continues to use direct CosmosAPI calls.
 This service wraps CosmosAPI to add queuing capabilities for better UI experience.
 """

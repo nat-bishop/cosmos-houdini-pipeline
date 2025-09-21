@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - Queue System Simplification (2025-01-20)
+- **Complete Migration to SimplifiedQueueService**
+  - Replaced complex QueueService (~680 lines) with SimplifiedQueueService (~400 lines)
+  - Eliminated threading complexity and application-level locks
+  - Uses database transactions with `SELECT ... FOR UPDATE SKIP LOCKED` for atomic job claiming
+  - Implements single warm container strategy preventing container accumulation
+  - Uses Gradio Timer component for automatic processing every 2 seconds instead of background threads
+  - Maintains backward compatibility with same public API methods
+  - Improved reliability through database-level concurrency control
+  - Reduced complexity while maintaining full functionality
+
+- **Architecture Simplification Benefits**
+  - No background threads or complex lock management
+  - Database handles all atomicity through transactions
+  - Fresh database sessions prevent stale data issues
+  - Linear execution flow easier to debug and maintain
+  - Single warm container prevents resource accumulation
+  - Timer-based processing integrates cleanly with Gradio lifecycle
+
 ### Fixed - Critical Bug Fixes (2025-01-19)
 - **Batch Inference Infrastructure Fixes**
   - Fixed batch inference execution failing with "No such file or directory" errors

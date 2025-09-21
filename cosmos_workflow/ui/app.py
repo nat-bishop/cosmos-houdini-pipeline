@@ -1364,6 +1364,76 @@ def create_ui():
         # Event Handlers
         # ============================================
 
+        # Unified filter handler that respects navigation state for persistent prompt filtering
+        def load_runs_with_filters(
+            status_filter, date_filter, type_filter, search_text, limit, rating_filter, nav_state
+        ):
+            """Load runs data with all filters, including persistent prompt filter from navigation state.
+
+            This function checks if there's an active prompt filter in navigation_state and uses
+            the appropriate loading function accordingly.
+            """
+            from cosmos_workflow.ui.tabs.runs_handlers import (
+                load_runs_data,
+                load_runs_for_multiple_prompts,
+            )
+
+            # Check if we have active prompt filtering
+            if (
+                nav_state
+                and nav_state.get("filter_type") == "prompt_ids"
+                and nav_state.get("filter_values")
+            ):
+                prompt_ids = nav_state.get("filter_values", [])
+                logger.info(f"Loading runs with prompt filter for {len(prompt_ids)} prompts")
+
+                # Use the multi-prompt loader with all filters
+                gallery, table, stats, prompt_names = load_runs_for_multiple_prompts(
+                    prompt_ids,
+                    status_filter,
+                    date_filter,
+                    type_filter,
+                    search_text,
+                    limit,
+                    rating_filter,
+                )
+
+                # Format prompt names for display
+                if prompt_names:
+                    filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+                    display_names = []
+                    for name in prompt_names[:3]:
+                        display_names.append(f"• {name}")
+                    filter_display += "\n".join(display_names)
+                    if len(prompt_names) > 3:
+                        filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+                else:
+                    filter_display = ""
+
+                return (
+                    gallery,
+                    table,
+                    stats,
+                    nav_state,  # Keep navigation state unchanged
+                    gr.update(visible=True),  # Show filter indicator
+                    gr.update(value=filter_display),  # Update filter text
+                )
+            else:
+                # No prompt filtering, use regular loader
+                logger.info("Loading runs without prompt filter")
+                gallery, table, stats = load_runs_data(
+                    status_filter, date_filter, type_filter, search_text, limit, rating_filter
+                )
+
+                return (
+                    gallery,
+                    table,
+                    stats,
+                    nav_state,  # Keep navigation state unchanged
+                    gr.update(visible=False),  # Hide filter indicator
+                    gr.update(value=""),  # Clear filter text
+                )
+
         # Tab navigation handler - check for navigation state when switching tabs
         def handle_tab_select(tab_index, nav_state, pending_data):
             """Handle tab selection and apply navigation filters."""
@@ -1472,12 +1542,9 @@ def create_ui():
                         "Loaded {} runs for filtered prompts", len(table_data) if table_data else 0
                     )
 
-                    # Clear navigation state after use to prevent re-filtering
-                    cleared_nav_state = {
-                        "filter_type": None,
-                        "filter_values": [],
-                        "source_tab": None,
-                    }
+                    # Keep navigation state for persistent filtering (don't clear it)
+                    # This allows the filter to persist when changing other filters
+                    kept_nav_state = nav_state  # Keep the current navigation state
 
                     # Format prompt names for display
                     if prompt_names:
@@ -1494,7 +1561,7 @@ def create_ui():
 
                     # Show filter indicator with prompt names
                     return (
-                        cleared_nav_state,  # Clear navigation state
+                        kept_nav_state,  # Keep navigation state for persistent filtering
                         None,  # Clear pending data
                         gallery_data if gallery_data else [],  # Update gallery
                         table_data,  # Update table
@@ -2060,7 +2127,7 @@ def create_ui():
 
                 # Set navigation state with filter information
                 nav_state_with_filter = {
-                    "filter_type": "prompts",
+                    "filter_type": "prompt_ids",  # Fixed: was "prompts", now matches line 1450 check
                     "filter_values": selected_ids,
                     "source_tab": "prompts",
                 }
@@ -2335,9 +2402,24 @@ def create_ui():
                 components["runs_limit"],
                 components.get("runs_rating_filter"),  # Rating filter from runs tab
             ]
-            # Update gallery, table and stats
-            filter_outputs = get_components("runs_gallery", "runs_table", "runs_stats")
+            # Update gallery, table and stats with unified filter handler
+            # Now includes navigation_state for persistent prompt filtering
+            filter_outputs = get_components(
+                "runs_gallery",
+                "runs_table",
+                "runs_stats",
+                "navigation_state",  # Add navigation state to outputs
+                "runs_nav_filter_row",  # Add filter indicator visibility
+                "runs_prompt_filter",  # Add filter text display
+            )
             if filter_outputs:
+                # Add navigation_state to inputs for unified filtering
+                unified_filter_inputs = (
+                    [*filter_inputs, navigation_state]
+                    if "navigation_state" in components
+                    else filter_inputs
+                )
+
                 for filter_component in [
                     "runs_status_filter",
                     "runs_date_filter",
@@ -2347,8 +2429,8 @@ def create_ui():
                     "runs_rating_filter",
                 ]:
                     components[filter_component].change(
-                        fn=load_runs_data,
-                        inputs=filter_inputs,
+                        fn=load_runs_with_filters,  # Use unified filter handler
+                        inputs=unified_filter_inputs,
                         outputs=filter_outputs,
                     )
 
@@ -2560,7 +2642,7 @@ def create_ui():
                         components.get("runs_delete_dialog"),
                     ],
                 ).then(
-                    fn=load_runs_data,
+                    fn=load_runs_with_filters,  # Use unified filter to maintain prompt filtering
                     inputs=[
                         components.get("runs_status_filter"),
                         components.get("runs_date_filter"),
@@ -2568,11 +2650,15 @@ def create_ui():
                         components.get("runs_search"),
                         components.get("runs_limit"),
                         components.get("runs_rating_filter"),
+                        components.get("navigation_state"),  # Include navigation state
                     ],
                     outputs=[
                         components.get("runs_gallery"),
                         components.get("runs_table"),
                         components.get("runs_stats"),
+                        components.get("navigation_state"),  # Update navigation state
+                        components.get("runs_nav_filter_row"),  # Update filter indicator
+                        components.get("runs_prompt_filter"),  # Update filter text
                     ],
                 )
 
@@ -2589,8 +2675,32 @@ def create_ui():
 
         # Clear navigation filter button
         if "clear_nav_filter_btn" in components:
+
+            def clear_prompt_filter_and_reload(status, date, type_, search, limit, rating):
+                """Clear the prompt filter in navigation state and reload runs."""
+                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_data
+
+                # Clear navigation state
+                cleared_state = {
+                    "filter_type": None,
+                    "filter_values": [],
+                    "source_tab": None,
+                }
+
+                # Load runs without prompt filter
+                gallery, table, stats = load_runs_data(status, date, type_, search, limit, rating)
+
+                return (
+                    gallery,
+                    table,
+                    stats,
+                    cleared_state,  # Reset navigation state
+                    gr.update(visible=False),  # Hide filter indicator
+                    gr.update(value=""),  # Clear filter text
+                )
+
             components["clear_nav_filter_btn"].click(
-                fn=load_runs_data,  # Load all runs without filter
+                fn=clear_prompt_filter_and_reload,
                 inputs=[
                     components.get("runs_status_filter"),
                     components.get("runs_date_filter"),
@@ -2603,13 +2713,9 @@ def create_ui():
                     components.get("runs_gallery"),
                     components.get("runs_table"),
                     components.get("runs_stats"),
-                ],
-            ).then(
-                fn=lambda: (gr.update(visible=False), gr.update(value="")),
-                inputs=[],
-                outputs=[
-                    components.get("runs_nav_filter_row"),
-                    components.get("runs_prompt_filter"),
+                    components.get("navigation_state"),  # Update navigation state
+                    components.get("runs_nav_filter_row"),  # Hide filter indicator
+                    components.get("runs_prompt_filter"),  # Clear filter text
                 ],
             )
 

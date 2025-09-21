@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Prompt Filter Persistence in Gradio UI (2025-01-21)
+- **Fixed persistent prompt filtering in Runs tab**
+  - Fixed bug where filter_type mismatch ("prompts" vs "prompt_ids") prevented navigation state from working
+  - Made navigation_state persistent to maintain prompt filters when changing other filters (status, date, type)
+  - Created unified filter handler that checks navigation_state for active prompt filtering
+  - Fixed issue where empty filter results would show all runs instead of no runs
+  - Fixed filter order - now applies all filters before limiting results for proper pagination
+  - Updated Clear Filter button to properly reset navigation_state
+  - Ensures filtering applies to all fetched runs, not just visible ones limited by Max Results setting
+
+- **Improved filter reliability**
+  - Prompt filtering now persists when using status, date, type, search, and rating filters
+  - Switching tabs and returning maintains the active prompt filter
+  - Multiple sequential prompt filters work reliably without degradation
+  - Shows "No runs found" message when filters match no results (instead of showing all runs)
+
 ### Changed - Queue System Simplification (2025-01-20)
 - **Complete Migration to SimplifiedQueueService**
   - Replaced complex QueueService (~680 lines) with SimplifiedQueueService (~400 lines)

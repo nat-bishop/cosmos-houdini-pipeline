@@ -1049,11 +1049,9 @@ def load_runs_for_multiple_prompts(
     """
     try:
         if not prompt_ids:
-            # No prompts specified, load all runs
-            gallery, table, stats = load_runs_data(
-                status_filter, date_filter, type_filter, search_text, limit
-            )
-            return gallery, table, stats, []  # Add empty prompt_names for consistency
+            # No prompts specified, return empty results (not all runs)
+            logger.info("No prompt IDs provided for filtering - returning empty results")
+            return [], [], "No prompts selected for filtering", []  # Return empty results
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -1077,9 +1075,12 @@ def load_runs_for_multiple_prompts(
                 if prompt:
                     prompt_map[prompt_id] = prompt
 
-                # Get runs for this prompt - fetch more to allow filtering
+                # Get runs for this prompt - fetch ALL to allow proper filtering
+                # Don't apply status filter here, we'll filter everything later
                 runs = ops.list_runs(
-                    prompt_id=prompt_id, status=None if status_filter == "all" else status_filter
+                    prompt_id=prompt_id,
+                    status=None,  # Get all statuses, we'll filter later
+                    limit=500,  # Get many runs to filter properly (was implicitly limited before)
                 )
 
                 # Add prompt text to each run
@@ -1133,6 +1134,14 @@ def load_runs_for_multiple_prompts(
             else:  # all
                 date_match = True
 
+            # Apply status filter
+            status_match = False
+            if status_filter == "all":
+                status_match = True
+            else:
+                run_status = run.get("status", "")
+                status_match = status_filter == run_status
+
             # Apply type filter
             type_match = False
             if type_filter == "all":
@@ -1141,8 +1150,8 @@ def load_runs_for_multiple_prompts(
                 model_type = run.get("model_type", "transfer")
                 type_match = type_filter == model_type
 
-            # Add to filtered runs if both filters match
-            if date_match and type_match:
+            # Add to filtered runs if all filters match
+            if date_match and type_match and status_match:
                 filtered_runs.append(run)
 
         # Apply text search
@@ -1336,6 +1345,12 @@ def load_runs_for_multiple_prompts(
         for pid in prompt_ids:
             # Always use the full prompt ID
             prompt_names.append(pid)
+
+        # Check if we have prompt_ids but no matching runs
+        if prompt_ids and len(gallery_data) == 0 and len(table_data) == 0:
+            # Had filters but no matches - return empty with appropriate message
+            stats = f"No runs found for {len(prompt_ids)} selected prompt(s)"
+            logger.info("Filter yielded no results for {} prompts", len(prompt_ids))
 
         return gallery_data, table_data, stats, prompt_names
 

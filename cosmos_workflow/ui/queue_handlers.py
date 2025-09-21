@@ -7,7 +7,7 @@ This module contains the business logic for queue management in the UI.
 import logging
 from typing import Any
 
-from cosmos_workflow.services.queue_service import QueueService
+from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService as QueueService
 
 logger = logging.getLogger(__name__)
 

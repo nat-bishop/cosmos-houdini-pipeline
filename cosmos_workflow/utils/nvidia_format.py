@@ -70,7 +70,7 @@ def to_cosmos_inference_json(
         "input_video_path": convert_video_path(inputs.get("video", "")),
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
-        "guidance": execution_config.get("guidance", 7.0),
+        "guidance": execution_config.get("guidance", 5.0),
         "sigma_max": execution_config.get("sigma_max", 70.0),
         "seed": execution_config.get("seed", 42),
         "fps": execution_config.get("fps", 8),

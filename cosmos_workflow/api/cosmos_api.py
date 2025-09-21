@@ -496,7 +496,7 @@ class CosmosAPI:
     def _build_execution_config(
         weights: dict[str, float] | None = None,
         num_steps: int = 35,
-        guidance: float = 7.0,
+        guidance: float = 5.0,
         seed: int = 1,
         **kwargs,
     ) -> dict[str, Any]:

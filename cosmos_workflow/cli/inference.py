@@ -34,7 +34,7 @@ from .helpers import (
     help="Control weights: VIS EDGE DEPTH SEG (default: 0.25 0.25 0.25 0.25)",
 )
 @click.option("--steps", default=35, help="Number of inference steps (default: 35)")
-@click.option("--guidance", default=7.0, help="Guidance scale (CFG) (default: 7.0)")
+@click.option("--guidance", default=5.0, help="Guidance scale (CFG) (default: 5.0)")
 @click.option("--seed", default=1, help="Random seed for reproducibility (default: 1)")
 @click.option("--fps", default=24, help="Output video FPS (default: 24)")
 @click.option("--sigma-max", default=70.0, help="Maximum noise level (default: 70.0)")

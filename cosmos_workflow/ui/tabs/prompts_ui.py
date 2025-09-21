@@ -214,7 +214,7 @@ def create_prompts_tab_ui():
                                     )
                                     components["inf_guidance"] = gr.Number(
                                         label="Guidance (CFG)",
-                                        value=7.0,
+                                        value=5.0,
                                         minimum=1.0,
                                         maximum=20.0,
                                     )

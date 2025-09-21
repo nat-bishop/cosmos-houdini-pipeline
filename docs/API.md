@@ -1713,7 +1713,7 @@ result = ops.quick_inference(
   prompt_id="ps_abc123",
   weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
   num_steps=35,
-  guidance=7.0
+  guidance=5.0
 )
 # Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
 
@@ -2365,7 +2365,7 @@ Video upscaling with parent run context:
 | `weights.depth` | Float | Depth estimation weight (0.0-1.0) | inference | Yes |
 | `weights.seg` | Float | Segmentation weight (0.0-1.0) | inference | Yes |
 | `num_steps` | Integer | Number of inference steps (1-100) | inference | No (default: 35) |
-| `guidance` | Float | Guidance scale (1.0-20.0) | inference | No (default: 7.0) |
+| `guidance` | Float | Guidance scale (1.0-20.0) | inference | No (default: 5.0) |
 | `model` | String | AI model name ("pixtral", "claude") | enhancement | Yes |
 | `offload` | Boolean | Enable memory efficient mode | enhancement | No (default: false) |
 | `batch_size` | Integer | Processing batch size | enhancement | No (default: 1) |

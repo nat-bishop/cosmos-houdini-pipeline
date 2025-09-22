@@ -2949,6 +2949,26 @@ def create_ui():
                 ],
             )
 
+        # Queue pause/resume control
+        if "queue_pause_checkbox" in components and "queue_status_indicator" in components:
+
+            def toggle_queue_pause(paused):
+                """Toggle queue pause state and update UI."""
+                global queue_service
+                if queue_service:
+                    queue_service.set_queue_paused(paused)
+                    if paused:
+                        return "⏸️ **Queue: Paused**"
+                    else:
+                        return "✅ **Queue: Active**"
+                return "❓ **Queue: Unknown**"
+
+            components["queue_pause_checkbox"].change(
+                fn=toggle_queue_pause,
+                inputs=[components["queue_pause_checkbox"]],
+                outputs=[components["queue_status_indicator"]],
+            )
+
         # Batch size control
         if "batch_size" in components:
 
@@ -3148,10 +3168,37 @@ def create_ui():
         def auto_process_queue():
             """Process next job in queue automatically."""
             global queue_service
-            if queue_service:
-                result = queue_service.process_next_job()
-                if result:
-                    logger.debug("Auto-processed job: {}", result.get("job_id"))
+
+            if queue_service is None:
+                logger.warning("Queue service not initialized")
+                return None
+
+            try:
+                # Check if queue is paused
+                if hasattr(queue_service, "queue_paused") and queue_service.queue_paused:
+                    logger.debug("Queue is paused, skipping processing")
+                    return None
+
+                # Only process if there are actually jobs in the queue
+                status = queue_service.get_queue_status()
+                queued_count = status.get("total_queued", 0)
+
+                if queued_count > 0:
+                    logger.debug("Queue has {} jobs, attempting to process next", queued_count)
+                    result = queue_service.process_next_job()
+                    if result:
+                        logger.info(
+                            "Auto-processed job: {} ({})",
+                            result.get("job_id", "unknown"),
+                            result.get("status", "unknown"),
+                        )
+                else:
+                    # Only log this at debug level to avoid spam
+                    logger.debug("Queue empty, nothing to process")
+
+            except Exception as e:
+                logger.error("Error in auto_process_queue: {}", e)
+
             return None
 
         # Create timer for automatic queue processing (inside gr.Blocks context)

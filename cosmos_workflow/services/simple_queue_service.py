@@ -55,6 +55,7 @@ class SimplifiedQueueService:
         self.db_connection = db_connection
         self._warm_container = None
         self.batch_size = 4  # Default batch size for GPU processing
+        self.queue_paused = False  # Control flag for queue processing
 
         logger.info("SimplifiedQueueService initialized")
 
@@ -73,6 +74,26 @@ class SimplifiedQueueService:
         self.batch_size = size
         logger.info("Updated batch size from {} to {}", old_size, size)
 
+    def set_queue_paused(self, paused: bool) -> None:
+        """Pause or resume queue processing.
+
+        When paused, no new jobs will be claimed from the queue.
+        Currently running jobs will continue to completion.
+
+        Args:
+            paused: True to pause queue, False to resume
+        """
+        self.queue_paused = paused
+        logger.info("Queue processing {}", "paused" if paused else "resumed")
+
+    def is_queue_paused(self) -> bool:
+        """Check if queue processing is paused.
+
+        Returns:
+            True if queue is paused, False otherwise
+        """
+        return self.queue_paused
+
     def claim_next_job(self) -> str | None:
         """Atomically claim the next job in the queue.
 
@@ -80,8 +101,13 @@ class SimplifiedQueueService:
         only one process can claim a job at a time.
 
         Returns:
-            Job ID if a job was claimed, None if queue is empty
+            Job ID if a job was claimed, None if queue is empty or paused
         """
+        # Check if queue is paused
+        if self.queue_paused:
+            logger.debug("Queue is paused, not claiming new jobs")
+            return None
+
         with self.db_connection.get_session() as session:
             # Force fresh read from database
             session.expire_all()
@@ -399,6 +425,7 @@ class SimplifiedQueueService:
                 "total_queued": len(queued_jobs),
                 "queued": [],
                 "running": None,
+                "paused": self.queue_paused,  # Include pause state
             }
 
             # Add queued job details

@@ -82,6 +82,18 @@ Currently idle - no jobs running
                 # Job Control Section
                 gr.Markdown("#### ⚙️ Job Controls")
                 with gr.Group():
+                    # Queue pause/resume control
+                    with gr.Row():
+                        components["queue_pause_checkbox"] = gr.Checkbox(
+                            label="⏸️ Pause Queue Processing",
+                            value=False,
+                            info="Pause processing of new jobs from queue (running jobs will continue)",
+                        )
+                        components["queue_status_indicator"] = gr.Markdown(
+                            "✅ **Queue: Active**",
+                            elem_classes=["queue-status"],
+                        )
+
                     # Batch size control
                     with gr.Row():
                         components["batch_size"] = gr.Number(

@@ -35,13 +35,17 @@ class QueueHandlers:
             # Build status text
             queued_count = status["total_queued"]
             has_running = status["running"] is not None
+            is_paused = status.get("paused", False)
+
+            # Add pause indicator if queue is paused
+            pause_indicator = " [PAUSED]" if is_paused else ""
 
             if has_running:
-                status_text = f"📋 Queue Status: {queued_count} pending, 1 running"
+                status_text = f"📋 Queue Status: {queued_count} pending, 1 running{pause_indicator}"
             elif queued_count > 0:
-                status_text = f"📋 Queue Status: {queued_count} pending"
+                status_text = f"📋 Queue Status: {queued_count} pending{pause_indicator}"
             else:
-                status_text = "📋 Queue Status: Empty"
+                status_text = f"📋 Queue Status: Empty{pause_indicator}"
 
             # Build table data
             table_data = []

@@ -1,6 +1,5 @@
 """Tests for upscale CLI command validation and edge cases."""
 
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -21,43 +20,24 @@ class TestUpscaleCLIValidation:
     @pytest.fixture
     def mock_context(self):
         """Create a mock CLI context."""
-        ctx = Mock()
-        ctx.get_operations = Mock()
+        ctx = Mock(spec=CLIContext)
+        mock_ops = Mock()
+        ctx.get_operations = Mock(return_value=mock_ops)
         return ctx
 
-    def test_no_source_provided_error(self, runner):
-        """Test that error is shown when neither --from-run nor --video is provided."""
-        # Create a mock context that will be passed to the command
+    def test_no_run_id_provided_error(self, runner):
+        """Test that error is shown when no run ID is provided."""
+        # Create a mock context
         mock_ctx = Mock(spec=CLIContext)
         mock_ops = Mock()
         mock_ctx.get_operations = Mock(return_value=mock_ops)
 
-        # Run command with no source
+        # Run command with no arguments
         result = runner.invoke(upscale, [], obj=mock_ctx)
 
-        # Should fail with exit code 1
-        assert result.exit_code == 1
-        assert "You must specify either --from-run or --video" in result.output
-
-    def test_both_sources_provided_error(self, runner):
-        """Test that error is shown when both --from-run and --video are provided."""
-        with runner.isolated_filesystem():
-            # Create a dummy video file
-            Path("test.mp4").touch()
-
-            # Create a mock context
-            mock_ctx = Mock(spec=CLIContext)
-            mock_ops = Mock()
-            mock_ctx.get_operations = Mock(return_value=mock_ops)
-
-            # Run command with both sources
-            result = runner.invoke(
-                upscale, ["--from-run", "rs_123", "--video", "test.mp4"], obj=mock_ctx
-            )
-
-            # Should fail with exit code 1
-            assert result.exit_code == 1
-            assert "Cannot specify both --from-run and --video" in result.output
+        # Should fail with exit code 2 (missing required argument)
+        assert result.exit_code == 2
+        assert "Missing argument 'RUN_ID'" in result.output
 
     def test_invalid_run_id_format(self, runner):
         """Test that invalid run ID format is rejected."""
@@ -67,7 +47,7 @@ class TestUpscaleCLIValidation:
         mock_ctx.get_operations = Mock(return_value=mock_ops)
 
         # Invalid format (doesn't start with rs_ or run_)
-        result = runner.invoke(upscale, ["--from-run", "invalid_id"], obj=mock_ctx)
+        result = runner.invoke(upscale, ["invalid_id"], obj=mock_ctx)
 
         assert result.exit_code == 1
         assert "Invalid run ID format" in result.output
@@ -77,120 +57,86 @@ class TestUpscaleCLIValidation:
         # Create a mock context
         mock_ctx = Mock(spec=CLIContext)
         mock_ops = Mock()
-        mock_ops.get_run = Mock(return_value=None)  # Run not found
-        mock_ops.upscale = Mock(side_effect=ValueError("Run not found: rs_123"))
+        # Mock a successful upscale operation
+        mock_ops.upscale = Mock(
+            return_value={"status": "started", "upscale_run_id": "rs_upscale123"}
+        )
         mock_ctx.get_operations = Mock(return_value=mock_ops)
 
-        # Test rs_ prefix
-        result = runner.invoke(upscale, ["--from-run", "rs_123"], obj=mock_ctx)
-        # Will fail because run not found, but should pass ID format validation
-        assert result.exit_code == 1
-        # The error should be about run not found, not invalid format
-        assert "Invalid run ID format" not in result.output
+        # Test with rs_ prefix
+        runner.invoke(upscale, ["rs_inference123"], obj=mock_ctx)
+        # Should call the upscale method (may fail for other reasons, but syntax is valid)
+        assert mock_ops.upscale.called
+        assert mock_ops.upscale.call_args[1]["run_id"] == "rs_inference123"
 
-        # Test run_ prefix
-        result = runner.invoke(upscale, ["--from-run", "run_456"], obj=mock_ctx)
-        # Will fail because run not found, but should pass ID format validation
-        assert result.exit_code == 1
-        assert "Invalid run ID format" not in result.output
+        # Reset mock
+        mock_ops.upscale.reset_mock()
 
-    def test_video_file_not_exists(self, runner):
-        """Test that non-existent video file is rejected."""
-        result = runner.invoke(upscale, ["--video", "nonexistent.mp4"])
+        # Test with run_ prefix
+        runner.invoke(upscale, ["run_inference123"], obj=mock_ctx)
+        assert mock_ops.upscale.called
+        assert mock_ops.upscale.call_args[1]["run_id"] == "run_inference123"
 
-        # Click validates the path exists
-        assert result.exit_code == 2  # Click's exit code for invalid option
-        assert "does not exist" in result.output.lower() or "invalid" in result.output.lower()
-
-    def test_weight_out_of_range(self, runner):
-        """Test that weight values outside 0.0-1.0 are rejected."""
-        with runner.isolated_filesystem():
-            Path("test.mp4").touch()
-
-            # Test weight > 1.0
-            result = runner.invoke(upscale, ["--video", "test.mp4", "--weight", "1.5"])
-            assert result.exit_code == 2  # Click validation error
-
-            # Test weight < 0.0
-            result = runner.invoke(upscale, ["--video", "test.mp4", "--weight", "-0.5"])
-            assert result.exit_code == 2  # Click validation error
-
-    def test_valid_weight_values(self, runner):
-        """Test that valid weight values are accepted."""
-        with runner.isolated_filesystem():
-            Path("test.mp4").touch()
-
-            # Create a mock context
-            mock_ctx = Mock(spec=CLIContext)
-            mock_ops = Mock()
-            mock_ops.upscale = Mock(return_value={"status": "started", "upscale_run_id": "rs_123"})
-            mock_ctx.get_operations = Mock(return_value=mock_ops)
-
-            # Test weight = 0.0
-            result = runner.invoke(
-                upscale, ["--video", "test.mp4", "--weight", "0.0"], obj=mock_ctx
-            )
-            # Should proceed to execution
-            assert result.exit_code == 0
-            assert mock_ops.upscale.called
-
-            # Test weight = 1.0
-            mock_ops.reset_mock()
-            result = runner.invoke(
-                upscale, ["--video", "test.mp4", "--weight", "1.0"], obj=mock_ctx
-            )
-            # Should proceed to execution
-            assert result.exit_code == 0
-            assert mock_ops.upscale.called
-
-            # Test weight = 0.5 (default)
-            mock_ops.reset_mock()
-            result = runner.invoke(upscale, ["--video", "test.mp4"], obj=mock_ctx)
-            # Should proceed to execution with default weight
-            assert result.exit_code == 0
-            assert mock_ops.upscale.called
-
-    def test_prompt_with_from_run(self, runner):
-        """Test that prompt works with --from-run."""
+    def test_video_file_path_rejected(self, runner):
+        """Test that video file paths are properly rejected with helpful message."""
         # Create a mock context
         mock_ctx = Mock(spec=CLIContext)
         mock_ops = Mock()
-        mock_run = {"id": "rs_123", "status": "completed", "outputs": {"output_path": "test.mp4"}}
-        mock_ops.get_run = Mock(return_value=mock_run)
+        mock_ctx.get_operations = Mock(return_value=mock_ops)
+
+        # Try with a video file path
+        result = runner.invoke(upscale, ["/path/to/video.mp4"], obj=mock_ctx)
+
+        assert result.exit_code == 1
+        assert "Invalid run ID format" in result.output
+        assert "To upscale external video files" in result.output
+
+    def test_weight_out_of_range(self, runner):
+        """Test that weight values outside 0-1 range are rejected."""
+        # Create a mock context
+        mock_ctx = Mock(spec=CLIContext)
+        mock_ops = Mock()
+        mock_ctx.get_operations = Mock(return_value=mock_ops)
+
+        # Test weight > 1
+        result = runner.invoke(upscale, ["rs_123", "--weight", "1.5"], obj=mock_ctx)
+        assert result.exit_code == 2  # Click validation error
+
+        # Test weight < 0
+        result = runner.invoke(upscale, ["rs_123", "--weight", "-0.5"], obj=mock_ctx)
+        assert result.exit_code == 2  # Click validation error
+
+    def test_valid_weight_values(self, runner):
+        """Test that valid weight values are accepted."""
+        # Create a mock context
+        mock_ctx = Mock(spec=CLIContext)
+        mock_ops = Mock()
+        mock_ops.upscale = Mock(return_value={"status": "started", "upscale_run_id": "rs_123"})
+        mock_ctx.get_operations = Mock(return_value=mock_ops)
+
+        # Test various valid weights
+        for weight in [0.0, 0.5, 1.0]:
+            mock_ops.upscale.reset_mock()
+            runner.invoke(upscale, ["rs_123", "--weight", str(weight)], obj=mock_ctx)
+            assert mock_ops.upscale.called
+            assert mock_ops.upscale.call_args[1]["control_weight"] == weight
+
+    def test_prompt_with_run_id(self, runner):
+        """Test that prompt works with run ID."""
+        # Create a mock context
+        mock_ctx = Mock(spec=CLIContext)
+        mock_ops = Mock()
         mock_ops.upscale = Mock(return_value={"status": "started", "upscale_run_id": "rs_456"})
         mock_ctx.get_operations = Mock(return_value=mock_ops)
 
-        runner.invoke(
-            upscale, ["--from-run", "rs_123", "--prompt", "enhance quality"], obj=mock_ctx
-        )
+        runner.invoke(upscale, ["rs_123", "--prompt", "cinematic quality"], obj=mock_ctx)
 
         # Should call upscale with prompt
         assert mock_ops.upscale.called
-        call_kwargs = mock_ops.upscale.call_args.kwargs
-        assert call_kwargs.get("prompt") == "enhance quality"
+        assert mock_ops.upscale.call_args[1]["prompt"] == "cinematic quality"
 
-    def test_prompt_with_video(self, runner):
-        """Test that prompt works with --video."""
-        with runner.isolated_filesystem():
-            Path("test.mp4").touch()
-
-            # Create a mock context
-            mock_ctx = Mock(spec=CLIContext)
-            mock_ops = Mock()
-            mock_ops.upscale = Mock(return_value={"status": "started", "upscale_run_id": "rs_456"})
-            mock_ctx.get_operations = Mock(return_value=mock_ops)
-
-            runner.invoke(
-                upscale, ["--video", "test.mp4", "--prompt", "cinematic 8K"], obj=mock_ctx
-            )
-
-            # Should call upscale with prompt
-            assert mock_ops.upscale.called
-            call_kwargs = mock_ops.upscale.call_args.kwargs
-            assert call_kwargs.get("prompt") == "cinematic 8K"
-
-    def test_dry_run_with_from_run(self, runner):
-        """Test dry-run mode with --from-run."""
+    def test_dry_run_with_run_id(self, runner):
+        """Test dry-run mode with run ID."""
         # Create a mock context
         mock_ctx = Mock(spec=CLIContext)
         mock_ops = Mock()
@@ -199,31 +145,23 @@ class TestUpscaleCLIValidation:
         mock_ops.upscale = Mock()  # Should NOT be called in dry-run
         mock_ctx.get_operations = Mock(return_value=mock_ops)
 
-        result = runner.invoke(upscale, ["--from-run", "rs_123", "--dry-run"], obj=mock_ctx)
+        result = runner.invoke(upscale, ["rs_123", "--dry-run"], obj=mock_ctx)
 
         # Should show preview and NOT execute
         assert "Dry-run mode" in result.output
-        assert "No changes made" in result.output
-        assert not mock_ops.upscale.called
+        assert "Would upscale from run" in result.output
+        assert not mock_ops.upscale.called  # Should not execute in dry-run
 
-    def test_dry_run_with_video(self, runner):
-        """Test dry-run mode with --video."""
-        with runner.isolated_filesystem():
-            # Create a test video file with some size
-            test_file = Path("test.mp4")
-            test_file.write_bytes(b"dummy video content")
+    def test_run_not_found_in_dry_run(self, runner):
+        """Test dry-run mode when run doesn't exist."""
+        # Create a mock context
+        mock_ctx = Mock(spec=CLIContext)
+        mock_ops = Mock()
+        mock_ops.get_run = Mock(return_value=None)  # Run not found
+        mock_ctx.get_operations = Mock(return_value=mock_ops)
 
-            # Create a mock context
-            mock_ctx = Mock(spec=CLIContext)
-            mock_ops = Mock()
-            mock_ops.upscale = Mock()  # Should NOT be called in dry-run
-            mock_ctx.get_operations = Mock(return_value=mock_ops)
+        result = runner.invoke(upscale, ["rs_nonexistent", "--dry-run"], obj=mock_ctx)
 
-            result = runner.invoke(upscale, ["--video", "test.mp4", "--dry-run"], obj=mock_ctx)
-
-            # Should show preview and NOT execute
-            assert "Dry-run mode" in result.output
-            assert "Would upscale video" in result.output
-            assert "File size" in result.output
-            assert "No changes made" in result.output
-            assert not mock_ops.upscale.called
+        # Should show error
+        assert result.exit_code == 1
+        assert "Run not found" in result.output

@@ -32,7 +32,7 @@ class TestUpscaleCommand:
         """Test basic upscale command syntax is accepted."""
         # Simplified test - just verify the command syntax is recognized
         # Without all the complex mocking, we can't test full behavior
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123"])
 
         # The command should at least be recognized (not return code 2 for invalid syntax)
         # Exit code 1 is acceptable (missing dependencies), but 2 means bad syntax
@@ -40,26 +40,24 @@ class TestUpscaleCommand:
 
     def test_upscale_with_custom_weight(self, runner):
         """Test upscale command accepts weight parameter."""
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123", "--weight", "0.8"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123", "--weight", "0.8"])
         # Should recognize the syntax
         assert result.exit_code != 2, "Weight parameter not recognized"
 
     def test_upscale_with_weight_shorthand(self, runner):
         """Test upscale command accepts -w shorthand for weight."""
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123", "-w", "0.3"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123", "-w", "0.3"])
         # Should recognize the shorthand
         assert result.exit_code != 2, "Weight shorthand -w not recognized"
 
     def test_upscale_invalid_weight_range(self, runner):
         """Test upscale command validates weight range."""
         # Test weight too low
-        result = runner.invoke(
-            cli, ["upscale", "--from-run", "rs_inference123", "--weight", "-0.1"]
-        )
+        result = runner.invoke(cli, ["upscale", "rs_inference123", "--weight", "-0.1"])
         assert result.exit_code != 0, "Should reject negative weight"
 
         # Test weight too high
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123", "--weight", "1.5"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123", "--weight", "1.5"])
         assert result.exit_code != 0, "Should reject weight > 1.0"
 
     def test_upscale_handles_missing_run(self, runner):
@@ -70,19 +68,19 @@ class TestUpscaleCommand:
 
     def test_upscale_shows_monitoring_instructions(self, runner):
         """Test upscale command syntax is valid."""
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123"])
         # Command should be recognized
         assert result.exit_code != 2
 
     def test_upscale_displays_run_id(self, runner):
         """Test upscale command accepts valid run ID format."""
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123"])
         # Should recognize valid run ID format
         assert result.exit_code != 2
 
     def test_upscale_dry_run(self, runner):
         """Test dry-run flag is recognized."""
-        result = runner.invoke(cli, ["upscale", "--from-run", "rs_inference123", "--dry-run"])
+        result = runner.invoke(cli, ["upscale", "rs_inference123", "--dry-run"])
         # Should recognize the dry-run flag
         assert result.exit_code != 2, "Dry-run flag not recognized"
 

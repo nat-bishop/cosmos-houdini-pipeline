@@ -87,7 +87,7 @@ class TestUpscalingRuns:
         """Test that upscale creates a proper database run."""
         # Act
         result = api.upscale(
-            video_source="rs_inference123",
+            run_id="rs_inference123",
             control_weight=0.7,
         )
 
@@ -117,7 +117,7 @@ class TestUpscalingRuns:
 
         # Act & Assert
         with pytest.raises(ValueError, match="Run not found: rs_missing"):
-            api.upscale(video_source="rs_missing", control_weight=0.5)
+            api.upscale(run_id="rs_missing", control_weight=0.5)
 
     def test_upscale_validates_parent_run_completed(self, api, mock_service):
         """Test that upscale validates the parent run is completed."""
@@ -131,7 +131,7 @@ class TestUpscalingRuns:
 
         # Act & Assert
         with pytest.raises(ValueError, match="must be completed before upscaling"):
-            api.upscale(video_source="rs_running123", control_weight=0.5)
+            api.upscale(run_id="rs_running123", control_weight=0.5)
 
     def test_upscale_handles_execution_failure(self, api, mock_service, mock_orchestrator):
         """Test that upscale handles execution failures gracefully."""
@@ -140,7 +140,7 @@ class TestUpscalingRuns:
 
         # Act
         result = api.upscale(
-            video_source="rs_inference123",
+            run_id="rs_inference123",
             control_weight=0.5,
         )
 
@@ -156,7 +156,7 @@ class TestUpscalingRuns:
     def test_upscale_updates_run_status_lifecycle(self, api, mock_service):
         """Test that upscale properly updates run status throughout lifecycle."""
         # Act
-        api.upscale(video_source="rs_inference123", control_weight=0.5)
+        api.upscale(run_id="rs_inference123", control_weight=0.5)
 
         # Assert - check status updates
         status_calls = mock_service.update_run_status.call_args_list
@@ -173,7 +173,7 @@ class TestUpscalingRuns:
     ):
         """Test that upscale passes all required parameters to orchestrator."""
         # Act
-        api.upscale(video_source="rs_inference123", control_weight=0.8)
+        api.upscale(run_id="rs_inference123", control_weight=0.8)
 
         # Assert - check orchestrator was called correctly
         mock_orchestrator.execute_upscaling_run.assert_called_once()
@@ -191,7 +191,7 @@ class TestUpscalingRuns:
     def test_upscale_with_default_control_weight(self, api, mock_service):
         """Test that upscale uses default control weight if not specified."""
         # Act
-        api.upscale(video_source="rs_inference123")
+        api.upscale(run_id="rs_inference123")
 
         # Assert - should use default weight of 0.5
         call_args = mock_service.create_run.call_args
@@ -202,15 +202,15 @@ class TestUpscalingRuns:
         """Test that upscale validates control weight is in valid range."""
         # Test invalid weights
         with pytest.raises(ValueError, match="Control weight must be between"):
-            api.upscale(video_source="rs_inference123", control_weight=-0.1)
+            api.upscale(run_id="rs_inference123", control_weight=-0.1)
 
         with pytest.raises(ValueError, match="Control weight must be between"):
-            api.upscale(video_source="rs_inference123", control_weight=1.1)
+            api.upscale(run_id="rs_inference123", control_weight=1.1)
 
     def test_upscale_stores_outputs_in_database(self, api, mock_service):
         """Test that upscale stores the outputs in the database."""
         # Act
-        api.upscale(video_source="rs_inference123", control_weight=0.5)
+        api.upscale(run_id="rs_inference123", control_weight=0.5)
 
         # Assert - check that outputs were stored
         mock_service.update_run.assert_called_once()

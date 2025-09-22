@@ -1467,3 +1467,35 @@ class DataRepository:
                 }
                 for r in enhancement_runs
             ]
+
+    def find_upscaled_run(self, source_run_id: str) -> dict[str, Any] | None:
+        """Find an upscaled version of a run by its source_run_id.
+
+        Queries the database for an upscale run that references this source run.
+
+        Args:
+            source_run_id: The original run ID to find upscaled version for
+
+        Returns:
+            The upscaled run dict if found, None otherwise
+        """
+        if not source_run_id:
+            return None
+
+        with self.db.get_session() as session:
+            # Query for upscale run with matching source_run_id in execution_config
+            from sqlalchemy import func
+
+            upscale_run = (
+                session.query(Run)
+                .filter(
+                    Run.model_type == "upscale",
+                    func.json_extract(Run.execution_config, "$.source_run_id") == source_run_id,
+                )
+                .order_by(Run.created_at.desc())  # Get most recent if multiple exist
+                .first()
+            )
+
+            if upscale_run:
+                return self._run_to_dict(upscale_run)
+            return None

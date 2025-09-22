@@ -430,6 +430,19 @@ class CosmosAPI:
                 "error": str(e),
             }
 
+    # ========== Public Helper Methods ==========
+
+    def get_upscaled_run(self, source_run_id: str) -> dict[str, Any] | None:
+        """Get the upscaled version of a run if it exists.
+
+        Args:
+            source_run_id: Original run ID to find upscaled version for
+
+        Returns:
+            Upscaled run data or None if not found
+        """
+        return self.service.find_upscaled_run(source_run_id)
+
     # ========== Internal Helper Methods ==========
 
     def _validate_prompt(self, prompt_id: str) -> dict[str, Any]:

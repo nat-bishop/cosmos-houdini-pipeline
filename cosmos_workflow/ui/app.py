@@ -1433,7 +1433,14 @@ def create_ui():
 
         # Unified filter handler that respects navigation state for persistent prompt filtering
         def load_runs_with_filters(
-            status_filter, date_filter, type_filter, search_text, limit, rating_filter, nav_state
+            status_filter,
+            date_filter,
+            type_filter,
+            search_text,
+            limit,
+            rating_filter,
+            version_filter,
+            nav_state,
         ):
             """Load runs data with all filters, including persistent prompt filter from navigation state.
 
@@ -1441,7 +1448,6 @@ def create_ui():
             the appropriate loading function accordingly.
             """
             from cosmos_workflow.ui.tabs.runs_handlers import (
-                load_runs_data,
                 load_runs_for_multiple_prompts,
             )
 
@@ -1486,10 +1492,16 @@ def create_ui():
                     gr.update(value=filter_display),  # Update filter text
                 )
             else:
-                # No prompt filtering, use regular loader
-                logger.info("Loading runs without prompt filter")
-                gallery, table, stats = load_runs_data(
-                    status_filter, date_filter, type_filter, search_text, limit, rating_filter
+                # No prompt filtering, use regular loader with version filter
+                logger.info("Loading runs with version filter: {}", version_filter)
+                gallery, table, stats = load_runs_data_with_version_filter(
+                    status_filter,
+                    date_filter,
+                    type_filter,
+                    search_text,
+                    limit,
+                    rating_filter,
+                    version_filter,
                 )
 
                 return (
@@ -1645,8 +1657,10 @@ def create_ui():
             # Check if we're navigating to Runs tab without filter - load default data
             elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
                 logger.info("Switching to Runs tab without filter - loading default data")
-                # Load default runs data
-                gallery_data, table_data, stats = load_runs_data("all", "all", "all", "", 50, "all")
+                # Load default runs data with default version filter
+                gallery_data, table_data, stats = load_runs_data_with_version_filter(
+                    "all", "all", "all", "", 50, "all", "best"
+                )
 
                 # Table data should be a list of lists for Gradio dataframe
                 # Only create empty list if data is None or invalid
@@ -2462,6 +2476,7 @@ def create_ui():
                 "runs_type_filter",
                 "runs_search",
                 "runs_limit",
+                "runs_version_filter",
             ]
         ):
             filter_inputs = [
@@ -2471,6 +2486,7 @@ def create_ui():
                 components["runs_search"],
                 components["runs_limit"],
                 components.get("runs_rating_filter"),  # Rating filter from runs tab
+                components["runs_version_filter"],  # Version filter
             ]
             # Update gallery, table and stats with unified filter handler
             # Now includes navigation_state for persistent prompt filtering
@@ -2497,6 +2513,7 @@ def create_ui():
                     "runs_search",
                     "runs_limit",
                     "runs_rating_filter",
+                    "runs_version_filter",  # Add version filter
                 ]:
                     components[filter_component].change(
                         fn=load_runs_with_filters,  # Use unified filter handler
@@ -2552,6 +2569,8 @@ def create_ui():
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",
+                # Upscale button
+                "runs_upscale_selected_btn",
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:
@@ -2743,12 +2762,72 @@ def create_ui():
                     ],
                 )
 
+        # ========== Upscale Operations ==========
+        # Import upscale handlers
+        from cosmos_workflow.ui.tabs.runs_handlers import (
+            cancel_upscale,
+            execute_upscale,
+            load_runs_data_with_version_filter,
+            show_upscale_dialog,
+        )
+
+        # Upscale button - show dialog
+        if "runs_upscale_selected_btn" in components and "runs_selected_id" in components:
+            components["runs_upscale_selected_btn"].click(
+                fn=show_upscale_dialog,
+                inputs=[components["runs_selected_id"]],
+                outputs=[
+                    components.get("runs_upscale_dialog"),
+                    components.get("runs_upscale_preview"),
+                    components.get("runs_upscale_id_hidden"),
+                ],
+            )
+
+        # Confirm upscale
+        if "runs_confirm_upscale_btn" in components:
+            components["runs_confirm_upscale_btn"].click(
+                fn=execute_upscale,
+                inputs=[
+                    components.get("runs_upscale_id_hidden"),
+                    components.get("runs_upscale_weight"),
+                    components.get("runs_upscale_prompt_input"),
+                ],
+                outputs=[
+                    components.get("runs_upscale_dialog"),
+                    components.get("runs_selected_info"),
+                ],
+            ).then(
+                # Refresh the display after queuing
+                fn=load_runs_data_with_version_filter,
+                inputs=[
+                    components.get("runs_status_filter"),
+                    components.get("runs_date_filter"),
+                    components.get("runs_type_filter"),
+                    components.get("runs_search"),
+                    components.get("runs_limit"),
+                    components.get("runs_rating_filter"),
+                    components.get("runs_version_filter"),
+                ],
+                outputs=[
+                    components.get("runs_gallery"),
+                    components.get("runs_table"),
+                    components.get("runs_stats"),
+                ],
+            )
+
+        # Cancel upscale
+        if "runs_cancel_upscale_btn" in components:
+            components["runs_cancel_upscale_btn"].click(
+                fn=cancel_upscale, outputs=[components.get("runs_upscale_dialog")]
+            )
+
         # Clear navigation filter button
         if "clear_nav_filter_btn" in components:
 
-            def clear_prompt_filter_and_reload(status, date, type_, search, limit, rating):
+            def clear_prompt_filter_and_reload(
+                status, date, type_, search, limit, rating, version_filter
+            ):
                 """Clear the prompt filter in navigation state and reload runs."""
-                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_data
 
                 # Clear navigation state
                 cleared_state = {
@@ -2757,8 +2836,10 @@ def create_ui():
                     "source_tab": None,
                 }
 
-                # Load runs without prompt filter
-                gallery, table, stats = load_runs_data(status, date, type_, search, limit, rating)
+                # Load runs without prompt filter but with version filter
+                gallery, table, stats = load_runs_data_with_version_filter(
+                    status, date, type_, search, limit, rating, version_filter
+                )
 
                 return (
                     gallery,
@@ -2778,6 +2859,7 @@ def create_ui():
                     components.get("runs_search"),
                     components.get("runs_limit"),
                     components.get("runs_rating_filter"),
+                    components.get("runs_version_filter"),
                 ],
                 outputs=[
                     components.get("runs_gallery"),

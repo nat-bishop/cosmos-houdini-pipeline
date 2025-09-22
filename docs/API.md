@@ -962,12 +962,6 @@ print(f"Position in queue: {position}")
 result = queue_service.process_next_job()
 ```
 
-### Legacy QueueService (Deprecated)
-
-**DEPRECATED**: The original QueueService has been replaced by SimplifiedQueueService. The legacy service is still available at `cosmos_workflow.services.queue_service.QueueService` but should not be used in new code.
-
-**Deprecation Notice**: Legacy QueueService will be removed in a future version. All new implementations should use SimplifiedQueueService for better reliability and simpler architecture.
-
 #### Supported Job Types
 
 **1. Single Inference (`job_type="inference"`):**

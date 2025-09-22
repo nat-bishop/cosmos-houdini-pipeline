@@ -831,11 +831,17 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             gr.update(value=params),  # runs_params_json
             gr.update(value=log_path),  # runs_log_path
             gr.update(value=log_content),  # runs_log_output
+            # Upscale button visibility
+            gr.update(
+                visible=run_details.get("status") == "completed"
+                and run_details.get("model_type") == "transfer"
+                and not ops.get_upscaled_run(run_id)  # Check if not already upscaled
+            ),  # runs_upscale_selected_btn
         ]
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 27  # Updated count for star buttons
+        return [gr.update(visible=False)] + [gr.update()] * 28  # Updated count for upscale button
 
 
 def load_run_logs(log_path):
@@ -1357,3 +1363,211 @@ def load_runs_for_multiple_prompts(
     except Exception as e:
         logger.error("Error loading runs for multiple prompts: {}", str(e))
         return [], [], "Error loading runs", []
+
+
+# ========== Upscale Event Handlers ==========
+
+
+def show_upscale_dialog(run_id):
+    """Show the upscale configuration dialog.
+
+    Args:
+        run_id: The run ID to upscale
+
+    Returns:
+        Tuple of (dialog visibility, preview text, hidden run_id)
+    """
+    if not run_id:
+        return gr.update(visible=False), gr.update(), gr.update()
+
+    try:
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+        run = ops.get_run(run_id)
+
+        if not run:
+            return gr.update(visible=False), gr.update(), gr.update()
+
+        # Check if run can be upscaled
+        if run["status"] != "completed":
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(
+                    value=f"Run must be completed to upscale. Current status: {run['status']}"
+                ),
+            )
+
+        if run.get("model_type") == "upscale":
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(value="Cannot upscale an already upscaled run"),
+            )
+
+        if run.get("model_type") != "transfer":
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(
+                    value=f"Can only upscale inference runs, not {run.get('model_type')} runs"
+                ),
+            )
+
+        # Check if already has upscaled version
+        upscaled = ops.get_upscaled_run(run_id)
+        if upscaled:
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(value=f"This run already has an upscaled version: {upscaled['id']}"),
+            )
+
+        preview_text = f"""
+        **Run ID:** {run_id}
+        **Status:** {run["status"]}
+        **Type:** {run.get("model_type", "transfer")}
+
+        This will create a new upscaling run that processes the output video to 4K resolution.
+        The upscaling process typically takes 2-3 minutes.
+        """
+
+        return (
+            gr.update(visible=True),  # runs_upscale_dialog
+            gr.update(value=preview_text),  # runs_upscale_preview
+            gr.update(value=run_id),  # runs_upscale_id_hidden
+        )
+
+    except Exception as e:
+        logger.error("Error showing upscale dialog: {}", e)
+        return gr.update(visible=False), gr.update(), gr.update()
+
+
+def execute_upscale(run_id, control_weight, prompt_text):
+    """Execute the upscaling operation via queue.
+
+    Args:
+        run_id: Run ID to upscale
+        control_weight: Control weight (0.0-1.0)
+        prompt_text: Optional guiding prompt
+
+    Returns:
+        Tuple of (dialog visibility, info message)
+    """
+    if not run_id:
+        return gr.update(visible=False), gr.update(value="No run selected")
+
+    try:
+        from cosmos_workflow.database import init_database
+        from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
+
+        # Initialize queue service
+        db = init_database("outputs/cosmos.db")
+        queue_service = SimplifiedQueueService(db_connection=db)
+
+        # Build job configuration
+        config = {
+            "run_id": run_id,  # Use correct parameter name
+            "control_weight": control_weight,
+        }
+        if prompt_text and prompt_text.strip():
+            config["prompt"] = prompt_text.strip()
+
+        # Add to queue
+        job_id = queue_service.add_job(
+            prompt_ids=[],  # Upscaling doesn't need prompt_ids
+            job_type="upscale",
+            config=config,
+        )
+
+        logger.info("Added upscale job {} for run {}", job_id, run_id)
+
+        return (
+            gr.update(visible=False),  # Hide dialog
+            gr.update(value=f"✅ Upscaling job queued (Job ID: {job_id})"),
+        )
+
+    except Exception as e:
+        logger.error("Error starting upscale: {}", e)
+        return (gr.update(visible=True), gr.update(value=f"❌ Error: {e!s}"))
+
+
+def cancel_upscale():
+    """Cancel the upscale dialog."""
+    return gr.update(visible=False)
+
+
+def load_runs_data_with_version_filter(
+    status_filter, date_filter, type_filter, search_text, limit, rating_filter, version_filter
+):
+    """Load runs data with version filtering support.
+
+    This extends load_runs_data to handle the version filter for showing
+    original/upscaled/best available videos in the gallery.
+    """
+    # Get base runs data
+    gallery_data, table_data, stats = load_runs_data(
+        status_filter, date_filter, type_filter, search_text, limit, rating_filter
+    )
+
+    # If version filter is "all" or "original", no changes needed
+    if version_filter in ["all", "original"]:
+        return gallery_data, table_data, stats
+
+    # For "best" or "upscaled", we need to check for upscaled versions
+    if version_filter in ["best", "upscaled"]:
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+        updated_gallery = []
+
+        for item in gallery_data:
+            # Gallery items are (video_path, label) tuples
+            if len(item) >= 2:
+                label = item[1]
+                # Parse run_id from label (format: "rs_xxx..." or "run_xxx...")
+                if "rs_" in label or "run_" in label:
+                    # Extract the run ID
+                    parts = label.split()
+                    run_id = parts[0] if parts else label
+
+                    # Check for upscaled version if this is an original run
+                    if "[4K" not in label:  # Not already upscaled
+                        upscaled = ops.get_upscaled_run(run_id)
+                        if upscaled and upscaled.get("status") == "completed":
+                            # Found upscaled version
+                            upscaled_video = upscaled.get("outputs", {}).get("output_path")
+                            if upscaled_video and Path(upscaled_video).exists():
+                                if version_filter == "best":
+                                    # Replace with upscaled version
+                                    new_label = f"{upscaled['id']} [4K ⬆️]"
+                                    # Preserve rating if present
+                                    if "★" in label:
+                                        rating_part = label[label.index("★") :]
+                                        new_label += f" {rating_part}"
+                                    updated_gallery.append((upscaled_video, new_label))
+                                    continue
+                                elif version_filter == "upscaled":
+                                    # Skip original, only show upscaled
+                                    continue
+
+                    # For "upscaled" filter, include runs that are already upscaled
+                    if version_filter == "upscaled" and "[4K" in label:
+                        updated_gallery.append(item)
+                    elif version_filter == "best":
+                        # No upscaled version found, keep original
+                        updated_gallery.append(item)
+                else:
+                    # Can't parse run_id, keep as is
+                    if version_filter != "upscaled":
+                        updated_gallery.append(item)
+            else:
+                # Invalid gallery item format, keep as is
+                if version_filter != "upscaled":
+                    updated_gallery.append(item)
+
+        return updated_gallery, table_data, stats
+
+    # Default: return unchanged
+    return gallery_data, table_data, stats

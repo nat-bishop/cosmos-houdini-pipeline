@@ -416,6 +416,14 @@ class GPUExecutor:
                 upscale_script = scripts_dir / "upscale.sh"
                 if upscale_script.exists():
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
+                    # Set execute permissions on the script
+                    remote_script_path = f"{remote_scripts_dir}/upscale.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on upscale.sh: {}", stderr
+                        )
 
                 # Get guidance and seed from execution_config
                 execution_config = run.get("execution_config", {})
@@ -1382,6 +1390,16 @@ class GPUExecutor:
                 if upscale_script.exists():
                     logger.info("Uploading upscale script to remote")
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
+                    # Set execute permissions on the script after upload (like batch_inference.sh)
+                    remote_script_path = f"{remote_scripts_dir}/upscale.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on upscale.sh: {}", stderr
+                        )
+                    else:
+                        logger.debug("Set execute permissions on upscale.sh")
                 else:
                     logger.warning("Upscale script not found at {}", upscale_script)
 

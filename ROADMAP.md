@@ -176,6 +176,9 @@
 
 **Note:** Low priority - current monolithic structure works but could be more maintainable
 
+### Progress Indicators for GPU Jobs
+- [ ] Add progress bars for GPU jobs to the Gradio app
+
 ### Standardize Error Handling
 - [ ] Create base exception classes in `cosmos_workflow/exceptions.py`
 - [ ] Define ValidationError, ExecutionError, NetworkError

@@ -343,8 +343,11 @@ class SimplifiedQueueService:
         """Execute upscale job."""
         config = job.config or {}
 
-        # Build kwargs
-        kwargs = {"video_source": config.get("video_source")}
+        # Map video_source to run_id for backward compatibility
+        run_id = config.get("run_id") or config.get("video_source")
+
+        # Build kwargs with correct parameter name
+        kwargs = {"run_id": run_id}
 
         if "control_weight" in config:
             kwargs["control_weight"] = config["control_weight"]
@@ -352,8 +355,8 @@ class SimplifiedQueueService:
             kwargs["prompt"] = config["prompt"]
 
         # Validate
-        if not kwargs["video_source"]:
-            raise ValueError("No video_source provided for upscale job")
+        if not run_id:
+            raise ValueError("No run_id provided for upscale job")
 
         # Execute upscale
         result = self.cosmos_api.upscale(**kwargs)

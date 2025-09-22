@@ -165,6 +165,17 @@
 - [ ] Ensure tests continue to work after directory changes
 - [ ] Update documentation to reflect new structure
 
+### Gradio UI Refactoring
+**Goal:** Reduce monolithic app.py file (currently 3,200+ lines) to improve maintainability
+
+**Potential Improvements:**
+- [ ] Extract inline event handlers to separate modules (~1,000 lines)
+- [ ] Move event bindings closer to their respective tab definitions
+- [ ] Reduce app.py to focus on component assembly only (~2,000 lines target)
+- [ ] Consider consolidating tab UI and handler files when they're closely related
+
+**Note:** Low priority - current monolithic structure works but could be more maintainable
+
 ### Standardize Error Handling
 - [ ] Create base exception classes in `cosmos_workflow/exceptions.py`
 - [ ] Define ValidationError, ExecutionError, NetworkError

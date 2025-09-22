@@ -744,34 +744,6 @@ def update_selection_count(dataframe_data):
         return "**0** prompts selected"
 
 
-def clear_all_prompts(dataframe_data):
-    """Clear all selections in the table."""
-    if dataframe_data is None:
-        return []
-
-    import pandas as pd
-
-    if isinstance(dataframe_data, pd.DataFrame):
-        # DataFrame format - set first column to False
-        dataframe_data = dataframe_data.copy()
-        dataframe_data.iloc[:, 0] = False
-        return dataframe_data
-    else:
-        # List format
-        updated_data = []
-        for row in dataframe_data:
-            new_row = row.copy() if isinstance(row, list) else list(row)
-            new_row[0] = False
-            updated_data.append(new_row)
-        return updated_data
-
-
-def toggle_enhance_force_visibility(create_new):
-    """Show/hide force overwrite checkbox based on action selection."""
-    # Show force checkbox only when overwrite is selected
-    return gr.update(visible=not create_new)
-
-
 def calculate_run_statistics(runs):
     """Calculate run statistics by model type and status.
 
@@ -997,28 +969,6 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
             gr.update(value="Error loading"),
             gr.update(value=None),
         ]
-
-
-def get_recent_runs(limit=5):
-    """Get recent runs for the Jobs tab."""
-    try:
-        # Create fresh CosmosAPI instance
-        ops = CosmosAPI()
-        # Get most recent runs
-        runs = ops.list_runs(limit=limit)
-
-        # Format for table display
-        table_data = []
-        for run in runs[:limit]:
-            run_id = run.get("id", "")[:8]
-            status = run.get("status", "unknown")
-            created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-            table_data.append([run_id, status, created])
-
-        return table_data
-    except Exception as e:
-        logger.error("Error getting recent runs: {}", str(e))
-        return []
 
 
 def run_inference_on_selected(

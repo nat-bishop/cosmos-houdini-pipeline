@@ -508,11 +508,12 @@ class GPUExecutor:
         remote_output_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
 
         # Determine output filename based on operation type
+        # Note: Upscaling now saves as output.mp4, not output_4k.mp4
+        remote_file = f"{remote_output_dir}/output.mp4"
         if upscaled:
-            remote_file = f"{remote_output_dir}/output_4k.mp4"
+            # Download as output_4k.mp4 locally for clarity, but remote file is output.mp4
             local_file = outputs_dir / "output_4k.mp4"
         else:
-            remote_file = f"{remote_output_dir}/output.mp4"
             local_file = outputs_dir / "output.mp4"
 
         # Download the output file

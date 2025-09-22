@@ -399,17 +399,20 @@ def on_runs_gallery_select(evt: gr.SelectData):
 
         if evt is None:
             logger.warning("No evt, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 16
+            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
         # The label now contains only rating and run ID in format "★★★☆☆||full_run_id"
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
-            return [gr.update(visible=False)] + [gr.update()] * 16
+            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
         # Extract full run ID from label (after the || separator)
         if "||" in label:
             full_run_id = label.split("||")[-1].strip()  # Get the last part which is the run_id
+            # Remove any upscale indicator like [4K ⬆️]
+            if " [4K" in full_run_id:
+                full_run_id = full_run_id.split(" [4K")[0].strip()
             if full_run_id and full_run_id.startswith("rs_"):
                 # Create a fake table data and event to reuse the existing handler
                 fake_table_data = [[full_run_id]]
@@ -449,11 +452,11 @@ def on_runs_gallery_select(evt: gr.SelectData):
                     return on_runs_table_select(fake_table_data, fake_evt)
 
         logger.warning("Could not extract run ID from label: {}", label)
-        return [gr.update(visible=False)] + [gr.update()] * 16
+        return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
     except Exception as e:
         logger.error("Error selecting from gallery: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 16
+        return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
 
 def on_runs_table_select(table_data, evt: gr.SelectData):
@@ -465,7 +468,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if evt is None or table_data is None:
             logger.warning("No evt or table_data, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 16
+            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -489,14 +492,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if not run_id or not ops:
             logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            return [gr.update(visible=False)] + [gr.update()] * 17
+            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
         # Get full run details
         run_details = ops.get_run(run_id)
         logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            return [gr.update(visible=False)] + [gr.update()] * 17
+            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
 
         # Get model type to determine which UI to show
         model_type = run_details.get("model_type", "transfer")
@@ -837,11 +840,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                 and run_details.get("model_type") == "transfer"
                 and not ops.get_upscaled_run(run_id)  # Check if not already upscaled
             ),  # runs_upscale_selected_btn
+            # Selected run tracking
+            gr.update(value=run_id),  # runs_selected_id
+            gr.update(value=f"Selected: {run_id[:12]}..."),  # runs_selected_info
         ]
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 28  # Updated count for upscale button
+        return [gr.update(visible=False)] + [gr.update()] * 30  # Updated count for new components
 
 
 def load_run_logs(log_path):
@@ -1503,71 +1509,232 @@ def load_runs_data_with_version_filter(
 ):
     """Load runs data with version filtering support.
 
-    This extends load_runs_data to handle the version filter for showing
-    original/upscaled/best available videos in the gallery.
+    This modifies the initial query to handle version filtering at the database level,
+    avoiding inefficient post-processing with multiple API calls.
     """
-    # Get base runs data
-    gallery_data, table_data, stats = load_runs_data(
-        status_filter, date_filter, type_filter, search_text, limit, rating_filter
-    )
+    try:
+        logger.debug(
+            "Loading runs data with filters: status={}, date={}, type={}, search={}, limit={}, rating={}, version={}",
+            status_filter,
+            date_filter,
+            type_filter,
+            search_text,
+            limit,
+            rating_filter,
+            version_filter,
+        )
 
-    # If version filter is "all" or "original", no changes needed
-    if version_filter in ["all", "original"]:
-        return gallery_data, table_data, stats
-
-    # For "best" or "upscaled", we need to check for upscaled versions
-    if version_filter in ["best", "upscaled"]:
+        # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
 
         ops = CosmosAPI()
-        updated_gallery = []
 
-        for item in gallery_data:
-            # Gallery items are (video_path, label) tuples
-            if len(item) >= 2:
-                label = item[1]
-                # Parse run_id from label (format: "rs_xxx..." or "run_xxx...")
-                if "rs_" in label or "run_" in label:
-                    # Extract the run ID
-                    parts = label.split()
-                    run_id = parts[0] if parts else label
+        if not ops:
+            logger.warning("CosmosAPI not initialized")
+            return [], [], "No data available"
 
-                    # Check for upscaled version if this is an original run
-                    if "[4K" not in label:  # Not already upscaled
-                        upscaled = ops.get_upscaled_run(run_id)
-                        if upscaled and upscaled.get("status") == "completed":
-                            # Found upscaled version
-                            upscaled_video = upscaled.get("outputs", {}).get("output_path")
-                            if upscaled_video and Path(upscaled_video).exists():
-                                if version_filter == "best":
-                                    # Replace with upscaled version
-                                    new_label = f"{upscaled['id']} [4K ⬆️]"
-                                    # Preserve rating if present
-                                    if "★" in label:
-                                        rating_part = label[label.index("★") :]
-                                        new_label += f" {rating_part}"
-                                    updated_gallery.append((upscaled_video, new_label))
-                                    continue
-                                elif version_filter == "upscaled":
-                                    # Skip original, only show upscaled
-                                    continue
+        # Query with version filter applied at database level
+        max_search_limit = 500
+        all_runs = ops.list_runs(
+            status=None if status_filter == "all" else status_filter,
+            limit=max_search_limit,
+            version_filter=version_filter,  # Pass version filter to SQL query
+        )
+        logger.info(
+            "Fetched {} runs from database with version_filter={}", len(all_runs), version_filter
+        )
 
-                    # For "upscaled" filter, include runs that are already upscaled
-                    if version_filter == "upscaled" and "[4K" in label:
-                        updated_gallery.append(item)
-                    elif version_filter == "best":
-                        # No upscaled version found, keep original
-                        updated_gallery.append(item)
+        # Continue with the rest of the processing from load_runs_data
+        # Enrich runs with prompt text
+        for run in all_runs:
+            if not run.get("prompt_text") and run.get("prompt_id"):
+                prompt = ops.get_prompt(run["prompt_id"])
+                if prompt:
+                    run["prompt_text"] = prompt.get("prompt_text", "")
+
+            # Add visual indicators for upscaled runs
+            if run.get("model_type") == "upscale":
+                run["is_upscaled"] = True
+
+        # Apply date filter
+        now = datetime.now(timezone.utc)
+        filtered_runs = []
+
+        for run in all_runs:
+            # Parse run creation date
+            try:
+                created_str = run.get("created_at", "")
+                if created_str:
+                    # Handle both timezone-aware and naive dates
+                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                        # Has timezone info
+                        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    else:
+                        # No timezone info - assume UTC
+                        created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
                 else:
-                    # Can't parse run_id, keep as is
-                    if version_filter != "upscaled":
-                        updated_gallery.append(item)
+                    created = now
+            except Exception:
+                created = now
+
+            # Apply date filter
+            date_match = False
+            if date_filter == "today":
+                date_match = created.date() == now.date()
+            elif date_filter == "yesterday":
+                yesterday = now - timedelta(days=1)
+                date_match = created.date() == yesterday.date()
+            elif date_filter == "last_7_days":
+                seven_days_ago = now - timedelta(days=7)
+                date_match = created >= seven_days_ago
+            elif date_filter == "last_30_days":
+                thirty_days_ago = now - timedelta(days=30)
+                date_match = created >= thirty_days_ago
+            else:  # all
+                date_match = True
+
+            # Apply type filter
+            type_match = False
+            if type_filter == "all":
+                type_match = True
             else:
-                # Invalid gallery item format, keep as is
-                if version_filter != "upscaled":
-                    updated_gallery.append(item)
+                model_type = run.get("model_type", "transfer")
+                type_match = type_filter == model_type
 
-        return updated_gallery, table_data, stats
+            # Add to filtered runs if both filters match
+            if date_match and type_match:
+                filtered_runs.append(run)
 
-    # Default: return unchanged
-    return gallery_data, table_data, stats
+        # Apply text search
+        if search_text:
+            search_lower = search_text.lower()
+            filtered_runs = [
+                run
+                for run in filtered_runs
+                if search_lower in run.get("id", "").lower()
+                or search_lower in run.get("prompt_text", "").lower()
+            ]
+
+        # Apply rating filter
+        if rating_filter and rating_filter != "all":
+            if rating_filter == "unrated":
+                filtered_runs = [run for run in filtered_runs if not run.get("rating")]
+            elif rating_filter == "5":
+                filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
+            elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
+                min_rating = int(rating_filter[0])
+                filtered_runs = [
+                    run
+                    for run in filtered_runs
+                    if run.get("rating") and run.get("rating") >= min_rating
+                ]
+
+        # Store total count before limiting for statistics
+        total_filtered = len(filtered_runs)
+
+        # Now limit to the user's Max Results setting
+        display_limit = int(limit)
+        filtered_runs = filtered_runs[:display_limit]
+
+        # Build gallery and table data
+        gallery_data = []
+        video_paths = []
+        completed_runs = [r for r in filtered_runs if r.get("status") == "completed"]
+
+        for run in completed_runs:
+            outputs = run.get("outputs", {})
+            output_video = None
+            run_id = run.get("id", "unknown")
+
+            if isinstance(outputs, dict) and "output_path" in outputs:
+                output_path = outputs["output_path"]
+                if output_path and output_path.endswith(".mp4"):
+                    output_video = Path(output_path)
+                    if output_video.exists():
+                        video_paths.append((output_video, run))
+
+        # Generate thumbnails
+        futures = []
+        for video_path, _run in video_paths[:display_limit]:
+            futures.append(THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path))
+
+        # Collect results
+        for i, future in enumerate(futures):
+            try:
+                thumb_path = future.result(timeout=3)
+                video_path, run = video_paths[i]
+                run_id = run.get("id", "unknown")
+                rating = run.get("rating", 0) or 0
+                rating_str = "★" * rating + "☆" * (5 - rating)
+
+                # Add upscale indicator if applicable
+                label = f"{rating_str}||{run_id}"
+                if run.get("is_upscaled"):
+                    label += " [4K ⬆️]"
+
+                if thumb_path:
+                    gallery_data.append((thumb_path, label))
+                else:
+                    gallery_data.append((str(video_path), label))
+            except Exception:
+                video_path, run = video_paths[i]
+                run_id = run.get("id", "unknown")
+                rating = run.get("rating", 0) or 0
+                rating_str = "★" * rating + "☆" * (5 - rating)
+                label = f"{rating_str}||{run_id}"
+                if run.get("is_upscaled"):
+                    label += " [4K ⬆️]"
+                gallery_data.append((str(video_path), label))
+
+        # Build table data
+        table_data = []
+        for run in filtered_runs:
+            run_id = run.get("id", "")
+            status_icon = {
+                "completed": "✅",
+                "running": "🔄",
+                "failed": "❌",
+                "pending": "⏳",
+                "cancelled": "🚫",
+            }.get(run.get("status", ""), "❓")
+
+            model_icon = {"transfer": "🎬", "enhance": "✨", "upscale": "⬆️"}.get(
+                run.get("model_type", "transfer"), "🎬"
+            )
+
+            prompt_preview = run.get("prompt_text", "")[:50]
+            if len(run.get("prompt_text", "")) > 50:
+                prompt_preview += "..."
+
+            rating = run.get("rating", 0) or 0
+            rating_str = "★" * rating + "☆" * (5 - rating) if rating > 0 else ""
+
+            table_data.append(
+                [
+                    run_id,
+                    f"{status_icon} {run.get('status', '')}",
+                    f"{model_icon} {run.get('model_type', 'transfer')}",
+                    prompt_preview,
+                    rating_str,
+                    run.get("created_at", "")[:19],
+                ]
+            )
+
+        # Calculate statistics
+        status_counts = {}
+        for run in filtered_runs:
+            status = run.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        stats_text = (
+            f"Total Matching: {total_filtered} (showing {len(filtered_runs)}) | "
+            f"Completed: {status_counts.get('completed', 0)} | "
+            f"Running: {status_counts.get('running', 0)} | "
+            f"Failed: {status_counts.get('failed', 0)}"
+        )
+
+        return gallery_data, table_data, stats_text
+
+    except Exception as e:
+        logger.error("Error loading runs data: {}", e, exc_info=True)
+        return [], [], "Error loading data"

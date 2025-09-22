@@ -498,6 +498,7 @@ class DataRepository:
         prompt_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        version_filter: str | None = None,
     ) -> list[dict[str, Any]]:
         """List runs with optional filtering and pagination.
 
@@ -506,16 +507,18 @@ class DataRepository:
             prompt_id: Optional filter by prompt ID
             limit: Maximum number of results to return (default: 50)
             offset: Number of results to skip (default: 0)
+            version_filter: Optional version filter ('all', 'best', 'original', 'upscaled')
 
         Returns:
             List of run dictionaries
         """
         logger.debug(
-            "Listing runs with status=%s, prompt_id=%s, limit=%s, offset=%s",
+            "Listing runs with status=%s, prompt_id=%s, limit=%s, offset=%s, version=%s",
             status,
             prompt_id,
             limit,
             offset,
+            version_filter,
         )
 
         try:
@@ -527,6 +530,31 @@ class DataRepository:
                     query = query.filter(Run.status == status)
                 if prompt_id:
                     query = query.filter(Run.prompt_id == prompt_id)
+
+                # Apply version filter
+                if version_filter == "original":
+                    # Only non-upscaled runs
+                    query = query.filter(Run.model_type != "upscale")
+                elif version_filter == "upscaled":
+                    # Only upscaled runs
+                    query = query.filter(Run.model_type == "upscale")
+                elif version_filter == "best":
+                    # This is more complex - we want to exclude originals that have upscaled versions
+                    # First, get all upscaled runs' source_run_ids
+                    from sqlalchemy import and_, func, not_
+
+                    # Subquery to get source_run_ids of completed upscaled runs
+                    upscaled_sources = (
+                        session.query(func.json_extract(Run.execution_config, "$.source_run_id"))
+                        .filter(and_(Run.model_type == "upscale", Run.status == "completed"))
+                        .subquery()
+                    )
+
+                    # Exclude original runs that have upscaled versions
+                    query = query.filter(
+                        not_(and_(Run.model_type != "upscale", Run.id.in_(upscaled_sources)))
+                    )
+                # version_filter == "all" or None: no additional filtering
 
                 # Order by created_at descending (newest first)
                 query = query.order_by(Run.created_at.desc())

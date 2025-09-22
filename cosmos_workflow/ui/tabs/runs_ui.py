@@ -121,6 +121,24 @@ def create_runs_tab_ui():
 
             # Right: Gallery and Table tabs
             with gr.Column(scale=3):
+                # Action buttons outside tabs - work with both gallery and table selection
+                with gr.Row():
+                    components["runs_delete_selected_btn"] = gr.Button(
+                        "🗑️ Delete Selected Run",
+                        size="sm",
+                        variant="stop",
+                    )
+                    components["runs_upscale_selected_btn"] = gr.Button(
+                        "⬆️ Upscale Selected Run",
+                        size="sm",
+                        variant="primary",
+                        visible=False,  # Hidden until valid run selected
+                    )
+                    components["runs_selected_info"] = gr.Markdown("No run selected")
+
+                # Hidden component to store selected run ID
+                components["runs_selected_id"] = gr.Textbox(visible=False)
+
                 with gr.Tabs():
                     # Generated Videos tab
                     with gr.Tab("Generated Videos"):
@@ -140,24 +158,6 @@ def create_runs_tab_ui():
 
                     # Run Records tab
                     with gr.Tab("Run Records"):
-                        # Single row operations
-                        with gr.Row():
-                            components["runs_delete_selected_btn"] = gr.Button(
-                                "🗑️ Delete Selected Run",
-                                size="sm",
-                                variant="stop",
-                            )
-                            components["runs_upscale_selected_btn"] = gr.Button(
-                                "⬆️ Upscale Selected Run",
-                                size="sm",
-                                variant="primary",
-                                visible=False,  # Hidden until valid run selected
-                            )
-                            components["runs_selected_info"] = gr.Markdown("No run selected")
-
-                        # Hidden component to store selected run ID
-                        components["runs_selected_id"] = gr.Textbox(visible=False)
-
                         with gr.Column(
                             elem_id="runs-table-wrapper", elem_classes=["runs-table-container"]
                         ):

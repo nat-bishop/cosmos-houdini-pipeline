@@ -388,6 +388,10 @@ class CosmosAPI:
             execution_config=execution_config,
         )
 
+        # Inherit rating from parent run if it has one
+        if parent_run.get("rating"):
+            self.service.update_run(upscale_run["id"], rating=parent_run["rating"])
+
         logger.info("Created upscaling run %s for parent run %s", upscale_run["id"], run_id)
 
         # Update status and execute
@@ -401,17 +405,11 @@ class CosmosAPI:
                 prompt_text=prompt,
             )
 
-            # Check if operation started in background
-            if result.get("status") == "started":
-                # Don't update to completed yet - monitor will handle it
-                logger.info("Upscaling run {} started in background", upscale_run["id"])
-                return {
-                    "upscale_run_id": upscale_run["id"],
-                    "status": "started",
-                    "message": result.get("message", "Upscaling started in background"),
-                }
+            # Upscaling runs synchronously and completes immediately (like batch inference)
+            if result.get("status") != "completed":
+                raise RuntimeError(f"Unexpected upscale status: {result.get('status')}")
 
-            # Legacy synchronous completion (shouldn't happen with new implementation)
+            # Update run with outputs and mark as completed
             self.service.update_run(upscale_run["id"], outputs=result)
             self.service.update_run_status(upscale_run["id"], "completed")
             logger.info("Upscaling run {} completed successfully", upscale_run["id"])
@@ -726,7 +724,7 @@ class CosmosAPI:
         """List runs with optional filtering.
 
         Args:
-            **kwargs: Filtering parameters (status, prompt_id, limit, offset)
+            **kwargs: Filtering parameters (status, prompt_id, limit, offset, version_filter)
 
         Returns:
             List of run dictionaries

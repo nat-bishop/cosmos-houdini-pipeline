@@ -2567,8 +2567,10 @@ def create_ui():
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",
-                # Upscale button
+                # Upscale button and selection tracking
                 "runs_upscale_selected_btn",
+                "runs_selected_id",
+                "runs_selected_info",
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:
@@ -2651,6 +2653,10 @@ def create_ui():
                 "runs_params_json",
                 "runs_log_path",
                 "runs_log_output",
+                # Upscale button and selection tracking
+                "runs_upscale_selected_btn",
+                "runs_selected_id",
+                "runs_selected_info",
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:

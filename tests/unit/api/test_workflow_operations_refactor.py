@@ -73,7 +73,11 @@ class TestQuickInferenceRefactored:
         mock_service.create_run.return_value = mock_run
 
         # Setup mock execution result
-        mock_result = {"output_path": "/outputs/result.mp4", "duration_seconds": 120}
+        mock_result = {
+            "output_path": "/outputs/result.mp4",
+            "duration_seconds": 120,
+            "status": "completed",
+        }
         mock_orchestrator.execute_run.return_value = mock_result
 
         # Call quick_inference with prompt_id directly (no run_id needed)
@@ -85,7 +89,7 @@ class TestQuickInferenceRefactored:
             execution_config={
                 "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
                 "num_steps": 35,
-                "guidance": 7.0,
+                "guidance": 5.0,
                 "seed": 1,
                 "sigma_max": 70.0,
                 "blur_strength": "medium",
@@ -102,7 +106,7 @@ class TestQuickInferenceRefactored:
         assert "run_id" in result
         assert result["run_id"] == "rs_auto123"
         assert result["output_path"] == "/outputs/result.mp4"
-        assert result["status"] == "success"
+        assert result["status"] == "completed"
 
     def test_quick_inference_with_custom_weights(self, ops, mock_service, mock_orchestrator):
         """Test quick_inference with custom weights."""
@@ -244,11 +248,8 @@ class TestBatchInferenceRefactored:
         batch_call_args = mock_orchestrator.execute_batch_runs.call_args[0][0]
         assert len(batch_call_args) == 3
 
-        # Verify run statuses are updated
-        assert mock_service.update_run_status.call_count == 3
-        mock_service.update_run_status.assert_any_call("rs_auto1", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto2", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto3", "completed")
+        # Note: Run statuses are now updated internally by execute_batch_runs,
+        # not by the API layer
 
         # Verify result structure
         assert "output_mapping" in result
@@ -326,11 +327,12 @@ class TestBatchInferenceRefactored:
             "failed": 1,
         }
 
-        ops.batch_inference(["ps_test1", "ps_test2"])
+        result = ops.batch_inference(["ps_test1", "ps_test2"])
 
-        # Verify status updates
-        mock_service.update_run_status.assert_any_call("rs_auto1", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto2", "failed")
+        # Note: Status updates are now handled internally by execute_batch_runs
+        # Verify result structure shows correct success/failure counts
+        assert result["successful"] == 1
+        assert result["failed"] == 1
 
     def test_batch_inference_with_additional_params(self, ops, mock_service, mock_orchestrator):
         """Test batch_inference with additional execution parameters."""

@@ -73,7 +73,7 @@ class FakeSSHManager:
         """Simulate SSH disconnection."""
         self.is_connected = False
 
-    def execute_command(self, command: str) -> tuple[str, str, int]:
+    def execute_command(self, command: str, timeout: int | None = None) -> tuple[str, str, int]:
         """Simulate command execution."""
         self.commands_executed.append(command)
         # Return fake output based on command
@@ -85,7 +85,7 @@ class FakeSSHManager:
             return ("file1.txt\nfile2.txt", "", 0)
         return ("", "", 0)
 
-    def execute_command_success(self, command: str) -> None:
+    def execute_command_success(self, command: str, timeout: int | None = None) -> None:
         """Simulate successful command execution."""
         self.commands_executed.append(command)
 

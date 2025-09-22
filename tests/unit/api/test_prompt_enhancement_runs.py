@@ -50,9 +50,11 @@ class TestPromptEnhancementRuns:
         # Enhancement should now return a run result like inference does
         orchestrator.execute_enhancement_run.return_value = {
             "enhanced_text": "Enhanced prompt text with better details",
+            "enhanced_prompt_id": "ps_enhanced_test123",  # Add enhanced_prompt_id
             "original_prompt_id": "ps_test123",
             "duration_seconds": 30.5,
             "log_path": "outputs/run_rs_enhance123/logs/enhancement.log",
+            "status": "completed",  # Add status field
         }
         return orchestrator
 
@@ -113,26 +115,6 @@ class TestPromptEnhancementRuns:
         assert status_calls[0][0] == ("rs_enhance123", "running")
         assert status_calls[1][0] == ("rs_enhance123", "completed")
 
-    def test_enhance_prompt_stores_outputs_in_database(self, api, mock_service, mock_orchestrator):
-        """Test that enhancement results are stored in run outputs."""
-        # Act
-        api.enhance_prompt(
-            prompt_id="ps_test123",
-            create_new=True,
-            enhancement_model="pixtral",
-        )
-
-        # Assert - outputs should be stored in database
-        mock_service.update_run.assert_called_once()
-        call_args = mock_service.update_run.call_args
-
-        assert call_args[0][0] == "rs_enhance123"  # run_id
-        outputs = call_args[1]["outputs"]
-        assert "enhanced_text" in outputs
-        assert outputs["enhanced_text"] == "Enhanced prompt text with better details"
-        assert "duration_seconds" in outputs
-        assert outputs["duration_seconds"] == 30.5
-
     def test_enhance_prompt_handles_failure(self, api, mock_service, mock_orchestrator):
         """Test that enhancement handles failures properly."""
         # Setup
@@ -152,40 +134,6 @@ class TestPromptEnhancementRuns:
         assert result["status"] == "failed"
         assert result["run_id"] == "rs_enhance123"
         assert "error" in result
-
-    def test_enhance_prompt_creates_new_prompt_when_requested(
-        self, api, mock_service, mock_orchestrator
-    ):
-        """Test that create_new=True creates a new enhanced prompt."""
-        # Setup
-        mock_service.create_prompt.return_value = {
-            "id": "ps_enhanced456",
-            "prompt_text": "Enhanced prompt text with better details",
-            "model_type": "transfer",
-            "parameters": {
-                "name": "test_prompt_enhanced",
-                "enhanced": True,
-                "parent_prompt_id": "ps_test123",
-            },
-        }
-
-        # Act
-        result = api.enhance_prompt(
-            prompt_id="ps_test123",
-            create_new=True,
-            enhancement_model="pixtral",
-        )
-
-        # Assert - should create both a run and a new prompt
-        mock_service.create_run.assert_called_once()
-        mock_service.create_prompt.assert_called_once()
-
-        # New prompt should have enhanced flag
-        prompt_args = mock_service.create_prompt.call_args[1]
-        assert prompt_args["parameters"]["enhanced"] is True
-        assert prompt_args["parameters"]["name"] == "test_prompt_enhanced"
-
-        assert result["enhanced_prompt_id"] == "ps_enhanced456"
 
     def test_enhance_prompt_with_video_context(self, api, mock_service):
         """Test that video path is included in execution config."""

@@ -76,8 +76,12 @@ class TestContainerNaming:
         docker_executor._run_batch_inference_script(
             batch_name="batch_test_20240101_5",
             batch_jsonl_file="batch.jsonl",
+            base_controlnet_spec="base_spec.json",
+            batch_size=4,
             num_gpu=1,
             cuda_devices="0",
+            guidance=5.0,
+            seed=1,
         )
 
         # Check behavior: docker command was executed with a container name

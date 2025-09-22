@@ -596,40 +596,56 @@ class TestDockerExecutorBatchInference:
         # Mock directory creation
         self.mock_remote_executor.create_directory.return_value = None
 
-        # Mock batch script execution
-        with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            # Run batch inference
-            result = self.docker_executor.run_batch_inference(
-                batch_name="batch_test",
-                batch_jsonl_file="batch_test.jsonl",
-                num_gpu=2,
-                cuda_devices="0,1",
-            )
+        # Mock getting output files
+        with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
+            mock_get_files.return_value = [
+                "/remote/outputs/batch_test/video_0/output.mp4",
+                "/remote/outputs/batch_test/video_1/output.mp4",
+            ]
 
-            # Verify batch file was checked
-            self.mock_remote_executor.file_exists.assert_called_once_with(
-                f"{self.remote_dir}/inputs/batches/batch_test.jsonl"
-            )
+            # Mock batch script execution
+            with patch.object(
+                self.docker_executor, "_run_batch_inference_script"
+            ) as mock_run_script:
+                # Mock successful execution
+                mock_run_script.return_value = 0  # Exit code 0 for success
 
-            # Verify directories were created (logs and output)
-            create_calls = self.mock_remote_executor.create_directory.call_args_list
-            assert len(create_calls) == 2
-            assert create_calls[0][0][0] == f"{self.remote_dir}/logs/batch"
-            assert create_calls[1][0][0] == f"{self.remote_dir}/outputs/batch_test"
+                # Run batch inference
+                result = self.docker_executor.run_batch_inference(
+                    batch_name="batch_test",
+                    batch_jsonl_file="batch_test.jsonl",
+                    base_controlnet_spec="base_spec.json",
+                    batch_size=4,
+                    num_gpu=2,
+                    cuda_devices="0,1",
+                    guidance=5.0,
+                    seed=1,
+                )
 
-            # Verify batch script was called with log path
+            # Verify batch files were checked (both JSONL and base_spec)
+            file_exists_calls = self.mock_remote_executor.file_exists.call_args_list
+            assert len(file_exists_calls) == 2
+            # Check that both files were verified
+            checked_files = [call[0][0] for call in file_exists_calls]
+            assert f"{self.remote_dir}/inputs/batches/batch_test.jsonl" in checked_files
+            assert f"{self.remote_dir}/inputs/batches/base_spec.json" in checked_files
+
+            # Verify batch script was called with correct parameters
             mock_run_script.assert_called_once_with(
                 "batch_test",
                 "batch_test.jsonl",
+                "base_spec.json",
+                4,
                 2,
                 "0,1",
-                f"{self.remote_dir}/logs/batch/batch_test.log",
+                5.0,
+                1,
             )
 
-            # Check result structure - batch now returns immediately with "started" status
+            # Check result structure - batch now runs synchronously with "completed" status
             assert result["batch_name"] == "batch_test"
             assert result["output_dir"] == f"{self.remote_dir}/outputs/batch_test"
-            assert result["status"] == "started"
+            assert result["status"] == "completed"
 
     def test_run_batch_inference_file_not_found(self):
         """Test batch inference when JSONL file doesn't exist."""
@@ -641,59 +657,69 @@ class TestDockerExecutorBatchInference:
             self.docker_executor.run_batch_inference(
                 batch_name="missing_batch",
                 batch_jsonl_file="missing.jsonl",
+                base_controlnet_spec="base_spec.json",
             )
 
-        # Should check for file and create log directory, but not output directory
-        self.mock_remote_executor.file_exists.assert_called_once()
-        # Log directory is created before file check
-        self.mock_remote_executor.create_directory.assert_called_once_with(
-            f"{self.remote_dir}/logs/batch"
-        )
+        # Should check for batch file (and stop on failure, not checking base spec)
+        assert self.mock_remote_executor.file_exists.call_count == 1
 
     def test_run_batch_inference_with_default_gpu_settings(self):
         """Test batch inference with default GPU settings."""
         self.mock_remote_executor.file_exists.return_value = True
 
-        with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            # Run with defaults
-            result = self.docker_executor.run_batch_inference(
-                batch_name="batch_default",
-                batch_jsonl_file="batch.jsonl",
-            )
+        # Mock getting output files
+        with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
+            mock_get_files.return_value = ["/remote/outputs/batch_default/video_0/output.mp4"]
+
+            with patch.object(
+                self.docker_executor, "_run_batch_inference_script"
+            ) as mock_run_script:
+                # Mock successful execution
+                mock_run_script.return_value = 0  # Exit code 0 for success
+
+                # Run with defaults
+                result = self.docker_executor.run_batch_inference(
+                    batch_name="batch_default",
+                    batch_jsonl_file="batch.jsonl",
+                    base_controlnet_spec="base_spec.json",
+                )
 
             # Check result
             assert result["batch_name"] == "batch_default"
-            assert result["status"] == "started"
+            assert result["status"] == "completed"
 
-            # Should use default num_gpu=1 and cuda_devices="0" with log path
+            # Should use default num_gpu=1 and cuda_devices="0"
             mock_run_script.assert_called_once_with(
                 "batch_default",
                 "batch.jsonl",
+                "base_spec.json",
+                4,
                 1,
                 "0",
-                f"{self.remote_dir}/logs/batch/batch_default.log",
+                5.0,
+                1,
             )
 
     def test_run_batch_inference_script_builds_correct_command(self):
-        """Test that batch inference script builds correct Docker command in background."""
+        """Test that batch inference script builds correct Docker command synchronously."""
         # Mock execute_command
         self.mock_ssh_manager.execute_command.return_value = (0, "", "")
 
         # Run batch inference script
         self.docker_executor._run_batch_inference_script(
-            "batch_test", "batch_test.jsonl", 4, "0,1,2,3"
+            "batch_test", "batch_test.jsonl", "base_spec.json", 4, 1, "0,1,2,3", 5.0, 1
         )
 
         # Get the command that was executed
         call_args = self.mock_ssh_manager.execute_command.call_args
         cmd = call_args[0][0]
 
-        # Check timeout is quick for background
-        assert call_args[1]["timeout"] == 5
+        # Check timeout is appropriate for synchronous execution
+        assert call_args[1]["timeout"] == 3600  # 1 hour for batch processing
 
-        # Check that it's run in background with nohup
-        assert "nohup" in cmd
-        assert "&" in cmd
+        # Check that it's run synchronously (no nohup or &)
+        assert "nohup" not in cmd
+        assert not cmd.strip().endswith("&")
 
         # Check command components
         assert "docker run" in cmd
@@ -702,7 +728,10 @@ class TestDockerExecutorBatchInference:
         assert "--shm-size=8g" in cmd
         assert f"-v {self.remote_dir}:/workspace" in cmd
         assert self.docker_image in cmd
-        assert "/workspace/scripts/batch_inference.sh batch_test batch_test.jsonl 4 0,1,2,3" in cmd
+        # Check for new parameters in the command
+        assert "batch_test" in cmd
+        assert "batch_test.jsonl" in cmd
+        assert "base_spec.json" in cmd
 
     def test_get_batch_output_files_returns_mp4_files(self):
         """Test that _get_batch_output_files returns list of MP4 files."""
@@ -722,10 +751,11 @@ class TestDockerExecutorBatchInference:
         assert "/outputs/batch/video_001.mp4" in files
         assert "/outputs/batch/video_002.mp4" in files
 
-        # Should have executed ls command
+        # Should have executed find command
         self.mock_ssh_manager.execute_command_success.assert_called_once()
         call_args = self.mock_ssh_manager.execute_command_success.call_args[0][0]
-        assert "ls -1" in call_args
+        assert "find" in call_args
+        assert "batch_test" in call_args
         assert "*.mp4" in call_args
 
     def test_get_batch_output_files_handles_no_outputs(self):
@@ -754,38 +784,61 @@ class TestDockerExecutorBatchInference:
         """Test batch inference with large batch."""
         self.mock_remote_executor.file_exists.return_value = True
 
-        with patch.object(self.docker_executor, "_run_batch_inference_script"):
-            # Run batch inference
-            result = self.docker_executor.run_batch_inference(
-                batch_name="large_batch",
-                batch_jsonl_file="large_batch.jsonl",
-            )
+        # Mock getting output files
+        with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
+            mock_get_files.return_value = ["/remote/outputs/large_batch/video_0/output.mp4"]
 
-            # Should return immediately with started status
+            with patch.object(
+                self.docker_executor, "_run_batch_inference_script"
+            ) as mock_run_script:
+                # Mock successful execution
+                mock_run_script.return_value = 0  # Exit code 0 for success
+
+                # Run batch inference
+                result = self.docker_executor.run_batch_inference(
+                    batch_name="large_batch",
+                    batch_jsonl_file="large_batch.jsonl",
+                    base_controlnet_spec="base_spec.json",
+                )
+
+            # Should return with completed status (now runs synchronously)
             assert result["batch_name"] == "large_batch"
-            assert result["status"] == "started"
+            assert result["status"] == "completed"
 
     def test_run_batch_inference_preserves_batch_name_with_special_chars(self):
         """Test that batch names with timestamps are preserved."""
         batch_name = "batch_20241210_153045"
         self.mock_remote_executor.file_exists.return_value = True
 
-        with patch.object(self.docker_executor, "_run_batch_inference_script") as mock_run_script:
-            # Run with timestamp in name
-            result = self.docker_executor.run_batch_inference(
-                batch_name=batch_name,
-                batch_jsonl_file=f"{batch_name}.jsonl",
-            )
+        # Mock getting output files
+        with patch.object(self.docker_executor, "_get_batch_output_files") as mock_get_files:
+            mock_get_files.return_value = [f"/remote/outputs/{batch_name}/video_0/output.mp4"]
+
+            with patch.object(
+                self.docker_executor, "_run_batch_inference_script"
+            ) as mock_run_script:
+                # Mock successful execution
+                mock_run_script.return_value = 0  # Exit code 0 for success
+
+                # Run with timestamp in name
+                result = self.docker_executor.run_batch_inference(
+                    batch_name=batch_name,
+                    batch_jsonl_file=f"{batch_name}.jsonl",
+                    base_controlnet_spec="base_spec.json",
+                )
 
             # Name should be preserved exactly
             assert result["batch_name"] == batch_name
-            assert result["status"] == "started"
+            assert result["status"] == "completed"
             mock_run_script.assert_called_once_with(
                 batch_name,
                 f"{batch_name}.jsonl",
+                "base_spec.json",
+                4,
                 1,
                 "0",
-                f"{self.remote_dir}/logs/batch/{batch_name}.log",
+                5.0,
+                1,
             )
 
 

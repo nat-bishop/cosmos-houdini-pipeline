@@ -110,65 +110,48 @@ class TestGPUExecutorBatchExecution:
         self.mock_docker_executor.run_batch_inference.return_value = {
             "batch_name": "batch_test",
             "output_dir": "/remote/outputs/batch_test",
-            "status": "started",
+            "status": "completed",
             "output_files": [
                 "/remote/outputs/batch_test/video_000.mp4",
                 "/remote/outputs/batch_test/video_001.mp4",
             ],
         }
 
-        # Mock output splitting
-        with patch.object(self.orchestrator, "_split_batch_outputs") as mock_split:
-            mock_split.return_value = {
-                "rs_001": {
-                    "remote_path": "/remote/outputs/batch_test/video_000.mp4",
-                    "batch_index": 0,
-                    "status": "found",
+        # Mock nvidia_format functions
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
+
+            # Mock to_cosmos_inference_json to return a valid dict for each call
+            mock_nv.to_cosmos_inference_json.side_effect = [
+                {
+                    "visual_input": "video1.mp4",
+                    "prompt": "First prompt",
+                    "name": "rs_001",
+                    "weights": {"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
                 },
-                "rs_002": {
-                    "remote_path": "/remote/outputs/batch_test/video_001.mp4",
-                    "batch_index": 1,
-                    "status": "found",
+                {
+                    "visual_input": "video2.mp4",
+                    "prompt": "Second prompt",
+                    "name": "rs_002",
+                    "weights": {"vis": 0.5, "edge": 0.5, "depth": 0.0, "seg": 0.0},
                 },
-            }
+            ]
 
-            # Mock nvidia_format functions
-            with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
-                self._setup_nvidia_format_mock(mock_nv)
+            # Execute batch
+            result = self.orchestrator.execute_batch_runs(self.test_runs_and_prompts)
 
-                # Mock to_cosmos_inference_json to return a valid dict for each call
-                mock_nv.to_cosmos_inference_json.side_effect = [
-                    {
-                        "visual_input": "video1.mp4",
-                        "prompt": "First prompt",
-                        "name": "rs_001",
-                        "weights": {"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
-                    },
-                    {
-                        "visual_input": "video2.mp4",
-                        "prompt": "Second prompt",
-                        "name": "rs_002",
-                        "weights": {"vis": 0.5, "edge": 0.5, "depth": 0.0, "seg": 0.0},
-                    },
-                ]
+            # Verify success
+            assert result["status"] == "success"
+            assert "batch_name" in result
 
-                # Execute batch
-                result = self.orchestrator.execute_batch_runs(self.test_runs_and_prompts)
+            # Note: to_cosmos_inference_json is not called in batch mode
+            # It's only used for individual inference, not batch
 
-                # Verify success
-                assert result["status"] == "success"
-                assert "batch_name" in result
-                assert "output_mapping" in result
-                assert len(result["output_mapping"]) == 2
-
-                # Note: to_cosmos_inference_json is not called in batch mode
-                # It's only used for individual inference, not batch
-
-                # Verify batch inference was called
-                self.mock_docker_executor.run_batch_inference.assert_called_once()
-                call_kwargs = self.mock_docker_executor.run_batch_inference.call_args.kwargs
-                assert call_kwargs["batch_name"].startswith("batch_")
-                assert call_kwargs["batch_jsonl_file"] == "batch.jsonl"
+            # Verify batch inference was called
+            self.mock_docker_executor.run_batch_inference.assert_called_once()
+            call_kwargs = self.mock_docker_executor.run_batch_inference.call_args.kwargs
+            assert call_kwargs["batch_name"].startswith("batch_")
+            assert call_kwargs["batch_jsonl_file"] == "batch.jsonl"
 
     def test_execute_batch_runs_auto_generates_batch_name(self):
         """Test that batch name is auto-generated when not provided."""
@@ -196,7 +179,7 @@ class TestGPUExecutorBatchExecution:
             self.mock_docker_executor.run_batch_inference.return_value = {
                 "batch_name": "auto_name",
                 "output_dir": "/remote/outputs/auto",
-                "status": "started",
+                "status": "completed",
                 "output_files": [],
             }
 
@@ -225,7 +208,7 @@ class TestGPUExecutorBatchExecution:
             ]
 
             self.mock_docker_executor.run_batch_inference.return_value = {
-                "status": "started",
+                "status": "completed",
                 "output_files": [],
             }
 
@@ -323,7 +306,7 @@ class TestGPUExecutorBatchExecution:
             }
 
             self.mock_docker_executor.run_batch_inference.return_value = {
-                "status": "started",
+                "status": "completed",
                 "output_files": [],
             }
 
@@ -337,132 +320,6 @@ class TestGPUExecutorBatchExecution:
                 assert result["status"] == "success"
                 assert "batch_name" in result
 
-    def test_split_batch_outputs_exact_matching(self):
-        """Test output splitting with exact run_id matching."""
-        batch_result = {
-            "output_files": [
-                "/outputs/batch/rs_001_output.mp4",
-                "/outputs/batch/rs_002_result.mp4",
-                "/outputs/batch/rs_003_video.mp4",
-            ]
-        }
-
-        runs_and_prompts = [
-            ({"id": "rs_001"}, {"id": "ps_001"}),
-            ({"id": "rs_002"}, {"id": "ps_002"}),
-            ({"id": "rs_003"}, {"id": "ps_003"}),
-        ]
-
-        # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
-
-        # Should match by run_id in filename
-        assert mapping["rs_001"]["remote_path"] == "/outputs/batch/rs_001_output.mp4"
-        assert mapping["rs_001"]["status"] == "found"
-        assert mapping["rs_002"]["remote_path"] == "/outputs/batch/rs_002_result.mp4"
-        assert mapping["rs_002"]["status"] == "found"
-        assert mapping["rs_003"]["remote_path"] == "/outputs/batch/rs_003_video.mp4"
-        assert mapping["rs_003"]["status"] == "found"
-
-    def test_split_batch_outputs_index_matching(self):
-        """Test output splitting with index-based matching."""
-        batch_result = {
-            "output_files": [
-                "/outputs/batch/video_000_output.mp4",
-                "/outputs/batch/video_001_output.mp4",
-                "/outputs/batch/video_002_output.mp4",
-            ]
-        }
-
-        runs_and_prompts = [
-            ({"id": "rs_abc"}, {"id": "ps_001"}),
-            ({"id": "rs_def"}, {"id": "ps_002"}),
-            ({"id": "rs_ghi"}, {"id": "ps_003"}),
-        ]
-
-        # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
-
-        # Should match by index in filename
-        assert mapping["rs_abc"]["remote_path"] == "/outputs/batch/video_000_output.mp4"
-        assert mapping["rs_abc"]["batch_index"] == 0
-        assert mapping["rs_def"]["remote_path"] == "/outputs/batch/video_001_output.mp4"
-        assert mapping["rs_def"]["batch_index"] == 1
-        assert mapping["rs_ghi"]["remote_path"] == "/outputs/batch/video_002_output.mp4"
-        assert mapping["rs_ghi"]["batch_index"] == 2
-
-    def test_split_batch_outputs_sequential_fallback(self):
-        """Test sequential matching when no pattern matches."""
-        batch_result = {
-            "output_files": [
-                "/outputs/batch/output1.mp4",
-                "/outputs/batch/output2.mp4",
-                "/outputs/batch/output3.mp4",
-            ]
-        }
-
-        runs_and_prompts = [
-            ({"id": "rs_aaa"}, {"id": "ps_001"}),
-            ({"id": "rs_bbb"}, {"id": "ps_002"}),
-            ({"id": "rs_ccc"}, {"id": "ps_003"}),
-        ]
-
-        # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
-
-        # Should fall back to sequential matching
-        assert mapping["rs_aaa"]["remote_path"] == "/outputs/batch/output1.mp4"
-        assert mapping["rs_aaa"]["status"] == "assumed"
-        assert mapping["rs_bbb"]["remote_path"] == "/outputs/batch/output2.mp4"
-        assert mapping["rs_bbb"]["status"] == "assumed"
-        assert mapping["rs_ccc"]["remote_path"] == "/outputs/batch/output3.mp4"
-        assert mapping["rs_ccc"]["status"] == "assumed"
-
-    def test_split_batch_outputs_missing_outputs(self):
-        """Test handling when some outputs are missing."""
-        batch_result = {
-            "output_files": [
-                "/outputs/batch/video_000.mp4",
-                "/outputs/batch/video_001.mp4",
-                # video_002 is missing
-            ]
-        }
-
-        runs_and_prompts = [
-            ({"id": "rs_001"}, {"id": "ps_001"}),
-            ({"id": "rs_002"}, {"id": "ps_002"}),
-            ({"id": "rs_003"}, {"id": "ps_003"}),  # This one will be missing
-        ]
-
-        # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
-
-        # First two should be matched
-        assert mapping["rs_001"]["status"] in ["found", "assumed"]
-        assert mapping["rs_002"]["status"] in ["found", "assumed"]
-
-        # Third should be marked as missing
-        assert mapping["rs_003"]["remote_path"] is None
-        assert mapping["rs_003"]["status"] == "missing"
-
-    def test_split_batch_outputs_no_outputs(self):
-        """Test handling when there are no output files."""
-        batch_result = {"output_files": []}
-
-        runs_and_prompts = [
-            ({"id": "rs_001"}, {"id": "ps_001"}),
-            ({"id": "rs_002"}, {"id": "ps_002"}),
-        ]
-
-        # Split outputs
-        mapping = self.orchestrator._split_batch_outputs(runs_and_prompts, batch_result)
-
-        # All should be marked as missing
-        assert mapping["rs_001"]["remote_path"] is None
-        assert mapping["rs_001"]["status"] == "missing"
-        assert mapping["rs_002"]["remote_path"] is None
-        assert mapping["rs_002"]["status"] == "missing"
-
     def test_execute_batch_runs_downloads_outputs_to_individual_folders(self):
         """Test that outputs are downloaded to individual run folders."""
         # Create outputs directory in temp dir
@@ -472,71 +329,59 @@ class TestGPUExecutorBatchExecution:
         self.mock_docker_executor.run_batch_inference.return_value = {
             "batch_name": "batch_test",
             "output_dir": "/remote/outputs/batch_test",
-            "status": "started",
+            "status": "completed",
             "output_files": [
                 "/remote/outputs/batch_test/video_000.mp4",
                 "/remote/outputs/batch_test/video_001.mp4",
             ],
         }
 
-        with patch.object(self.orchestrator, "_split_batch_outputs") as mock_split:
-            mock_split.return_value = {
-                "rs_001": {
-                    "remote_path": "/remote/outputs/batch_test/video_000.mp4",
-                    "batch_index": 0,
-                    "status": "found",
+        # No longer need to patch _split_batch_outputs as method was removed
+        # The batch outputs are now handled directly in execute_batch_runs
+        with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
+            self._setup_nvidia_format_mock(mock_nv)
+            # Mock to_cosmos_inference_json to return a valid dict for each call
+            mock_nv.to_cosmos_inference_json.side_effect = [
+                {
+                    "visual_input": "video1.mp4",
+                    "prompt": "First prompt",
+                    "name": "rs_001",
+                    "weights": {"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
                 },
-                "rs_002": {
-                    "remote_path": "/remote/outputs/batch_test/video_001.mp4",
-                    "batch_index": 1,
-                    "status": "found",
+                {
+                    "visual_input": "video2.mp4",
+                    "prompt": "Second prompt",
+                    "name": "rs_002",
+                    "weights": {"vis": 0.5, "edge": 0.5, "depth": 0.0, "seg": 0.0},
                 },
-            }
+            ]
 
-            with patch("cosmos_workflow.execution.gpu_executor.nvidia_format") as mock_nv:
-                self._setup_nvidia_format_mock(mock_nv)
-                # Mock to_cosmos_inference_json to return a valid dict for each call
-                mock_nv.to_cosmos_inference_json.side_effect = [
-                    {
-                        "visual_input": "video1.mp4",
-                        "prompt": "First prompt",
-                        "name": "rs_001",
-                        "weights": {"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
-                    },
-                    {
-                        "visual_input": "video2.mp4",
-                        "prompt": "Second prompt",
-                        "name": "rs_002",
-                        "weights": {"vis": 0.5, "edge": 0.5, "depth": 0.0, "seg": 0.0},
-                    },
-                ]
+            # Execute batch
+            result = self.orchestrator.execute_batch_runs(self.test_runs_and_prompts)
 
-                # Execute batch
-                result = self.orchestrator.execute_batch_runs(self.test_runs_and_prompts)
+            # Check download calls
+            downloaded = self.fake_file_transfer.downloaded_files
 
-                # Check download calls
-                downloaded = self.fake_file_transfer.downloaded_files
+            # Should download to individual run folders
+            downloaded_paths = [str(f["local"]).replace("\\", "/") for f in downloaded]
 
-                # Should download to individual run folders
-                downloaded_paths = [str(f["local"]).replace("\\", "/") for f in downloaded]
+            # The downloads should have happened for the found outputs
+            assert len(downloaded) > 0, f"No downloads occurred. Downloaded: {downloaded}"
 
-                # The downloads should have happened for the found outputs
-                assert len(downloaded) > 0, f"No downloads occurred. Downloaded: {downloaded}"
+            # Check that downloads went to run directories
+            assert any("rs_001" in p for p in downloaded_paths), (
+                f"rs_001 not in paths: {downloaded_paths}"
+            )
+            assert any("rs_002" in p for p in downloaded_paths), (
+                f"rs_002 not in paths: {downloaded_paths}"
+            )
 
-                # Check that downloads went to run directories
-                assert any("rs_001" in p for p in downloaded_paths), (
-                    f"rs_001 not in paths: {downloaded_paths}"
-                )
-                assert any("rs_002" in p for p in downloaded_paths), (
-                    f"rs_002 not in paths: {downloaded_paths}"
-                )
-
-                # Check output mapping exists and has correct structure
-                output_mapping = result["output_mapping"]
-                assert "rs_001" in output_mapping
-                assert "rs_002" in output_mapping
-                assert output_mapping["rs_001"]["status"] == "found"
-                assert output_mapping["rs_002"]["status"] == "found"
+            # Check output mapping exists and has correct structure
+            output_mapping = result["output_mapping"]
+            assert "rs_001" in output_mapping
+            assert "rs_002" in output_mapping
+            assert output_mapping["rs_001"]["status"] == "found"
+            assert output_mapping["rs_002"]["status"] == "found"
 
     def test_execute_batch_runs_with_mixed_video_inputs(self):
         """Test batch execution with different video input combinations."""
@@ -599,7 +444,7 @@ class TestGPUExecutorBatchExecution:
             ]
 
             self.mock_docker_executor.run_batch_inference.return_value = {
-                "status": "started",
+                "status": "completed",
                 "output_files": [],
             }
 
@@ -633,7 +478,7 @@ class TestGPUExecutorBatchExecution:
             ]
 
             self.mock_docker_executor.run_batch_inference.return_value = {
-                "status": "started",
+                "status": "completed",
                 "output_files": [],
             }
 

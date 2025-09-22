@@ -378,10 +378,12 @@ class TestDockerExecutor:
         """Test kill_containers with one running container."""
         # Mock one container found
         container_id = "abc123def456"
-        self.mock_ssh_manager.execute_command_success.side_effect = [
-            container_id,  # First call returns container ID
-            None,  # Second call kills container
-        ]
+
+        # Mock execute_command_success for docker ps (returns string)
+        self.mock_ssh_manager.execute_command_success = Mock(return_value=container_id)
+
+        # Mock execute_command for docker kill (returns tuple: exit_code, stdout, stderr)
+        self.mock_ssh_manager.execute_command = Mock(return_value=(0, "", ""))
 
         # Kill containers
         result = self.docker_executor.kill_containers()
@@ -391,19 +393,21 @@ class TestDockerExecutor:
         assert result["status"] == "success"
         assert container_id in result["killed_containers"]
 
-        # Check that docker kill was called
-        calls = self.mock_ssh_manager.execute_command_success.call_args_list
-        assert len(calls) == 2
-        assert f"sudo docker kill {container_id}" in calls[1][0][0]
+        # Verify docker ps was called
+        self.mock_ssh_manager.execute_command_success.assert_called_once()
+        # Verify docker kill was called
+        self.mock_ssh_manager.execute_command.assert_called_once()
 
     def test_kill_containers_with_multiple_containers(self):
         """Test kill_containers with multiple running containers."""
         # Mock multiple containers found
         container_ids = ["abc123def456", "789xyz012345", "mno456pqr789"]
-        self.mock_ssh_manager.execute_command_success.side_effect = [
-            "\n".join(container_ids),  # First call returns container IDs
-            None,  # Second call kills all containers
-        ]
+
+        # Mock execute_command_success for docker ps (returns string)
+        self.mock_ssh_manager.execute_command_success = Mock(return_value="\n".join(container_ids))
+
+        # Mock execute_command for docker kill (returns tuple)
+        self.mock_ssh_manager.execute_command = Mock(return_value=(0, "", ""))
 
         # Kill containers
         result = self.docker_executor.kill_containers()
@@ -414,9 +418,9 @@ class TestDockerExecutor:
         assert all(cid in result["killed_containers"] for cid in container_ids)
 
         # Check that docker kill was called with all container IDs
-        calls = self.mock_ssh_manager.execute_command_success.call_args_list
-        assert len(calls) == 2
-        kill_command = calls[1][0][0]
+        self.mock_ssh_manager.execute_command_success.assert_called_once()
+        self.mock_ssh_manager.execute_command.assert_called_once()
+        kill_command = self.mock_ssh_manager.execute_command.call_args[0][0]
         for cid in container_ids:
             assert cid in kill_command
 
@@ -424,10 +428,14 @@ class TestDockerExecutor:
         """Test that kill_containers handles docker kill failure gracefully."""
         # Mock container found but kill fails
         container_id = "abc123def456"
-        self.mock_ssh_manager.execute_command_success.side_effect = [
-            container_id,  # First call returns container ID
-            Exception("Failed to kill container"),  # Second call fails
-        ]
+
+        # Mock execute_command_success for docker ps
+        self.mock_ssh_manager.execute_command_success = Mock(return_value=container_id)
+
+        # Mock execute_command for docker kill - returns error exit code
+        self.mock_ssh_manager.execute_command = Mock(
+            return_value=(1, "", "Failed to kill container")
+        )
 
         # Kill containers should handle error
         result = self.docker_executor.kill_containers()

@@ -53,7 +53,7 @@ class TestBatchFormat:
         assert "visual_input" in line1
         assert "prompt" in line1
         assert "control_overrides" in line1
-        assert line1["visual_input"] == "inputs/videos/test1.mp4"
+        assert line1["visual_input"] == "runs/rs_001/inputs/videos/test1.mp4"
         assert line1["prompt"] == "A futuristic city"
 
         # Check control_overrides structure
@@ -65,7 +65,10 @@ class TestBatchFormat:
         # Check second line has depth input
         line2 = batch_lines[1]
         assert "depth" in line2["control_overrides"]
-        assert line2["control_overrides"]["depth"]["input_control"] == "inputs/videos/depth2.mp4"
+        assert (
+            line2["control_overrides"]["depth"]["input_control"]
+            == "runs/rs_002/inputs/videos/depth2.mp4"
+        )
 
     def test_batch_jsonl_write(self, tmp_path):
         """Test writing batch data as JSONL file."""
@@ -163,7 +166,7 @@ class TestBatchFormat:
         assert "seg" in controls  # 0.5 weight
 
         # Verify seg has input_control from provided file
-        assert controls["seg"]["input_control"] == "inputs/videos/seg.mp4"
+        assert controls["seg"]["input_control"] == "runs/rs_001/inputs/videos/seg.mp4"
         assert controls["seg"]["control_weight"] == 0.5
 
         # Verify depth has null input_control (auto-generate)

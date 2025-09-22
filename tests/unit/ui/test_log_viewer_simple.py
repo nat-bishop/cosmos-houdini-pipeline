@@ -121,9 +121,14 @@ class TestLogViewerSimple:
 
         html = viewer.get_html()
 
-        # Should escape HTML tags
-        assert "<script>" not in html
-        assert "&lt;script&gt;" in html
+        # Should escape HTML tags in the log content (not in the auto-scroll script)
+        # Check that the malicious script is escaped
+        assert (
+            "&lt;script&gt;alert" in html
+            or "&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;" in html
+        )
+        # The unescaped version should not appear in the log content
+        assert "<script>alert('XSS')</script>" not in html
 
     def test_case_insensitive_search(self):
         """Test case-insensitive search."""

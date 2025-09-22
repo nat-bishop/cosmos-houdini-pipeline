@@ -46,6 +46,8 @@ def api(repository):
             # Mock successful enhancement
             api.orchestrator.execute_enhancement_run = lambda r, p: {
                 "enhanced_text": "Enhanced: " + p.get("prompt_text", ""),
+                "enhanced_prompt_id": f"ps_enhanced_{p['id'][-8:]}",
+                "original_prompt_id": p["id"],
                 "status": "completed",
             }
             yield api

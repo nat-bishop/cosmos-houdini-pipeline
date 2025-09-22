@@ -270,9 +270,13 @@ class SimplifiedQueueService:
             "batch_size": self.batch_size,
         }
 
-        # Add optional parameters
+        # Add optional parameters with proper mapping
+        # Map guidance_scale from UI to guidance for API
+        if "guidance_scale" in config:
+            kwargs["guidance"] = config["guidance_scale"]
+
+        # Add other optional parameters
         optional_params = [
-            "guidance_scale",
             "seed",
             "fps",
             "sigma_max",

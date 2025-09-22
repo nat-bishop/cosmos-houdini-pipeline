@@ -111,6 +111,8 @@ class DockerExecutor:
         run_id: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        guidance: float = 5.0,
+        seed: int = 1,
         stream_output: bool = False,
     ) -> dict:
         """Run Cosmos-Transfer1 inference on remote instance synchronously.
@@ -163,6 +165,8 @@ class DockerExecutor:
                 run_id,
                 num_gpu,
                 cuda_devices,
+                guidance,
+                seed,
                 stream_output=stream_output,
                 run_logger=run_logger,
             )
@@ -452,6 +456,8 @@ class DockerExecutor:
         run_id: str,
         num_gpu: int,
         cuda_devices: str,
+        guidance: float = 5.0,
+        seed: int = 1,
         stream_output: bool = False,
         run_logger=None,
     ) -> int:
@@ -483,7 +489,7 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "bash /workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
+            f'bash -lc "bash /workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices} {prompt_name} {guidance} {seed}"'
         )
 
         # Run synchronously (blocking)
@@ -862,6 +868,8 @@ class DockerExecutor:
         batch_size: int = 4,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        guidance: float = 5.0,
+        seed: int = 1,
     ) -> dict[str, Any]:
         """Run batch inference for multiple prompts/videos.
 
@@ -897,7 +905,14 @@ class DockerExecutor:
 
         # Run without the remote_log_path - the script itself handles logging
         exit_code = self._run_batch_inference_script(
-            batch_name, batch_jsonl_file, base_controlnet_spec, batch_size, num_gpu, cuda_devices
+            batch_name,
+            batch_jsonl_file,
+            base_controlnet_spec,
+            batch_size,
+            num_gpu,
+            cuda_devices,
+            guidance,
+            seed,
         )
 
         # Handle exit codes like single inference
@@ -942,6 +957,8 @@ class DockerExecutor:
         batch_size: int,
         num_gpu: int,
         cuda_devices: str,
+        guidance: float,
+        seed: int,
     ) -> int:
         """Run batch inference using the bash script synchronously.
 
@@ -957,7 +974,7 @@ class DockerExecutor:
 
         # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
         # Use bash explicitly to avoid shebang line ending issues
-        cmd = f"bash /workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size}"
+        cmd = f"bash /workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size} {guidance} {seed}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking

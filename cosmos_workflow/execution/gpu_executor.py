@@ -417,12 +417,19 @@ class GPUExecutor:
                 if upscale_script.exists():
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
 
+                # Get guidance and seed from execution_config
+                execution_config = run.get("execution_config", {})
+                guidance = execution_config.get("guidance", 5.0)
+                seed = execution_config.get("seed", 1)
+
                 # Run inference synchronously with streaming output
                 # Create a prompt file path for DockerExecutor (it expects Path)
                 prompt_file = Path(f"{run_id}.json")  # Just a name, not used inside
                 inference_result = self.docker_executor.run_inference(
                     prompt_file=prompt_file,
                     run_id=run_id,
+                    guidance=guidance,
+                    seed=seed,
                     stream_output=stream_output,  # Use parameter to control streaming
                 )
 
@@ -669,12 +676,20 @@ class GPUExecutor:
                             )
                             self.file_transfer.upload_file(Path(input_path), remote_video_dir)
 
+                # Get guidance and seed from first run's execution_config (all runs in batch share the same config)
+                first_run = runs_and_prompts[0][0]
+                execution_config = first_run.get("execution_config", {})
+                guidance = execution_config.get("guidance", 5.0)
+                seed = execution_config.get("seed", 1)
+
                 # Run batch inference
                 batch_result = self.docker_executor.run_batch_inference(
                     batch_name=batch_name,
                     batch_jsonl_file=batch_file.name,
                     base_controlnet_spec=base_spec_file.name,
                     batch_size=batch_size,
+                    guidance=guidance,
+                    seed=seed,
                 )
 
                 if batch_result["status"] == "failed":

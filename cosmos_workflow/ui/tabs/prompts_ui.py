@@ -165,6 +165,31 @@ def create_prompts_tab_ui():
                                 scale=2,
                             )
 
+                        # Run statistics and rating
+                        with gr.Row():
+                            components["selected_prompt_runs_stats"] = gr.Textbox(
+                                label="Run Statistics",
+                                value="Loading...",
+                                interactive=False,
+                            )
+                            components["selected_prompt_rating"] = gr.Textbox(
+                                label="Average Rating",
+                                value="N/A",
+                                interactive=False,
+                            )
+
+                        # Video thumbnail
+                        gr.Markdown("##### Input Video Preview")
+                        components["selected_prompt_video_thumb"] = gr.Image(
+                            label="Input Video Thumbnail",
+                            show_label=False,
+                            height=216,
+                            width=384,
+                            type="filepath",
+                            interactive=False,
+                            elem_classes=["video-thumbnail"],
+                        )
+
                     # Inference tab
                     with gr.Tab("🚀 Inference"):
                         gr.Markdown("##### Inference Parameters")

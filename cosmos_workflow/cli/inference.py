@@ -129,10 +129,9 @@ def inference(
                 "Steps": str(steps),
                 "Would create": "Run specification internally",
                 "Would upload": "Prompt data and video files to remote GPU",
+                "Would execute": "Inference",
+                "Would download": "Generated video results",
             }
-
-            dry_run_data["Would execute"] = "Inference"
-            dry_run_data["Would download"] = "Generated video results"
         else:
             # Batch dry run
             dry_run_data = {

@@ -772,6 +772,77 @@ def toggle_enhance_force_visibility(create_new):
     return gr.update(visible=not create_new)
 
 
+def calculate_run_statistics(runs):
+    """Calculate run statistics by model type and status.
+
+    Args:
+        runs: List of run dictionaries
+
+    Returns:
+        Dictionary with counts by model_type for completed runs
+    """
+    stats = {"transfer": 0, "upscale": 0, "enhance": 0, "total_completed": 0}
+
+    for run in runs:
+        if run.get("status") == "completed":
+            model_type = run.get("model_type", "").lower()
+            if model_type in stats:
+                stats[model_type] += 1
+            stats["total_completed"] += 1
+
+    return stats
+
+
+def calculate_average_rating(runs):
+    """Calculate average rating for completed runs.
+
+    Args:
+        runs: List of run dictionaries
+
+    Returns:
+        Tuple of (average_rating, rated_count) or (None, 0) if no ratings
+    """
+    ratings = []
+    for run in runs:
+        if run.get("status") == "completed" and run.get("rating") is not None:
+            rating = run.get("rating")
+            if isinstance(rating, int | float) and 1 <= rating <= 5:
+                ratings.append(rating)
+
+    if ratings:
+        return sum(ratings) / len(ratings), len(ratings)
+    return None, 0
+
+
+def get_video_thumbnail(video_path):
+    """Generate or retrieve thumbnail for video.
+
+    Args:
+        video_path: Path to video file
+
+    Returns:
+        Path to thumbnail image or None if failed
+    """
+    from pathlib import Path
+
+    from cosmos_workflow.ui.tabs.runs_handlers import generate_thumbnail_fast
+
+    if not video_path:
+        return None
+
+    video_file = Path(video_path)
+    if not video_file.exists():
+        return None
+
+    # Use existing thumbnail generation function
+    try:
+        thumb_path = generate_thumbnail_fast(str(video_file))
+        return thumb_path
+    except Exception as e:
+        logger.error("Failed to generate thumbnail for {}: {}", video_path, e)
+        return None
+
+
 def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
     """Handle row selection in prompts table to show details."""
     try:
@@ -779,15 +850,18 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
 
         if dataframe_data is None or evt is None:
             logger.warning("on_prompt_row_select: dataframe_data or evt is None")
-            # Return gr.update() objects to force UI refresh
+            # Return gr.update() objects to force UI refresh - now with additional fields
             return [
-                gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=False),
+                gr.update(value=""),  # prompt_id
+                gr.update(value=""),  # name
+                gr.update(value=""),  # prompt_text
+                gr.update(value=""),  # negative_prompt
+                gr.update(value=""),  # created
+                gr.update(value=""),  # video_dir
+                gr.update(value=False),  # enhanced
+                gr.update(value="No data"),  # runs_stats
+                gr.update(value="N/A"),  # rating
+                gr.update(value=None),  # thumbnail
             ]
 
         # Get the selected row index
@@ -816,6 +890,9 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                 gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=False),
+                gr.update(value="No data"),
+                gr.update(value="N/A"),
+                gr.update(value=None),
             ]
 
         # Use CosmosAPI to get full prompt details
@@ -838,11 +915,42 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                 inputs.get("video", "").replace("/color.mp4", "") if inputs.get("video") else ""
             )
 
+            # Fetch runs for this prompt
+            runs = ops.list_runs(prompt_id=prompt_id, limit=100)
+
+            # Calculate run statistics
+            stats = calculate_run_statistics(runs)
+            if stats["total_completed"] > 0:
+                parts = []
+                if stats["transfer"] > 0:
+                    parts.append(f"{stats['transfer']} inference")
+                if stats["upscale"] > 0:
+                    parts.append(f"{stats['upscale']} upscale")
+                if stats["enhance"] > 0:
+                    parts.append(f"{stats['enhance']} enhance")
+                stats_text = f"{stats['total_completed']} completed ({', '.join(parts)})"
+            else:
+                stats_text = "No completed runs"
+
+            # Calculate average rating
+            avg_rating, rated_count = calculate_average_rating(runs)
+            if avg_rating is not None:
+                rating_text = (
+                    f"{avg_rating:.1f}/5 ({rated_count} {'run' if rated_count == 1 else 'runs'})"
+                )
+            else:
+                rating_text = "No ratings yet"
+
+            # Generate thumbnail for input video
+            video_path = inputs.get("video", "")
+            thumbnail_path = get_video_thumbnail(video_path) if video_path else None
+
             logger.info(
-                "Returning prompt details: id=%s, name=%s, enhanced=%s",
+                "Returning prompt details: id=%s, name=%s, enhanced=%s, runs=%d",
                 prompt_id,
                 name,
                 enhanced,
+                len(runs),
             )
             # Return gr.update() objects to force UI refresh
             return [
@@ -853,6 +961,9 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
                 gr.update(value=created),
                 gr.update(value=video_dir),
                 gr.update(value=enhanced),
+                gr.update(value=stats_text),
+                gr.update(value=rating_text),
+                gr.update(value=thumbnail_path),
             ]
 
         logger.warning("No prompt details found for {}", prompt_id)
@@ -864,6 +975,9 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
             gr.update(value=""),
             gr.update(value=""),
             gr.update(value=False),
+            gr.update(value="No data"),
+            gr.update(value="N/A"),
+            gr.update(value=None),
         ]
 
     except Exception as e:
@@ -879,6 +993,9 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
             gr.update(value=""),
             gr.update(value=""),
             gr.update(value=False),
+            gr.update(value="Error loading"),
+            gr.update(value="Error loading"),
+            gr.update(value=None),
         ]
 
 
@@ -1960,6 +2077,9 @@ def create_ui():
                 "selected_prompt_created",
                 "selected_prompt_video_dir",
                 "selected_prompt_enhanced",
+                "selected_prompt_runs_stats",
+                "selected_prompt_rating",
+                "selected_prompt_video_thumb",
             )
             if outputs:
                 components["ops_prompts_table"].select(

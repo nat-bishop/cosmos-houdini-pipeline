@@ -85,15 +85,7 @@ def create_runs_tab_ui():
                     )
 
                     components["runs_rating_filter"] = gr.Dropdown(
-                        choices=[
-                            ("All", "all"),
-                            ("5 stars", 5),
-                            ("4+ stars", "4+"),
-                            ("3+ stars", "3+"),
-                            ("2+ stars", "2+"),
-                            ("1+ stars", "1+"),
-                            ("Unrated", "unrated"),
-                        ],
+                        choices=["all", "5", "4+", "3+", "2+", "1+", "unrated"],
                         value="all",
                         label="Rating Filter",
                         info="Filter by star rating",

@@ -2476,6 +2476,7 @@ def create_ui():
                 "runs_type_filter",
                 "runs_search",
                 "runs_limit",
+                "runs_rating_filter",
                 "runs_version_filter",
             ]
         ):
@@ -2485,7 +2486,7 @@ def create_ui():
                 components["runs_type_filter"],
                 components["runs_search"],
                 components["runs_limit"],
-                components.get("runs_rating_filter"),  # Rating filter from runs tab
+                components["runs_rating_filter"],  # Rating filter from runs tab
                 components["runs_version_filter"],  # Version filter
             ]
             # Update gallery, table and stats with unified filter handler
@@ -2500,11 +2501,7 @@ def create_ui():
             )
             if filter_outputs:
                 # Add navigation_state to inputs for unified filtering
-                unified_filter_inputs = (
-                    [*filter_inputs, navigation_state]
-                    if "navigation_state" in components
-                    else filter_inputs
-                )
+                unified_filter_inputs = [*filter_inputs, navigation_state]
 
                 for filter_component in [
                     "runs_status_filter",
@@ -2515,11 +2512,12 @@ def create_ui():
                     "runs_rating_filter",
                     "runs_version_filter",  # Add version filter
                 ]:
-                    components[filter_component].change(
-                        fn=load_runs_with_filters,  # Use unified filter handler
-                        inputs=unified_filter_inputs,
-                        outputs=filter_outputs,
-                    )
+                    if filter_component in components and components[filter_component] is not None:
+                        components[filter_component].change(
+                            fn=load_runs_with_filters,  # Use unified filter handler
+                            inputs=unified_filter_inputs,
+                            outputs=filter_outputs,
+                        )
 
         # Runs table selection
         if "runs_table" in components:
@@ -2739,6 +2737,7 @@ def create_ui():
                         components.get("runs_search"),
                         components.get("runs_limit"),
                         components.get("runs_rating_filter"),
+                        components.get("runs_version_filter"),  # Add version filter
                         components.get("navigation_state"),  # Include navigation state
                     ],
                     outputs=[
@@ -2895,6 +2894,8 @@ def create_ui():
                 "runs_type_filter",
                 "runs_search",
                 "runs_limit",
+                "runs_rating_filter",
+                "runs_version_filter",
                 "runs_gallery",
                 "runs_table",
                 "runs_stats",
@@ -2910,6 +2911,7 @@ def create_ui():
                 search_text,
                 limit,
                 rating_filter,
+                version_filter,
             ):
                 """Handle star button click and save rating."""
                 if not run_id:
@@ -2922,9 +2924,17 @@ def create_ui():
                     ops.set_run_rating(run_id, star_value)
                     logger.info("Set rating {} for run {}", star_value, run_id)
 
-                # Refresh the runs display
-                gallery_data, table_data, stats = load_runs_data(
-                    status_filter, date_filter, type_filter, search_text, limit, rating_filter
+                # Refresh the runs display with version filter support
+                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_data_with_version_filter
+
+                gallery_data, table_data, stats = load_runs_data_with_version_filter(
+                    status_filter,
+                    date_filter,
+                    type_filter,
+                    search_text,
+                    limit,
+                    rating_filter,
+                    version_filter,
                 )
 
                 # Update star button displays
@@ -2949,8 +2959,8 @@ def create_ui():
             for i in range(1, 6):
                 star_btn = components[f"star_{i}"]
                 star_btn.click(
-                    fn=lambda run_id, sf, df, tf, st, lm, rf, star_val=i: handle_star_click(
-                        star_val, run_id, sf, df, tf, st, lm, rf
+                    fn=lambda run_id, sf, df, tf, st, lm, rf, vf, star_val=i: handle_star_click(
+                        star_val, run_id, sf, df, tf, st, lm, rf, vf
                     ),
                     inputs=[
                         components["runs_info_id"],
@@ -2960,6 +2970,7 @@ def create_ui():
                         components["runs_search"],
                         components["runs_limit"],
                         components.get("runs_rating_filter"),
+                        components.get("runs_version_filter"),
                     ],
                     outputs=[
                         components["star_1"],

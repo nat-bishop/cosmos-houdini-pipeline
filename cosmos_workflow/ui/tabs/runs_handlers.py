@@ -191,7 +191,7 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
             if rating_filter == "unrated":
                 # Filter for runs with no rating
                 filtered_runs = [run for run in filtered_runs if not run.get("rating")]
-            elif rating_filter == 5:
+            elif rating_filter == "5":
                 # Exact 5 stars
                 filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
             elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
@@ -1183,7 +1183,7 @@ def load_runs_for_multiple_prompts(
             if rating_filter == "unrated":
                 # Filter for runs with no rating
                 filtered_runs = [run for run in filtered_runs if not run.get("rating")]
-            elif rating_filter == 5:
+            elif rating_filter == "5":
                 # Exact 5 stars
                 filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
             elif isinstance(rating_filter, str) and rating_filter.endswith("+"):

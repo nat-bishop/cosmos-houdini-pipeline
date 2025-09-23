@@ -212,6 +212,15 @@ def cleanup_on_shutdown(signum=None, frame=None):
     except Exception as e:
         logger.debug("Cleanup error (expected on shutdown): {}", e)
 
+    # Shutdown thumbnail executor thread pool to prevent resource leak
+    try:
+        from cosmos_workflow.ui.tabs.runs_handlers import THUMBNAIL_EXECUTOR
+
+        THUMBNAIL_EXECUTOR.shutdown(wait=False)
+        logger.info("Thumbnail executor shutdown completed")
+    except Exception as e:
+        logger.debug("Error shutting down thumbnail executor: {}", e)
+
 
 # Register cleanup - reuse existing kill_containers() method
 atexit.register(cleanup_on_shutdown)

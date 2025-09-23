@@ -44,7 +44,8 @@ def _apply_date_filter(runs: list, date_filter: str) -> list:
                     created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
             else:
                 created = now
-        except Exception:
+        except (ValueError, TypeError) as e:
+            logger.debug("Failed to parse created_at timestamp: %s", e)
             created = now
 
         # Apply date filter
@@ -215,9 +216,9 @@ def _build_runs_table_data(runs: list) -> list:
 
                 duration_delta = end - start
                 duration = str(duration_delta).split(".")[0]
-            except Exception:
+            except (ValueError, TypeError) as e:
                 # Unable to parse dates, leave duration as-is
-                logger.debug("Unable to parse dates for duration calculation")
+                logger.debug("Unable to parse dates for duration calculation: %s", e)
 
         created = run.get("created_at", "")[:19] if run.get("created_at") else ""
         rating = run.get("rating")

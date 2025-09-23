@@ -194,3 +194,72 @@ class QueueHandlers:
 
         except Exception:
             return str(timestamp)
+
+    def on_queue_select(self, evt):
+        """Handle queue table row selection.
+
+        Args:
+            evt: Gradio selection event
+
+        Returns:
+            Tuple of (selected_info, actions_row_visibility, selected_id)
+        """
+        if evt and len(evt) > 0:
+            # Get selected row data
+            selected_row = evt[0]  # Get first selected row
+            job_id = selected_row[1] if len(selected_row) > 1 else None
+
+            if job_id:
+                details = self.get_job_details(job_id)
+                return details, {"visible": True}, job_id
+
+        return "No selection", {"visible": False}, None
+
+    def remove_item(self, job_id: str) -> tuple:
+        """Remove a job from the queue.
+
+        Args:
+            job_id: ID of job to remove
+
+        Returns:
+            Tuple of (status_text, queue_data, selected_info, actions_visibility)
+        """
+        if not job_id:
+            status, data = self.get_queue_display()
+            return status, data, "No job selected", {"visible": False}
+
+        message = self.cancel_job(job_id)
+        status, data = self.get_queue_display()
+
+        return f"{status}\n{message}", data, "Job removed", {"visible": False}
+
+    def prioritize_item(self, job_id: str) -> tuple:
+        """Move a job to the front of the queue.
+
+        Args:
+            job_id: ID of job to prioritize
+
+        Returns:
+            Tuple of (status_text, queue_data, selected_info)
+        """
+        if not job_id:
+            status, data = self.get_queue_display()
+            return status, data, "No job selected"
+
+        try:
+            # Move job to front of queue
+            success = self.queue_service.prioritize_job(job_id)
+            if success:
+                message = f"✅ Prioritized job {job_id}"
+            else:
+                message = f"❌ Could not prioritize job {job_id}"
+
+            status, data = self.get_queue_display()
+            details = self.get_job_details(job_id)
+
+            return f"{status}\n{message}", data, details
+
+        except Exception as e:
+            logger.error("Error prioritizing job %s: %s", job_id, e)
+            status, data = self.get_queue_display()
+            return f"{status}\n❌ Error: {e}", data, "Error prioritizing job"

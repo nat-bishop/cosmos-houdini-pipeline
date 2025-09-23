@@ -184,10 +184,13 @@ def wire_inputs_events(components, config, api):
         config: Application configuration
         api: CosmosAPI instance
     """
+    import functools
+
     from cosmos_workflow.ui.tabs.inputs_handlers import (
         create_prompt,
         filter_input_directories,
         get_input_directories,
+        load_input_gallery,
         on_input_select,
     )
 
@@ -251,8 +254,36 @@ def wire_inputs_events(components, config, api):
 
     # Input gallery selection
     if "input_gallery" in components:
-        # Note: This needs the proper handler function
-        pass  # TODO: Implement when on_input_gallery_select is available
+        import functools
+
+        from cosmos_workflow.ui.tabs.inputs_handlers import on_input_select
+
+        # Create a bound handler with inputs_dir from config
+        handle_input_select = functools.partial(
+            on_input_select, inputs_dir=getattr(config, "inputs_dir", "inputs")
+        )
+
+        components["input_gallery"].select(
+            fn=handle_input_select,
+            inputs=[components["input_gallery"]],
+            outputs=filter_none_components(
+                [
+                    components.get("selected_dir_path"),
+                    components.get("preview_group"),
+                    components.get("input_tabs_group"),
+                    components.get("input_name"),
+                    components.get("input_path"),
+                    components.get("input_created"),
+                    components.get("input_resolution"),
+                    components.get("input_duration"),
+                    components.get("input_fps"),
+                    components.get("input_codec"),
+                    components.get("input_files"),
+                    components.get("video_preview_gallery"),
+                    components.get("create_video_dir"),
+                ]
+            ),
+        )
 
     # Input filtering events
     if "inputs_search" in components:
@@ -272,8 +303,24 @@ def wire_inputs_events(components, config, api):
         )
 
     if "inputs_sort" in components:
-        # TODO: Implement sort handler
-        pass
+        components["inputs_sort"].change(
+            fn=lambda search, date_f, sort: load_input_gallery(
+                getattr(config, "inputs_dir", "inputs"), search, date_f, sort
+            ),
+            inputs=filter_none_components(
+                [
+                    components.get("inputs_search"),
+                    components.get("inputs_date_filter"),
+                    components.get("inputs_sort"),
+                ]
+            ),
+            outputs=filter_none_components(
+                [
+                    components.get("input_gallery"),
+                    components.get("inputs_results_count"),
+                ]
+            ),
+        )
 
 
 def wire_prompts_events(components, api, simple_queue_service):
@@ -873,7 +920,7 @@ def wire_jobs_control_events(components):
     if "stream_btn" in components:
         components["stream_btn"].click(
             fn=refresh_and_stream,
-            inputs=filter_none_components([components.get("job_status")]),
+            inputs=None,  # refresh_and_stream doesn't take any inputs
             outputs=filter_none_components(
                 [
                     components.get("running_jobs_display"),
@@ -960,8 +1007,19 @@ def wire_jobs_control_events(components):
             )
 
     if "cancel_job_btn" in components:
-        # Note: This would need the cancel_job handler from jobs_handlers
-        pass  # TODO: Implement when cancel_job is available
+        from cosmos_workflow.ui.tabs.jobs_handlers import cancel_selected_job
+
+        components["cancel_job_btn"].click(
+            fn=cancel_selected_job,
+            inputs=[components.get("selected_job_id")],
+            outputs=filter_none_components(
+                [
+                    components.get("job_status"),
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                ]
+            ),
+        )
 
 
 def wire_queue_control_events(components, simple_queue_service):
@@ -1020,50 +1078,51 @@ def wire_queue_control_events(components, simple_queue_service):
 
 def wire_queue_selection_events(components, simple_queue_service):
     """Wire queue table selection events."""
-    # from cosmos_workflow.ui.queue_handlers import QueueHandlers
-    # queue_handlers = QueueHandlers(simple_queue_service)
+    from cosmos_workflow.ui.queue_handlers import QueueHandlers
+
+    queue_handlers = QueueHandlers(simple_queue_service)
 
     # Queue table selection
     if "queue_table" in components:
-        # TODO: Implement on_queue_select in QueueHandlers
-        pass
-        # components["queue_table"].select(
-        #     fn=queue_handlers.on_queue_select,
-        #     inputs=[components["queue_table"]],
-        #     outputs=[
-        #         components.get("queue_selected_info"),
-        #         components.get("queue_actions_row"),
-        #         components.get("queue_selected_id"),
-        #     ],
-        # )
+        components["queue_table"].select(
+            fn=queue_handlers.on_queue_select,
+            inputs=[components["queue_table"]],
+            outputs=filter_none_components(
+                [
+                    components.get("queue_selected_info"),
+                    components.get("queue_actions_row"),
+                    components.get("queue_selected_id"),
+                ]
+            ),
+        )
 
     # Queue item actions
     if "remove_queue_item_btn" in components:
-        # TODO: Implement remove_item in QueueHandlers
-        pass
-        # components["remove_queue_item_btn"].click(
-        #     fn=queue_handlers.remove_item,
-        #     inputs=[components.get("queue_selected_id")],
-        #     outputs=[
-        #         components.get("queue_status"),
-        #         components.get("queue_table"),
-        #         components.get("queue_selected_info"),
-        #         components.get("queue_actions_row"),
-        #     ],
-        # )
+        components["remove_queue_item_btn"].click(
+            fn=queue_handlers.remove_item,
+            inputs=[components.get("queue_selected_id")],
+            outputs=filter_none_components(
+                [
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                    components.get("queue_selected_info"),
+                    components.get("queue_actions_row"),
+                ]
+            ),
+        )
 
     if "prioritize_queue_item_btn" in components:
-        # TODO: Implement prioritize_item in QueueHandlers
-        pass
-        # components["prioritize_queue_item_btn"].click(
-        #     fn=queue_handlers.prioritize_item,
-        #     inputs=[components.get("queue_selected_id")],
-        #     outputs=[
-        #         components.get("queue_status"),
-        #         components.get("queue_table"),
-        #         components.get("queue_selected_info"),
-        #     ],
-        # )
+        components["prioritize_queue_item_btn"].click(
+            fn=queue_handlers.prioritize_item,
+            inputs=[components.get("queue_selected_id")],
+            outputs=filter_none_components(
+                [
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                    components.get("queue_selected_info"),
+                ]
+            ),
+        )
 
 
 def wire_all_events(app, components, config, api, simple_queue_service):
@@ -1191,7 +1250,7 @@ def wire_cross_tab_navigation(components):
                 fn=navigate_to_runs_for_input,
                 inputs=filter_none_components(
                     [
-                        components.get("selected_input_dir"),
+                        components.get("selected_dir_path"),  # Fixed: using correct component name
                         components.get("navigation_state"),
                     ]
                 ),

@@ -80,14 +80,8 @@ def _register_shutdown_handlers():
             except Exception as e:
                 logger.error(f"Error shutting down queue service: {e}")
 
-        # Shutdown thumbnail executor
-        try:
-            from cosmos_workflow.ui.tabs.runs.display_builders import THUMBNAIL_EXECUTOR
-
-            THUMBNAIL_EXECUTOR.shutdown(wait=False)
-            logger.info("Thumbnail executor shut down successfully")
-        except Exception as e:
-            logger.error(f"Error shutting down thumbnail executor: {e}")
+        # No longer need to shutdown thumbnail executor as we removed thread pool
+        # Thumbnails are now generated synchronously during output download
 
         logger.info("Gradio UI shutdown complete")
 

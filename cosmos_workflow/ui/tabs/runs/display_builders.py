@@ -4,76 +4,111 @@ This module contains functions for building gallery data, table data,
 and statistics for the runs display.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cosmos_workflow.ui.utils import video as video_utils
 from cosmos_workflow.utils.logging import logger
-
-# Thread pool for parallel thumbnail generation
-THUMBNAIL_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
 def build_gallery_data(runs: list, limit: int = 50) -> list:
-    """Build gallery data with thumbnails for completed runs.
+    """Build gallery data using pre-generated thumbnails for completed runs.
+
+    This function first checks for thumbnail_path in the database (fastest),
+    then looks for thumbnails in the filesystem as fallback. Thumbnails are
+    generated once when outputs are downloaded, never on-demand.
 
     Args:
-        runs: List of run dictionaries
-        limit: Maximum number of thumbnails to generate
+        runs: List of run dictionaries from database
+        limit: Maximum number of thumbnails to display
 
     Returns:
         List of (thumbnail_path, label) tuples for gallery
     """
     gallery_data = []
-    video_paths = []
+    processed_count = 0
 
-    # Collect video paths from completed runs
+    # Look for pre-generated thumbnails for completed runs
     for run in runs:
+        if processed_count >= limit:
+            break
+
         if run.get("status") != "completed":
             continue
 
         outputs = run.get("outputs", {})
+        thumb_path = None
         output_video = None
 
-        # New structure: outputs.output_path
-        if isinstance(outputs, dict) and "output_path" in outputs:
-            output_path = outputs["output_path"]
-            if output_path and output_path.endswith(".mp4"):
-                output_video = Path(output_path)
-                if output_video.exists():
-                    video_paths.append((output_video, run))
-        # Old structure: outputs.files array
-        elif isinstance(outputs, dict) and "files" in outputs:
-            files = outputs.get("files", [])
-            for file_path in files:
-                if file_path.endswith("output.mp4"):
-                    output_video = Path(file_path)
-                    if output_video.exists():
-                        video_paths.append((output_video, run))
+        # FIRST: Check if thumbnail_path is stored in database (fastest)
+        if isinstance(outputs, dict) and "thumbnail_path" in outputs:
+            thumb_path_str = outputs["thumbnail_path"]
+            if thumb_path_str:
+                thumb_path = Path(thumb_path_str)
+                if not thumb_path.exists():
+                    logger.warning(
+                        "Thumbnail path stored in database but file missing: {} for run {}",
+                        thumb_path_str,
+                        run.get("id", "unknown"),
+                    )
+                    thumb_path = None
+
+        # If no thumbnail in database, try filesystem locations as fallback
+        if not thumb_path:
+            # Get output video path
+            if isinstance(outputs, dict) and "output_path" in outputs:
+                output_path = outputs["output_path"]
+                if output_path and output_path.endswith(".mp4"):
+                    output_video = Path(output_path)
+            # Old structure: outputs.files array
+            elif isinstance(outputs, dict) and "files" in outputs:
+                files = outputs.get("files", [])
+                for file_path in files:
+                    if file_path.endswith("output.mp4"):
+                        output_video = Path(file_path)
                         break
 
-    # Generate thumbnails in parallel
-    if video_paths:
-        logger.info("Generating thumbnails for {} videos", min(len(video_paths), limit))
-        futures = []
-        for video_path, run in video_paths[:limit]:
-            future = THUMBNAIL_EXECUTOR.submit(video_utils.generate_thumbnail_fast, video_path)
-            futures.append((future, run))
+            if output_video and output_video.exists():
+                # Look for pre-generated thumbnail in same directory
+                thumb_path = output_video.parent / f"{output_video.stem}.thumb.jpg"
 
-        # Collect results
-        for future, run in futures:
-            try:
-                thumb_path = future.result(timeout=3)
-                if thumb_path:
-                    # Include rating and run ID in label
-                    full_id = run.get("id", "")
-                    rating = run.get("rating")
-                    star_display = "★" * rating + "☆" * (5 - rating) if rating else "☆☆☆☆☆"
-                    label = f"{star_display}||{full_id}"
-                    gallery_data.append((thumb_path, label))
-            except Exception as e:
-                logger.debug("Failed to generate thumbnail: {}", str(e))
+                # Also check legacy centralized thumbnail location as fallback
+                if not thumb_path.exists():
+                    import hashlib
+
+                    path_hash = hashlib.md5(str(output_video).encode()).hexdigest()[:8]  # noqa: S324
+                    legacy_thumb_path = (
+                        Path("outputs/.thumbnails") / f"{output_video.stem}_{path_hash}.jpg"
+                    )
+                    if legacy_thumb_path.exists():
+                        thumb_path = legacy_thumb_path
+                    else:
+                        thumb_path = None
+
+                if not thumb_path or not thumb_path.exists():
+                    # Log warning that thumbnail is missing
+                    logger.warning(
+                        "Thumbnail not found for completed run {} with output video at {}. "
+                        "Thumbnail should have been generated when output was downloaded.",
+                        run.get("id", "unknown"),
+                        output_video,
+                    )
+                    continue
+            else:
+                # No output video found, skip this run
+                continue
+
+        # Add to gallery if we have a valid thumbnail
+        if thumb_path and thumb_path.exists():
+            # Include rating and run ID in label
+            full_id = run.get("id", "")
+            rating = run.get("rating")
+            star_display = "★" * rating + "☆" * (5 - rating) if rating else "☆☆☆☆☆"
+            label = f"{star_display}||{full_id}"
+            gallery_data.append((str(thumb_path), label))
+            processed_count += 1
+
+    if processed_count > 0:
+        logger.info("Loaded {} pre-generated thumbnails for gallery display", processed_count)
 
     return gallery_data
 
@@ -155,7 +190,6 @@ _build_runs_table_data = build_runs_table_data
 _calculate_runs_statistics = calculate_runs_statistics
 
 __all__ = [
-    "THUMBNAIL_EXECUTOR",
     "build_gallery_data",
     "build_runs_table_data",
     "calculate_runs_statistics",

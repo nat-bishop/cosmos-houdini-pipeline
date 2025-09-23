@@ -88,33 +88,26 @@ def wire_header_events(components, api, config):
         api: CosmosAPI instance
         config: Configuration instance
     """
-    from cosmos_workflow.ui.tabs.inputs_handlers import get_input_directories
-    from cosmos_workflow.ui.tabs.prompts_handlers import list_prompts
-    from cosmos_workflow.ui.tabs.runs import load_runs_data
+    from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
 
     # Manual refresh button
     def refresh_all_data():
         """Refresh data in all tabs."""
         try:
-            from pathlib import Path
-
-            # Refresh inputs - get the correct videos directory from config
-            local_config = config.get_local_config()
-            inputs_dir_path = Path(local_config.videos_dir)
-            get_input_directories(inputs_dir_path)
-
-            # Refresh prompts
-            prompts_data = list_prompts()
-
-            # Refresh runs with default filters
-            gallery, table, stats = load_runs_data(
-                status_filter="all",
-                date_filter="all",
-                type_filter="all",
+            # Refresh prompts using load_ops_prompts which returns the right format
+            prompts_data = load_ops_prompts(
+                limit=50,
                 search_text="",
-                limit="50",
-                rating_filter=None,
+                enhanced_filter="all",
+                runs_filter="all",
+                date_filter="all",
             )
+
+            # For runs, return empty/minimal data to avoid hanging on thumbnail generation
+            # The runs tab will load its own data when accessed
+            gallery = []
+            table = []
+            stats = "Runs data will refresh when you visit the Runs tab"
 
             return (
                 "**Status:** ✅ All data refreshed",
@@ -1146,7 +1139,7 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
 
     from cosmos_workflow.ui.queue_handlers import QueueHandlers
     from cosmos_workflow.ui.tabs.inputs_handlers import load_input_gallery
-    from cosmos_workflow.ui.tabs.prompts_handlers import list_prompts
+    from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
     from cosmos_workflow.ui.tabs.runs.data_loading import load_runs_data
 
     # Load initial data for inputs tab
@@ -1163,11 +1156,21 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
             outputs=[components["input_gallery"], components["inputs_results_count"]],
         )
 
-    # Load initial data for prompts tab
-    if "prompts_table" in components:
+    # Load initial data for prompts tab - fixed to use ops_prompts_table
+    if "ops_prompts_table" in components:
+
+        def load_initial_prompts():
+            return load_ops_prompts(
+                limit=50,
+                search_text="",
+                enhanced_filter="all",
+                runs_filter="all",
+                date_filter="all",
+            )
+
         app.load(
-            fn=list_prompts,
-            outputs=[components["prompts_table"]],
+            fn=load_initial_prompts,
+            outputs=[components["ops_prompts_table"]],
         )
 
     # Load initial data for runs tab

@@ -180,15 +180,30 @@ class GPUExecutor:
                 if self._thread_safe_download(remote_output, local_output):
                     logger.info("Downloaded output file for run {}", run_id)
 
+                    # Generate thumbnail for the output
+                    thumbnail_path = None
+                    if local_output.exists():
+                        try:
+                            from cosmos_workflow.ui.utils import video as video_utils
+
+                            thumbnail_path = video_utils.generate_thumbnail_fast(
+                                str(local_output), store_with_video=True
+                            )
+                            if thumbnail_path:
+                                logger.info("Generated thumbnail: {}", thumbnail_path)
+                        except Exception as e:
+                            logger.warning("Error generating thumbnail: {}", e)
+
                     # Update database with success
                     if self.service:
-                        self.service.update_run(
-                            run_id,
-                            outputs={
-                                "output_path": str(local_output),
-                                "completed_at": datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
+                        outputs_data = {
+                            "output_path": str(local_output),
+                            "completed_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        if thumbnail_path:
+                            outputs_data["thumbnail_path"] = str(thumbnail_path)
+
+                        self.service.update_run(run_id, outputs=outputs_data)
                         self.service.update_run_status(run_id, "completed")
                     logger.info("Inference run {} completed successfully", run_id)
                 else:
@@ -307,15 +322,30 @@ class GPUExecutor:
             if self._thread_safe_download(remote_output, local_output):
                 logger.info("Downloaded 4K output file for run {}", run_id)
 
+                # Generate thumbnail for the output
+                thumbnail_path = None
+                if local_output.exists():
+                    try:
+                        from cosmos_workflow.ui.utils import video as video_utils
+
+                        thumbnail_path = video_utils.generate_thumbnail_fast(
+                            str(local_output), store_with_video=True
+                        )
+                        if thumbnail_path:
+                            logger.info("Generated thumbnail: {}", thumbnail_path)
+                    except Exception as e:
+                        logger.warning("Error generating thumbnail: {}", e)
+
                 # Update database with success
                 if self.service:
-                    self.service.update_run(
-                        run_id,
-                        outputs={
-                            "output_path": str(local_output),
-                            "completed_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
+                    outputs_data = {
+                        "output_path": str(local_output),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if thumbnail_path:
+                        outputs_data["thumbnail_path"] = str(thumbnail_path)
+
+                    self.service.update_run(run_id, outputs=outputs_data)
                     self.service.update_run_status(run_id, "completed")
                 logger.info("Upscaling run {} completed successfully", run_id)
             else:
@@ -454,16 +484,21 @@ class GPUExecutor:
                     logger.info("Inference completed for run {}, downloading outputs...", run_id)
 
                     try:
-                        output_path = self._download_outputs(run_id, run_dir, upscaled=False)
+                        output_path, thumbnail_path = self._download_outputs(
+                            run_id, run_dir, upscaled=False
+                        )
 
-                        # Return completed status with output path
-                        return {
+                        # Return completed status with output path and thumbnail
+                        result = {
                             "status": "completed",
                             "output_path": str(output_path),
                             "message": "Inference completed successfully",
                             "run_id": run_id,
                             "log_path": str(run_dir / "logs" / "inference.log"),
                         }
+                        if thumbnail_path:
+                            result["thumbnail_path"] = str(thumbnail_path)
+                        return result
                     except Exception as download_error:
                         logger.error(
                             "Failed to download outputs for run {}: {}", run_id, download_error
@@ -570,7 +605,27 @@ class GPUExecutor:
         except Exception as e:
             logger.error("Failed to download/append log: {}", e)
 
-        return local_file
+        # Generate thumbnail for the output video
+        # This happens once when the output is downloaded, not on every view
+        thumbnail_path = None
+        if local_file.exists():
+            try:
+                from cosmos_workflow.ui.utils import video as video_utils
+
+                # Generate thumbnail in the same directory as the output
+                thumbnail_path = video_utils.generate_thumbnail_fast(
+                    str(local_file), store_with_video=True
+                )
+                if thumbnail_path:
+                    logger.info("Generated thumbnail for output: {}", thumbnail_path)
+                else:
+                    logger.warning("Failed to generate thumbnail for output: {}", local_file)
+            except Exception as e:
+                # Don't fail the download if thumbnail generation fails
+                logger.warning("Error generating thumbnail: {}", e)
+
+        # Return both the output file and thumbnail path
+        return local_file, thumbnail_path
 
     # ========== Batch Execution ==========
 
@@ -1460,7 +1515,9 @@ class GPUExecutor:
                     logger.info("Upscaling completed for run {}, downloading outputs...", run_id)
 
                     try:
-                        output_path = self._download_outputs(run_id, run_dir, upscaled=True)
+                        output_path, thumbnail_path = self._download_outputs(
+                            run_id, run_dir, upscaled=True
+                        )
 
                         # Build result data
                         result_data = {
@@ -1472,6 +1529,8 @@ class GPUExecutor:
                             "run_id": run_id,
                             "log_path": (logs_dir / "upscaling.log").as_posix(),
                         }
+                        if thumbnail_path:
+                            result_data["thumbnail_path"] = str(thumbnail_path)
 
                         # Add source_run_id if this was from an existing run
                         if source_run_id:

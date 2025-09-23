@@ -125,13 +125,15 @@ def _extract_metadata_imageio(video_path: Path) -> dict[str, str]:
 
 
 def generate_thumbnail_fast(
-    video_path: str, thumb_size: tuple[int, int] = (384, 216)
+    video_path: str, thumb_size: tuple[int, int] = (384, 216), store_with_video: bool = False
 ) -> str | None:
     """Generate a small, low-res thumbnail very quickly using ffmpeg.
 
     Args:
         video_path: Path to video file
         thumb_size: Thumbnail size (width, height)
+        store_with_video: If True, store thumbnail in same directory as video.
+                         If False, use centralized .thumbnails directory
 
     Returns:
         Path to thumbnail or None if failed
@@ -142,13 +144,17 @@ def generate_thumbnail_fast(
             logger.debug("Video file does not exist: %s", video_path)
             return None
 
-        # Create thumbnails directory
-        thumb_dir = Path("outputs/.thumbnails")
-        thumb_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate unique thumbnail name based on video path
-        path_hash = hashlib.md5(str(video_path).encode()).hexdigest()[:8]  # noqa: S324
-        thumb_path = thumb_dir / f"{video_path.stem}_{path_hash}.jpg"
+        # Determine thumbnail path based on storage preference
+        if store_with_video:
+            # Store thumbnail in same directory as video with .thumb.jpg extension
+            thumb_path = video_path.parent / f"{video_path.stem}.thumb.jpg"
+        else:
+            # Use centralized thumbnails directory (legacy behavior)
+            thumb_dir = Path("outputs/.thumbnails")
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+            # Generate unique thumbnail name based on video path
+            path_hash = hashlib.md5(str(video_path).encode()).hexdigest()[:8]  # noqa: S324
+            thumb_path = thumb_dir / f"{video_path.stem}_{path_hash}.jpg"
 
         # Skip if thumbnail already exists
         if thumb_path.exists():
@@ -171,11 +177,11 @@ def generate_thumbnail_fast(
             str(thumb_path),
         ]
 
-        # Run with timeout
+        # Run with timeout (increased slightly for production use)
         result = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
-            timeout=2,  # Very short timeout
+            timeout=5,  # Reasonable timeout for production
             creationflags=subprocess.CREATE_NO_WINDOW
             if hasattr(subprocess, "CREATE_NO_WINDOW")
             else 0,

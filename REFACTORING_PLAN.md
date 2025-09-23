@@ -680,3 +680,37 @@ _Track discoveries, issues, and decisions here as you work:_
 - **No file > 500 lines** (except core/builder.py initially)
 - **Average module size**: ~200 lines
 - **Code duplication**: < 5%
+
+---
+
+## Phase 4.7: Drastically Reduce app.py Size ✅ COMPLETE (2025-09-23)
+
+### Achievements
+- **Reduced app.py from 2,063 to 152 lines** (92.6% reduction!)
+- **Reduced create_ui() from 1,782 to ~20 lines** (98.9% reduction!)
+- **Created modular core architecture:**
+  - `core/state.py` (86 lines) - State management
+  - `core/navigation.py` (138 lines) - Tab navigation
+  - `core/builder.py` (1,243 lines) - UI building and event wiring
+  - `core/utils.py` (88 lines) - Helper functions
+  - `core/safe_wiring.py` (187 lines) - Safe event handling
+
+### Problems Fixed
+- Implemented missing QueueHandler methods (on_queue_select, remove_item, prioritize_item)
+- Fixed refresh_and_stream function signature mismatch
+- Completed input gallery selection handler implementation
+- Fixed cross-tab navigation argument mismatches
+- Resolved all TODOs in builder.py
+- Added missing functools import
+
+### Final Verification
+- ✅ All 4 tabs (Inputs, Prompts, Runs, Jobs) loading correctly
+- ✅ Event handlers wired properly
+- ✅ 100% feature parity achieved
+- ✅ Pre-commit hooks passing
+- ✅ UI tested via Playwright automation
+
+### Key Stats
+- **Total refactoring impact**: Reduced monolithic code by 92.6%
+- **Modular architecture**: 5 core modules + handler separation
+- **Maintainability**: Clear separation of concerns achieved

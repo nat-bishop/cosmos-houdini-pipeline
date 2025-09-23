@@ -259,12 +259,12 @@ def get_video_files(directory: Path, extensions: list[str] | None = None) -> lis
     if extensions is None:
         extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv"]
 
-    video_files = []
+    video_files = set()  # Use set to avoid duplicates
     dir_path = Path(directory)
 
     for ext in extensions:
-        video_files.extend(dir_path.glob(f"*{ext}"))
-        video_files.extend(dir_path.glob(f"*{ext.upper()}"))
+        video_files.update(dir_path.glob(f"*{ext}"))
+        video_files.update(dir_path.glob(f"*{ext.upper()}"))
 
     return sorted(video_files)
 

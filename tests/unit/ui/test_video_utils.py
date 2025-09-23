@@ -31,32 +31,21 @@ class TestGenerateThumbnailFast:
             # Expected thumbnail path (same directory as video)
             expected_thumb = video_path.parent / "output.thumb.jpg"
 
-            # Mock the thumbnail creation
-            with patch.object(Path, "exists") as mock_exists:
+            # Call the function (thumbnail doesn't exist yet)
+            result = generate_thumbnail_fast(str(video_path))
 
-                def exists_side_effect(self):
-                    if self == video_path:
-                        return True
-                    elif self == expected_thumb:
-                        # First call returns False (doesn't exist yet)
-                        # Second call returns True (after ffmpeg "creates" it)
-                        return mock_exists.call_count > 1
-                    return False
+            # Verify ffmpeg was called with correct parameters
+            mock_run.assert_called_once()
+            ffmpeg_args = mock_run.call_args[0][0]
+            assert ffmpeg_args[0] == "ffmpeg"
+            assert "-i" in ffmpeg_args
+            assert str(video_path) in ffmpeg_args
+            assert str(expected_thumb) in ffmpeg_args
+            assert "-vf" in ffmpeg_args
+            assert "scale=384:216" in ffmpeg_args
 
-                mock_exists.side_effect = exists_side_effect
-
-                # Call the function
-                generate_thumbnail_fast(str(video_path))
-
-                # Verify ffmpeg was called with correct parameters
-                mock_run.assert_called_once()
-                ffmpeg_args = mock_run.call_args[0][0]
-                assert ffmpeg_args[0] == "ffmpeg"
-                assert "-i" in ffmpeg_args
-                assert str(video_path) in ffmpeg_args
-                assert str(expected_thumb) in ffmpeg_args
-                assert "-vf" in ffmpeg_args
-                assert "scale=384:216" in ffmpeg_args
+            # Function returns None since we didn't create the thumbnail file
+            assert result is None
 
     def test_generate_thumbnail_video_not_exists(self):
         """Test that None is returned when video doesn't exist."""
@@ -115,20 +104,33 @@ class TestGenerateThumbnailFast:
 class TestExtractVideoMetadata:
     """Test video metadata extraction."""
 
-    @patch("cv2.VideoCapture")
-    def test_extract_metadata_with_cv2(self, mock_capture):
+    @patch.dict("sys.modules", {"cv2": MagicMock()})
+    def test_extract_metadata_with_cv2(self):
         """Test metadata extraction using OpenCV."""
+        # Get the mocked cv2 module
+        import sys
+
+        mock_cv2 = sys.modules["cv2"]
+
         # Setup mock video capture
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = True
+
+        # Mock the cv2 constants
+        mock_cv2.CAP_PROP_FRAME_WIDTH = 3
+        mock_cv2.CAP_PROP_FRAME_HEIGHT = 4
+        mock_cv2.CAP_PROP_FPS = 5
+        mock_cv2.CAP_PROP_FRAME_COUNT = 7
+        mock_cv2.CAP_PROP_FOURCC = 6
+
         mock_cap.get.side_effect = lambda prop: {
-            0: 1920,  # WIDTH
-            1: 1080,  # HEIGHT
+            3: 1920,  # WIDTH
+            4: 1080,  # HEIGHT
             5: 24,  # FPS
             7: 120,  # FRAME_COUNT
             6: 1234,  # FOURCC
         }.get(prop, 0)
-        mock_capture.return_value = mock_cap
+        mock_cv2.VideoCapture.return_value = mock_cap
 
         with tempfile.TemporaryDirectory() as tmpdir:
             video_path = Path(tmpdir) / "test.mp4"

@@ -52,49 +52,33 @@ def build_gallery_data(runs: list, limit: int = 50) -> list:
                     )
                     thumb_path = None
 
-        # If no thumbnail in database, try filesystem locations as fallback
+        # If no thumbnail in database, try filesystem location as fallback
         if not thumb_path:
-            # Get output video path
+            # Get output video path from current structure
             if isinstance(outputs, dict) and "output_path" in outputs:
                 output_path = outputs["output_path"]
                 if output_path and output_path.endswith(".mp4"):
                     output_video = Path(output_path)
-            # Old structure: outputs.files array
-            elif isinstance(outputs, dict) and "files" in outputs:
-                files = outputs.get("files", [])
-                for file_path in files:
-                    if file_path.endswith("output.mp4"):
-                        output_video = Path(file_path)
-                        break
 
-            if output_video and output_video.exists():
-                # Look for pre-generated thumbnail in same directory
-                thumb_path = output_video.parent / f"{output_video.stem}.thumb.jpg"
+                    if output_video.exists():
+                        # Look for pre-generated thumbnail in same directory
+                        thumb_path = output_video.parent / f"{output_video.stem}.thumb.jpg"
 
-                # Also check legacy centralized thumbnail location as fallback
-                if not thumb_path.exists():
-                    import hashlib
-
-                    path_hash = hashlib.md5(str(output_video).encode()).hexdigest()[:8]  # noqa: S324
-                    legacy_thumb_path = (
-                        Path("outputs/.thumbnails") / f"{output_video.stem}_{path_hash}.jpg"
-                    )
-                    if legacy_thumb_path.exists():
-                        thumb_path = legacy_thumb_path
+                        if not thumb_path.exists():
+                            # Log warning that thumbnail is missing
+                            logger.warning(
+                                "Thumbnail not found for completed run {} with output video at {}. "
+                                "Thumbnail should have been generated when output was downloaded.",
+                                run.get("id", "unknown"),
+                                output_video,
+                            )
+                            thumb_path = None
+                            continue
                     else:
-                        thumb_path = None
-
-                if not thumb_path or not thumb_path.exists():
-                    # Log warning that thumbnail is missing
-                    logger.warning(
-                        "Thumbnail not found for completed run {} with output video at {}. "
-                        "Thumbnail should have been generated when output was downloaded.",
-                        run.get("id", "unknown"),
-                        output_video,
-                    )
-                    continue
+                        # Output video doesn't exist
+                        continue
             else:
-                # No output video found, skip this run
+                # No output path in database, skip this run
                 continue
 
         # Add to gallery if we have a valid thumbnail
@@ -183,11 +167,6 @@ def calculate_runs_statistics(runs: list, total_count: int) -> str:
 
     return stats
 
-
-# Maintain backward compatibility with underscore-prefixed names
-_build_gallery_data = build_gallery_data
-_build_runs_table_data = build_runs_table_data
-_calculate_runs_statistics = calculate_runs_statistics
 
 __all__ = [
     "build_gallery_data",

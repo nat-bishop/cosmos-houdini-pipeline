@@ -4,7 +4,6 @@ This module provides video processing, metadata extraction, and validation
 utilities used across the UI.
 """
 
-import hashlib
 import subprocess
 from pathlib import Path
 
@@ -125,15 +124,16 @@ def _extract_metadata_imageio(video_path: Path) -> dict[str, str]:
 
 
 def generate_thumbnail_fast(
-    video_path: str, thumb_size: tuple[int, int] = (384, 216), store_with_video: bool = False
+    video_path: str, thumb_size: tuple[int, int] = (384, 216)
 ) -> str | None:
     """Generate a small, low-res thumbnail very quickly using ffmpeg.
+
+    Thumbnails are always stored in the same directory as the video file
+    with a .thumb.jpg extension for fast access.
 
     Args:
         video_path: Path to video file
         thumb_size: Thumbnail size (width, height)
-        store_with_video: If True, store thumbnail in same directory as video.
-                         If False, use centralized .thumbnails directory
 
     Returns:
         Path to thumbnail or None if failed
@@ -144,17 +144,8 @@ def generate_thumbnail_fast(
             logger.debug("Video file does not exist: %s", video_path)
             return None
 
-        # Determine thumbnail path based on storage preference
-        if store_with_video:
-            # Store thumbnail in same directory as video with .thumb.jpg extension
-            thumb_path = video_path.parent / f"{video_path.stem}.thumb.jpg"
-        else:
-            # Use centralized thumbnails directory (legacy behavior)
-            thumb_dir = Path("outputs/.thumbnails")
-            thumb_dir.mkdir(parents=True, exist_ok=True)
-            # Generate unique thumbnail name based on video path
-            path_hash = hashlib.md5(str(video_path).encode()).hexdigest()[:8]  # noqa: S324
-            thumb_path = thumb_dir / f"{video_path.stem}_{path_hash}.jpg"
+        # Store thumbnail in same directory as video with .thumb.jpg extension
+        thumb_path = video_path.parent / f"{video_path.stem}.thumb.jpg"
 
         # Skip if thumbnail already exists
         if thumb_path.exists():

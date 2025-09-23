@@ -18,8 +18,8 @@ class TestGenerateThumbnailFast:
     """Test the generate_thumbnail_fast function with production standards."""
 
     @patch("cosmos_workflow.ui.utils.video.subprocess.run")
-    def test_generate_thumbnail_with_video_storage(self, mock_run):
-        """Test thumbnail generation with store_with_video=True."""
+    def test_generate_thumbnail(self, mock_run):
+        """Test thumbnail generation storing in same directory as video."""
         # Setup
         mock_run.return_value = Mock(returncode=0)
 
@@ -46,7 +46,7 @@ class TestGenerateThumbnailFast:
                 mock_exists.side_effect = exists_side_effect
 
                 # Call the function
-                generate_thumbnail_fast(str(video_path), store_with_video=True)
+                generate_thumbnail_fast(str(video_path))
 
                 # Verify ffmpeg was called with correct parameters
                 mock_run.assert_called_once()
@@ -57,30 +57,6 @@ class TestGenerateThumbnailFast:
                 assert str(expected_thumb) in ffmpeg_args
                 assert "-vf" in ffmpeg_args
                 assert "scale=384:216" in ffmpeg_args
-
-    @patch("cosmos_workflow.ui.utils.video.subprocess.run")
-    def test_generate_thumbnail_centralized_storage(self, mock_run):
-        """Test thumbnail generation with centralized storage (legacy)."""
-        mock_run.return_value = Mock(returncode=0)
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a mock video file
-            video_path = Path(tmpdir) / "output.mp4"
-            video_path.touch()
-
-            with patch.object(Path, "exists", return_value=True):
-                with patch.object(Path, "mkdir"):
-                    # Call the function with store_with_video=False (default)
-                    generate_thumbnail_fast(str(video_path))
-
-                    # Verify ffmpeg was called
-                    mock_run.assert_called_once()
-                    ffmpeg_args = mock_run.call_args[0][0]
-
-                    # Should use centralized .thumbnails directory
-                    output_path = ffmpeg_args[-1]
-                    assert ".thumbnails" in output_path
-                    assert "output_" in output_path  # Contains hash suffix
 
     def test_generate_thumbnail_video_not_exists(self):
         """Test that None is returned when video doesn't exist."""
@@ -99,7 +75,7 @@ class TestGenerateThumbnailFast:
             thumb_path.touch()
 
             # Call the function
-            result = generate_thumbnail_fast(str(video_path), store_with_video=True)
+            result = generate_thumbnail_fast(str(video_path))
 
             # Should return existing thumbnail without calling ffmpeg
             assert result == str(thumb_path)
@@ -114,7 +90,7 @@ class TestGenerateThumbnailFast:
             video_path = Path(tmpdir) / "output.mp4"
             video_path.touch()
 
-            result = generate_thumbnail_fast(str(video_path), store_with_video=True)
+            result = generate_thumbnail_fast(str(video_path))
 
             # Should return None on ffmpeg failure
             assert result is None
@@ -130,7 +106,7 @@ class TestGenerateThumbnailFast:
             video_path = Path(tmpdir) / "output.mp4"
             video_path.touch()
 
-            result = generate_thumbnail_fast(str(video_path), store_with_video=True)
+            result = generate_thumbnail_fast(str(video_path))
 
             # Should return None on timeout
             assert result is None

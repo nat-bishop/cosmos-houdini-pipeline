@@ -186,9 +186,7 @@ class GPUExecutor:
                         try:
                             from cosmos_workflow.ui.utils import video as video_utils
 
-                            thumbnail_path = video_utils.generate_thumbnail_fast(
-                                str(local_output), store_with_video=True
-                            )
+                            thumbnail_path = video_utils.generate_thumbnail_fast(str(local_output))
                             if thumbnail_path:
                                 logger.info("Generated thumbnail: {}", thumbnail_path)
                         except Exception as e:
@@ -613,9 +611,7 @@ class GPUExecutor:
                 from cosmos_workflow.ui.utils import video as video_utils
 
                 # Generate thumbnail in the same directory as the output
-                thumbnail_path = video_utils.generate_thumbnail_fast(
-                    str(local_file), store_with_video=True
-                )
+                thumbnail_path = video_utils.generate_thumbnail_fast(str(local_file))
                 if thumbnail_path:
                     logger.info("Generated thumbnail for output: {}", thumbnail_path)
                 else:

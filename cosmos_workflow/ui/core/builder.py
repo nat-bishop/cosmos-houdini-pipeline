@@ -254,10 +254,12 @@ def wire_inputs_events(components, config, api):
 
     # Input gallery selection
     if "input_gallery" in components:
+        import gradio as gr
+
         from cosmos_workflow.ui.tabs.inputs_handlers import on_input_select
 
         # Create a wrapper that adds inputs_dir
-        def handle_input_select(evt, gallery_data):
+        def handle_input_select(evt: gr.SelectData, gallery_data):
             return on_input_select(evt, gallery_data, getattr(config, "inputs_dir", "inputs"))
 
         components["input_gallery"].select(

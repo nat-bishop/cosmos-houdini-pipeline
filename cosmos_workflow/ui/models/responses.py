@@ -6,57 +6,66 @@ in Gradio event handlers, improving maintainability and type safety.
 
 from typing import Any, NamedTuple
 
+# Cache for empty response to avoid recreating on every error
+_EMPTY_RESPONSE_CACHE = None
+
 
 def create_empty_run_details_response():
-    """Create an empty/hidden RunDetailsResponse for error cases."""
-    import gradio as gr
+    """Create an empty/hidden RunDetailsResponse for error cases.
 
-    # Create all fields as empty gr.update() calls
-    return RunDetailsResponse(
-        runs_details_group=gr.update(visible=False),
-        runs_detail_id=gr.update(),
-        runs_detail_status=gr.update(),
-        runs_main_content_transfer=gr.update(),
-        runs_main_content_enhance=gr.update(),
-        runs_main_content_upscale=gr.update(),
-        runs_input_video_1=gr.update(),
-        runs_input_video_2=gr.update(),
-        runs_input_video_3=gr.update(),
-        runs_input_video_4=gr.update(),
-        runs_output_video=gr.update(),
-        runs_prompt_text=gr.update(),
-        runs_original_prompt_enhance=gr.update(),
-        runs_enhanced_prompt_enhance=gr.update(),
-        runs_enhance_stats=gr.update(),
-        runs_output_video_upscale=gr.update(),
-        runs_original_video_upscale=gr.update(),
-        runs_upscale_stats=gr.update(),
-        runs_upscale_prompt=gr.update(),
-        runs_info_id=gr.update(),
-        runs_info_prompt_id=gr.update(),
-        runs_info_status=gr.update(),
-        runs_info_duration=gr.update(),
-        runs_info_type=gr.update(),
-        runs_info_prompt_name=gr.update(),
-        star_1=gr.update(),
-        star_2=gr.update(),
-        star_3=gr.update(),
-        star_4=gr.update(),
-        star_5=gr.update(),
-        runs_info_rating=gr.update(),
-        runs_info_created=gr.update(),
-        runs_info_completed=gr.update(),
-        runs_info_output_path=gr.update(),
-        runs_info_input_paths=gr.update(),
-        runs_params_json=gr.update(),
-        runs_log_path=gr.update(),
-        runs_log_output=gr.update(),
-        runs_upscale_selected_btn=gr.update(),
-        runs_selected_id=gr.update(),
-        runs_selected_info=gr.update(),
-        runs_output_video_upscaled=gr.update(),
-        runs_upscaled_tab=gr.update(),
-    )
+    Uses caching to avoid recreating 43 gr.update() objects on every call.
+    """
+    global _EMPTY_RESPONSE_CACHE
+    if _EMPTY_RESPONSE_CACHE is None:
+        import gradio as gr
+
+        # Create all fields as empty gr.update() calls (only once)
+        _EMPTY_RESPONSE_CACHE = RunDetailsResponse(
+            runs_details_group=gr.update(visible=False),
+            runs_detail_id=gr.update(),
+            runs_detail_status=gr.update(),
+            runs_main_content_transfer=gr.update(),
+            runs_main_content_enhance=gr.update(),
+            runs_main_content_upscale=gr.update(),
+            runs_input_video_1=gr.update(),
+            runs_input_video_2=gr.update(),
+            runs_input_video_3=gr.update(),
+            runs_input_video_4=gr.update(),
+            runs_output_video=gr.update(),
+            runs_prompt_text=gr.update(),
+            runs_original_prompt_enhance=gr.update(),
+            runs_enhanced_prompt_enhance=gr.update(),
+            runs_enhance_stats=gr.update(),
+            runs_output_video_upscale=gr.update(),
+            runs_original_video_upscale=gr.update(),
+            runs_upscale_stats=gr.update(),
+            runs_upscale_prompt=gr.update(),
+            runs_info_id=gr.update(),
+            runs_info_prompt_id=gr.update(),
+            runs_info_status=gr.update(),
+            runs_info_duration=gr.update(),
+            runs_info_type=gr.update(),
+            runs_info_prompt_name=gr.update(),
+            star_1=gr.update(),
+            star_2=gr.update(),
+            star_3=gr.update(),
+            star_4=gr.update(),
+            star_5=gr.update(),
+            runs_info_rating=gr.update(),
+            runs_info_created=gr.update(),
+            runs_info_completed=gr.update(),
+            runs_info_output_path=gr.update(),
+            runs_info_input_paths=gr.update(),
+            runs_params_json=gr.update(),
+            runs_log_path=gr.update(),
+            runs_log_output=gr.update(),
+            runs_upscale_selected_btn=gr.update(),
+            runs_selected_id=gr.update(),
+            runs_selected_info=gr.update(),
+            runs_output_video_upscaled=gr.update(),
+            runs_upscaled_tab=gr.update(),
+        )
+    return _EMPTY_RESPONSE_CACHE
 
 
 class RunDetailsResponse(NamedTuple):

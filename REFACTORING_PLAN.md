@@ -20,15 +20,15 @@ Refactor the Gradio UI to be less monolithic and more maintainable using simple,
 ### Solution: Use Python's NamedTuple
 
 #### Tasks
-- [ ] Create `cosmos_workflow/ui/models/` directory
-- [ ] Create `responses.py` with NamedTuple definitions
-- [ ] Define response classes:
-  - [ ] `RunDetailsResponse` for `on_runs_table_select` (40+ fields)
-  - [ ] `PromptDetailsResponse` for `on_prompt_row_select` (10 fields)
-  - [ ] `InputSelectionResponse` for `on_input_select` (12 fields)
-- [ ] Update `on_runs_table_select` to return `RunDetailsResponse`
-- [ ] Update calling code to handle NamedTuple response
-- [ ] Test all UI updates still work correctly
+- [x] Create `cosmos_workflow/ui/models/` directory
+- [x] Create `responses.py` with NamedTuple definitions
+- [x] Define response classes:
+  - [x] `RunDetailsResponse` for `on_runs_table_select` (40+ fields)
+  - [x] `PromptDetailsResponse` for `on_prompt_row_select` (10 fields)
+  - [x] `InputSelectionResponse` for `on_input_select` (12 fields)
+- [x] Update `on_runs_table_select` to return `RunDetailsResponse`
+- [x] Update calling code to handle NamedTuple response
+- [x] Test all UI updates still work correctly
 
 ### Implementation Example
 ```python

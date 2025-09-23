@@ -325,12 +325,19 @@ def load_runs_with_filters(
         )
 
 
-# Import helper functions from the original module
-# These will be moved here after initial refactoring
-from cosmos_workflow.ui.tabs.runs_handlers import (
-    _apply_date_filter,
-    _apply_run_filters,
-    _build_gallery_data,
-    _build_runs_table_data,
-    _calculate_runs_statistics,
+# Import helper functions from the new specialized modules
+from cosmos_workflow.ui.tabs.runs.display_builders import (
+    build_gallery_data as _build_gallery_data,
+)
+from cosmos_workflow.ui.tabs.runs.display_builders import (
+    build_runs_table_data as _build_runs_table_data,
+)
+from cosmos_workflow.ui.tabs.runs.display_builders import (
+    calculate_runs_statistics as _calculate_runs_statistics,
+)
+from cosmos_workflow.ui.tabs.runs.filters import (
+    apply_date_filter as _apply_date_filter,
+)
+from cosmos_workflow.ui.tabs.runs.filters import (
+    apply_run_filters as _apply_run_filters,
 )

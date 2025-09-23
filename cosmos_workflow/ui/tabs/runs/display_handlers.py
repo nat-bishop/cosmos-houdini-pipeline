@@ -16,17 +16,30 @@ from cosmos_workflow.ui.models.responses import (
     create_empty_run_details_response,
 )
 
-# Import helper functions from original module
-# These will be moved here in the complete refactoring
-from cosmos_workflow.ui.tabs.runs_handlers import (
-    _build_input_gallery,
-    _extract_run_metadata,
-    _load_spec_and_weights,
-    _prepare_enhance_ui_data,
-    _prepare_transfer_ui_data,
-    _prepare_upscale_ui_data,
-    _read_log_content,
-    _resolve_video_paths,
+# Import helper functions from new specialized modules
+from cosmos_workflow.ui.tabs.runs.model_handlers import (
+    prepare_enhance_ui_data as _prepare_enhance_ui_data,
+)
+from cosmos_workflow.ui.tabs.runs.model_handlers import (
+    prepare_transfer_ui_data as _prepare_transfer_ui_data,
+)
+from cosmos_workflow.ui.tabs.runs.model_handlers import (
+    prepare_upscale_ui_data as _prepare_upscale_ui_data,
+)
+from cosmos_workflow.ui.tabs.runs.run_details import (
+    build_input_gallery as _build_input_gallery,
+)
+from cosmos_workflow.ui.tabs.runs.run_details import (
+    extract_run_metadata as _extract_run_metadata,
+)
+from cosmos_workflow.ui.tabs.runs.run_details import (
+    load_spec_and_weights as _load_spec_and_weights,
+)
+from cosmos_workflow.ui.tabs.runs.run_details import (
+    read_log_content as _read_log_content,
+)
+from cosmos_workflow.ui.tabs.runs.run_details import (
+    resolve_video_paths as _resolve_video_paths,
 )
 from cosmos_workflow.ui.utils import dataframe as df_utils
 from cosmos_workflow.utils.logging import logger
@@ -266,11 +279,14 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     # Prepare display data based on model type
     prepared_data = {}
     if model_type == "transfer":
-        prepared_data = _prepare_transfer_ui_data(run_details, prepared_data)
+        prepared_data = _prepare_transfer_ui_data(run_details, exec_config, outputs)
     elif model_type == "enhance":
-        prepared_data = _prepare_enhance_ui_data(run_details, prepared_data)
+        prepared_data = _prepare_enhance_ui_data(run_details, exec_config, outputs)
     elif model_type == "upscale":
-        prepared_data = _prepare_upscale_ui_data(run_details, prepared_data)
+        metadata = _extract_run_metadata(run_details)
+        prepared_data = _prepare_upscale_ui_data(
+            run_details, exec_config, outputs, metadata["duration"]
+        )
 
     # Extract navigation info from prepared data
     runs_nav_info_update = prepared_data.get("runs_nav_info", gr.update())

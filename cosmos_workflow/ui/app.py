@@ -214,7 +214,7 @@ def cleanup_on_shutdown(signum=None, frame=None):
 
     # Shutdown thumbnail executor thread pool to prevent resource leak
     try:
-        from cosmos_workflow.ui.tabs.runs.data_loading import THUMBNAIL_EXECUTOR
+        from cosmos_workflow.ui.tabs.runs.display_builders import THUMBNAIL_EXECUTOR
 
         THUMBNAIL_EXECUTOR.shutdown(wait=False)
         logger.info("Thumbnail executor shutdown completed")

@@ -261,13 +261,65 @@ ui/
 - **Result**: Eliminated ~500 lines of duplicate code, improved maintainability
 - **Key Achievement**: Unified data loading with Strategy pattern via RunFilters class
 
-#### Step 4.6: Complete Legacy Migration (runs_handlers.py cleanup)
-- [ ] Move remaining helper functions from runs_handlers.py to appropriate modules:
-  - [ ] Move filtering helpers to runs/filters.py
-  - [ ] Move display builders to runs/display_builders.py
-  - [ ] Move metadata extractors to runs/run_details.py
-- [ ] Delete runs_handlers.py once all functions migrated
-- [ ] Update all imports to use new module structure
+#### Step 4.6: Complete Legacy Migration (runs_handlers.py cleanup) 🚧 IN PROGRESS
+**Goal: Delete runs_handlers.py (1,823 lines) by migrating 13 helper functions**
+
+##### Detailed Migration Plan:
+
+1. **Create runs/filters.py (~150 lines)**
+   - [ ] Move `_apply_date_filter()` - 51 lines - date filtering logic
+   - [ ] Move `_apply_run_filters()` - 49 lines - type/search/rating filters
+
+2. **Create runs/display_builders.py (~300 lines)**
+   - [ ] Move `_build_gallery_data()` - 63 lines - gallery data structure
+   - [ ] Move `_build_runs_table_data()` - 47 lines - table data structure
+   - [ ] Move `_calculate_runs_statistics()` - 25 lines - statistics formatting
+
+3. **Enhance runs/run_details.py (~400 lines)**
+   - [ ] Move `_extract_run_metadata()` - 30 lines - metadata extraction
+   - [ ] Move `_resolve_video_paths()` - 49 lines - video path resolution
+   - [ ] Move `_load_spec_and_weights()` - 24 lines - spec.json loading
+   - [ ] Move `_build_input_gallery()` - 77 lines - input gallery builder
+   - [ ] Move `_read_log_content()` - 22 lines - log file reading
+   - [ ] Remove temporary imports from runs_handlers
+
+4. **Create runs/model_handlers.py (~200 lines)**
+   - [ ] Move `_prepare_transfer_ui_data()` - 18 lines - transfer UI prep
+   - [ ] Move `_prepare_enhance_ui_data()` - 36 lines - enhance UI prep
+   - [ ] Move `_prepare_upscale_ui_data()` - 36 lines - upscale UI prep
+
+5. **Update Import References**
+   - [ ] Update runs/data_loading.py imports
+   - [ ] Update runs/display_handlers.py imports
+   - [ ] Update any other files importing from runs_handlers
+
+6. **Final Cleanup**
+   - [ ] Delete runs_handlers.py entirely
+   - [ ] Run tests to verify functionality
+
+#### Step 4.7: Extract Core Logic from app.py
+**Goal: Reduce app.py from 2,061 → ~300 lines**
+
+The main issue: `create_ui()` function is 1,782 lines (lines 268-2050)!
+
+1. **Create core/navigation.py (~200 lines)**
+   - [ ] Extract `handle_tab_select()` and related logic
+   - [ ] Move `_handle_jobs_tab_refresh()`
+   - [ ] Extract all tab switching logic
+
+2. **Create core/builder.py (~1,500 lines initially)**
+   - [ ] Split `create_ui()` into modular builders
+   - [ ] `build_header()` - Header components
+   - [ ] `build_inputs_tab()` - Inputs tab assembly
+   - [ ] `build_prompts_tab()` - Prompts tab assembly
+   - [ ] `build_runs_tab()` - Runs tab assembly
+   - [ ] `build_jobs_tab()` - Jobs tab assembly
+   - [ ] `wire_events()` - All event connections
+
+3. **Create core/state.py (~150 lines)**
+   - [ ] Move global state management
+   - [ ] Navigation state handling
+   - [ ] Shared state between tabs
 
 ### Current Structure (After Phase 4.5)
 ```
@@ -584,7 +636,33 @@ _Track discoveries, issues, and decisions here as you work:_
 - **Code duplication reduced**: 70% in data loading functions
 - **Best practices applied**: functools.partial, NamedTuple, Strategy pattern, unified loaders
 
-### Next Steps
-- Complete Phase 4.6: Migrate remaining helper functions from runs_handlers.py
-- Target: Delete runs_handlers.py entirely after migration
-- Phase 5: Apply Gradio best practices to new modular structure
+### Implementation Timeline
+
+#### Phase 4.6 (2-3 days)
+- Migrate 13 helper functions to new modules
+- Delete runs_handlers.py (1,823 lines)
+- Update all import references
+- Test thoroughly
+
+#### Phase 4.7 (2 days)
+- Extract core logic from app.py
+- Create modular builders
+- Reduce app.py to ~300 lines
+
+#### Phase 5 (3 days)
+- Apply Gradio best practices
+- Final cleanup and documentation
+
+**Total: 7-8 days to complete full refactoring**
+
+### Next Steps (Priority Order)
+1. **Immediate**: Complete Phase 4.6 - Migrate runs_handlers.py helpers
+2. **High Priority**: Phase 4.7 - Extract create_ui() into builders
+3. **Medium Priority**: Phase 5 - Apply Gradio patterns
+
+### Target Metrics After Completion
+- **app.py**: ~300 lines (85% reduction from 2,061)
+- **runs_handlers.py**: Deleted (1,823 lines removed)
+- **No file > 500 lines** (except core/builder.py initially)
+- **Average module size**: ~200 lines
+- **Code duplication**: < 5%

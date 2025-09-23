@@ -8,7 +8,6 @@ import functools
 
 import gradio as gr
 
-from cosmos_workflow.ui.core.navigation import handle_tab_select
 from cosmos_workflow.ui.core.state import create_ui_states
 from cosmos_workflow.ui.core.utils import filter_none_components
 from cosmos_workflow.ui.styles_simple import get_custom_css
@@ -77,33 +76,8 @@ def wire_navigation_events(components):
     Args:
         components: Dictionary of UI components
     """
-    # Tab navigation handler
-    components["tabs"].change(
-        fn=lambda x: x,
-        inputs=[components["tabs"]],
-        outputs=[components["selected_tab"]],
-        show_progress=False,
-    ).success(
-        fn=handle_tab_select,
-        inputs=[
-            components["selected_tab"],
-            components["navigation_state"],
-            components["pending_nav_data"],
-        ],
-        outputs=[
-            components["navigation_state"],
-            components["pending_nav_data"],
-            components["runs_gallery"],
-            components["runs_table"],
-            components["runs_stats"],
-            components["runs_nav_filter_row"],
-            components["runs_prompt_filter"],
-            components["running_jobs_display"],
-            components["job_status"],
-            components["active_job_card"],
-        ],
-        show_progress=False,
-    )
+    # Tab navigation handler - Tabs component cannot be used as input
+    # Instead, we'll handle tab navigation through button clicks and other events
 
 
 def wire_header_events(components, api, config):
@@ -122,9 +96,12 @@ def wire_header_events(components, api, config):
     def refresh_all_data():
         """Refresh data in all tabs."""
         try:
-            # Refresh inputs
-            inputs_dir = getattr(config, "inputs_dir", "inputs")
-            get_input_directories(inputs_dir)
+            from pathlib import Path
+
+            # Refresh inputs - get the correct videos directory from config
+            local_config = config.get_local_config()
+            inputs_dir_path = Path(local_config.videos_dir)
+            get_input_directories(inputs_dir_path)
 
             # Refresh prompts
             prompts_data = list_prompts()
@@ -159,7 +136,7 @@ def wire_header_events(components, api, config):
     if "manual_refresh" in components:
         outputs = [
             components.get("status_display"),
-            components.get("prompts_table"),
+            components.get("ops_prompts_table"),  # Fixed: was "prompts_table"
             components.get("runs_gallery"),
             components.get("runs_table"),
             components.get("runs_stats"),
@@ -186,6 +163,9 @@ def wire_inputs_events(components, config, api):
     """
     import functools
 
+    # Bind with inputs_dir parameter
+    from pathlib import Path
+
     from cosmos_workflow.ui.tabs.inputs_handlers import (
         create_prompt,
         filter_input_directories,
@@ -194,8 +174,9 @@ def wire_inputs_events(components, config, api):
         on_input_select,
     )
 
-    # Bind with inputs_dir parameter
-    inputs_dir = getattr(config, "inputs_dir", "inputs")  # ConfigManager uses attributes, not dict
+    # Get the correct videos directory from config
+    local_config = config.get_local_config()
+    inputs_dir = Path(local_config.videos_dir)  # This is "inputs/videos" from config
     get_dirs_bound = functools.partial(get_input_directories, inputs_dir)
     filter_dirs_bound = functools.partial(filter_input_directories, inputs_dir)
 
@@ -260,7 +241,7 @@ def wire_inputs_events(components, config, api):
 
         # Create a wrapper that adds inputs_dir
         def handle_input_select(evt: gr.SelectData, gallery_data):
-            return on_input_select(evt, gallery_data, getattr(config, "inputs_dir", "inputs"))
+            return on_input_select(evt, gallery_data, inputs_dir)
 
         components["input_gallery"].select(
             fn=handle_input_select,
@@ -303,9 +284,7 @@ def wire_inputs_events(components, config, api):
 
     if "inputs_sort" in components:
         components["inputs_sort"].change(
-            fn=lambda search, date_f, sort: load_input_gallery(
-                getattr(config, "inputs_dir", "inputs"), search, date_f, sort
-            ),
+            fn=lambda search, date_f, sort: load_input_gallery(inputs_dir, search, date_f, sort),
             inputs=filter_none_components(
                 [
                     components.get("inputs_search"),
@@ -996,13 +975,13 @@ def wire_jobs_control_events(components):
         def update_batch_size(size):
             """Update batch processing size."""
             logger.info(f"Batch size updated to: {size}")
-            return gr.update(value=f"Batch size: {size}")
+            # Don't return anything if no output is expected
 
         if "batch_size" in components:
             components["batch_size"].change(
                 fn=update_batch_size,
                 inputs=[components["batch_size"]],
-                outputs=filter_none_components([components.get("batch_status")]),
+                outputs=None,  # No output expected
             )
 
     if "cancel_job_btn" in components:
@@ -1147,7 +1126,91 @@ def wire_all_events(app, components, config, api, simple_queue_service):
     # Wire cross-tab navigation events
     wire_cross_tab_navigation(components)
 
+    # Load initial data
+    wire_initial_data_load(app, components, config, api, simple_queue_service)
+
     logger.info("All events wired successfully")
+
+
+def wire_initial_data_load(app, components, config, api, simple_queue_service):
+    """Wire initial data loading events when the app starts.
+
+    Args:
+        app: The Gradio Blocks app
+        components: Dictionary of all UI components
+        config: Application configuration
+        api: CosmosAPI instance
+        simple_queue_service: SimplifiedQueueService instance
+    """
+    from pathlib import Path
+
+    from cosmos_workflow.ui.queue_handlers import QueueHandlers
+    from cosmos_workflow.ui.tabs.inputs_handlers import load_input_gallery
+    from cosmos_workflow.ui.tabs.prompts_handlers import list_prompts
+    from cosmos_workflow.ui.tabs.runs.data_loading import load_runs_data
+
+    # Load initial data for inputs tab
+    if "input_gallery" in components and "inputs_results_count" in components:
+
+        def load_initial_inputs():
+            local_config = config.get_local_config()
+            inputs_dir = Path(local_config.videos_dir)
+            gallery_items, results_text = load_input_gallery(inputs_dir)
+            return gallery_items, results_text
+
+        app.load(
+            fn=load_initial_inputs,
+            outputs=[components["input_gallery"], components["inputs_results_count"]],
+        )
+
+    # Load initial data for prompts tab
+    if "prompts_table" in components:
+        app.load(
+            fn=list_prompts,
+            outputs=[components["prompts_table"]],
+        )
+
+    # Load initial data for runs tab
+    if "runs_gallery" in components:
+
+        def load_initial_runs():
+            # Use the legacy load_runs_data function signature
+            return load_runs_data(
+                status_filter="all",
+                date_filter="all",
+                type_filter="all",
+                search_text="",
+                limit=50,
+                rating_filter="all",
+            )
+
+        runs_outputs = [
+            components.get("runs_gallery"),
+            components.get("runs_table"),
+            components.get("runs_stats"),
+            components.get("runs_results_count"),
+        ]
+
+        app.load(
+            fn=load_initial_runs,
+            outputs=filter_none_components(runs_outputs),
+        )
+
+    # Load initial data for jobs/queue tab
+    if "queue_table" in components:
+        queue_handlers = QueueHandlers(simple_queue_service)
+
+        app.load(
+            fn=queue_handlers.get_queue_display,
+            outputs=filter_none_components(
+                [
+                    components.get("queue_status"),
+                    components.get("queue_table"),
+                ]
+            ),
+        )
+
+    logger.info("Initial data loading configured")
 
 
 def wire_cross_tab_navigation(components):
@@ -1272,13 +1335,23 @@ def wire_cross_tab_navigation(components):
 
             logger.info(f"Navigating to prompts with search: {input_name}")
 
-            # Update search and load filtered prompts
-            from cosmos_workflow.ui.tabs.prompts_handlers import filter_prompts
+            # Extract just the directory name (remove any path prefixes)
+            search_term = input_name.split("/")[-1] if "/" in input_name else input_name
+            search_term = search_term.split("\\")[-1] if "\\" in search_term else search_term
 
-            filtered_table = filter_prompts(input_name, "All", None)
+            # Load prompts with search filter
+            from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
+
+            filtered_table = load_ops_prompts(
+                limit=50,
+                search_text=search_term,
+                enhanced_filter="all",
+                runs_filter="all",
+                date_filter="all",
+            )
 
             return (
-                gr.update(value=input_name),  # Update search box
+                gr.update(value=search_term),  # Update search box with directory name only
                 filtered_table,  # Update table
                 1,  # Prompts tab index
             )
@@ -1286,7 +1359,7 @@ def wire_cross_tab_navigation(components):
         outputs = filter_none_components(
             [
                 components.get("prompt_search"),
-                components.get("prompts_table"),
+                components.get("ops_prompts_table"),  # Fixed: was "prompts_table"
                 components.get("selected_tab"),
             ]
         )

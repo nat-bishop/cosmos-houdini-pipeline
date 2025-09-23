@@ -60,8 +60,9 @@ class TestUpscalingRuns:
     def mock_orchestrator(self):
         """Create mock orchestrator."""
         orchestrator = MagicMock()
-        # Upscaling should return a run result like inference/enhancement does
+        # Upscaling now completes synchronously with a status field
         orchestrator.execute_upscaling_run.return_value = {
+            "status": "completed",  # Required for synchronous completion
             "output_path": "outputs/run_rs_upscale456/output_4k.mp4",
             "parent_run_id": "rs_inference123",
             "duration_seconds": 180.5,
@@ -104,10 +105,10 @@ class TestUpscalingRuns:
         assert exec_config["control_weight"] == 0.7
         assert "input_video_source" in exec_config  # Changed from input_video
 
-        # Result should include upscale_run_id
+        # Result should include upscale_run_id and success status
         assert "upscale_run_id" in result
         assert result["upscale_run_id"] == "rs_upscale456"
-        assert result["status"] == "success"
+        assert result["status"] == "success"  # Synchronous completion
         assert "output_path" in result
 
     def test_upscale_validates_parent_run_exists(self, api, mock_service):

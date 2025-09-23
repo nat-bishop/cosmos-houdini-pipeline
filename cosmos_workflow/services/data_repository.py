@@ -523,7 +523,8 @@ class DataRepository:
 
         try:
             with self.db.get_session() as session:
-                query = session.query(Run)
+                # Always exclude upscale model_type runs - they're implementation details
+                query = session.query(Run).filter(Run.model_type != "upscale")
 
                 # Apply filters
                 if status:
@@ -531,16 +532,9 @@ class DataRepository:
                 if prompt_id:
                     query = query.filter(Run.prompt_id == prompt_id)
 
-                # Apply version filter
-                if version_filter == "original":
-                    # Only non-upscaled runs
-                    query = query.filter(Run.model_type != "upscale")
-                elif version_filter == "upscaled":
-                    # Only upscaled runs
-                    query = query.filter(Run.model_type == "upscale")
-                elif version_filter == "best":
-                    # This is more complex - we want to exclude originals that have upscaled versions
-                    # First, get all upscaled runs' source_run_ids
+                # Apply version filter for transfer runs
+                if version_filter == "not upscaled":
+                    # Only transfer runs WITHOUT upscaled versions
                     from sqlalchemy import and_, func, not_
 
                     # Subquery to get source_run_ids of completed upscaled runs
@@ -550,10 +544,23 @@ class DataRepository:
                         .subquery()
                     )
 
-                    # Exclude original runs that have upscaled versions
-                    query = query.filter(
-                        not_(and_(Run.model_type != "upscale", Run.id.in_(upscaled_sources)))
+                    # Only show transfer runs that are NOT in the upscaled sources
+                    query = query.filter(not_(Run.id.in_(upscaled_sources)))
+
+                elif version_filter == "upscaled":
+                    # Only transfer runs WITH upscaled versions
+                    from sqlalchemy import and_, func
+
+                    # Subquery to get source_run_ids of completed upscaled runs
+                    upscaled_sources = (
+                        session.query(func.json_extract(Run.execution_config, "$.source_run_id"))
+                        .filter(and_(Run.model_type == "upscale", Run.status == "completed"))
+                        .subquery()
                     )
+
+                    # Only show transfer runs that ARE in the upscaled sources
+                    query = query.filter(Run.id.in_(upscaled_sources))
+
                 # version_filter == "all" or None: no additional filtering
 
                 # Order by created_at descending (newest first)

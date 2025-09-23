@@ -57,6 +57,9 @@ class SimplifiedQueueService:
         self.batch_size = 4  # Default batch size for GPU processing
         self.queue_paused = False  # Control flag for queue processing
 
+        # Clean up any orphaned jobs from previous session
+        self._cleanup_orphaned_jobs()
+
         logger.info("SimplifiedQueueService initialized")
 
     def set_batch_size(self, size: int) -> None:
@@ -553,3 +556,60 @@ class SimplifiedQueueService:
         # Simple estimate: 120 seconds per job
         avg_job_time = 120
         return position * avg_job_time
+
+    def _cleanup_orphaned_jobs(self) -> None:
+        """Mark jobs that were running when app closed as failed.
+
+        This runs on startup to clean up any jobs that were interrupted
+        by application restart, crash, or unexpected shutdown.
+        """
+        if not self.db_connection:
+            logger.debug("No database connection available for cleanup")
+            return
+
+        with self.db_connection.get_session() as session:
+            # Find jobs that were left in running state
+            orphaned_jobs = session.query(JobQueue).filter_by(status="running").all()
+
+            if not orphaned_jobs:
+                logger.debug("No orphaned jobs found on startup")
+                return
+
+            logger.info("Found {} orphaned job(s) from previous session", len(orphaned_jobs))
+
+            for job in orphaned_jobs:
+                # Mark job as failed
+                job.status = "failed"
+                job.completed_at = datetime.now(timezone.utc)
+                job.result = {"error": "Job interrupted by application restart"}
+
+                logger.info("Marking orphaned job {} (type: {}) as failed", job.id, job.job_type)
+
+                # Also mark associated runs as failed
+                # This ensures the Run records match the job status
+                for prompt_id in job.prompt_ids:
+                    try:
+                        # Get runs for this prompt
+                        runs = self.cosmos_api.service.list_runs(prompt_id=prompt_id)
+
+                        for run in runs:
+                            # Only update runs that were in progress
+                            if run.get("status") in ["pending", "running", "uploading"]:
+                                run_id = run.get("id")
+                                logger.info(
+                                    "Marking orphaned run {} (status: {}) as failed",
+                                    run_id,
+                                    run.get("status"),
+                                )
+
+                                # Use update_run to set error message
+                                # This automatically sets status to failed and completed_at
+                                self.cosmos_api.service.update_run(
+                                    run_id, error_message="Job interrupted by application restart"
+                                )
+                    except Exception as e:
+                        logger.error("Error updating runs for prompt {}: {}", prompt_id, e)
+                        # Continue with other prompts even if one fails
+
+            session.commit()
+            logger.info("Cleaned up {} orphaned job(s) on startup", len(orphaned_jobs))

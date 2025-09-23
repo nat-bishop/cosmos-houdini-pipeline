@@ -4,11 +4,13 @@ These tests verify the simplified queue implementation that uses database
 transactions for atomicity instead of application-level locks.
 """
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 import pytest
 
 from cosmos_workflow.database import DatabaseConnection
+from cosmos_workflow.database.models import JobQueue
 from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
 
 
@@ -112,7 +114,7 @@ class TestSimplifiedQueueService:
             prompt_ids=[],  # Upscale doesn't need prompt IDs
             job_type="upscale",
             config={
-                "video_source": "/inputs/video.mp4",
+                "run_id": "rs_test123",
                 "control_weight": 0.8,
                 "prompt": "high quality",
             },
@@ -201,15 +203,13 @@ class TestSimplifiedQueueService:
 
     def test_process_upscale_job(self, queue_service, mock_cosmos_api):
         """Test processing an upscale job."""
-        queue_service.add_job(
-            [], "upscale", {"video_source": "/inputs/video.mp4", "control_weight": 0.8}
-        )
+        queue_service.add_job([], "upscale", {"run_id": "rs_test123", "control_weight": 0.8})
 
         result = queue_service.process_next_job()
 
         assert result["status"] == "completed"
         mock_cosmos_api.upscale.assert_called_once_with(
-            video_source="/inputs/video.mp4",
+            run_id="rs_test123",
             control_weight=0.8,
         )
 
@@ -354,13 +354,13 @@ class TestSimplifiedQueueService:
         assert result["status"] == "failed"
         assert "No prompt IDs" in result["error"]
 
-    def test_missing_video_source_for_upscale(self, queue_service):
-        """Test that upscale jobs require video_source."""
+    def test_missing_run_id_for_upscale(self, queue_service):
+        """Test that upscale jobs require run_id."""
         job_id = queue_service.add_job([], "upscale", {})
         result = queue_service.execute_job(job_id)
 
         assert result["status"] == "failed"
-        assert "No video_source" in result["error"]
+        assert "No run_id" in result["error"]
 
     def test_estimated_wait_time(self, queue_service):
         """Test wait time estimation for queued jobs."""
@@ -446,3 +446,144 @@ class TestSimplifiedQueueService:
         status2 = service.get_job_status(job2)
         assert status1["status"] == "running"
         assert status2["status"] == "queued"
+
+    # Test Orphaned Job Cleanup
+
+    def test_cleanup_orphaned_jobs_on_startup(self, test_db, mock_cosmos_api):
+        """Test that orphaned running jobs are marked as failed on startup."""
+        # Create an orphaned job directly in the database (simulating a crash)
+        with test_db.get_session() as session:
+            orphaned_job = JobQueue(
+                id="orphaned_job_001",
+                prompt_ids=["ps_orphaned"],
+                job_type="inference",
+                status="running",  # Stuck in running state
+                config={"test": True},
+                started_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+            )
+            session.add(orphaned_job)
+            session.commit()
+
+        # Mock the service to return no runs (no associated runs to update)
+        mock_cosmos_api.service = Mock()
+        mock_cosmos_api.service.list_runs = Mock(return_value=[])
+
+        # Initialize service - should trigger cleanup
+        service = SimplifiedQueueService(cosmos_api=mock_cosmos_api, db_connection=test_db)
+
+        # Check that the orphaned job was marked as failed
+        status = service.get_job_status("orphaned_job_001")
+        assert status["status"] == "failed"
+        assert status["result"] is not None
+        assert "interrupted by application restart" in status["result"].get("error", "").lower()
+
+    def test_cleanup_orphaned_jobs_with_runs(self, test_db, mock_cosmos_api):
+        """Test that orphaned jobs and their associated runs are marked as failed."""
+        # Create an orphaned job
+        with test_db.get_session() as session:
+            orphaned_job = JobQueue(
+                id="orphaned_with_runs",
+                prompt_ids=["ps_with_run"],
+                job_type="inference",
+                status="running",
+                config={},
+                started_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+            session.add(orphaned_job)
+            session.commit()
+
+        # Mock the service to return a pending run
+        mock_cosmos_api.service = Mock()
+        mock_cosmos_api.service.list_runs = Mock(
+            return_value=[
+                {
+                    "id": "run_orphaned_123",
+                    "status": "pending",
+                    "prompt_id": "ps_with_run",
+                }
+            ]
+        )
+        mock_cosmos_api.service.update_run = Mock()
+
+        # Initialize service - should trigger cleanup
+        service = SimplifiedQueueService(cosmos_api=mock_cosmos_api, db_connection=test_db)
+
+        # Check that the job was marked as failed
+        status = service.get_job_status("orphaned_with_runs")
+        assert status["status"] == "failed"
+
+        # Check that update_run was called for the orphaned run
+        mock_cosmos_api.service.update_run.assert_called_once_with(
+            "run_orphaned_123",
+            error_message="Job interrupted by application restart",
+        )
+
+    def test_no_cleanup_when_no_orphaned_jobs(self, test_db, mock_cosmos_api):
+        """Test that cleanup doesn't affect queued jobs."""
+        # Create a queued job (not orphaned)
+        with test_db.get_session() as session:
+            queued_job = JobQueue(
+                id="queued_job_001",
+                prompt_ids=["ps_queued"],
+                job_type="inference",
+                status="queued",  # Properly queued, not orphaned
+                config={},
+            )
+            session.add(queued_job)
+            session.commit()
+
+        # Mock the service
+        mock_cosmos_api.service = Mock()
+        mock_cosmos_api.service.list_runs = Mock(return_value=[])
+
+        # Initialize service
+        service = SimplifiedQueueService(cosmos_api=mock_cosmos_api, db_connection=test_db)
+
+        # Check that the queued job is still queued
+        status = service.get_job_status("queued_job_001")
+        assert status["status"] == "queued"  # Should not be changed
+
+    def test_cleanup_handles_run_update_errors(self, test_db, mock_cosmos_api):
+        """Test that cleanup continues even if updating runs fails."""
+        # Create multiple orphaned jobs
+        with test_db.get_session() as session:
+            job1 = JobQueue(
+                id="orphaned_1",
+                prompt_ids=["ps_1"],
+                job_type="inference",
+                status="running",
+                config={},
+            )
+            job2 = JobQueue(
+                id="orphaned_2",
+                prompt_ids=["ps_2"],
+                job_type="inference",
+                status="running",
+                config={},
+            )
+            session.add_all([job1, job2])
+            session.commit()
+
+        # Mock the service to fail on first update but succeed on second
+        mock_cosmos_api.service = Mock()
+        mock_cosmos_api.service.list_runs = Mock(
+            return_value=[{"id": "run_123", "status": "running", "prompt_id": "ps_1"}]
+        )
+        mock_cosmos_api.service.update_run = Mock(side_effect=Exception("Database error"))
+
+        # Initialize service - should handle the error and continue
+        service = SimplifiedQueueService(cosmos_api=mock_cosmos_api, db_connection=test_db)
+
+        # Both jobs should still be marked as failed despite run update error
+        status1 = service.get_job_status("orphaned_1")
+        status2 = service.get_job_status("orphaned_2")
+        assert status1["status"] == "failed"
+        assert status2["status"] == "failed"
+
+    def test_cleanup_with_no_database_connection(self, mock_cosmos_api):
+        """Test that cleanup handles missing database connection gracefully."""
+        # Initialize service with no database
+        service = SimplifiedQueueService(cosmos_api=mock_cosmos_api, db_connection=None)
+
+        # Should not crash, just skip cleanup
+        assert service.db_connection is None

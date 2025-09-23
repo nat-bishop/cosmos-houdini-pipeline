@@ -108,10 +108,10 @@ def create_runs_tab_ui():
 
                     # Add version display filter
                     components["runs_version_filter"] = gr.Dropdown(
-                        choices=["best", "all", "original", "upscaled"],
-                        value="best",
+                        choices=["all", "not upscaled", "upscaled"],
+                        value="all",
                         label="Video Version Display",
-                        info="Choose which video versions to show in gallery",
+                        info="Show transfer runs: all, only without upscaling, or only with upscaling",
                         interactive=True,
                     )
 
@@ -329,15 +329,27 @@ def create_runs_tab_ui():
                             with gr.Column(visible=True) as components[
                                 "runs_main_content_transfer"
                             ]:
-                                # Generated Output
+                                # Generated Output with tabs for Original/Upscaled
                                 gr.Markdown("#### Generated Output")
-                                components["runs_output_video"] = gr.Video(
-                                    label="Output Video",
-                                    show_label=False,
-                                    autoplay=True,
-                                    loop=True,
-                                    height=500,
-                                )
+                                with gr.Tabs() as components["runs_output_tabs"]:
+                                    with gr.Tab("Original Output"):
+                                        components["runs_output_video"] = gr.Video(
+                                            label="Output Video",
+                                            show_label=False,
+                                            autoplay=True,
+                                            loop=True,
+                                            height=500,
+                                        )
+                                    with gr.Tab("Upscaled Output", visible=False) as components[
+                                        "runs_upscaled_tab"
+                                    ]:
+                                        components["runs_output_video_upscaled"] = gr.Video(
+                                            label="Upscaled Output Video",
+                                            show_label=False,
+                                            autoplay=True,
+                                            loop=True,
+                                            height=500,
+                                        )
 
                                 # Input Videos
                                 gr.Markdown("#### Input Videos")

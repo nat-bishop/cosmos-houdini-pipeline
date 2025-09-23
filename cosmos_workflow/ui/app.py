@@ -2571,6 +2571,9 @@ def create_ui():
                 "runs_upscale_selected_btn",
                 "runs_selected_id",
                 "runs_selected_info",
+                # New components for upscaled output
+                "runs_output_video_upscaled",
+                "runs_upscaled_tab",
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:
@@ -2657,6 +2660,9 @@ def create_ui():
                 "runs_upscale_selected_btn",
                 "runs_selected_id",
                 "runs_selected_info",
+                # New components for upscaled output
+                "runs_output_video_upscaled",
+                "runs_upscaled_tab",
             ]
             outputs = get_components(*runs_output_keys)
             if outputs:

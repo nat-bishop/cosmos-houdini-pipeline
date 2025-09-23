@@ -399,13 +399,13 @@ def on_runs_gallery_select(evt: gr.SelectData):
 
         if evt is None:
             logger.warning("No evt, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
         # The label now contains only rating and run ID in format "★★★☆☆||full_run_id"
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
-            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
         # Extract full run ID from label (after the || separator)
         if "||" in label:
@@ -452,11 +452,11 @@ def on_runs_gallery_select(evt: gr.SelectData):
                     return on_runs_table_select(fake_table_data, fake_evt)
 
         logger.warning("Could not extract run ID from label: {}", label)
-        return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+        return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
     except Exception as e:
         logger.error("Error selecting from gallery: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+        return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
 
 def on_runs_table_select(table_data, evt: gr.SelectData):
@@ -468,7 +468,7 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if evt is None or table_data is None:
             logger.warning("No evt or table_data, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -492,14 +492,14 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if not run_id or not ops:
             logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
         # Get full run details
         run_details = ops.get_run(run_id)
         logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            return [gr.update(visible=False)] + [gr.update()] * 29  # Match new count
+            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
 
         # Get model type to determine which UI to show
         model_type = run_details.get("model_type", "transfer")
@@ -539,6 +539,24 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         # Get rating if present
         rating_value = run_details.get("rating", None)
+
+        # Check for upscaled version if this is a transfer run
+        upscaled_video = None
+        show_upscaled_tab = False
+        if model_type == "transfer":
+            upscaled_run = ops.get_upscaled_run(run_id)
+            if upscaled_run and upscaled_run.get("status") == "completed":
+                upscaled_outputs = upscaled_run.get("outputs", {})
+                if isinstance(upscaled_outputs, dict) and "output_path" in upscaled_outputs:
+                    upscaled_path = upscaled_outputs["output_path"]
+                    if (
+                        upscaled_path
+                        and upscaled_path.endswith(".mp4")
+                        and Path(upscaled_path).exists()
+                    ):
+                        upscaled_video = str(Path(upscaled_path))
+                        show_upscaled_tab = True
+                        logger.info("Found upscaled video for run {}: {}", run_id, upscaled_video)
 
         # Get input videos and control weights
         input_videos = []
@@ -843,11 +861,16 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             # Selected run tracking
             gr.update(value=run_id),  # runs_selected_id
             gr.update(value=f"Selected: {run_id[:12]}..."),  # runs_selected_info
+            # New components for upscaled output
+            gr.update(
+                value=upscaled_video if upscaled_video and Path(upscaled_video).exists() else None
+            ),  # runs_output_video_upscaled
+            gr.update(visible=show_upscaled_tab),  # runs_upscaled_tab
         ]
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 30  # Updated count for new components
+        return [gr.update(visible=False)] + [gr.update()] * 32  # Updated count for new components
 
 
 def load_run_logs(log_path):
@@ -1545,16 +1568,18 @@ def load_runs_data_with_version_filter(
         )
 
         # Continue with the rest of the processing from load_runs_data
-        # Enrich runs with prompt text
+        # Enrich runs with prompt text and check for upscaled versions
         for run in all_runs:
             if not run.get("prompt_text") and run.get("prompt_id"):
                 prompt = ops.get_prompt(run["prompt_id"])
                 if prompt:
                     run["prompt_text"] = prompt.get("prompt_text", "")
 
-            # Add visual indicators for upscaled runs
-            if run.get("model_type") == "upscale":
-                run["is_upscaled"] = True
+            # Check if this transfer run has an upscaled version
+            if run.get("model_type") == "transfer":
+                upscaled_run = ops.get_upscaled_run(run["id"])
+                if upscaled_run and upscaled_run.get("status") == "completed":
+                    run["has_upscaled"] = True
 
         # Apply date filter
         now = datetime.now(timezone.utc)
@@ -1667,9 +1692,9 @@ def load_runs_data_with_version_filter(
                 rating = run.get("rating", 0) or 0
                 rating_str = "★" * rating + "☆" * (5 - rating)
 
-                # Add upscale indicator if applicable
+                # Add upscale indicator if this run has an upscaled version
                 label = f"{rating_str}||{run_id}"
-                if run.get("is_upscaled"):
+                if run.get("has_upscaled"):
                     label += " [4K ⬆️]"
 
                 if thumb_path:
@@ -1682,7 +1707,7 @@ def load_runs_data_with_version_filter(
                 rating = run.get("rating", 0) or 0
                 rating_str = "★" * rating + "☆" * (5 - rating)
                 label = f"{rating_str}||{run_id}"
-                if run.get("is_upscaled"):
+                if run.get("has_upscaled"):
                     label += " [4K ⬆️]"
                 gallery_data.append((str(video_path), label))
 

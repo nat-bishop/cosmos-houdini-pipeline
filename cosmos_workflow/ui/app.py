@@ -24,7 +24,6 @@ workflow management system from input preparation to output generation.
 """
 
 import atexit
-import os
 import signal
 import threading
 from datetime import datetime, timezone
@@ -39,16 +38,20 @@ from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
 
 # Import modular UI components
 from cosmos_workflow.ui.components.header import create_header_ui
-from cosmos_workflow.ui.helpers import (
-    extract_video_metadata,
-)
-from cosmos_workflow.ui.log_viewer import LogViewer
 from cosmos_workflow.ui.queue_handlers import QueueHandlers
 from cosmos_workflow.ui.styles_simple import get_custom_css
+from cosmos_workflow.ui.tabs.inputs_handlers import (
+    create_prompt,
+    load_input_gallery,
+    on_input_select,
+)
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_handlers import (
     cancel_kill_confirmation,
+    check_running_jobs,
     execute_kill_job,
+    refresh_and_stream,
+    refresh_jobs_on_tab_select,
     show_kill_confirmation,
 )
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
@@ -74,13 +77,13 @@ from cosmos_workflow.ui.tabs.runs_handlers import (
     update_runs_selection_info,
 )
 from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
+from cosmos_workflow.ui.utils import dataframe as df_utils
 from cosmos_workflow.utils.logging import logger
 
 # Load configuration
 config = ConfigManager()
 
 # Initialize log viewer (reusing existing component)
-log_viewer = LogViewer(max_lines=2000)
 
 # Initialize Queue Service for UI use
 queue_service = None
@@ -213,257 +216,6 @@ outputs_dir = Path(local_config.outputs_dir)
 # ============================================================================
 
 
-def get_input_directories():
-    """Get all input video directories with metadata."""
-    directories = []
-
-    if not inputs_dir.exists():
-        logger.warning("Inputs directory does not exist: {}", inputs_dir)
-        return []
-
-    for dir_path in sorted(inputs_dir.iterdir()):
-        if dir_path.is_dir():
-            # Check for required files
-            color_video = dir_path / "color.mp4"
-            depth_video = dir_path / "depth.mp4"
-            seg_video = dir_path / "segmentation.mp4"
-
-            # Get directory modification time
-            dir_stat = dir_path.stat()
-
-            dir_info = {
-                "name": dir_path.name,
-                "path": str(dir_path),
-                "has_color": color_video.exists(),
-                "has_depth": depth_video.exists(),
-                "has_segmentation": seg_video.exists(),
-                "mtime": dir_stat.st_mtime,  # Modification time for date filtering
-                "files": [],
-            }
-
-            # Get all files in directory
-            for file_path in dir_path.iterdir():
-                if file_path.is_file():
-                    dir_info["files"].append(
-                        {
-                            "name": file_path.name,
-                            "size": file_path.stat().st_size,
-                            "path": str(file_path),
-                        }
-                    )
-
-            directories.append(dir_info)
-
-    return directories
-
-
-def filter_input_directories(search_text="", date_filter="all", sort_by="name_asc"):
-    """Filter input directories based on criteria.
-
-    Args:
-        search_text: Text to search in directory names
-        date_filter: Filter by date range (all, today, last_7_days, etc.)
-        sort_by: Sort order (name_asc, name_desc, date_newest, date_oldest)
-
-    Returns:
-        Tuple of (filtered_directories, total_count, filtered_count)
-    """
-    import time
-
-    all_dirs = get_input_directories()
-    total_count = len(all_dirs)
-    filtered = all_dirs
-
-    # Apply search filter
-    if search_text and search_text.strip():
-        search_lower = search_text.lower().strip()
-        filtered = [d for d in filtered if search_lower in d["name"].lower()]
-
-    # Apply date filter
-    if date_filter != "all":
-        current_time = time.time()
-        if date_filter == "today":
-            cutoff_time = current_time - (24 * 3600)  # 24 hours
-        elif date_filter == "last_7_days":
-            cutoff_time = current_time - (7 * 24 * 3600)
-        elif date_filter == "last_30_days":
-            cutoff_time = current_time - (30 * 24 * 3600)
-        elif date_filter == "older_than_30_days":
-            cutoff_time = current_time - (30 * 24 * 3600)
-            filtered = [d for d in filtered if d["mtime"] < cutoff_time]
-        else:
-            cutoff_time = 0
-
-        if date_filter != "older_than_30_days" and cutoff_time > 0:
-            filtered = [d for d in filtered if d["mtime"] >= cutoff_time]
-
-    # Apply sorting
-    if sort_by == "name_asc":
-        filtered = sorted(filtered, key=lambda x: x["name"].lower())
-    elif sort_by == "name_desc":
-        filtered = sorted(filtered, key=lambda x: x["name"].lower(), reverse=True)
-    elif sort_by == "date_newest":
-        filtered = sorted(filtered, key=lambda x: x["mtime"], reverse=True)
-    elif sort_by == "date_oldest":
-        filtered = sorted(filtered, key=lambda x: x["mtime"])
-
-    return filtered, total_count, len(filtered)
-
-
-def load_input_gallery(search_text="", date_filter="all", sort_by="name_asc"):
-    """Load input directories for gallery display with filtering.
-
-    Args:
-        search_text: Text to search in directory names
-        date_filter: Filter by date range
-        sort_by: Sort order
-
-    Returns:
-        Tuple of (gallery_items, results_text)
-    """
-    filtered_dirs, total_count, filtered_count = filter_input_directories(
-        search_text, date_filter, sort_by
-    )
-
-    gallery_items = []
-    for dir_info in filtered_dirs:
-        # Use color.mp4 as thumbnail if it exists
-        color_path = Path(dir_info["path"]) / "color.mp4"
-        if color_path.exists():
-            gallery_items.append((str(color_path), dir_info["name"]))
-        else:
-            # Use a placeholder or first video file found
-            for file_info in dir_info["files"]:
-                if file_info["name"].endswith(".mp4"):
-                    gallery_items.append((file_info["path"], dir_info["name"]))
-                    break
-
-    # Format results text - simpler without bold
-    if search_text or date_filter != "all" or sort_by != "name_asc":
-        results_text = f"{filtered_count} of {total_count} directories"
-    else:
-        results_text = f"{total_count} directories found"
-
-    return gallery_items, results_text
-
-
-def on_input_select(evt: gr.SelectData, gallery_data):
-    """Handle input selection from gallery with real video metadata extraction."""
-    if evt.index is None:
-        return (
-            "",  # selected_dir_path - State component needs raw value
-            gr.update(visible=False),  # preview_group (compatibility)
-            gr.update(visible=False),  # input_tabs_group
-            gr.update(value=""),  # input_name
-            gr.update(value=""),  # input_path
-            gr.update(value=""),  # input_created
-            gr.update(value=""),  # input_resolution
-            gr.update(value=""),  # input_duration
-            gr.update(value=""),  # input_fps
-            gr.update(value=""),  # input_codec
-            gr.update(value=""),  # input_files
-            gr.update(value=[]),  # video_preview_gallery
-            gr.update(value=""),  # create_video_dir
-        )
-
-    directories = get_input_directories()
-    if evt.index >= len(directories):
-        return (
-            "",  # selected_dir_path - State component needs raw value
-            gr.update(visible=False),  # preview_group (compatibility)
-            gr.update(visible=False),  # input_tabs_group
-            gr.update(value=""),  # input_name
-            gr.update(value=""),  # input_path
-            gr.update(value=""),  # input_created
-            gr.update(value=""),  # input_resolution
-            gr.update(value=""),  # input_duration
-            gr.update(value=""),  # input_fps
-            gr.update(value=""),  # input_codec
-            gr.update(value=""),  # input_files
-            gr.update(value=[]),  # video_preview_gallery
-            gr.update(value=""),  # create_video_dir
-        )
-
-    selected_dir = directories[evt.index]
-
-    # Format directory info for structured fields
-    from datetime import datetime
-
-    # Extract individual field values
-    name = selected_dir["name"]
-    path = selected_dir["path"]
-
-    # Extract real video metadata from color video
-    metadata = {
-        "resolution": "Unknown",
-        "duration": "Unknown",
-        "fps": "Unknown",
-        "codec": "Unknown",
-    }
-    if selected_dir["has_color"]:
-        color_path = Path(selected_dir["path"]) / "color.mp4"
-        if color_path.exists():
-            metadata = extract_video_metadata(color_path)
-
-    # Format metadata as plain text values
-    resolution_text = metadata["resolution"]
-    duration_text = metadata["duration"]
-    fps_text = metadata["fps"]
-    codec_text = metadata["codec"]
-
-    # Get creation time from directory
-    dir_stat = os.stat(selected_dir["path"])
-    created_time = datetime.fromtimestamp(dir_stat.st_ctime, tz=timezone.utc).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-
-    # Format file list with better descriptions
-    files_list = []
-    for file_info in selected_dir["files"]:
-        size_mb = file_info["size"] / (1024 * 1024)
-        file_type = ""
-        if "color" in file_info["name"]:
-            file_type = " 🎨 RGB"
-        elif "depth" in file_info["name"]:
-            file_type = " 🏔️ Depth"
-        elif "segmentation" in file_info["name"]:
-            file_type = " 🧩 Segmentation"
-        files_list.append(f"• {file_info['name']}{file_type} ({size_mb:.1f} MB)")
-
-    files_text = "\n".join(files_list)
-
-    # Load videos for preview gallery
-    video_gallery_items = []
-    if selected_dir["has_color"]:
-        color_path = str(Path(selected_dir["path"]) / "color.mp4")
-        video_gallery_items.append((color_path, "Color (RGB)"))
-    if selected_dir["has_depth"]:
-        depth_path = str(Path(selected_dir["path"]) / "depth.mp4")
-        video_gallery_items.append((depth_path, "Depth Map"))
-    if selected_dir["has_segmentation"]:
-        seg_path = str(Path(selected_dir["path"]) / "segmentation.mp4")
-        video_gallery_items.append((seg_path, "Segmentation"))
-
-    # Convert path to forward slashes for cross-platform compatibility in input field
-    video_dir_value = selected_dir["path"].replace("\\", "/")
-
-    return (
-        selected_dir["path"],  # selected_dir_path - State component needs raw value, not gr.update
-        gr.update(visible=False),  # preview_group (compatibility)
-        gr.update(visible=True),  # input_tabs_group
-        gr.update(value=name),  # input_name
-        gr.update(value=path),  # input_path
-        gr.update(value=created_time),  # input_created
-        gr.update(value=resolution_text),  # input_resolution
-        gr.update(value=duration_text),  # input_duration
-        gr.update(value=fps_text),  # input_fps
-        gr.update(value=codec_text),  # input_codec
-        gr.update(value=files_text),  # input_files
-        gr.update(value=video_gallery_items),  # video_preview_gallery
-        gr.update(value=video_dir_value),  # create_video_dir (auto-fill)
-    )
-
-
 # ============================================================================
 # Phase 2: Prompt Management Functions
 # ============================================================================
@@ -503,55 +255,6 @@ def list_prompts(limit=50):
     except Exception as e:
         logger.error("Failed to list prompts: {}", e)
         return []
-
-
-def create_prompt(prompt_text, video_dir, name, negative_prompt):
-    """Create a new prompt using CosmosAPI."""
-    try:
-        # Validate inputs
-        if not prompt_text or not prompt_text.strip():
-            gr.Error("Prompt text is required")
-            return ""
-
-        if not video_dir or not video_dir.strip():
-            gr.Error("Video directory is required")
-            return ""
-
-        # Convert to Path and validate
-        video_path = Path(video_dir.strip())
-        if not video_path.is_absolute():
-            # If it's a relative path, use it as-is (already relative to project root)
-            video_path = Path(video_dir.strip())
-
-        # Use CosmosAPI to create prompt (it handles validation)
-        ops = CosmosAPI()
-        prompt = ops.create_prompt(
-            prompt_text=prompt_text.strip(),
-            video_dir=video_path,
-            name=name.strip() if name and name.strip() else None,
-            negative_prompt=negative_prompt.strip()
-            if negative_prompt and negative_prompt.strip()
-            else None,
-        )
-
-        # Success message with prompt ID
-        prompt_id = prompt.get("id", "unknown")
-        prompt_name = prompt.get("parameters", {}).get("name", "unnamed")
-
-        # Show success notification
-        gr.Info(f"Created prompt: {prompt_id} - {prompt_name}")
-        return ""  # Return empty string for the invisible output component
-
-    except FileNotFoundError as e:
-        gr.Error(str(e))
-        return ""
-    except ValueError as e:
-        gr.Error(str(e))
-        return ""
-    except Exception as e:
-        logger.error("Failed to create prompt: {}", e)
-        gr.Error(f"Failed to create prompt: {e}")
-        return ""
 
 
 # ============================================================================
@@ -713,30 +416,8 @@ def update_selection_count(dataframe_data):
         if dataframe_data is None:
             return "**0** prompts selected"
 
-        # Handle both list and dataframe formats
-        import pandas as pd
-
-        if isinstance(dataframe_data, pd.DataFrame):
-            # It's a pandas DataFrame - Gradio returns DataFrame with values
-            if not dataframe_data.empty:
-                # Access the actual values array and check first column
-                first_col_values = (
-                    dataframe_data.values[:, 0] if dataframe_data.shape[1] > 0 else []
-                )
-                selected = sum(1 for val in first_col_values if val is True)
-            else:
-                selected = 0
-        elif isinstance(dataframe_data, list):
-            # List format - check if rows have boolean first element
-            selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
-        elif hasattr(dataframe_data, "__len__"):
-            # Could be a numpy array or similar
-            try:
-                selected = sum(1 for row in dataframe_data if len(row) > 0 and row[0] is True)
-            except Exception:
-                return "**0** prompts selected"
-        else:
-            return "**0** prompts selected"
+        # Use utility to count selected prompts
+        selected = df_utils.count_selected(dataframe_data)
 
         return f"**{selected}** prompt{'s' if selected != 1 else ''} selected"
     except Exception as e:
@@ -797,7 +478,7 @@ def get_video_thumbnail(video_path):
     """
     from pathlib import Path
 
-    from cosmos_workflow.ui.tabs.runs_handlers import generate_thumbnail_fast
+    from cosmos_workflow.ui.utils.video import generate_thumbnail_fast
 
     if not video_path:
         return None
@@ -840,16 +521,11 @@ def on_prompt_row_select(dataframe_data, evt: gr.SelectData):
         row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
         logger.info("Selected row index: {}", row_idx)
 
-        # Extract row data
-        import pandas as pd
-
-        if isinstance(dataframe_data, pd.DataFrame):
-            row = dataframe_data.iloc[row_idx]
-            # Columns: ["☑", "ID", "Name", "Prompt Text", "Created"]
-            prompt_id = str(row.iloc[1]) if len(row) > 1 else ""
-        else:
-            row = dataframe_data[row_idx] if row_idx < len(dataframe_data) else []
-            prompt_id = str(row[1]) if len(row) > 1 else ""
+        # Extract prompt ID using utility
+        # Columns: ["☑", "ID", "Name", "Prompt Text", "Created"]
+        prompt_id = df_utils.get_cell_value(dataframe_data, row_idx, 1, default="")
+        if prompt_id:
+            prompt_id = str(prompt_id)
 
         logger.info("Selected prompt_id: {}", prompt_id)
 
@@ -993,22 +669,8 @@ def run_inference_on_selected(
         progress = gr.Progress()
 
     try:
-        # Get selected prompt IDs
-        selected_ids = []
-        if dataframe_data is not None:
-            # Handle different data formats
-            import pandas as pd
-
-            if isinstance(dataframe_data, pd.DataFrame):
-                # DataFrame format
-                for _, row in dataframe_data.iterrows():
-                    if row.iloc[0]:  # Checkbox is checked
-                        selected_ids.append(row.iloc[1])  # Prompt ID is second column
-            else:
-                # List format
-                for row in dataframe_data:
-                    if row[0]:  # Checkbox is checked
-                        selected_ids.append(row[1])  # Prompt ID is second column
+        # Get selected prompt IDs using utility
+        selected_ids = df_utils.get_selected_ids(dataframe_data, id_column=1)
 
         if not selected_ids:
             return "❌ No prompts selected"
@@ -1079,22 +741,8 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
         else:
             force_overwrite = bool(force_overwrite)
 
-        # Get selected prompt IDs
-        selected_ids = []
-        if dataframe_data is not None:
-            # Handle different data formats
-            import pandas as pd
-
-            if isinstance(dataframe_data, pd.DataFrame):
-                # DataFrame format
-                for _, row in dataframe_data.iterrows():
-                    if row.iloc[0]:  # Checkbox is checked
-                        selected_ids.append(row.iloc[1])  # Prompt ID
-            else:
-                # List format
-                for row in dataframe_data:
-                    if row[0]:  # Checkbox is checked
-                        selected_ids.append(row[1])  # Prompt ID
+        # Get selected prompt IDs using utility
+        selected_ids = df_utils.get_selected_ids(dataframe_data, id_column=1)
 
         if not selected_ids:
             return "❌ No prompts selected"
@@ -1145,208 +793,6 @@ def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, progres
 # ============================================================================
 # Existing Log Streaming Functions (keeping from original)
 # ============================================================================
-
-
-def start_log_streaming(auto_start=False):
-    """Generator that streams logs to the UI.
-
-    Args:
-        auto_start: If True, don't clear logs (useful for auto-start on tab switch)
-    """
-    if not auto_start:
-        log_viewer.clear()
-
-    try:
-        ops = CosmosAPI()
-        containers = ops.get_active_containers()
-
-        if not containers:
-            yield "No active containers found", log_viewer.get_text()
-            return
-
-        if len(containers) > 1:
-            container_id = containers[0]["container_id"]
-            message = f"Multiple containers found, streaming from {container_id}"
-        else:
-            container_id = containers[0]["container_id"]
-            message = f"Streaming logs from container {container_id}"
-
-        yield message, log_viewer.get_text()
-
-        try:
-            for log_line in ops.stream_logs_generator(container_id):
-                log_viewer.add_from_stream(log_line)
-                yield message, log_viewer.get_text()
-        except KeyboardInterrupt:
-            yield "Streaming stopped", log_viewer.get_text()
-
-    except RuntimeError as e:
-        yield f"Error: {e}", log_viewer.get_text()
-    except Exception as e:
-        yield f"Failed to start streaming: {e}", log_viewer.get_text()
-
-
-def refresh_jobs_on_tab_select(tab_idx):
-    """Refresh jobs status when switching to jobs tab."""
-    if tab_idx == 3:
-        # Refresh the jobs status
-        jobs_result = check_running_jobs()
-        return jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
-    else:
-        # No update for other tabs
-        return gr.update(), gr.update(), gr.update(), gr.update()
-
-
-def refresh_and_stream():
-    """Refresh jobs status and start streaming if container is active."""
-    # First refresh the jobs status
-    jobs_result = check_running_jobs()
-
-    # Check if there's an active container
-    if "Ready to stream" in jobs_result[1]:
-        # Start streaming automatically
-        for status, logs in start_log_streaming(auto_start=True):
-            yield jobs_result[0], status, jobs_result[2], logs
-    else:
-        # Just return the refreshed status without streaming
-        yield jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
-
-
-def check_running_jobs():
-    """Check for active containers and system status on remote instance."""
-    try:
-        ops = CosmosAPI()
-        # Get comprehensive status like CLI does
-        status_info = ops.check_status()
-
-        # Build container details display
-        container_details_text = ""
-
-        # SSH Status
-        if status_info.get("ssh_status") == "connected":
-            container_details_text += "SSH Connection     ✓ Connected\n"
-        else:
-            container_details_text += "SSH Connection     ✗ Failed\n"
-
-        # Docker status
-        docker_info = status_info.get("docker_status", {})
-        if isinstance(docker_info, dict) and docker_info.get("docker_running"):
-            container_details_text += "Docker Daemon      ✓ Running\n"
-        else:
-            container_details_text += "Docker Daemon      ✗ Not running\n"
-
-        # GPU information
-        gpu_info = status_info.get("gpu_info", {})
-        if gpu_info:
-            gpu_name = gpu_info.get("name", "Unknown")
-            gpu_memory = gpu_info.get("memory_total", "Unknown")
-            container_details_text += f"GPU                {gpu_name} ({gpu_memory})\n"
-            container_details_text += (
-                f"CUDA Version       {gpu_info.get('cuda_version', 'Unknown')}\n"
-            )
-
-            # Add GPU utilization metrics
-            gpu_util = gpu_info.get("gpu_utilization")
-            if gpu_util:
-                container_details_text += f"GPU Usage          {gpu_util}\n"
-
-            # Add memory usage details with actual percentage
-            mem_used = gpu_info.get("memory_used")
-            mem_total = gpu_info.get("memory_total")
-            mem_percentage = gpu_info.get("memory_percentage", "0%")
-            if mem_used and mem_total:
-                container_details_text += (
-                    f"Memory Usage       {mem_used} / {mem_total} ({mem_percentage})\n"
-                )
-
-            # Add temperature if available
-            temperature = gpu_info.get("temperature")
-            if temperature and temperature != "N/A":
-                container_details_text += f"Temperature        {temperature}\n"
-
-            # Add power metrics if available
-            power_draw = gpu_info.get("power_draw")
-            power_limit = gpu_info.get("power_limit")
-            if power_draw and power_draw != "N/A" and power_limit and power_limit != "N/A":
-                container_details_text += f"Power              {power_draw} / {power_limit}\n"
-
-            # Add clock speeds if available
-            clock_current = gpu_info.get("clock_current")
-            clock_max = gpu_info.get("clock_max")
-            if clock_current and clock_current != "N/A" and clock_max and clock_max != "N/A":
-                container_details_text += f"Clock Speed        {clock_current} / {clock_max}\n"
-        else:
-            container_details_text += "GPU                Not detected\n"
-
-        # Active run information
-        active_run = status_info.get("active_run")
-        active_job_display = ""
-
-        if active_run:
-            container_details_text += f"Active Operation   {active_run['model_type'].upper()}\n"
-            container_details_text += f"  Run ID           {active_run['id']}\n"
-            container_details_text += f"  Prompt ID        {active_run['prompt_id']}\n"
-            if active_run.get("started_at"):
-                container_details_text += f"  Started          {active_run['started_at']}\n"
-
-            # Format active job card
-            active_job_display = f"""**🟢 Active Job Running**
-
-**Operation:** {active_run["model_type"].upper()}
-**Run ID:** {active_run["id"]}
-**Prompt ID:** {active_run["prompt_id"]}
-**Status:** {active_run.get("status", "Running")}
-"""
-            if active_run.get("started_at"):
-                active_job_display += f"**Started:** {active_run['started_at']}"
-
-        # Container information
-        container = status_info.get("container")
-        if container:
-            container_name = container.get("name", "Unknown")
-            container_status = container.get("status", "Unknown")
-            container_id = container.get("id_short", container.get("id", "Unknown")[:12])
-
-            container_details_text += f"Running Container  {container_name}\n"
-            container_details_text += f"  Status           {container_status}\n"
-            container_details_text += f"  Container ID     {container_id}\n"
-
-            # If no active run info, create basic active job display from container
-            if not active_job_display:
-                active_job_display = f"""**🟢 Container Running**
-
-**Container:** {container_name}
-**ID:** {container_id}
-**Status:** {container_status}
-"""
-
-            status = "Ready to stream from active container"
-        else:
-            if active_run:
-                # Run without container - zombie run
-                container_details_text += (
-                    "Running Container  Missing! (Database shows active run)\n"
-                )
-                active_job_display = f"""**⚠️ Zombie Run Detected**
-
-**Run ID:** {active_run["id"]}
-Container missing - may need cleanup
-"""
-                status = "Container missing but run active in database"
-            else:
-                container_details_text += "Running Container  None\n"
-                active_job_display = """**No Active Job**
-
-Currently idle - no jobs running"""
-                status = "No containers to stream from"
-
-        return container_details_text.strip(), status, active_job_display
-
-    except Exception as e:
-        error_display = f"""**⚠️ Error**
-
-{e}"""
-        return f"Error: {e}", "Error checking containers", error_display
 
 
 # ============================================================================
@@ -1513,6 +959,121 @@ def create_ui():
                     gr.update(value=""),  # Clear filter text
                 )
 
+        # Helper functions for tab navigation
+        def _handle_jobs_tab_refresh():
+            """Handle Jobs tab refresh when switching to it."""
+            logger.info("Switching to Jobs tab - refreshing status")
+            jobs_result = check_running_jobs()
+
+            if "Ready to stream" in jobs_result[1]:
+                logger.info("Active container detected - starting log stream")
+
+            return (
+                gr.update(),  # runs_gallery - no update
+                gr.update(),  # runs_table - no update
+                gr.update(),  # runs_stats - no update
+                gr.update(),  # runs_nav_filter_row - no update
+                gr.update(),  # runs_prompt_filter - no update
+                jobs_result[0],  # Update container details
+                jobs_result[1],  # Update job status
+                jobs_result[2],  # Update active job card
+            )
+
+        def _format_filter_display(prompt_names):
+            """Format prompt filter display text."""
+            if not prompt_names:
+                return ""
+
+            filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+            display_names = [f"• {name}" for name in prompt_names[:3]]
+            filter_display += "\n".join(display_names)
+
+            if len(prompt_names) > 3:
+                filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+
+            return filter_display
+
+        def _handle_runs_tab_with_pending_data(pending_data):
+            """Handle Runs tab with pending navigation data."""
+            logger.info("Using pending navigation data for Runs tab")
+
+            gallery_data = pending_data.get("gallery", [])
+            table_data = pending_data.get("table", [])
+            stats = pending_data.get("stats", "No data")
+            prompt_names = pending_data.get("prompt_names", [])
+
+            filter_display = _format_filter_display(prompt_names)
+
+            return (
+                gallery_data,
+                table_data,
+                stats,
+                gr.update(visible=bool(prompt_names)),
+                gr.update(value=filter_display),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
+
+        def _handle_runs_tab_with_filter(nav_state):
+            """Handle Runs tab with prompt filter."""
+            prompt_ids = nav_state.get("filter_values", [])
+            logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
+
+            if not prompt_ids:
+                return (gr.update(),) * 8
+
+            from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
+
+            gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
+                prompt_ids, "all", "all", "all", "", 50
+            )
+
+            # Ensure table_data is properly formatted
+            if table_data is None:
+                table_data = []
+            elif isinstance(table_data, dict):
+                table_data = table_data.get("data", [])
+
+            logger.info("Loaded {} runs for filtered prompts", len(table_data) if table_data else 0)
+
+            filter_display = _format_filter_display(prompt_names)
+
+            return (
+                gallery_data if gallery_data else [],
+                table_data,
+                stats if stats else "No data",
+                gr.update(visible=True),
+                gr.update(value=filter_display),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
+
+        def _handle_runs_tab_default():
+            """Handle Runs tab without filter - load default data."""
+            logger.info("Switching to Runs tab without filter - loading default data")
+
+            gallery_data, table_data, stats = load_runs_data_with_version_filter(
+                "all", "all", "all", "", 50, "all", "best"
+            )
+
+            if table_data is None:
+                table_data = []
+            elif isinstance(table_data, dict):
+                table_data = table_data.get("data", [])
+
+            return (
+                gallery_data if gallery_data else [],
+                table_data,
+                stats if stats else "No data",
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
+
         # Tab navigation handler - check for navigation state when switching tabs
         def handle_tab_select(tab_index, nav_state, pending_data):
             """Handle tab selection and apply navigation filters."""
@@ -1526,168 +1087,32 @@ def create_ui():
 
             # Auto-refresh Jobs tab when switching to it (index 3)
             if tab_index == 3:
-                logger.info("Switching to Jobs tab - refreshing status")
-                # Refresh jobs data immediately
-                jobs_result = check_running_jobs()
-                # Also start streaming automatically if there's an active container
-                if "Ready to stream" in jobs_result[1]:
-                    logger.info("Active container detected - starting log stream")
-                    # Return the refreshed data
-                    return (
-                        nav_state,
-                        pending_data,
-                        gr.update(),  # runs_gallery - no update
-                        gr.update(),  # runs_table - no update
-                        gr.update(),  # runs_stats - no update
-                        gr.update(),  # runs_nav_filter_row - no update
-                        gr.update(),  # runs_prompt_filter - no update
-                        jobs_result[0],  # Update container details
-                        jobs_result[1],  # Update job status
-                        jobs_result[2],  # Update active job card
-                    )
-                else:
-                    # Just return the refreshed data without streaming
-                    return (
-                        nav_state,
-                        pending_data,
-                        gr.update(),  # runs_gallery - no update
-                        gr.update(),  # runs_table - no update
-                        gr.update(),  # runs_stats - no update
-                        gr.update(),  # runs_nav_filter_row - no update
-                        gr.update(),  # runs_prompt_filter - no update
-                        jobs_result[0],  # Update container details
-                        jobs_result[1],  # Update job status
-                        jobs_result[2],  # Update active job card
-                    )
+                updates = _handle_jobs_tab_refresh()
+                return (nav_state, pending_data, *updates)
 
             # Check if there's pending navigation data (from View Runs button)
             if tab_index == 2 and pending_data is not None:
-                logger.info("Using pending navigation data for Runs tab")
-                gallery_data = pending_data.get("gallery", [])
-                table_data = pending_data.get("table", [])
-                stats = pending_data.get("stats", "No data")
-                prompt_names = pending_data.get("prompt_names", [])
-
-                # Format prompt names for display
-                if prompt_names:
-                    filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
-                    # Show up to 3 prompt IDs - full IDs, no truncation
-                    display_names = []
-                    for name in prompt_names[:3]:
-                        display_names.append(f"• {name}")
-                    filter_display += "\n".join(display_names)
-                    if len(prompt_names) > 3:
-                        filter_display += f"\n• ... and {len(prompt_names) - 3} more"
-                else:
-                    filter_display = ""
-
-                # Clear the pending data and update display
-                return (
-                    nav_state,  # Keep the navigation state as-is
-                    None,  # Clear pending data after consuming it
-                    gallery_data,  # Update gallery
-                    table_data,  # Update table
-                    stats,  # Update stats
-                    gr.update(visible=bool(prompt_names)),  # Show filter indicator if filtering
-                    gr.update(value=filter_display),  # Update filter display with formatted text
-                    gr.update(),  # Don't change running_jobs_display
-                    gr.update(),  # Don't change job_status
-                    gr.update(),  # Don't change active_job_card
-                )
+                updates = _handle_runs_tab_with_pending_data(pending_data)
+                return (nav_state, None, *updates)
 
             # Check if we're navigating to Runs tab (index 2) with pending filter
             elif tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
-                prompt_ids = nav_state.get("filter_values", [])
-                logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
-
-                if prompt_ids:
-                    # Load runs for the filtered prompts
-                    from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
-
-                    # Load filtered data
-                    gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
-                        prompt_ids, "all", "all", "all", "", 50
-                    )
-
-                    # Table data should be a list of lists for Gradio dataframe
-                    # Only create empty list if data is None or invalid
-                    if table_data is None:
-                        table_data = []
-                    elif isinstance(table_data, dict):
-                        # If it's a dict (from error handling), extract the data
-                        table_data = table_data.get("data", [])
-
-                    logger.info(
-                        "Loaded {} runs for filtered prompts", len(table_data) if table_data else 0
-                    )
-
-                    # Keep navigation state for persistent filtering (don't clear it)
-                    # This allows the filter to persist when changing other filters
-                    kept_nav_state = nav_state  # Keep the current navigation state
-
-                    # Format prompt names for display
-                    if prompt_names:
-                        filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
-                        # Show up to 3 prompt IDs - full IDs, no truncation
-                        display_names = []
-                        for name in prompt_names[:3]:
-                            display_names.append(f"• {name}")
-                        filter_display += "\n".join(display_names)
-                        if len(prompt_names) > 3:
-                            filter_display += f"\n• ... and {len(prompt_names) - 3} more"
-                    else:
-                        filter_display = ""
-
-                    # Show filter indicator with prompt names
-                    return (
-                        kept_nav_state,  # Keep navigation state for persistent filtering
-                        None,  # Clear pending data
-                        gallery_data if gallery_data else [],  # Update gallery
-                        table_data,  # Update table
-                        stats if stats else "No data",  # Update stats
-                        gr.update(visible=True),  # Show filter indicator row
-                        gr.update(
-                            value=filter_display
-                        ),  # Update filter display with formatted text
-                        gr.update(),  # Don't change running_jobs_display
-                        gr.update(),  # Don't change job_status
-                        gr.update(),  # Don't change active_job_card
-                    )
+                updates = _handle_runs_tab_with_filter(nav_state)
+                return (nav_state, None, *updates)
 
             # Check if we're navigating to Runs tab without filter - load default data
             elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
-                logger.info("Switching to Runs tab without filter - loading default data")
-                # Load default runs data with default version filter
-                gallery_data, table_data, stats = load_runs_data_with_version_filter(
-                    "all", "all", "all", "", 50, "all", "best"
-                )
-
-                # Table data should be a list of lists for Gradio dataframe
-                # Only create empty list if data is None or invalid
-                if table_data is None:
-                    table_data = []
-                elif isinstance(table_data, dict):
-                    # If it's a dict (from error handling), extract the data
-                    table_data = table_data.get("data", [])
-
-                return (
+                updates = _handle_runs_tab_default()
+                final_nav_state = (
                     nav_state
                     if nav_state
                     else {
                         "filter_type": None,
                         "filter_values": [],
                         "source_tab": None,
-                    },  # Keep current navigation state
-                    None,  # Clear pending data
-                    gallery_data if gallery_data else [],  # Update gallery with default data
-                    table_data,  # Update table with default data
-                    stats if stats else "No data",  # Update stats
-                    gr.update(visible=False),  # Hide filter indicator
-                    gr.update(),  # Don't change filter dropdown
-                    gr.update(),  # Don't change running_jobs_display
-                    gr.update(),  # Don't change job_status
-                    gr.update(),  # Don't change active_job_card
+                    }
                 )
+                return (final_nav_state, None, *updates)
 
             # No navigation action needed for other tabs
             return (
@@ -1789,6 +1214,7 @@ def create_ui():
 
                 # Load all data with filter parameters
                 inputs_data, inputs_count = load_input_gallery(
+                    inputs_dir,
                     inputs_search,
                     inputs_date_filter,
                     inputs_sort,
@@ -1952,8 +1378,12 @@ def create_ui():
 
         # Inputs Tab Events
         if "input_gallery" in components:
+            # Create wrapper function for on_input_select
+            def handle_input_select(evt: gr.SelectData, gallery_data):
+                return on_input_select(evt, gallery_data, inputs_dir)
+
             components["input_gallery"].select(
-                fn=on_input_select,
+                fn=handle_input_select,
                 inputs=[components["input_gallery"]],
                 outputs=[
                     components["selected_dir_path"],
@@ -1994,7 +1424,9 @@ def create_ui():
             # Search box with debouncing (responds to text changes)
             if "inputs_search" in components:
                 components["inputs_search"].change(
-                    fn=load_input_gallery,
+                    fn=lambda search, date_f, sort: load_input_gallery(
+                        inputs_dir, search, date_f, sort
+                    ),
                     inputs=filter_inputs,
                     outputs=filter_outputs,
                 )
@@ -2003,7 +1435,9 @@ def create_ui():
 
             if "inputs_date_filter" in components:
                 components["inputs_date_filter"].change(
-                    fn=load_input_gallery,
+                    fn=lambda search, date_f, sort: load_input_gallery(
+                        inputs_dir, search, date_f, sort
+                    ),
                     inputs=filter_inputs,
                     outputs=filter_outputs,
                 )
@@ -2011,7 +1445,9 @@ def create_ui():
             # Sort dropdown
             if "inputs_sort" in components:
                 components["inputs_sort"].change(
-                    fn=load_input_gallery,
+                    fn=lambda search, date_f, sort: load_input_gallery(
+                        inputs_dir, search, date_f, sort
+                    ),
                     inputs=filter_inputs,
                     outputs=filter_outputs,
                 )
@@ -3175,12 +2611,7 @@ def create_ui():
                     logger.info("Selected row index: {}", row_idx)
 
                     # Extract job ID from table (column 1 has Job ID)
-                    import pandas as pd
-
-                    if isinstance(table_data, pd.DataFrame):
-                        job_id = table_data.iloc[row_idx, 1]  # Job ID is in column 1
-                    else:
-                        job_id = table_data[row_idx][1] if row_idx < len(table_data) else None
+                    job_id = df_utils.get_cell_value(table_data, row_idx, 1, default=None)
 
                     logger.info("Selected job ID: {}", job_id)
 
@@ -3192,10 +2623,7 @@ def create_ui():
 
                     # Check if this is a queued job (to show cancel button)
                     # Extract status from the table data to determine if cancellable
-                    if isinstance(table_data, pd.DataFrame):
-                        status = table_data.iloc[row_idx, 3]  # Status is in column 3
-                    else:
-                        status = table_data[row_idx][3] if row_idx < len(table_data) else None
+                    status = df_utils.get_cell_value(table_data, row_idx, 3, default=None)
 
                     # Show cancel button only for queued jobs
                     show_cancel = status == "queued"
@@ -3247,7 +2675,7 @@ def create_ui():
 
             def load_initial_data():
                 """Load initial data efficiently."""
-                gallery_data, results_text = load_input_gallery()
+                gallery_data, results_text = load_input_gallery(inputs_dir)
                 prompts_data = load_ops_prompts(50)
                 # Only call check_running_jobs once
                 try:

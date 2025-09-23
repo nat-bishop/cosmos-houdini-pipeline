@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Event handlers for Runs tab functionality."""
 
-import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,79 +11,251 @@ from cosmos_workflow.ui.models.responses import (
     RunDetailsResponse,
     create_empty_run_details_response,
 )
+from cosmos_workflow.ui.utils import dataframe as df_utils
+from cosmos_workflow.ui.utils import video as video_utils
 from cosmos_workflow.utils.logging import logger
 
 # Thread pool for parallel thumbnail generation
 THUMBNAIL_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
-def generate_thumbnail_fast(video_path, thumb_size=(384, 216)):
-    """Generate a small, low-res thumbnail very quickly.
+def _apply_date_filter(runs: list, date_filter: str) -> list:
+    """Apply date filter to runs list.
 
     Args:
-        video_path: Path to video file
-        thumb_size: Thumbnail size (width, height)
+        runs: List of run dictionaries
+        date_filter: Date filter type (today, yesterday, last_7_days, last_30_days, all)
 
     Returns:
-        Path to thumbnail or None if failed
+        Filtered list of runs
     """
-    try:
-        video_path = Path(video_path)
-        if not video_path.exists():
-            return None
+    now = datetime.now(timezone.utc)
+    filtered_runs = []
 
-        # Create thumbnails directory
-        thumb_dir = Path("outputs/.thumbnails")
-        thumb_dir.mkdir(parents=True, exist_ok=True)
+    for run in runs:
+        # Parse run creation date
+        try:
+            created_str = run.get("created_at", "")
+            if created_str:
+                # Handle both timezone-aware and naive dates
+                if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                    created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                else:
+                    created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+            else:
+                created = now
+        except Exception:
+            created = now
 
-        # Generate unique thumbnail name based on video path
-        import hashlib
+        # Apply date filter
+        date_match = False
+        if date_filter == "today":
+            date_match = created.date() == now.date()
+        elif date_filter == "yesterday":
+            yesterday = now - timedelta(days=1)
+            date_match = created.date() == yesterday.date()
+        elif date_filter == "last_7_days":
+            seven_days_ago = now - timedelta(days=7)
+            date_match = created >= seven_days_ago
+        elif date_filter == "last_30_days":
+            thirty_days_ago = now - timedelta(days=30)
+            date_match = created >= thirty_days_ago
+        else:  # all
+            date_match = True
 
-        path_hash = hashlib.md5(str(video_path).encode()).hexdigest()[:8]  # noqa: S324
-        thumb_path = thumb_dir / f"{video_path.stem}_{path_hash}.jpg"
+        if date_match:
+            filtered_runs.append(run)
 
-        # Skip if thumbnail already exists
-        if thumb_path.exists():
-            return str(thumb_path)
+    return filtered_runs
 
-        # Use ffmpeg with fast settings for quick thumbnail generation
-        cmd = [
-            "ffmpeg",
-            "-ss",
-            "0.5",  # Seek to 0.5 seconds (very fast seek)
-            "-i",
-            str(video_path),
-            "-vframes",
-            "1",  # Just 1 frame
-            "-vf",
-            f"scale={thumb_size[0]}:{thumb_size[1]}",  # Small size
-            "-q:v",
-            "5",  # Lower quality for speed (1=best, 31=worst)
-            "-y",  # Overwrite
-            str(thumb_path),
+
+def _apply_run_filters(
+    runs: list, type_filter: str, search_text: str, rating_filter: str | None = None
+) -> list:
+    """Apply type, search, and rating filters to runs.
+
+    Args:
+        runs: List of run dictionaries
+        type_filter: Model type filter
+        search_text: Text to search in run ID and prompt text
+        rating_filter: Rating filter (unrated, 5, 4+, 3+, etc.)
+
+    Returns:
+        Filtered list of runs
+    """
+    filtered_runs = runs.copy()
+
+    # Apply type filter
+    if type_filter != "all":
+        filtered_runs = [
+            run for run in filtered_runs if run.get("model_type", "transfer") == type_filter
         ]
 
-        # Run with timeout
-        result = subprocess.run(  # noqa: S603
-            cmd,
-            capture_output=True,
-            timeout=2,  # Very short timeout
-            creationflags=subprocess.CREATE_NO_WINDOW
-            if hasattr(subprocess, "CREATE_NO_WINDOW")
-            else 0,
-        )
+    # Apply text search
+    if search_text:
+        search_lower = search_text.lower()
+        filtered_runs = [
+            run
+            for run in filtered_runs
+            if search_lower in run.get("id", "").lower()
+            or search_lower in run.get("prompt_text", "").lower()
+        ]
 
-        if result.returncode == 0 and thumb_path.exists():
-            return str(thumb_path)
+    # Apply rating filter
+    if rating_filter and rating_filter != "all":
+        if rating_filter == "unrated":
+            filtered_runs = [run for run in filtered_runs if not run.get("rating")]
+        elif rating_filter == "5":
+            filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
+        elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
+            min_rating = int(rating_filter[0])
+            filtered_runs = [
+                run
+                for run in filtered_runs
+                if run.get("rating") and run.get("rating") >= min_rating
+            ]
 
-    except (subprocess.TimeoutExpired, Exception):  # noqa: S110
-        pass
+    return filtered_runs
 
-    return None
+
+def _build_gallery_data(runs: list, limit: int = 50) -> list:
+    """Build gallery data with thumbnails for completed runs.
+
+    Args:
+        runs: List of run dictionaries
+        limit: Maximum number of thumbnails to generate
+
+    Returns:
+        List of (thumbnail_path, label) tuples for gallery
+    """
+    gallery_data = []
+    video_paths = []
+
+    # Collect video paths from completed runs
+    for run in runs:
+        if run.get("status") != "completed":
+            continue
+
+        outputs = run.get("outputs", {})
+        output_video = None
+
+        # New structure: outputs.output_path
+        if isinstance(outputs, dict) and "output_path" in outputs:
+            output_path = outputs["output_path"]
+            if output_path and output_path.endswith(".mp4"):
+                output_video = Path(output_path)
+                if output_video.exists():
+                    video_paths.append((output_video, run))
+        # Old structure: outputs.files array
+        elif isinstance(outputs, dict) and "files" in outputs:
+            files = outputs.get("files", [])
+            for file_path in files:
+                if file_path.endswith("output.mp4"):
+                    output_video = Path(file_path)
+                    if output_video.exists():
+                        video_paths.append((output_video, run))
+                        break
+
+    # Generate thumbnails in parallel
+    if video_paths:
+        logger.info("Generating thumbnails for {} videos", min(len(video_paths), limit))
+        futures = []
+        for video_path, run in video_paths[:limit]:
+            future = THUMBNAIL_EXECUTOR.submit(video_utils.generate_thumbnail_fast, video_path)
+            futures.append((future, run))
+
+        # Collect results
+        for future, run in futures:
+            try:
+                thumb_path = future.result(timeout=3)
+                if thumb_path:
+                    # Include rating and run ID in label
+                    full_id = run.get("id", "")
+                    rating = run.get("rating")
+                    star_display = "★" * rating + "☆" * (5 - rating) if rating else "☆☆☆☆☆"
+                    label = f"{star_display}||{full_id}"
+                    gallery_data.append((thumb_path, label))
+            except Exception as e:
+                logger.debug("Failed to generate thumbnail: {}", str(e))
+
+    return gallery_data
+
+
+def _build_runs_table_data(runs: list) -> list:
+    """Build table data from runs list.
+
+    Args:
+        runs: List of run dictionaries
+
+    Returns:
+        List of table rows
+    """
+    table_data = []
+
+    for run in runs:
+        run_id = run.get("id", "")
+        status = run.get("status", "unknown")
+        model_type = run.get("model_type", "transfer")
+
+        # Calculate duration
+        duration = "N/A"
+        if run.get("created_at") and run.get("completed_at"):
+            try:
+                created_str = run["created_at"]
+                if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
+                    start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                else:
+                    start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
+
+                completed_str = run["completed_at"]
+                if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
+                    end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
+                else:
+                    end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
+
+                duration_delta = end - start
+                duration = str(duration_delta).split(".")[0]
+            except Exception:
+                pass
+
+        created = run.get("created_at", "")[:19] if run.get("created_at") else ""
+        rating = run.get("rating")
+        rating_display = str(rating) if rating else "-"
+
+        table_data.append([run_id, status, model_type, duration, rating_display, created])
+
+    return table_data
+
+
+def _calculate_runs_statistics(runs: list, total_count: int) -> str:
+    """Calculate statistics for runs display.
+
+    Args:
+        runs: List of displayed runs
+        total_count: Total count before limiting
+
+    Returns:
+        Formatted statistics string
+    """
+    completed_count = sum(1 for r in runs if r.get("status") == "completed")
+    running_count = sum(1 for r in runs if r.get("status") == "running")
+    failed_count = sum(1 for r in runs if r.get("status") == "failed")
+
+    stats = f"""
+    **Total Matching:** {total_count} (showing {len(runs)})
+    **Completed:** {completed_count}
+    **Running:** {running_count}
+    **Failed:** {failed_count}
+    """
+
+    return stats
 
 
 def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, rating_filter=None):
-    """Load runs data for table with filtering and populate video grid."""
+    """Load runs data for table with filtering and populate video grid.
+
+    Simplified version using helper functions.
+    """
     try:
         logger.debug(
             "Loading runs data with filters: status={}, date={}, type={}, search={}, limit={}, rating={}",
@@ -105,8 +276,7 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
             logger.warning("CosmosAPI not initialized")
             return [], [], "No data available"
 
-        # Query more runs initially to ensure filters have enough data to work with
-        # We fetch up to 500 runs to search through, then limit display results later
+        # Query runs from database
         max_search_limit = 500
         all_runs = ops.list_runs(
             status=None if status_filter == "all" else status_filter, limit=max_search_limit
@@ -120,259 +290,25 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
                 if prompt:
                     run["prompt_text"] = prompt.get("prompt_text", "")
 
-        # Apply date filter
-        now = datetime.now(timezone.utc)
-        filtered_runs = []
+        # Apply filters using helpers
+        filtered_runs = _apply_date_filter(all_runs, date_filter)
+        filtered_runs = _apply_run_filters(filtered_runs, type_filter, search_text, rating_filter)
 
-        for run in all_runs:
-            # Parse run creation date
-            try:
-                created_str = run.get("created_at", "")
-                if created_str:
-                    # Handle both timezone-aware and naive dates
-                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                        # Has timezone info
-                        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    else:
-                        # No timezone info - assume UTC
-                        created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-                else:
-                    created = now
-            except Exception:
-                created = now
-
-            # Apply date filter
-            date_match = False
-            if date_filter == "today":
-                date_match = created.date() == now.date()
-            elif date_filter == "yesterday":
-                yesterday = now - timedelta(days=1)
-                date_match = created.date() == yesterday.date()
-            elif date_filter == "last_7_days":
-                seven_days_ago = now - timedelta(days=7)
-                date_match = created >= seven_days_ago
-            elif date_filter == "last_30_days":
-                thirty_days_ago = now - timedelta(days=30)
-                date_match = created >= thirty_days_ago
-            else:  # all
-                date_match = True
-
-            # Apply type filter
-            type_match = False
-            if type_filter == "all":
-                type_match = True
-            else:
-                # Get model_type from run data (it's stored in database as model_type, not run_type)
-                model_type = run.get(
-                    "model_type", "transfer"
-                )  # Default to transfer if not specified
-                type_match = type_filter == model_type
-
-            # Add to filtered runs if both filters match
-            if date_match and type_match:
-                filtered_runs.append(run)
-
-        # Apply text search
-        if search_text:
-            search_lower = search_text.lower()
-            initial_count = len(filtered_runs)
-            filtered_runs = [
-                run
-                for run in filtered_runs
-                if search_lower in run.get("id", "").lower()
-                or search_lower in run.get("prompt_text", "").lower()
-            ]
-            logger.debug(
-                "Text search '{}' reduced runs from {} to {}",
-                search_text,
-                initial_count,
-                len(filtered_runs),
-            )
-
-        # Apply rating filter
-        if rating_filter and rating_filter != "all":
-            initial_count = len(filtered_runs)
-            if rating_filter == "unrated":
-                # Filter for runs with no rating
-                filtered_runs = [run for run in filtered_runs if not run.get("rating")]
-            elif rating_filter == "5":
-                # Exact 5 stars
-                filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
-            elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
-                # Range filters like "4+", "3+", etc.
-                min_rating = int(rating_filter[0])
-                filtered_runs = [
-                    run
-                    for run in filtered_runs
-                    if run.get("rating") and run.get("rating") >= min_rating
-                ]
-            logger.debug(
-                "Rating filter '{}' reduced runs from {} to {}",
-                rating_filter,
-                initial_count,
-                len(filtered_runs),
-            )
-
-        # Store total count before limiting for statistics
+        # Store total count before limiting
         total_filtered = len(filtered_runs)
 
-        # Now limit to the user's Max Results setting
+        # Limit to the user's Max Results setting
         display_limit = int(limit)
         filtered_runs = filtered_runs[:display_limit]
 
-        # Build gallery data with thumbnails (only completed runs)
-        gallery_data = []
-        video_paths = []
-        completed_runs = [r for r in filtered_runs if r.get("status") == "completed"]
-        logger.debug("Processing {} completed runs for gallery", len(completed_runs))
+        # Build gallery data using helper
+        gallery_data = _build_gallery_data(filtered_runs, limit=50)
 
-        # First collect all video paths
-        missing_videos = []
-        for run in filtered_runs:
-            if run.get("status") == "completed":
-                outputs = run.get("outputs", {})
-                output_video = None
-                run_id = run.get("id", "unknown")
+        # Build table data using helper
+        table_data = _build_runs_table_data(filtered_runs)
 
-                # New structure: outputs.output_path
-                if isinstance(outputs, dict) and "output_path" in outputs:
-                    output_path = outputs["output_path"]
-                    logger.debug(
-                        "Run {} using new structure with output_path: {}", run_id, output_path
-                    )
-                    if output_path and output_path.endswith(".mp4"):
-                        # Normalize path separators for cross-platform compatibility
-                        raw_path = output_path
-                        output_video = Path(output_path)
-                        if str(raw_path) != str(output_video):
-                            logger.debug("Path normalized from '{} to '{}'", raw_path, output_video)
-                        if output_video.exists():
-                            video_paths.append((output_video, run))
-                            logger.debug("Found output video for run {}: {}", run_id, output_video)
-                        else:
-                            missing_videos.append((run_id, output_path))
-                            logger.warning(
-                                "Output video not found for run {}: {}", run_id, output_path
-                            )
-
-                # Old structure: outputs.files array
-                elif isinstance(outputs, dict) and "files" in outputs:
-                    files = outputs.get("files", [])
-                    logger.debug(
-                        "Run {} using old structure with files array ({} files)", run_id, len(files)
-                    )
-                    for file_path in files:
-                        if file_path.endswith("output.mp4"):
-                            # Normalize path for Windows
-                            output_video = Path(file_path)
-                            if output_video.exists():
-                                video_paths.append((output_video, run))
-                                logger.debug(
-                                    "Found output video for run {}: {}", run_id, output_video
-                                )
-                            else:
-                                missing_videos.append((run_id, file_path))
-                                logger.warning(
-                                    "Output video not found for run {}: {}", run_id, file_path
-                                )
-                            break
-                else:
-                    logger.debug("Run {} has no recognized output structure", run_id)
-
-        if missing_videos:
-            logger.warning(
-                "Missing videos for {} runs: {}", len(missing_videos), missing_videos[:5]
-            )  # Log first 5 for brevity
-
-        # Generate thumbnails in parallel for speed
-        if video_paths:
-            logger.info("Generating thumbnails for {} videos (max 50)", min(len(video_paths), 50))
-            futures = []
-            for video_path, run in video_paths[:50]:  # Limit to 50 for performance
-                future = THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path)
-                futures.append((future, run))
-
-            # Collect results
-            successful_thumbs = 0
-            failed_thumbs = 0
-            for future, run in futures:
-                try:
-                    thumb_path = future.result(timeout=3)
-                    if thumb_path:
-                        # Include rating and run ID in label for gallery
-                        full_id = run.get("id", "")
-                        rating = run.get("rating")
-                        if rating:
-                            star_display = "★" * rating + "☆" * (5 - rating)
-                        else:
-                            star_display = "☆☆☆☆☆"  # Show empty stars instead of "No Rating"
-                        # Keep run ID hidden with separator for selection
-                        # The gallery will display the label but we still need the ID for selection
-                        label = f"{star_display}||{full_id}"
-                        gallery_data.append((thumb_path, label))
-                        successful_thumbs += 1
-                    else:
-                        failed_thumbs += 1
-                except Exception as e:
-                    failed_thumbs += 1
-                    logger.debug("Failed to generate thumbnail: {}", str(e))
-
-            logger.info(
-                "Gallery built: {} thumbnails generated, {} failed from {} completed runs",
-                successful_thumbs,
-                failed_thumbs,
-                len(completed_runs),
-            )
-
-        # Build table data
-        table_data = []
-        for run in filtered_runs:
-            run_id = run.get("id", "")
-            status = run.get("status", "unknown")
-            model_type = run.get("model_type", "transfer")  # Default to transfer if not specified
-
-            # Calculate duration
-            duration = "N/A"
-            if run.get("created_at") and run.get("completed_at"):
-                try:
-                    # Handle both timezone-aware and naive dates for start time
-                    created_str = run["created_at"]
-                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                        start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    else:
-                        start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-
-                    # Handle both timezone-aware and naive dates for end time
-                    completed_str = run["completed_at"]
-                    if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
-                        end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
-                    else:
-                        end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
-                    duration_delta = end - start
-                    duration = str(duration_delta).split(".")[0]
-                except Exception:  # noqa: S110
-                    pass
-
-            created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-
-            # Get rating and display as number for compact table
-            rating = run.get("rating")
-            rating_display = str(rating) if rating else "-"
-
-            # Updated columns: Run ID, Status, Run Type, Duration, Rating, Created
-            table_data.append([run_id, status, model_type, duration, rating_display, created])
-
-        # Build statistics
-        completed_count = sum(1 for r in filtered_runs if r.get("status") == "completed")
-        running_count = sum(1 for r in filtered_runs if r.get("status") == "running")
-        failed_count = sum(1 for r in filtered_runs if r.get("status") == "failed")
-
-        stats = f"""
-        **Total Matching:** {total_filtered} (showing {len(filtered_runs)})
-        **Completed:** {completed_count}
-        **Running:** {running_count}
-        **Failed:** {failed_count}
-        """
+        # Calculate statistics using helper
+        stats = _calculate_runs_statistics(filtered_runs, total_filtered)
 
         logger.info(
             "Runs data loaded: {} total, {} shown, {} gallery items",
@@ -394,6 +330,297 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
             "data": [],
         }
         return [], empty_table, "Error loading data"
+
+
+def _extract_run_metadata(run_details: dict) -> dict:
+    """Extract basic metadata from run details.
+
+    Args:
+        run_details: Raw run details from API
+
+    Returns:
+        Dictionary with duration, dates, status, etc.
+    """
+    metadata = {
+        "duration": "N/A",
+        "created_at": run_details.get("created_at", ""),
+        "completed_at": run_details.get("completed_at", ""),
+        "status": run_details.get("status", "unknown"),
+        "log_path": run_details.get("log_path", ""),
+    }
+
+    # Calculate duration
+    if metadata["created_at"] and metadata["completed_at"]:
+        try:
+            start = datetime.fromisoformat(metadata["created_at"].replace("Z", "+00:00"))
+            end = datetime.fromisoformat(metadata["completed_at"].replace("Z", "+00:00"))
+            duration_delta = end - start
+            metadata["duration"] = str(duration_delta).split(".")[0]
+        except Exception:  # noqa: S110
+            pass
+
+    return metadata
+
+
+def _resolve_video_paths(outputs: dict, run_id: str, ops) -> tuple:
+    """Resolve output and upscaled video paths from run outputs.
+
+    Args:
+        outputs: Outputs dictionary from run details
+        run_id: Run ID for checking upscaled version
+        ops: CosmosAPI instance
+
+    Returns:
+        Tuple of (output_video_path, upscaled_video_path, show_upscaled_tab)
+    """
+    output_video = ""
+
+    # New structure: outputs.output_path
+    if isinstance(outputs, dict) and "output_path" in outputs:
+        output_path = outputs["output_path"]
+        if output_path and output_path.endswith(".mp4"):
+            output_video = str(Path(output_path))
+
+    # Old structure: outputs.files array
+    elif isinstance(outputs, dict) and "files" in outputs:
+        files = outputs.get("files", [])
+        for file_path in files:
+            if file_path.endswith("output.mp4"):
+                output_video = str(Path(file_path))
+                break
+
+    # Check for upscaled version
+    upscaled_video = None
+    show_upscaled_tab = False
+
+    if ops and run_id:
+        upscaled_run = ops.get_upscaled_run(run_id)
+        if upscaled_run and upscaled_run.get("status") == "completed":
+            upscaled_outputs = upscaled_run.get("outputs", {})
+            if isinstance(upscaled_outputs, dict) and "output_path" in upscaled_outputs:
+                upscaled_path = upscaled_outputs["output_path"]
+                if (
+                    upscaled_path
+                    and upscaled_path.endswith(".mp4")
+                    and Path(upscaled_path).exists()
+                ):
+                    upscaled_video = str(Path(upscaled_path))
+                    show_upscaled_tab = True
+                    logger.info("Found upscaled video for run {}: {}", run_id, upscaled_video)
+
+    return output_video, upscaled_video, show_upscaled_tab
+
+
+def _load_spec_and_weights(run_id: str) -> dict:
+    """Load spec.json and extract control weights.
+
+    Args:
+        run_id: Run ID to locate spec.json
+
+    Returns:
+        Dictionary with spec data or empty dict if not found
+    """
+    spec_data = {}
+    if run_id:
+        spec_path = Path(f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/inputs/spec.json")
+        if spec_path.exists():
+            try:
+                import json
+
+                with open(spec_path) as f:
+                    spec_data = json.load(f)
+                logger.info("Loaded spec.json for run {}", run_id)
+            except Exception as e:
+                logger.warning("Failed to load spec.json: {}", str(e))
+    return spec_data
+
+
+def _build_input_gallery(spec_data: dict, prompt_inputs: dict, run_id: str) -> tuple:
+    """Build input video gallery from spec data and prompt inputs.
+
+    Args:
+        spec_data: Loaded spec.json data
+        prompt_inputs: Input paths from prompt
+        run_id: Run ID for locating generated controls
+
+    Returns:
+        Tuple of (input_videos list, control_weights dict)
+    """
+    input_videos = []
+    control_weights = {"vis": 0, "edge": 0, "depth": 0, "seg": 0}
+
+    if spec_data:
+        # Add main video from prompt if it exists
+        if prompt_inputs.get("video"):
+            path = Path(prompt_inputs["video"])
+            if path.exists():
+                input_videos.append((str(path), "Color/Visual"))
+                control_weights["vis"] = 1.0
+
+        # Process each control type
+        control_types = {"edge": "Edge", "depth": "Depth", "seg": "Segmentation"}
+
+        for control_key, control_label in control_types.items():
+            control_config = spec_data.get(control_key, {})
+            weight = control_config.get("control_weight", 0)
+
+            # Only process if weight > 0
+            if weight > 0:
+                control_weights[control_key] = weight
+                label_with_weight = f"{control_label} (Weight: {weight})"
+
+                # First try prompt's input for this control
+                if prompt_inputs.get(control_key):
+                    control_path = Path(prompt_inputs[control_key])
+                    if control_path.exists():
+                        input_videos.append((str(control_path), label_with_weight))
+                        continue
+
+                # If no prompt input, check for AI-generated control
+                indexed_path = Path(
+                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control_0.mp4"
+                )
+                non_indexed_path = Path(
+                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control.mp4"
+                )
+
+                if indexed_path.exists():
+                    input_videos.append((str(indexed_path), label_with_weight))
+                elif non_indexed_path.exists():
+                    input_videos.append((str(non_indexed_path), label_with_weight))
+
+    # Fallback if no spec.json - use prompt inputs with default weights
+    elif prompt_inputs:
+        video_keys = {
+            "video": ("Color/Visual", 1.0),
+            "edge": ("Edge", 0.5),
+            "depth": ("Depth", 0.5),
+            "seg": ("Segmentation", 0.5),
+        }
+        for key, (label, default_weight) in video_keys.items():
+            if prompt_inputs.get(key):
+                path = Path(prompt_inputs[key])
+                if path.exists():
+                    if key != "video":
+                        label = f"{label} (Weight: {default_weight})"
+                    input_videos.append((str(path), label))
+                    if key == "video":
+                        control_weights["vis"] = default_weight
+                    else:
+                        control_weights[key] = default_weight
+
+    return input_videos, control_weights
+
+
+def _prepare_transfer_ui_data(run_details: dict, exec_config: dict, outputs: dict) -> dict:
+    """Prepare UI data for transfer model runs.
+
+    Args:
+        run_details: Full run details
+        exec_config: Execution configuration
+        outputs: Run outputs
+
+    Returns:
+        Dictionary with transfer-specific UI data
+    """
+    return {
+        "show_transfer_content": True,
+        "show_enhance_content": False,
+        "show_upscale_content": False,
+    }
+
+
+def _prepare_enhance_ui_data(run_details: dict, exec_config: dict, outputs: dict) -> dict:
+    """Prepare UI data for enhance model runs.
+
+    Args:
+        run_details: Full run details
+        exec_config: Execution configuration
+        outputs: Run outputs
+
+    Returns:
+        Dictionary with enhance-specific UI data
+    """
+    original_prompt = exec_config.get("original_prompt_text", "")
+    enhanced_prompt = outputs.get("enhanced_text", "")
+    enhancement_model = exec_config.get("model", "Unknown")
+    create_new = exec_config.get("create_new", True)
+    enhanced_at = outputs.get("enhanced_at", "")
+
+    enhance_stats_text = f"""
+    **Model Used:** {enhancement_model}
+    **Mode:** {"Created new prompt" if create_new else "Overwrote original"}
+    **Enhanced At:** {enhanced_at[:19] if enhanced_at else "Unknown"}
+    **Original Length:** {len(original_prompt)} characters
+    **Enhanced Length:** {len(enhanced_prompt)} characters
+    **Status:** {run_details.get("status", "unknown").title()}
+    """
+
+    return {
+        "show_transfer_content": False,
+        "show_enhance_content": True,
+        "show_upscale_content": False,
+        "original_prompt": original_prompt,
+        "enhanced_prompt": enhanced_prompt,
+        "enhance_stats_text": enhance_stats_text,
+    }
+
+
+def _prepare_upscale_ui_data(run_details: dict, exec_config: dict, outputs: dict) -> dict:
+    """Prepare UI data for upscale model runs.
+
+    Args:
+        run_details: Full run details
+        exec_config: Execution configuration
+        outputs: Run outputs
+
+    Returns:
+        Dictionary with upscale-specific UI data
+    """
+    source_run_id = exec_config.get("source_run_id", "")
+    input_video_source = exec_config.get("input_video_source", "")
+    control_weight = exec_config.get("control_weight", 0.5)
+    upscale_prompt = exec_config.get("prompt", "")
+
+    # Get duration from metadata helper
+    metadata = _extract_run_metadata(run_details)
+
+    upscale_stats_text = f"""
+    **Control Weight:** {control_weight}
+    **Source:** {"Run " + source_run_id[:8] if source_run_id else "Direct video"}
+    **Duration:** {metadata["duration"]}
+    **Status:** {run_details.get("status", "unknown").title()}
+    """
+
+    return {
+        "show_transfer_content": False,
+        "show_enhance_content": False,
+        "show_upscale_content": True,
+        "input_video_source": input_video_source,
+        "upscale_prompt": upscale_prompt,
+        "upscale_stats_text": upscale_stats_text,
+    }
+
+
+def _read_log_content(log_path: str, lines: int = 15) -> str:
+    """Read last N lines from log file.
+
+    Args:
+        log_path: Path to log file
+        lines: Number of lines to read from end
+
+    Returns:
+        Log content or error message
+    """
+    if not log_path or not Path(log_path).exists():
+        return ""
+
+    try:
+        with open(log_path) as f:
+            all_lines = f.readlines()
+            return "".join(all_lines[-lines:])
+    except Exception:
+        return "Error reading log file"
 
 
 def on_runs_gallery_select(evt: gr.SelectData):
@@ -468,88 +695,67 @@ def on_runs_gallery_select(evt: gr.SelectData):
 
 
 def on_runs_table_select(table_data, evt: gr.SelectData):
-    """Handle selection of a run from the table."""
+    """Handle selection of a run from the table.
+
+    Refactored version that uses helper functions for better maintainability.
+    """
     try:
         logger.info(
             "on_runs_table_select called - evt: {}, table_data type: {}", evt, type(table_data)
         )
 
+        # Early return for no selection
         if evt is None or table_data is None:
             logger.warning("No evt or table_data, hiding details")
-            # Return empty response with all fields hidden/empty
             return list(create_empty_run_details_response())
 
-        # Create CosmosAPI instance
-        from cosmos_workflow.api.cosmos_api import CosmosAPI
-
-        ops = CosmosAPI()
-
-        # Get selected row
-        logger.info("Event index: {}, type: {}", evt.index, type(evt.index))
+        # Get selected row index
         row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
         logger.info("Selected row index: {}", row_idx)
 
         # Extract run ID from table
-        import pandas as pd
+        run_id = df_utils.get_cell_value(table_data, row_idx, 0, default=None)
+        logger.info("Extracted run_id: {}", run_id)
 
-        if isinstance(table_data, pd.DataFrame):
-            run_id = table_data.iloc[row_idx, 0]  # Run ID is first column now (no checkbox)
-            logger.info("Extracted run_id from DataFrame: {}", run_id)
-        else:
-            run_id = table_data[row_idx][0] if row_idx < len(table_data) else None
-            logger.info("Extracted run_id from list: {}", run_id)
-
-        if not run_id or not ops:
-            logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            # Return empty response with all fields hidden/empty
+        if not run_id:
+            logger.warning("No run_id found in selected row")
             return list(create_empty_run_details_response())
 
-        # Get full run details
+        # Get run details from API
+        from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+        ops = CosmosAPI()
+
         run_details = ops.get_run(run_id)
-        logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            # Return empty response with all fields hidden/empty
             return list(create_empty_run_details_response())
 
-        # Get model type to determine which UI to show
+        # Extract model type and basic info
         model_type = run_details.get("model_type", "transfer")
-        logger.info("Run model type: {}", model_type)
+        prompt_id = run_details.get("prompt_id", "")
+        prompt_text = run_details.get("prompt_text", "")
+        logger.info("Run model type: {}, prompt_id: {}", model_type, prompt_id)
 
-        # Extract details
-        # Get output video - handle both old and new output structures
+        # Use helper to extract metadata
+        metadata = _extract_run_metadata(run_details)
+        duration = metadata["duration"]
+        log_path = metadata["log_path"]
+
+        # Use helper to resolve video paths
         outputs = run_details.get("outputs", {})
-        output_video = ""
-
-        # New structure: outputs.output_path
-        if isinstance(outputs, dict) and "output_path" in outputs:
-            output_path = outputs["output_path"]
-            if output_path and output_path.endswith(".mp4"):
-                # Normalize path separators for cross-platform compatibility
-                output_video = str(Path(output_path))
-
-        # Old structure: outputs.files array
-        elif isinstance(outputs, dict) and "files" in outputs:
-            files = outputs.get("files", [])
-            for file_path in files:
-                if file_path.endswith("output.mp4"):
-                    # Normalize path for Windows
-                    output_video = str(Path(file_path))
-                    break
-
+        video_paths, output_gallery, output_video = _resolve_video_paths(outputs, run_id, ops)
         logger.info("Output video path: {}", output_video)
 
-        # Get prompt text (will need to fetch from prompt later)
-        prompt_text = run_details.get("prompt_text", "")
-
-        # If prompt_text is not in run, fetch it from the prompt
-        if not prompt_text and run_details.get("prompt_id"):
-            prompt = ops.get_prompt(run_details["prompt_id"])
+        # Get prompt text if not in run details
+        if not prompt_text and prompt_id:
+            prompt = ops.get_prompt(prompt_id)
             if prompt:
                 prompt_text = prompt.get("prompt_text", "")
 
-        # Get rating if present
+        # Get rating and prompt info
         rating_value = run_details.get("rating", None)
+        prompt_name = ""
 
         # Check for upscaled version if this is a transfer run
         upscaled_video = None
@@ -567,123 +773,24 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
                     ):
                         upscaled_video = str(Path(upscaled_path))
                         show_upscaled_tab = True
-                        logger.info("Found upscaled video for run {}: {}", run_id, upscaled_video)
+                        logger.info("Found upscaled video: {}", upscaled_video)
 
-        # Get input videos and control weights
-        input_videos = []
-        control_weights = {"vis": 0, "edge": 0, "depth": 0, "seg": 0}
-        prompt_id = run_details.get("prompt_id")
-        prompt_name = ""  # Initialize prompt_name
-        run_id = run_details.get("id", "")
+        # Use helper to load spec and weights
+        spec_data = _load_spec_and_weights(run_id)
 
-        # Read spec.json just for control weights
-        spec_data = {}
-        if run_id:
-            spec_path = Path(
-                f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/inputs/spec.json"
-            )
-            if spec_path.exists():
-                try:
-                    import json
-
-                    with open(spec_path) as f:
-                        spec_data = json.load(f)
-                    logger.info("Loaded spec.json for run {}", run_id)
-                except Exception as e:
-                    logger.warning("Failed to load spec.json: {}", str(e))
-
-        # Get prompt inputs for video paths
+        # Get prompt inputs if available
         prompt_inputs = {}
-        if prompt_id and ops:
+        if prompt_id:
             prompt = ops.get_prompt(prompt_id)
             if prompt:
                 prompt_inputs = prompt.get("inputs", {})
-                # Get the prompt name from parameters
                 prompt_params = prompt.get("parameters", {})
                 prompt_name = prompt_params.get("name", "")
 
-        # Process videos based on spec.json weights and prompt inputs
-        if spec_data:
-            # Add main video from prompt if it exists
-            if prompt_inputs.get("video"):
-                path = Path(prompt_inputs["video"])
-                if path.exists():
-                    # Main video doesn't need weight in label since it's always 1.0
-                    input_videos.append((str(path), "Color/Visual"))
-                    control_weights["vis"] = 1.0
+        # Use helper to build input gallery
+        input_videos, control_weights = _build_input_gallery(spec_data, prompt_inputs, run_id)
 
-            # Process each control type
-            control_types = {"edge": "Edge", "depth": "Depth", "seg": "Segmentation"}
-
-            for control_key, control_label in control_types.items():
-                control_config = spec_data.get(control_key, {})
-                weight = control_config.get("control_weight", 0)
-
-                # Only process if weight > 0
-                if weight > 0:
-                    control_weights[control_key] = weight
-                    # Include weight in the label
-                    label_with_weight = f"{control_label} (Weight: {weight})"
-
-                    # First try prompt's input for this control
-                    if prompt_inputs.get(control_key):
-                        control_path = Path(prompt_inputs[control_key])
-                        if control_path.exists():
-                            input_videos.append((str(control_path), label_with_weight))
-                            logger.info("Using prompt's {} input: {}", control_key, control_path)
-                            continue
-
-                    # If no prompt input, check for AI-generated control
-                    # Try indexed version first (from batch inference), then non-indexed (backward compat)
-                    indexed_path = Path(
-                        f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control_0.mp4"
-                    )
-                    non_indexed_path = Path(
-                        f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control.mp4"
-                    )
-
-                    if indexed_path.exists():
-                        logger.debug(
-                            "Found indexed control file for {}: {}", control_key, indexed_path
-                        )
-                        input_videos.append((str(indexed_path), label_with_weight))
-                        logger.info(
-                            "Using AI-generated {} control (indexed): {}", control_key, indexed_path
-                        )
-                    elif non_indexed_path.exists():
-                        input_videos.append((str(non_indexed_path), label_with_weight))
-                        logger.info(
-                            "Using AI-generated {} control: {}", control_key, non_indexed_path
-                        )
-                    else:
-                        logger.warning(
-                            "No video found for {} control (weight={})", control_key, weight
-                        )
-
-        # Fallback if no spec.json - use prompt inputs with default weights
-        elif prompt_inputs:
-            # Map the actual keys to display labels
-            video_keys = {
-                "video": ("Color/Visual", 1.0),
-                "edge": ("Edge", 0.5),
-                "depth": ("Depth", 0.5),
-                "seg": ("Segmentation", 0.5),
-            }
-            for key, (label, default_weight) in video_keys.items():
-                if prompt_inputs.get(key):
-                    path = Path(prompt_inputs[key])
-                    if path.exists():
-                        # Add weight to label for controls
-                        if key != "video":
-                            label = f"{label} (Weight: {default_weight})"
-                        input_videos.append((str(path), label))
-                        # Set default weight for backward compatibility
-                        if key == "video":
-                            control_weights["vis"] = default_weight
-                        else:
-                            control_weights[key] = default_weight
-
-        # Use control weights from spec.json, fallback to execution_config if needed
+        # Get execution config and parameters
         exec_config = run_details.get("execution_config", {})
         if not any(control_weights.values()):
             # No weights from spec.json, try execution_config
@@ -692,27 +799,8 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         params = exec_config  # Use entire execution_config as parameters
 
-        # Get metadata
-        duration = "N/A"
-        if run_details.get("created_at") and run_details.get("completed_at"):
-            try:
-                start = datetime.fromisoformat(run_details["created_at"].replace("Z", "+00:00"))
-                end = datetime.fromisoformat(run_details["completed_at"].replace("Z", "+00:00"))
-                duration_delta = end - start
-                duration = str(duration_delta).split(".")[0]
-            except Exception:  # noqa: S110
-                pass
-
-        # Get log path
-        log_path = run_details.get("log_path", "")
-        log_content = ""
-        if log_path and Path(log_path).exists():
-            try:
-                with open(log_path) as f:
-                    lines = f.readlines()
-                    log_content = "".join(lines[-15:])  # Last 15 lines
-            except Exception:
-                log_content = "Error reading log file"
+        # Use helper to read log content
+        log_content = _read_log_content(log_path) if log_path else "No log file available"
 
         logger.info(
             "Returning updates - visible: True, run_id: {}, output_video: {}, model_type: {}",
@@ -721,61 +809,35 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             model_type,
         )
 
-        # Prepare model-specific content based on model type
-        # TO ADD NEW MODEL TYPES:
-        # 1. Add elif model_type == "your_type"
-        # 2. Set content visibility and prepare data
-        # 3. Add corresponding UI block in runs_ui.py
-
+        # Prepare model-specific content using helpers
         if model_type == "enhance":
-            # Enhancement runs: Hide transfer/upscale content, show enhance content
+            enhance_data = _prepare_enhance_ui_data(run_details, exec_config, outputs)
             show_transfer_content = False
             show_enhance_content = True
             show_upscale_content = False
-
-            # Get original and enhanced prompts
-            original_prompt = exec_config.get("original_prompt_text", "")
-            enhanced_prompt = outputs.get("enhanced_text", "")
-
-            # Build enhancement statistics
-            enhancement_model = exec_config.get("model", "Unknown")
-            create_new = exec_config.get("create_new", True)
-            enhanced_at = outputs.get("enhanced_at", "")
-
-            enhance_stats_text = f"""
-            **Model Used:** {enhancement_model}
-            **Mode:** {"Created new prompt" if create_new else "Overwrote original"}
-            **Enhanced At:** {enhanced_at[:19] if enhanced_at else "Unknown"}
-            **Original Length:** {len(original_prompt)} characters
-            **Enhanced Length:** {len(enhanced_prompt)} characters
-            **Status:** {run_details.get("status", "unknown").title()}
-            """
-
+            original_prompt = enhance_data["original_prompt"]
+            enhanced_prompt = enhance_data["enhanced_prompt"]
+            enhance_stats_text = enhance_data["enhance_stats_text"]
         elif model_type == "upscale":
-            # Upscale runs: Hide transfer/enhance content, show upscale content
+            upscale_data = _prepare_upscale_ui_data(run_details, exec_config, outputs)
             show_transfer_content = False
             show_enhance_content = False
             show_upscale_content = True
-
-            # Get original video (source for upscaling)
-            source_run_id = exec_config.get("source_run_id", "")
-            input_video_source = exec_config.get("input_video_source", "")
-            control_weight = exec_config.get("control_weight", 0.5)
-            upscale_prompt = exec_config.get("prompt", "")
-
-            # Build upscale statistics
-            upscale_stats_text = f"""
-            **Control Weight:** {control_weight}
-            **Source:** {"Run " + source_run_id[:8] if source_run_id else "Direct video"}
-            **Duration:** {duration}
-            **Status:** {run_details.get("status", "unknown").title()}
-            """
-
+            input_video_source = upscale_data["input_video_source"]
+            upscale_prompt = upscale_data["upscale_prompt"]
+            upscale_stats_text = upscale_data["upscale_stats_text"]
         else:
-            # Default/Transfer runs: Show transfer content, hide others
+            # Default/Transfer runs
             show_transfer_content = True
             show_enhance_content = False
             show_upscale_content = False
+            # Initialize enhance/upscale variables for default case
+            original_prompt = ""
+            enhanced_prompt = ""
+            enhance_stats_text = ""
+            input_video_source = ""
+            upscale_prompt = ""
+            upscale_stats_text = ""
 
         # Prepare individual video updates for transfer/default content
         video_updates = []
@@ -1065,14 +1127,10 @@ def update_runs_selection_info(table_data, evt: gr.SelectData):
             return "No run selected", ""
 
         # Get selected run ID
-        import pandas as pd
-
         row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
 
-        if isinstance(table_data, pd.DataFrame):
-            run_id = table_data.iloc[row_idx, 0]  # Run ID is first column
-        else:
-            run_id = table_data[row_idx][0] if row_idx < len(table_data) else ""
+        # Extract run ID from table using utility
+        run_id = df_utils.get_cell_value(table_data, row_idx, 0, default="")
 
         if run_id:
             return f"Selected: {run_id[:8]}...", run_id
@@ -1086,8 +1144,8 @@ def load_runs_for_multiple_prompts(
 ):
     """Load runs data for multiple prompt IDs.
 
-    TODO: Optimize this to use a single query with IN clause in the future.
-    Currently makes multiple API calls for simplicity and to avoid backend changes.
+    This function collects runs from multiple prompts and uses the same
+    filtering and display logic as load_runs_data.
 
     Args:
         prompt_ids: List of prompt IDs to filter by
@@ -1096,6 +1154,7 @@ def load_runs_for_multiple_prompts(
         type_filter: Run type filter
         search_text: Search text
         limit: Maximum number of results
+        rating_filter: Rating filter to apply
 
     Returns:
         Tuple of (gallery_data, table_data, stats, prompt_names)
@@ -1150,241 +1209,30 @@ def load_runs_for_multiple_prompts(
         # Sort by created_at descending
         all_runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
 
-        # Apply date filter
-        now = datetime.now(timezone.utc)
-        filtered_runs = []
+        # Apply all filters using helper functions
+        filtered_runs = _apply_date_filter(all_runs, date_filter)
 
-        for run in all_runs:
-            # Parse run creation date
-            try:
-                created_str = run.get("created_at", "")
-                if created_str:
-                    # Handle both timezone-aware and naive dates
-                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                        # Has timezone info
-                        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    else:
-                        # No timezone info - assume UTC
-                        created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-                else:
-                    created = now
-            except Exception:
-                created = now
+        # Apply status filter
+        if status_filter != "all":
+            filtered_runs = [r for r in filtered_runs if r.get("status") == status_filter]
 
-            # Apply date filter
-            date_match = False
-            if date_filter == "today":
-                date_match = created.date() == now.date()
-            elif date_filter == "yesterday":
-                yesterday = now - timedelta(days=1)
-                date_match = created.date() == yesterday.date()
-            elif date_filter == "last_7_days":
-                seven_days_ago = now - timedelta(days=7)
-                date_match = created >= seven_days_ago
-            elif date_filter == "last_30_days":
-                thirty_days_ago = now - timedelta(days=30)
-                date_match = created >= thirty_days_ago
-            else:  # all
-                date_match = True
+        # Apply additional filters using helper
+        filtered_runs = _apply_run_filters(filtered_runs, type_filter, search_text, rating_filter)
 
-            # Apply status filter
-            status_match = False
-            if status_filter == "all":
-                status_match = True
-            else:
-                run_status = run.get("status", "")
-                status_match = status_filter == run_status
-
-            # Apply type filter
-            type_match = False
-            if type_filter == "all":
-                type_match = True
-            else:
-                model_type = run.get("model_type", "transfer")
-                type_match = type_filter == model_type
-
-            # Add to filtered runs if all filters match
-            if date_match and type_match and status_match:
-                filtered_runs.append(run)
-
-        # Apply text search
-        if search_text:
-            search_lower = search_text.lower()
-            initial_count = len(filtered_runs)
-            filtered_runs = [
-                run
-                for run in filtered_runs
-                if search_lower in run.get("id", "").lower()
-                or search_lower in run.get("prompt_text", "").lower()
-            ]
-            logger.debug(
-                "Text search '{}' reduced runs from {} to {}",
-                search_text,
-                initial_count,
-                len(filtered_runs),
-            )
-
-        # Apply rating filter
-        if rating_filter and rating_filter != "all":
-            initial_count = len(filtered_runs)
-            if rating_filter == "unrated":
-                # Filter for runs with no rating
-                filtered_runs = [run for run in filtered_runs if not run.get("rating")]
-            elif rating_filter == "5":
-                # Exact 5 stars
-                filtered_runs = [run for run in filtered_runs if run.get("rating") == 5]
-            elif isinstance(rating_filter, str) and rating_filter.endswith("+"):
-                # Range filters like "4+", "3+", etc.
-                min_rating = int(rating_filter[0])
-                filtered_runs = [
-                    run
-                    for run in filtered_runs
-                    if run.get("rating") and run.get("rating") >= min_rating
-                ]
-            logger.debug(
-                "Rating filter '{}' reduced runs from {} to {}",
-                rating_filter,
-                initial_count,
-                len(filtered_runs),
-            )
-
-        # Store total count before limiting for statistics
+        # Store total count before limiting
         total_filtered = len(filtered_runs)
 
-        # Now limit to the user's Max Results setting
+        # Limit to display count
         display_limit = int(limit)
         filtered_runs = filtered_runs[:display_limit]
 
-        # Build gallery data with thumbnails (only completed runs)
-        gallery_data = []
-        video_paths = []
-        completed_runs = [r for r in filtered_runs if r.get("status") == "completed"]
-        logger.debug("Processing {} completed runs for gallery", len(completed_runs))
+        # Build gallery data using helper
+        gallery_data = _build_gallery_data(filtered_runs, limit=50)
 
-        # First collect all video paths
-        missing_videos = []
-        for run in filtered_runs:
-            if run.get("status") == "completed":
-                outputs = run.get("outputs", {})
-                output_video = None
-                run_id = run.get("id", "unknown")
+        # Build table data using helper
+        table_data = _build_runs_table_data(filtered_runs)
 
-                # New structure: outputs.output_path
-                if isinstance(outputs, dict) and "output_path" in outputs:
-                    output_path = outputs["output_path"]
-                    logger.debug(
-                        "Run {} using new structure with output_path: {}", run_id, output_path
-                    )
-                    if output_path and output_path.endswith(".mp4"):
-                        # Normalize path separators for cross-platform compatibility
-                        raw_path = output_path
-                        output_video = Path(output_path)
-                        if str(raw_path) != str(output_video):
-                            logger.debug("Path normalized from '{} to '{}'", raw_path, output_video)
-                        if output_video.exists():
-                            video_paths.append((output_video, run))
-                            logger.debug("Found output video for run {}: {}", run_id, output_video)
-                        else:
-                            missing_videos.append((run_id, output_path))
-                            logger.warning(
-                                "Output video not found for run {}: {}", run_id, output_path
-                            )
-
-                # Old structure: outputs.files array
-                elif isinstance(outputs, dict) and "files" in outputs:
-                    files = outputs.get("files", [])
-                    logger.debug(
-                        "Run {} using old structure with files array ({} files)", run_id, len(files)
-                    )
-                    for file_path in files:
-                        if file_path.endswith("output.mp4"):
-                            # Normalize path for Windows
-                            output_video = Path(file_path)
-                            if output_video.exists():
-                                video_paths.append((output_video, run))
-                                logger.debug(
-                                    "Found output video for run {}: {}", run_id, output_video
-                                )
-                            else:
-                                missing_videos.append((run_id, file_path))
-                                logger.warning(
-                                    "Output video not found for run {}: {}", run_id, file_path
-                                )
-                            break
-                else:
-                    logger.debug("Run {} has no recognized output structure", run_id)
-
-        if missing_videos:
-            logger.warning(
-                "Missing videos for {} runs: {}", len(missing_videos), missing_videos[:5]
-            )  # Log first 5 for brevity
-
-        # Generate thumbnails in parallel for speed
-        if video_paths:
-            futures = []
-            for video_path, run in video_paths[:50]:  # Limit to 50 for performance
-                future = THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path)
-                futures.append((future, run))
-
-            # Collect results
-            for future, run in futures:
-                try:
-                    thumb_path = future.result(timeout=3)
-                    if thumb_path:
-                        # Include rating and run ID in label for gallery
-                        full_id = run.get("id", "")
-                        rating = run.get("rating")
-                        if rating:
-                            star_display = "★" * rating + "☆" * (5 - rating)
-                        else:
-                            star_display = "☆☆☆☆☆"  # Show empty stars instead of "No Rating"
-                        # Keep run ID hidden with separator for selection
-                        # The gallery will display the label but we still need the ID for selection
-                        label = f"{star_display}||{full_id}"
-                        gallery_data.append((thumb_path, label))
-                except Exception as e:
-                    logger.debug("Failed to generate thumbnail: {}", str(e))
-
-        # Build table data
-        table_data = []
-        for run in filtered_runs:
-            run_id = run.get("id", "")
-            status = run.get("status", "unknown")
-            prompt_id = run.get("prompt_id", "")
-            model_type = run.get("model_type", "transfer")
-
-            # Calculate duration
-            duration = "N/A"
-            if run.get("created_at") and run.get("completed_at"):
-                try:
-                    # Handle both timezone-aware and naive dates for start time
-                    created_str = run["created_at"]
-                    if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                        start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    else:
-                        start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-
-                    # Handle both timezone-aware and naive dates for end time
-                    completed_str = run["completed_at"]
-                    if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
-                        end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
-                    else:
-                        end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
-                    duration_delta = end - start
-                    duration = str(duration_delta).split(".")[0]
-                except Exception as e:
-                    logger.debug("Failed to calculate duration: {}", str(e))
-
-            created = run.get("created_at", "")[:19] if run.get("created_at") else ""
-
-            # Get rating and display as number for compact table
-            rating = run.get("rating")
-            rating_display = str(rating) if rating else "-"
-
-            # Updated columns: Run ID, Status, Run Type, Duration, Rating, Created
-            table_data.append([run_id, status, model_type, duration, rating_display, created])
-
-        # Build statistics
+        # Build statistics for multiple prompts
         stats = f"""
         **Filtering by:** {len(prompt_ids)} prompt(s)
         **Total Matching:** {total_filtered} (showing {len(filtered_runs)})
@@ -1393,15 +1241,11 @@ def load_runs_for_multiple_prompts(
         **Failed:** {sum(1 for r in filtered_runs if r.get("status") == "failed")}
         """
 
-        # Build prompt names for filter display
-        prompt_names = []
-        for pid in prompt_ids:
-            # Always use the full prompt ID
-            prompt_names.append(pid)
+        # Build prompt names list
+        prompt_names = list(prompt_ids)
 
-        # Check if we have prompt_ids but no matching runs
+        # Check for empty results
         if prompt_ids and len(gallery_data) == 0 and len(table_data) == 0:
-            # Had filters but no matches - return empty with appropriate message
             stats = f"No runs found for {len(prompt_ids)} selected prompt(s)"
             logger.info("Filter yielded no results for {} prompts", len(prompt_ids))
 
@@ -1699,7 +1543,9 @@ def load_runs_data_with_version_filter(
         # Generate thumbnails
         futures = []
         for video_path, _run in video_paths[:display_limit]:
-            futures.append(THUMBNAIL_EXECUTOR.submit(generate_thumbnail_fast, video_path))
+            futures.append(
+                THUMBNAIL_EXECUTOR.submit(video_utils.generate_thumbnail_fast, video_path)
+            )
 
         # Collect results
         for i, future in enumerate(futures):

@@ -3,44 +3,25 @@
 
 import gradio as gr
 
+from cosmos_workflow.ui.utils import dataframe as df_utils
 from cosmos_workflow.utils.logging import logger
 
 
 def select_all_prompts(table_data):
     """Select all prompts in the table."""
     try:
-        import pandas as pd
-
         # Handle empty data
         if table_data is None:
             return [], "**0** prompts selected"
 
-        # Handle DataFrame format (what Gradio returns)
-        if isinstance(table_data, pd.DataFrame):
-            if table_data.empty:
-                return table_data, "**0** prompts selected"
-            # Set first column to True for all rows
-            table_data = table_data.copy()
-            table_data.iloc[:, 0] = True
-            count = len(table_data)
-            return table_data, f"**{count}** prompts selected"
+        # Use utility to select all
+        updated_data = df_utils.select_all(table_data)
+        count = df_utils.count_selected(updated_data)
 
-        # Handle list format (legacy)
-        elif isinstance(table_data, list):
-            if len(table_data) == 0:
-                return table_data, "**0** prompts selected"
-            # Set all checkboxes to True (first column)
-            updated_data = []
-            for row in table_data:
-                updated_row = list(row)
-                updated_row[0] = True  # Check the checkbox
-                updated_data.append(updated_row)
-            count = len(updated_data)
-            return updated_data, f"**{count}** prompts selected"
-
+        if count == 1:
+            return updated_data, f"**{count}** prompt selected"
         else:
-            # Unknown format
-            return table_data, "**0** prompts selected"
+            return updated_data, f"**{count}** prompts selected"
 
     except Exception as e:
         logger.error("Error selecting all prompts: {}", str(e))
@@ -50,36 +31,13 @@ def select_all_prompts(table_data):
 def clear_selection(table_data):
     """Clear all selections in the prompts table."""
     try:
-        import pandas as pd
-
         # Handle empty data
         if table_data is None:
             return [], "**0** prompts selected"
 
-        # Handle DataFrame format (what Gradio returns)
-        if isinstance(table_data, pd.DataFrame):
-            if table_data.empty:
-                return table_data, "**0** prompts selected"
-            # Set first column to False for all rows
-            table_data = table_data.copy()
-            table_data.iloc[:, 0] = False
-            return table_data, "**0** prompts selected"
-
-        # Handle list format (legacy)
-        elif isinstance(table_data, list):
-            if len(table_data) == 0:
-                return table_data, "**0** prompts selected"
-            # Set all checkboxes to False (first column)
-            updated_data = []
-            for row in table_data:
-                updated_row = list(row)
-                updated_row[0] = False  # Uncheck the checkbox
-                updated_data.append(updated_row)
-            return updated_data, "**0** prompts selected"
-
-        else:
-            # Unknown format
-            return table_data, "**0** prompts selected"
+        # Use utility to clear selection
+        updated_data = df_utils.clear_selection(table_data)
+        return updated_data, "**0** prompts selected"
 
     except Exception as e:
         logger.error("Error clearing selection: {}", str(e))
@@ -89,41 +47,18 @@ def clear_selection(table_data):
 def update_selection_count(table_data):
     """Update the count of selected prompts."""
     try:
-        import pandas as pd
-
         if table_data is None:
             logger.debug("update_selection_count: table_data is None")
             return "**0** prompts selected"
 
-        # Handle DataFrame format
-        if isinstance(table_data, pd.DataFrame):
-            if table_data.empty:
-                logger.debug("update_selection_count: DataFrame is empty")
-                return "**0** prompts selected"
-            # Count True values in first column
-            count = table_data.iloc[:, 0].sum()
-            logger.info("update_selection_count: DataFrame count={}", count)
-            if count == 1:
-                return f"**{count}** prompt selected"
-            else:
-                return f"**{count}** prompts selected"
+        # Use utility to count selected
+        count = df_utils.count_selected(table_data)
+        logger.info("update_selection_count: count={}", count)
 
-        # Handle list format
-        elif isinstance(table_data, list):
-            if len(table_data) == 0:
-                logger.debug("update_selection_count: List is empty")
-                return "**0** prompts selected"
-            # Count checked rows (first column is checkbox)
-            count = sum(1 for row in table_data if row[0])
-            logger.info("update_selection_count: List count={}", count)
-            if count == 1:
-                return f"**{count}** prompt selected"
-            else:
-                return f"**{count}** prompts selected"
-
+        if count == 1:
+            return f"**{count}** prompt selected"
         else:
-            logger.debug("update_selection_count: Unknown data type: {}", type(table_data))
-            return "**0** prompts selected"
+            return f"**{count}** prompts selected"
 
     except Exception as e:
         logger.error("Error updating selection count: {}", str(e))
@@ -132,27 +67,8 @@ def update_selection_count(table_data):
 
 def get_selected_prompt_ids(table_data):
     """Extract IDs of selected prompts from table data."""
-    import pandas as pd
-
-    selected_ids = []
-
-    if table_data is None:
-        return selected_ids
-
-    # Handle DataFrame format
-    if isinstance(table_data, pd.DataFrame):
-        if not table_data.empty:
-            # Get rows where first column is True
-            selected_rows = table_data[table_data.iloc[:, 0]]
-            # Get IDs from second column
-            selected_ids = selected_rows.iloc[:, 1].tolist()
-
-    # Handle list format
-    elif isinstance(table_data, list) and len(table_data) > 0:
-        for row in table_data:
-            if row[0]:  # If checkbox is checked
-                selected_ids.append(row[1])  # ID is in second column
-
+    # Use utility to get selected IDs (ID is in column 1)
+    selected_ids = df_utils.get_selected_ids(table_data, id_column=1)
     logger.debug("Selected %d prompts from table", len(selected_ids))
     return selected_ids
 

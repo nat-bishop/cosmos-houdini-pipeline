@@ -9,8 +9,12 @@ import logging
 import gradio as gr
 
 from cosmos_workflow.api.cosmos_api import CosmosAPI
+from cosmos_workflow.ui.log_viewer import LogViewer
 
 logger = logging.getLogger(__name__)
+
+# Initialize log viewer instance
+log_viewer = LogViewer(max_lines=2000)
 
 
 def show_kill_confirmation():
@@ -128,3 +132,205 @@ def execute_kill_job():
             gr.update(visible=False),
             f"Error: {e}",
         )
+
+
+def start_log_streaming(auto_start=False):
+    """Generator that streams logs to the UI.
+
+    Args:
+        auto_start: If True, don't clear logs (useful for auto-start on tab switch)
+    """
+    if not auto_start:
+        log_viewer.clear()
+
+    try:
+        ops = CosmosAPI()
+        containers = ops.get_active_containers()
+
+        if not containers:
+            yield "No active containers found", log_viewer.get_text()
+            return
+
+        if len(containers) > 1:
+            container_id = containers[0]["container_id"]
+            message = f"Multiple containers found, streaming from {container_id}"
+        else:
+            container_id = containers[0]["container_id"]
+            message = f"Streaming logs from container {container_id}"
+
+        yield message, log_viewer.get_text()
+
+        try:
+            for log_line in ops.stream_logs_generator(container_id):
+                log_viewer.add_from_stream(log_line)
+                yield message, log_viewer.get_text()
+        except KeyboardInterrupt:
+            yield "Streaming stopped", log_viewer.get_text()
+
+    except RuntimeError as e:
+        yield f"Error: {e}", log_viewer.get_text()
+    except Exception as e:
+        yield f"Failed to start streaming: {e}", log_viewer.get_text()
+
+
+def refresh_jobs_on_tab_select(tab_idx):
+    """Refresh jobs status when switching to jobs tab."""
+    if tab_idx == 3:
+        # Refresh the jobs status
+        jobs_result = check_running_jobs()
+        return jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
+    else:
+        # No update for other tabs
+        return gr.update(), gr.update(), gr.update(), gr.update()
+
+
+def refresh_and_stream():
+    """Refresh jobs status and start streaming if container is active."""
+    # First refresh the jobs status
+    jobs_result = check_running_jobs()
+
+    # Check if there's an active container
+    if "Ready to stream" in jobs_result[1]:
+        # Start streaming automatically
+        for status, logs in start_log_streaming(auto_start=True):
+            yield jobs_result[0], status, jobs_result[2], logs
+    else:
+        # Just return the refreshed status without streaming
+        yield jobs_result[0], jobs_result[1], jobs_result[2], log_viewer.get_text()
+
+
+def check_running_jobs():
+    """Check for active containers and system status on remote instance."""
+    try:
+        ops = CosmosAPI()
+        # Get comprehensive status like CLI does
+        status_info = ops.check_status()
+
+        # Build container details display
+        container_details_text = ""
+
+        # SSH Status
+        if status_info.get("ssh_status") == "connected":
+            container_details_text += "SSH Connection     ✓ Connected\n"
+        else:
+            container_details_text += "SSH Connection     ✗ Failed\n"
+
+        # Docker status
+        docker_info = status_info.get("docker_status", {})
+        if isinstance(docker_info, dict) and docker_info.get("docker_running"):
+            container_details_text += "Docker Daemon      ✓ Running\n"
+        else:
+            container_details_text += "Docker Daemon      ✗ Not running\n"
+
+        # GPU information
+        gpu_info = status_info.get("gpu_info", {})
+        if gpu_info:
+            gpu_name = gpu_info.get("name", "Unknown")
+            gpu_memory = gpu_info.get("memory_total", "Unknown")
+            container_details_text += f"GPU                {gpu_name} ({gpu_memory})\n"
+            container_details_text += (
+                f"CUDA Version       {gpu_info.get('cuda_version', 'Unknown')}\n"
+            )
+
+            # Add GPU utilization metrics
+            gpu_util = gpu_info.get("gpu_utilization")
+            if gpu_util:
+                container_details_text += f"GPU Usage          {gpu_util}\n"
+
+            # Add memory usage details with actual percentage
+            mem_used = gpu_info.get("memory_used")
+            mem_total = gpu_info.get("memory_total")
+            mem_percentage = gpu_info.get("memory_percentage", "0%")
+            if mem_used and mem_total:
+                container_details_text += (
+                    f"Memory Usage       {mem_used} / {mem_total} ({mem_percentage})\n"
+                )
+
+            # Add temperature if available
+            temperature = gpu_info.get("temperature")
+            if temperature and temperature != "N/A":
+                container_details_text += f"Temperature        {temperature}\n"
+
+            # Add power metrics if available
+            power_draw = gpu_info.get("power_draw")
+            power_limit = gpu_info.get("power_limit")
+            if power_draw and power_draw != "N/A" and power_limit and power_limit != "N/A":
+                container_details_text += f"Power              {power_draw} / {power_limit}\n"
+
+            # Add clock speeds if available
+            clock_current = gpu_info.get("clock_current")
+            clock_max = gpu_info.get("clock_max")
+            if clock_current and clock_current != "N/A" and clock_max and clock_max != "N/A":
+                container_details_text += f"Clock Speed        {clock_current} / {clock_max}\n"
+        else:
+            container_details_text += "GPU                Not detected\n"
+
+        # Active run information
+        active_run = status_info.get("active_run")
+        active_job_display = ""
+
+        if active_run:
+            container_details_text += f"Active Operation   {active_run['model_type'].upper()}\n"
+            container_details_text += f"  Run ID           {active_run['id']}\n"
+            container_details_text += f"  Prompt ID        {active_run['prompt_id']}\n"
+            if active_run.get("started_at"):
+                container_details_text += f"  Started          {active_run['started_at']}\n"
+
+            # Format active job card
+            active_job_display = f"""**🟢 Active Job Running**
+
+**Operation:** {active_run["model_type"].upper()}
+**Run ID:** {active_run["id"]}
+**Prompt ID:** {active_run["prompt_id"]}
+**Status:** {active_run.get("status", "Running")}
+"""
+            if active_run.get("started_at"):
+                active_job_display += f"**Started:** {active_run['started_at']}"
+
+        # Container information
+        container = status_info.get("container")
+        if container:
+            container_name = container.get("name", "Unknown")
+            container_status = container.get("status", "Unknown")
+            container_id = container.get("id_short", container.get("id", "Unknown")[:12])
+
+            container_details_text += f"Running Container  {container_name}\n"
+            container_details_text += f"  Status           {container_status}\n"
+            container_details_text += f"  Container ID     {container_id}\n"
+
+            # If no active run info, create basic active job display from container
+            if not active_job_display:
+                active_job_display = f"""**🟢 Container Running**
+
+**Container:** {container_name}
+**ID:** {container_id}
+**Status:** {container_status}
+"""
+
+            status = "Ready to stream from active container"
+        else:
+            if active_run:
+                # Run without container - zombie run
+                container_details_text += (
+                    "Running Container  Missing! (Database shows active run)\n"
+                )
+                active_job_display = f"""**⚠️ Zombie Run Detected**
+
+**Run ID:** {active_run["id"]}
+Container missing - may need cleanup
+"""
+                status = "Container missing but run active in database"
+            else:
+                container_details_text += "Running Container  None\n"
+                active_job_display = """**No Active Job**
+
+Currently idle - no jobs running"""
+                status = "No containers to stream from"
+
+        return container_details_text.strip(), status, active_job_display
+
+    except Exception as e:
+        error_display = f"""**⚠️ Error**
+
+{e}"""
+        return f"Error: {e}", "Error checking containers", error_display

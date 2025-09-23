@@ -567,6 +567,14 @@ class SimplifiedQueueService:
             logger.debug("No database connection available for cleanup")
             return
 
+        # First, clean up orphaned JobQueue entries
+        self._cleanup_orphaned_job_queue()
+
+        # Second, clean up orphaned Run records that may not have associated jobs
+        self._cleanup_orphaned_runs()
+
+    def _cleanup_orphaned_job_queue(self) -> None:
+        """Clean up JobQueue entries stuck in running state."""
         with self.db_connection.get_session() as session:
             # Find jobs that were left in running state
             orphaned_jobs = session.query(JobQueue).filter_by(status="running").all()
@@ -613,3 +621,61 @@ class SimplifiedQueueService:
 
             session.commit()
             logger.info("Cleaned up {} orphaned job(s) on startup", len(orphaned_jobs))
+
+    def _cleanup_orphaned_runs(self) -> None:
+        """Clean up Run records stuck in pending/running/uploading state.
+
+        This handles runs that may not have associated JobQueue entries,
+        such as runs created via CLI or runs whose jobs were already deleted.
+        """
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            # Get all runs that are stuck in incomplete states
+            # We'll check if they're older than 10 minutes (reasonable timeout)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+
+            orphaned_runs = self.cosmos_api.service.list_runs(limit=1000)
+            cleanup_count = 0
+
+            for run in orphaned_runs:
+                # Check if run is stuck in an incomplete state
+                if run.get("status") in ["pending", "running", "uploading"]:
+                    # Check if it's old enough to be considered orphaned
+                    created_at = run.get("created_at")
+                    if created_at:
+                        # Parse the timestamp
+                        if isinstance(created_at, str):
+                            # Handle ISO format timestamps
+                            created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        else:
+                            created_dt = created_at
+
+                        # Ensure timezone awareness
+                        if created_dt.tzinfo is None:
+                            created_dt = created_dt.replace(tzinfo=timezone.utc)
+
+                        # If older than cutoff, mark as failed
+                        if created_dt < cutoff_time:
+                            run_id = run.get("id")
+                            logger.info(
+                                "Marking orphaned run {} (status: {}, age: {}) as failed",
+                                run_id,
+                                run.get("status"),
+                                datetime.now(timezone.utc) - created_dt,
+                            )
+
+                            # Use update_run to set error message
+                            self.cosmos_api.service.update_run(
+                                run_id, error_message="Run orphaned - no active job or container"
+                            )
+                            cleanup_count += 1
+
+            if cleanup_count > 0:
+                logger.info("Cleaned up {} orphaned run(s) on startup", cleanup_count)
+            else:
+                logger.debug("No orphaned runs found on startup")
+
+        except Exception as e:
+            logger.error("Error cleaning up orphaned runs: {}", e)
+            # Don't fail startup if run cleanup fails

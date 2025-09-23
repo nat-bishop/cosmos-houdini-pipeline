@@ -26,7 +26,7 @@ workflow management system from input preparation to output generation.
 import atexit
 import signal
 import threading
-from datetime import datetime, timezone
+from datetime import timezone
 from functools import partial
 from pathlib import Path
 
@@ -57,29 +57,35 @@ from cosmos_workflow.ui.tabs.jobs_handlers import (
 )
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
 from cosmos_workflow.ui.tabs.prompts_handlers import (
-    calculate_average_rating,
-    calculate_run_statistics,
     cancel_delete_prompts,
     clear_selection,
     confirm_delete_prompts,
-    filter_prompts,
     get_selected_prompt_ids,
-    get_video_thumbnail,
-    list_prompts,
     load_ops_prompts,
     on_prompt_row_select,
     preview_delete_prompts,
-    run_enhance_on_selected as run_enhance_on_selected_base,
-    run_inference_on_selected as run_inference_on_selected_base,
     select_all_prompts,
+)
+from cosmos_workflow.ui.tabs.prompts_handlers import (
+    run_enhance_on_selected as run_enhance_on_selected_base,
+)
+from cosmos_workflow.ui.tabs.prompts_handlers import (
+    run_inference_on_selected as run_inference_on_selected_base,
+)
+from cosmos_workflow.ui.tabs.prompts_handlers import (
     update_selection_count as prompts_update_selection_count,
 )
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
 from cosmos_workflow.ui.tabs.runs_handlers import (
     cancel_delete_run,
     confirm_delete_run,
+    handle_runs_tab_default,
+    handle_runs_tab_with_filter,
+    handle_runs_tab_with_pending_data,
     load_run_logs,
     load_runs_data,
+    load_runs_data_with_version_filter,
+    load_runs_with_filters,
     on_runs_gallery_select,
     on_runs_table_select,
     preview_delete_run,
@@ -230,10 +236,10 @@ outputs_dir = Path(local_config.outputs_dir)
 # ============================================================================
 
 
-
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 def update_selection_count(dataframe_data):
     """Wrapper for prompts_update_selection_count to avoid name conflict."""
@@ -259,17 +265,11 @@ def create_ui():
     db_connection = DatabaseConnection(database_path)
     queue_service = SimplifiedQueueService(db_connection=db_connection)
     queue_handlers = QueueHandlers(queue_service)
-    
+
     # Create partial functions with queue_service bound
     # This is the Pythonic way to inject dependencies without global state
-    run_inference_on_selected = partial(
-        run_inference_on_selected_base,
-        queue_service=queue_service
-    )
-    run_enhance_on_selected = partial(
-        run_enhance_on_selected_base,
-        queue_service=queue_service
-    )
+    run_inference_on_selected = partial(run_inference_on_selected_base, queue_service=queue_service)
+    run_enhance_on_selected = partial(run_enhance_on_selected_base, queue_service=queue_service)
 
     # Get custom CSS from styles module
     custom_css = get_custom_css()
@@ -339,86 +339,6 @@ def create_ui():
         # ============================================
 
         # Unified filter handler that respects navigation state for persistent prompt filtering
-        def load_runs_with_filters(
-            status_filter,
-            date_filter,
-            type_filter,
-            search_text,
-            limit,
-            rating_filter,
-            version_filter,
-            nav_state,
-        ):
-            """Load runs data with all filters, including persistent prompt filter from navigation state.
-
-            This function checks if there's an active prompt filter in navigation_state and uses
-            the appropriate loading function accordingly.
-            """
-            from cosmos_workflow.ui.tabs.runs_handlers import (
-                load_runs_for_multiple_prompts,
-            )
-
-            # Check if we have active prompt filtering
-            if (
-                nav_state
-                and nav_state.get("filter_type") == "prompt_ids"
-                and nav_state.get("filter_values")
-            ):
-                prompt_ids = nav_state.get("filter_values", [])
-                logger.info(f"Loading runs with prompt filter for {len(prompt_ids)} prompts")
-
-                # Use the multi-prompt loader with all filters
-                gallery, table, stats, prompt_names = load_runs_for_multiple_prompts(
-                    prompt_ids,
-                    status_filter,
-                    date_filter,
-                    type_filter,
-                    search_text,
-                    limit,
-                    rating_filter,
-                )
-
-                # Format prompt names for display
-                if prompt_names:
-                    filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
-                    display_names = []
-                    for name in prompt_names[:3]:
-                        display_names.append(f"• {name}")
-                    filter_display += "\n".join(display_names)
-                    if len(prompt_names) > 3:
-                        filter_display += f"\n• ... and {len(prompt_names) - 3} more"
-                else:
-                    filter_display = ""
-
-                return (
-                    gallery,
-                    table,
-                    stats,
-                    nav_state,  # Keep navigation state unchanged
-                    gr.update(visible=True),  # Show filter indicator
-                    gr.update(value=filter_display),  # Update filter text
-                )
-            else:
-                # No prompt filtering, use regular loader with version filter
-                logger.info("Loading runs with version filter: {}", version_filter)
-                gallery, table, stats = load_runs_data_with_version_filter(
-                    status_filter,
-                    date_filter,
-                    type_filter,
-                    search_text,
-                    limit,
-                    rating_filter,
-                    version_filter,
-                )
-
-                return (
-                    gallery,
-                    table,
-                    stats,
-                    nav_state,  # Keep navigation state unchanged
-                    gr.update(visible=False),  # Hide filter indicator
-                    gr.update(value=""),  # Clear filter text
-                )
 
         # Helper functions for tab navigation
         def _handle_jobs_tab_refresh():
@@ -440,101 +360,6 @@ def create_ui():
                 jobs_result[2],  # Update active job card
             )
 
-        def _format_filter_display(prompt_names):
-            """Format prompt filter display text."""
-            if not prompt_names:
-                return ""
-
-            filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
-            display_names = [f"• {name}" for name in prompt_names[:3]]
-            filter_display += "\n".join(display_names)
-
-            if len(prompt_names) > 3:
-                filter_display += f"\n• ... and {len(prompt_names) - 3} more"
-
-            return filter_display
-
-        def _handle_runs_tab_with_pending_data(pending_data):
-            """Handle Runs tab with pending navigation data."""
-            logger.info("Using pending navigation data for Runs tab")
-
-            gallery_data = pending_data.get("gallery", [])
-            table_data = pending_data.get("table", [])
-            stats = pending_data.get("stats", "No data")
-            prompt_names = pending_data.get("prompt_names", [])
-
-            filter_display = _format_filter_display(prompt_names)
-
-            return (
-                gallery_data,
-                table_data,
-                stats,
-                gr.update(visible=bool(prompt_names)),
-                gr.update(value=filter_display),
-                gr.update(),
-                gr.update(),
-                gr.update(),
-            )
-
-        def _handle_runs_tab_with_filter(nav_state):
-            """Handle Runs tab with prompt filter."""
-            prompt_ids = nav_state.get("filter_values", [])
-            logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
-
-            if not prompt_ids:
-                return (gr.update(),) * 8
-
-            from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
-
-            gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
-                prompt_ids, "all", "all", "all", "", 50
-            )
-
-            # Ensure table_data is properly formatted
-            if table_data is None:
-                table_data = []
-            elif isinstance(table_data, dict):
-                table_data = table_data.get("data", [])
-
-            logger.info("Loaded {} runs for filtered prompts", len(table_data) if table_data else 0)
-
-            filter_display = _format_filter_display(prompt_names)
-
-            return (
-                gallery_data if gallery_data else [],
-                table_data,
-                stats if stats else "No data",
-                gr.update(visible=True),
-                gr.update(value=filter_display),
-                gr.update(),
-                gr.update(),
-                gr.update(),
-            )
-
-        def _handle_runs_tab_default():
-            """Handle Runs tab without filter - load default data."""
-            logger.info("Switching to Runs tab without filter - loading default data")
-
-            gallery_data, table_data, stats = load_runs_data_with_version_filter(
-                "all", "all", "all", "", 50, "all", "best"
-            )
-
-            if table_data is None:
-                table_data = []
-            elif isinstance(table_data, dict):
-                table_data = table_data.get("data", [])
-
-            return (
-                gallery_data if gallery_data else [],
-                table_data,
-                stats if stats else "No data",
-                gr.update(visible=False),
-                gr.update(),
-                gr.update(),
-                gr.update(),
-                gr.update(),
-            )
-
         # Tab navigation handler - check for navigation state when switching tabs
         def handle_tab_select(tab_index, nav_state, pending_data):
             """Handle tab selection and apply navigation filters."""
@@ -553,17 +378,17 @@ def create_ui():
 
             # Check if there's pending navigation data (from View Runs button)
             if tab_index == 2 and pending_data is not None:
-                updates = _handle_runs_tab_with_pending_data(pending_data)
+                updates = handle_runs_tab_with_pending_data(pending_data)
                 return (nav_state, None, *updates)
 
             # Check if we're navigating to Runs tab (index 2) with pending filter
             elif tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
-                updates = _handle_runs_tab_with_filter(nav_state)
+                updates = handle_runs_tab_with_filter(nav_state)
                 return (nav_state, None, *updates)
 
             # Check if we're navigating to Runs tab without filter - load default data
             elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
-                updates = _handle_runs_tab_default()
+                updates = handle_runs_tab_default()
                 final_nav_state = (
                     nav_state
                     if nav_state
@@ -1674,7 +1499,6 @@ def create_ui():
         from cosmos_workflow.ui.tabs.runs_handlers import (
             cancel_upscale,
             execute_upscale,
-            load_runs_data_with_version_filter,
             show_upscale_dialog,
         )
 
@@ -1833,8 +1657,6 @@ def create_ui():
                     logger.info("Set rating {} for run {}", star_value, run_id)
 
                 # Refresh the runs display with version filter support
-                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_data_with_version_filter
-
                 gallery_data, table_data, stats = load_runs_data_with_version_filter(
                     status_filter,
                     date_filter,

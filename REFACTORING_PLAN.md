@@ -222,9 +222,22 @@ ui/
 - [x] Deleted duplicate inputs.py file (405 lines removed)
 - **Result**: app.py reduced from 3063 → 2775 lines (-288 lines)
 
-#### Step 4.3: Move Prompt Handlers from app.py (~500 lines)
-- [ ] Move all prompt-related handlers to prompts_handlers.py
-- [ ] Update imports and event bindings
+#### Step 4.3: Move Prompt Handlers from app.py (~500 lines) ✅ COMPLETED
+- [x] Move all prompt-related handlers to prompts_handlers.py:
+  - [x] `list_prompts()` (34 lines)
+  - [x] `filter_prompts()` (88 lines)
+  - [x] `load_ops_prompts()` (58 lines)
+  - [x] `calculate_run_statistics()` (17 lines)
+  - [x] `calculate_average_rating()` (19 lines)
+  - [x] `get_video_thumbnail()` (18 lines)
+  - [x] `on_prompt_row_select()` (149 lines)
+  - [x] `run_inference_on_selected()` (87 lines)
+  - [x] `run_enhance_on_selected()` (74 lines)
+- [x] Updated imports in app.py to use prompts_handlers functions
+- [x] Fixed SimplifiedQueueService import path (simple_queue_service not simplified)
+- [x] Replaced wrapper functions with functools.partial for clean dependency injection
+- **Result**: app.py reduced from 2772 → 2232 lines (-540 lines)
+- **Best Practice**: Used functools.partial instead of wrapper functions for dependency injection
 
 #### Step 4.4: Move Run Handlers from app.py (~800 lines)
 - [ ] Move all run-related handlers to runs_handlers.py
@@ -478,3 +491,29 @@ _Track discoveries, issues, and decisions here as you work:_
 - [ ] Team walkthrough completed
 - [ ] Performance benchmarked
 - [ ] Deployment verified
+
+
+---
+
+## Overall Progress Summary
+
+### Phases Completed
+- **Phase 1**: ✅ Fixed Named Returns with NamedTuple
+- **Phase 2**: ✅ Extracted Common Utilities (1,056 lines)
+- **Phase 3**: ✅ Consolidated Complex Functions (522 lines simplified)
+
+### Phase 4 Progress
+- **Step 4.1**: ✅ Moved job handlers (-192 lines)
+- **Step 4.2**: ✅ Consolidated inputs tab (-288 lines)
+- **Step 4.3**: ✅ Moved prompt handlers (-540 lines)
+- **Step 4.4-4.6**: 🔄 Pending
+
+### Key Metrics
+- **app.py reduction**: 3,255 → 2,232 lines (31.4% reduction)
+- **Total lines eliminated**: ~1,023 lines
+- **Modules created**: 7 specialized handler modules
+- **Best practices applied**: functools.partial, NamedTuple, utility extraction
+
+### Next Steps
+- Continue with Phase 4.4: Move run handlers from app.py
+- Target: Reduce app.py to ~300 lines (just initialization)

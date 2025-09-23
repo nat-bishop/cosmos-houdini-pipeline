@@ -216,7 +216,8 @@ def _build_runs_table_data(runs: list) -> list:
                 duration_delta = end - start
                 duration = str(duration_delta).split(".")[0]
             except Exception:
-                pass
+                # Unable to parse dates, leave duration as-is
+                logger.debug("Unable to parse dates for duration calculation")
 
         created = run.get("created_at", "")[:19] if run.get("created_at") else ""
         rating = run.get("rating")
@@ -1627,3 +1628,195 @@ def load_runs_data_with_version_filter(
     except Exception as e:
         logger.error("Error loading runs data: {}", e, exc_info=True)
         return [], [], "Error loading data"
+
+
+def load_runs_with_filters(
+    status_filter,
+    date_filter,
+    type_filter,
+    search_text,
+    limit,
+    rating_filter,
+    version_filter,
+    nav_state,
+):
+    """Load runs data with all filters, including persistent prompt filter from navigation state.
+
+    This function checks if there's an active prompt filter in navigation_state and uses
+    the appropriate loading function accordingly.
+    """
+    # Check if we have active prompt filtering
+    if (
+        nav_state
+        and nav_state.get("filter_type") == "prompt_ids"
+        and nav_state.get("filter_values")
+    ):
+        prompt_ids = nav_state.get("filter_values", [])
+        logger.info(f"Loading runs with prompt filter for {len(prompt_ids)} prompts")
+
+        # Use the multi-prompt loader with all filters
+        gallery, table, stats, prompt_names = load_runs_for_multiple_prompts(
+            prompt_ids,
+            status_filter,
+            date_filter,
+            type_filter,
+            search_text,
+            limit,
+            rating_filter,
+        )
+
+        # Format prompt names for display
+        if prompt_names:
+            filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+            display_names = []
+            for name in prompt_names[:3]:
+                display_names.append(f"• {name}")
+            filter_display += "\n".join(display_names)
+            if len(prompt_names) > 3:
+                filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+        else:
+            filter_display = ""
+
+        return (
+            gallery,
+            table,
+            stats,
+            nav_state,  # Keep navigation state unchanged
+            gr.update(visible=True),  # Show filter indicator
+            gr.update(value=filter_display),  # Update filter text
+        )
+    else:
+        # No prompt filtering, use regular loader with version filter
+        logger.info("Loading runs with version filter: {}", version_filter)
+        gallery, table, stats = load_runs_data_with_version_filter(
+            status_filter,
+            date_filter,
+            type_filter,
+            search_text,
+            limit,
+            rating_filter,
+            version_filter,
+        )
+
+        return (
+            gallery,
+            table,
+            stats,
+            nav_state,  # Keep navigation state unchanged
+            gr.update(visible=False),  # Hide filter indicator
+            gr.update(value=""),  # Clear filter text
+        )
+
+
+def handle_runs_tab_with_pending_data(pending_data):
+    """Handle Runs tab with pending navigation data.
+
+    Args:
+        pending_data: Dictionary with gallery, table, stats, and prompt_names
+
+    Returns:
+        Tuple of updates for runs components
+    """
+    logger.info("Using pending navigation data for Runs tab")
+
+    gallery_data = pending_data.get("gallery", [])
+    table_data = pending_data.get("table", [])
+    stats = pending_data.get("stats", "No data")
+    prompt_names = pending_data.get("prompt_names", [])
+
+    # Format prompt filter display
+    filter_display = ""
+    if prompt_names:
+        filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+        display_names = [f"• {name}" for name in prompt_names[:3]]
+        filter_display += "\n".join(display_names)
+        if len(prompt_names) > 3:
+            filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+
+    return (
+        gallery_data,
+        table_data,
+        stats,
+        gr.update(visible=bool(prompt_names)),
+        gr.update(value=filter_display),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
+
+
+def handle_runs_tab_with_filter(nav_state):
+    """Handle Runs tab with prompt filter.
+
+    Args:
+        nav_state: Navigation state dictionary with filter_type and filter_values
+
+    Returns:
+        Tuple of updates for runs components
+    """
+    prompt_ids = nav_state.get("filter_values", [])
+    logger.info("Switching to Runs tab with filter for prompts: {}", prompt_ids)
+
+    if not prompt_ids:
+        return (gr.update(),) * 8
+
+    gallery_data, table_data, stats, prompt_names = load_runs_for_multiple_prompts(
+        prompt_ids, "all", "all", "all", "", 50
+    )
+
+    # Ensure table_data is properly formatted
+    if table_data is None:
+        table_data = []
+    elif isinstance(table_data, dict):
+        table_data = table_data.get("data", [])
+
+    logger.info("Loaded {} runs for filtered prompts", len(table_data) if table_data else 0)
+
+    # Format prompt filter display
+    filter_display = ""
+    if prompt_names:
+        filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
+        display_names = [f"• {name}" for name in prompt_names[:3]]
+        filter_display += "\n".join(display_names)
+        if len(prompt_names) > 3:
+            filter_display += f"\n• ... and {len(prompt_names) - 3} more"
+
+    return (
+        gallery_data if gallery_data else [],
+        table_data,
+        stats if stats else "No data",
+        gr.update(visible=True),
+        gr.update(value=filter_display),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
+
+
+def handle_runs_tab_default():
+    """Handle Runs tab without filter - load default data.
+
+    Returns:
+        Tuple of updates for runs components
+    """
+    logger.info("Switching to Runs tab without filter - loading default data")
+
+    gallery_data, table_data, stats = load_runs_data_with_version_filter(
+        "all", "all", "all", "", 50, "all", "best"
+    )
+
+    if table_data is None:
+        table_data = []
+    elif isinstance(table_data, dict):
+        table_data = table_data.get("data", [])
+
+    return (
+        gallery_data if gallery_data else [],
+        table_data,
+        stats if stats else "No data",
+        gr.update(visible=False),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )

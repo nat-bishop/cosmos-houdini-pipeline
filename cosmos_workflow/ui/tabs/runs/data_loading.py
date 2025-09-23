@@ -161,10 +161,11 @@ class RunsLoader:
 
             # Check for upscaled versions of transfer runs
             if run.get("model_type") == "transfer":
-                upscaled_runs = self.api.list_runs(parent_id=run["id"], model_type="upscale")
-                if upscaled_runs:
+                # Get upscaled run using the dedicated method
+                upscaled_run = self.api.get_upscaled_run(run["id"])
+                if upscaled_run:
                     run["has_upscaled"] = True
-                    run["upscaled_run"] = upscaled_runs[0]
+                    run["upscaled_run"] = upscaled_run
 
     def _apply_filters(
         self, runs: list[dict[str, Any]], filters: RunFilters

@@ -718,7 +718,13 @@ def run_inference_on_selected(
         return f"❌ Error: {e}"
 
 
-def run_enhance_on_selected(dataframe_data, create_new, force_overwrite, queue_service: SimplifiedQueueService, progress=None):
+def run_enhance_on_selected(
+    dataframe_data,
+    create_new,
+    force_overwrite,
+    queue_service: SimplifiedQueueService,
+    progress=None,
+):
     """Run enhancement on selected prompts with queue progress tracking."""
     if progress is None:
         progress = gr.Progress()

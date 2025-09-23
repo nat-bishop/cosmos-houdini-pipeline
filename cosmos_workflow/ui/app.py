@@ -76,7 +76,7 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     update_selection_count as prompts_update_selection_count,
 )
 from cosmos_workflow.ui.tabs.prompts_ui import create_prompts_tab_ui
-from cosmos_workflow.ui.tabs.runs_handlers import (
+from cosmos_workflow.ui.tabs.runs import (
     cancel_delete_run,
     confirm_delete_run,
     handle_runs_tab_default,
@@ -214,7 +214,7 @@ def cleanup_on_shutdown(signum=None, frame=None):
 
     # Shutdown thumbnail executor thread pool to prevent resource leak
     try:
-        from cosmos_workflow.ui.tabs.runs_handlers import THUMBNAIL_EXECUTOR
+        from cosmos_workflow.ui.tabs.runs.data_loading import THUMBNAIL_EXECUTOR
 
         THUMBNAIL_EXECUTOR.shutdown(wait=False)
         logger.info("Thumbnail executor shutdown completed")
@@ -892,7 +892,7 @@ def create_ui():
 
             def prepare_runs_navigation(selected_ids):
                 """Navigate to Runs tab with filtering - sets pending data to avoid race condition."""
-                from cosmos_workflow.ui.tabs.runs_handlers import load_runs_for_multiple_prompts
+                from cosmos_workflow.ui.tabs.runs import load_runs_for_multiple_prompts
                 from cosmos_workflow.utils.logging import logger
 
                 # Selected IDs are now passed directly from state
@@ -1505,7 +1505,7 @@ def create_ui():
 
         # ========== Upscale Operations ==========
         # Import upscale handlers
-        from cosmos_workflow.ui.tabs.runs_handlers import (
+        from cosmos_workflow.ui.tabs.runs import (
             cancel_upscale,
             execute_upscale,
             show_upscale_dialog,

@@ -8,6 +8,10 @@ from pathlib import Path
 
 import gradio as gr
 
+from cosmos_workflow.ui.models.responses import (
+    RunDetailsResponse,
+    create_empty_run_details_response,
+)
 from cosmos_workflow.utils.logging import logger
 
 # Thread pool for parallel thumbnail generation
@@ -399,13 +403,15 @@ def on_runs_gallery_select(evt: gr.SelectData):
 
         if evt is None:
             logger.warning("No evt, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+            # Return empty response with all fields hidden/empty
+            return list(create_empty_run_details_response())
 
         # The label now contains only rating and run ID in format "★★★☆☆||full_run_id"
         label = evt.value.get("caption", "") if isinstance(evt.value, dict) else ""
         if not label:
             logger.warning("No label in gallery selection")
-            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+            # Return empty response with all fields hidden/empty
+            return list(create_empty_run_details_response())
 
         # Extract full run ID from label (after the || separator)
         if "||" in label:
@@ -452,11 +458,13 @@ def on_runs_gallery_select(evt: gr.SelectData):
                     return on_runs_table_select(fake_table_data, fake_evt)
 
         logger.warning("Could not extract run ID from label: {}", label)
-        return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+        # Return empty response with all fields hidden/empty
+        return list(create_empty_run_details_response())
 
     except Exception as e:
         logger.error("Error selecting from gallery: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+        # Return empty response on error
+        return list(create_empty_run_details_response())
 
 
 def on_runs_table_select(table_data, evt: gr.SelectData):
@@ -468,7 +476,8 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if evt is None or table_data is None:
             logger.warning("No evt or table_data, hiding details")
-            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+            # Return empty response with all fields hidden/empty
+            return list(create_empty_run_details_response())
 
         # Create CosmosAPI instance
         from cosmos_workflow.api.cosmos_api import CosmosAPI
@@ -492,14 +501,16 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
 
         if not run_id or not ops:
             logger.warning("No run_id ({}) or ops ({}), hiding details", run_id, ops)
-            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+            # Return empty response with all fields hidden/empty
+            return list(create_empty_run_details_response())
 
         # Get full run details
         run_details = ops.get_run(run_id)
         logger.info("Retrieved run_details: {}", bool(run_details))
         if not run_details:
             logger.warning("No run_details found for run_id: {}", run_id)
-            return [gr.update(visible=False)] + [gr.update()] * 32  # Match new count
+            # Return empty response with all fields hidden/empty
+            return list(create_empty_run_details_response())
 
         # Get model type to determine which UI to show
         model_type = run_details.get("model_type", "transfer")
@@ -788,89 +799,96 @@ def on_runs_table_select(table_data, evt: gr.SelectData):
             else:
                 star_updates.append(gr.update(value="☆", elem_classes=["star-btn"]))
 
-        return [
-            gr.update(visible=True),  # runs_details_group
-            gr.update(value=run_id),  # runs_detail_id (hidden)
-            gr.update(value=run_details.get("status", "")),  # runs_detail_status (hidden)
+        # Build response using NamedTuple for better maintainability
+        response = RunDetailsResponse(
+            # Main visibility controls
+            runs_details_group=gr.update(visible=True),
+            runs_detail_id=gr.update(value=run_id),
+            runs_detail_status=gr.update(value=run_details.get("status", "")),
             # Content block visibility
-            gr.update(visible=show_transfer_content),  # runs_main_content_transfer
-            gr.update(visible=show_enhance_content),  # runs_main_content_enhance
-            gr.update(visible=show_upscale_content),  # runs_main_content_upscale
+            runs_main_content_transfer=gr.update(visible=show_transfer_content),
+            runs_main_content_enhance=gr.update(visible=show_enhance_content),
+            runs_main_content_upscale=gr.update(visible=show_upscale_content),
             # Transfer content components
-            video_updates[0],  # runs_input_video_1
-            video_updates[1],  # runs_input_video_2
-            video_updates[2],  # runs_input_video_3
-            video_updates[3],  # runs_input_video_4
-            gr.update(
+            runs_input_video_1=video_updates[0],
+            runs_input_video_2=video_updates[1],
+            runs_input_video_3=video_updates[2],
+            runs_input_video_4=video_updates[3],
+            runs_output_video=gr.update(
                 value=output_video if output_video and Path(output_video).exists() else None
-            ),  # runs_output_video
-            gr.update(value=prompt_text),  # runs_prompt_text
+            ),
+            runs_prompt_text=gr.update(value=prompt_text),
             # Enhancement content components
-            gr.update(
+            runs_original_prompt_enhance=gr.update(
                 value=original_prompt if model_type == "enhance" else ""
-            ),  # runs_original_prompt_enhance
-            gr.update(
+            ),
+            runs_enhanced_prompt_enhance=gr.update(
                 value=enhanced_prompt if model_type == "enhance" else ""
-            ),  # runs_enhanced_prompt_enhance
-            gr.update(
+            ),
+            runs_enhance_stats=gr.update(
                 value=enhance_stats_text if model_type == "enhance" else ""
-            ),  # runs_enhance_stats
+            ),
             # Upscale content components
-            gr.update(
+            runs_output_video_upscale=gr.update(
                 value=output_video
                 if model_type == "upscale" and output_video and Path(output_video).exists()
                 else None
-            ),  # runs_output_video_upscale
-            gr.update(
+            ),
+            runs_original_video_upscale=gr.update(
                 value=input_video_source if model_type == "upscale" and input_video_source else None
-            ),  # runs_original_video_upscale
-            gr.update(
+            ),
+            runs_upscale_stats=gr.update(
                 value=upscale_stats_text if model_type == "upscale" else ""
-            ),  # runs_upscale_stats
-            gr.update(
-                value=upscale_prompt if model_type == "upscale" else ""
-            ),  # runs_upscale_prompt
-            # Info tab components (always the same)
-            gr.update(value=run_id),  # runs_info_id
-            gr.update(value=run_details.get("prompt_id", "")),  # runs_info_prompt_id
-            gr.update(value=run_details.get("status", "")),  # runs_info_status
-            gr.update(value=duration),  # runs_info_duration
-            gr.update(
-                value=model_type
-            ),  # runs_info_type (now shows model_type instead of run_type)
-            gr.update(value=prompt_name),  # runs_info_prompt_name
+            ),
+            runs_upscale_prompt=gr.update(value=upscale_prompt if model_type == "upscale" else ""),
+            # Info tab components
+            runs_info_id=gr.update(value=run_id),
+            runs_info_prompt_id=gr.update(value=run_details.get("prompt_id", "")),
+            runs_info_status=gr.update(value=run_details.get("status", "")),
+            runs_info_duration=gr.update(value=duration),
+            runs_info_type=gr.update(value=model_type),
+            runs_info_prompt_name=gr.update(value=prompt_name),
             # Star rating buttons
-            *star_updates,  # star_1 through star_5
-            gr.update(value=rating_value),  # runs_info_rating
-            gr.update(value=run_details.get("created_at", "")[:19]),  # runs_info_created
-            gr.update(value=run_details.get("completed_at", "")[:19]),  # runs_info_completed
-            gr.update(value=output_video if output_video else "Not found"),  # runs_info_output_path
-            gr.update(
+            star_1=star_updates[0],
+            star_2=star_updates[1],
+            star_3=star_updates[2],
+            star_4=star_updates[3],
+            star_5=star_updates[4],
+            # Additional info fields
+            runs_info_rating=gr.update(value=rating_value),
+            runs_info_created=gr.update(value=run_details.get("created_at", "")[:19]),
+            runs_info_completed=gr.update(value=run_details.get("completed_at", "")[:19]),
+            runs_info_output_path=gr.update(value=output_video if output_video else "Not found"),
+            runs_info_input_paths=gr.update(
                 value=input_paths_text.strip() if input_paths_text else "No input videos"
-            ),  # runs_info_input_paths
+            ),
             # Parameters and Logs tabs
-            gr.update(value=params),  # runs_params_json
-            gr.update(value=log_path),  # runs_log_path
-            gr.update(value=log_content),  # runs_log_output
-            # Upscale button visibility
-            gr.update(
+            runs_params_json=gr.update(value=params),
+            runs_log_path=gr.update(value=log_path),
+            runs_log_output=gr.update(value=log_content),
+            # Action buttons
+            runs_upscale_selected_btn=gr.update(
                 visible=run_details.get("status") == "completed"
                 and run_details.get("model_type") == "transfer"
-                and not ops.get_upscaled_run(run_id)  # Check if not already upscaled
-            ),  # runs_upscale_selected_btn
+                and not ops.get_upscaled_run(run_id)
+            ),
             # Selected run tracking
-            gr.update(value=run_id),  # runs_selected_id
-            gr.update(value=f"Selected: {run_id[:12]}..."),  # runs_selected_info
-            # New components for upscaled output
-            gr.update(
+            runs_selected_id=gr.update(value=run_id),
+            runs_selected_info=gr.update(value=f"Selected: {run_id[:12]}..."),
+            # Upscaled output components
+            runs_output_video_upscaled=gr.update(
                 value=upscaled_video if upscaled_video and Path(upscaled_video).exists() else None
-            ),  # runs_output_video_upscaled
-            gr.update(visible=show_upscaled_tab),  # runs_upscaled_tab
-        ]
+            ),
+            runs_upscaled_tab=gr.update(visible=show_upscaled_tab),
+        )
+
+        # Return as list to maintain compatibility with Gradio
+        return list(response)
 
     except Exception as e:
         logger.error("Error selecting run: {}", str(e))
-        return [gr.update(visible=False)] + [gr.update()] * 32  # Updated count for new components
+        # Return empty response on error
+        return list(create_empty_run_details_response())
 
 
 def load_run_logs(log_path):

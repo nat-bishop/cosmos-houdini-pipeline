@@ -288,89 +288,87 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
             run_details, exec_config, outputs, metadata["duration"]
         )
 
-    # Extract navigation info from prepared data
-    runs_nav_info_update = prepared_data.get("runs_nav_info", gr.update())
-    runs_nav_prev_update = prepared_data.get("runs_nav_prev", gr.update())
-    runs_nav_next_update = prepared_data.get("runs_nav_next", gr.update())
+    # Get model type info
+    model_type = run_details.get("model_type", "transfer")
+    status = run_details.get("status", "")
 
-    # Prepare info content
-    info_content = prepared_data.get("info_content", {})
-    info_display = f"""
-## Run Information
+    # Determine which content block should be visible
+    show_transfer = model_type == "transfer"
+    show_enhance = model_type == "enhance"
+    show_upscale = model_type == "upscale"
 
-**Run ID**: {info_content.get("run_id", "")}
-**Status**: {info_content.get("status", "")}
-**Model Type**: {info_content.get("model_type", "")}
-**Created**: {info_content.get("created", "")}
-**Duration**: {info_content.get("duration", "")}
-**Resolution**: {info_content.get("resolution", "")}
-"""
-    if info_content.get("parent_id"):
-        info_display += f"\n**Parent ID**: {info_content['parent_id']}"
-    if info_content.get("upscaled_from"):
-        info_display += f"\n**Upscaled From**: {info_content['upscaled_from']}"
+    # Build params display
+    params_display = ""
+    if exec_config:
+        import json
 
-    # Prepare parameters content
-    params_display = prepared_data.get("params_display", "")
+        params_display = json.dumps(exec_config, indent=2)
 
     # Read log content
     logs_content = _read_log_content(log_path, 50) if log_path else ""
 
-    # Create the response
+    # Get rating if available
+    rating = run_details.get("rating", 0)
+
+    # Create the response matching the actual RunDetailsResponse fields
     response = RunDetailsResponse(
-        # Visibility controls
+        # Main visibility controls
         runs_details_group=gr.update(visible=True),
-        runs_nav_info=runs_nav_info_update,
-        runs_nav_prev=runs_nav_prev_update,
-        runs_nav_next=runs_nav_next_update,
-        runs_info_display=gr.update(value=info_display),
-        runs_params_display=gr.update(value=params_display),
-        runs_logs_display=gr.update(value=logs_content),
-        runs_main_output_video=gr.update(value=output_video, visible=bool(output_video)),
-        runs_main_output_gallery=gr.update(
-            value=output_gallery if output_gallery else [], visible=bool(output_gallery)
-        ),
-        runs_main_input_gallery=gr.update(value=input_videos, visible=bool(input_videos)),
-        runs_main_upscaled_video=gr.update(value=upscaled_video, visible=bool(upscaled_video)),
-        runs_upscaled_tab=gr.update(visible=show_upscaled_tab),
+        runs_detail_id=run_id,
+        runs_detail_status=status,
+        # Content block visibility (model-specific views)
+        runs_main_content_transfer=gr.update(visible=show_transfer),
+        runs_main_content_enhance=gr.update(visible=show_enhance),
+        runs_main_content_upscale=gr.update(visible=show_upscale),
+        # Transfer content components (input videos)
+        runs_input_video_1=gr.update(value=input_videos[0] if len(input_videos) > 0 else None),
+        runs_input_video_2=gr.update(value=input_videos[1] if len(input_videos) > 1 else None),
+        runs_input_video_3=gr.update(value=input_videos[2] if len(input_videos) > 2 else None),
+        runs_input_video_4=gr.update(value=input_videos[3] if len(input_videos) > 3 else None),
+        runs_output_video=gr.update(value=output_video, visible=bool(output_video)),
         runs_prompt_text=gr.update(value=prompt_text or ""),
-        runs_selected_id=run_id,
-        runs_detail_tabs=gr.update(selected=0),
-        runs_detail_row1=gr.update(visible=True),
-        runs_enhance_params_md=gr.update(value=prepared_data.get("enhance_params", "")),
-        runs_transfer_params_md=gr.update(value=prepared_data.get("transfer_params", "")),
-        runs_upscale_params_md=gr.update(value=prepared_data.get("upscale_params", "")),
-        runs_detail_actions_row=gr.update(visible=True),
-        runs_delete_selected_btn=gr.update(visible=True),
-        runs_transfer_selected_btn=gr.update(
-            visible=model_type == "transfer" and run_details.get("status") == "completed"
-        ),
-        runs_enhance_selected_btn=gr.update(
-            visible=model_type == "transfer" and run_details.get("status") == "completed"
-        ),
+        # Enhancement content components
+        runs_original_prompt_enhance=gr.update(value=prepared_data.get("original_prompt", "")),
+        runs_enhanced_prompt_enhance=gr.update(value=prepared_data.get("enhanced_prompt", "")),
+        runs_enhance_stats=gr.update(value=prepared_data.get("enhance_stats", "")),
+        # Upscale content components
+        runs_output_video_upscale=gr.update(value=upscaled_video if show_upscale else None),
+        runs_original_video_upscale=gr.update(value=output_video if show_upscale else None),
+        runs_upscale_stats=gr.update(value=prepared_data.get("upscale_stats", "")),
+        runs_upscale_prompt=gr.update(value=prepared_data.get("upscale_prompt", "")),
+        # Info tab components
+        runs_info_id=gr.update(value=run_id),
+        runs_info_prompt_id=gr.update(value=prompt_id or ""),
+        runs_info_status=gr.update(value=status),
+        runs_info_duration=gr.update(value=metadata.get("duration", "")),
+        runs_info_type=gr.update(value=model_type),
+        runs_info_prompt_name=gr.update(value=prompt_text[:50] if prompt_text else ""),
+        # Star rating buttons (5 separate buttons)
+        star_1=gr.update(variant="primary" if rating >= 1 else "secondary"),
+        star_2=gr.update(variant="primary" if rating >= 2 else "secondary"),
+        star_3=gr.update(variant="primary" if rating >= 3 else "secondary"),
+        star_4=gr.update(variant="primary" if rating >= 4 else "secondary"),
+        star_5=gr.update(variant="primary" if rating >= 5 else "secondary"),
+        # Additional info fields
+        runs_info_rating=gr.update(value=rating),
+        runs_info_created=gr.update(value=metadata.get("created_at", "")),
+        runs_info_completed=gr.update(value=metadata.get("completed_at", "")),
+        runs_info_output_path=gr.update(value=str(output_video) if output_video else ""),
+        runs_info_input_paths=gr.update(value="\n".join([str(v) for v in input_videos])),
+        # Parameters and Logs tabs
+        runs_params_json=gr.update(value=params_display),
+        runs_log_path=gr.update(value=log_path or ""),
+        runs_log_output=gr.update(value=logs_content),
+        # Action buttons
         runs_upscale_selected_btn=gr.update(
-            visible=model_type == "transfer"
-            and run_details.get("status") == "completed"
-            and not show_upscaled_tab
+            visible=model_type == "transfer" and status == "completed" and not show_upscaled_tab
         ),
-        # Add all other required fields with appropriate values or gr.update()
-        runs_selected_index=gr.update(),
-        runs_delete_dialog=gr.update(),
-        runs_delete_preview=gr.update(),
-        runs_delete_confirm_text=gr.update(),
-        runs_confirm_delete_btn=gr.update(),
-        runs_cancel_delete_btn=gr.update(),
-        runs_transfer_dialog=gr.update(),
-        runs_transfer_preview=gr.update(),
-        runs_transfer_options=gr.update(),
-        runs_transfer_overwrite=gr.update(),
-        runs_confirm_transfer_btn=gr.update(),
-        runs_cancel_transfer_btn=gr.update(),
-        runs_upscale_dialog=gr.update(),
-        runs_upscale_preview=gr.update(),
-        runs_upscale_status=gr.update(),
-        runs_confirm_upscale_btn=gr.update(),
-        runs_cancel_upscale_btn=gr.update(),
+        # Selected run tracking
+        runs_selected_id=run_id,
+        runs_selected_info=gr.update(value=f"Selected: {run_id}"),
+        # Upscaled output components
+        runs_output_video_upscaled=gr.update(value=upscaled_video, visible=bool(upscaled_video)),
+        runs_upscaled_tab=gr.update(visible=show_upscaled_tab),
     )
 
     return list(response)

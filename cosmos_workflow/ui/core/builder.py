@@ -477,15 +477,15 @@ def wire_prompts_events(components, api, simple_queue_service):
         outputs = filter_none_components(
             [
                 components.get("selected_prompt_id"),
-                components.get("prompt_details"),
-                components.get("prompt_video_gallery"),
-                components.get("run_inference_btn"),
-                components.get("run_enhance_btn"),
-                components.get("prompt_run_stats"),
-                components.get("runs_for_prompt"),
-                components.get("view_runs_for_prompt_btn"),
-                components.get("prompt_action_result"),
-                components.get("status_display"),
+                components.get("selected_prompt_name"),
+                components.get("selected_prompt_text"),
+                components.get("selected_prompt_negative"),
+                components.get("selected_prompt_created"),
+                components.get("selected_prompt_video_dir"),
+                components.get("selected_prompt_enhanced"),
+                components.get("selected_prompt_runs_stats"),
+                components.get("selected_prompt_rating"),
+                components.get("selected_prompt_video_thumb"),
             ]
         )
         if outputs:

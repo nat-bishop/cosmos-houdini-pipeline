@@ -19,7 +19,6 @@ from cosmos_workflow.ui.tabs.runs.data_loading import (
     load_runs_with_filters,
 )
 from cosmos_workflow.ui.tabs.runs.display_builders import (
-    THUMBNAIL_EXECUTOR,
     build_gallery_data,
     build_runs_table_data,
     calculate_runs_statistics,
@@ -61,7 +60,6 @@ from cosmos_workflow.ui.tabs.runs.run_details import (
 )
 
 __all__ = [
-    "THUMBNAIL_EXECUTOR",
     "apply_date_filter",
     "apply_run_filters",
     "build_gallery_data",

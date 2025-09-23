@@ -467,7 +467,10 @@ def calculate_average_rating(runs):
 
 
 def get_video_thumbnail(video_path):
-    """Generate or retrieve thumbnail for video.
+    """Get or generate thumbnail for video file.
+
+    Checks for existing thumbnail first, generates if missing.
+    Since generation only happens once per video, this is acceptable.
 
     Args:
         video_path: Path to video file
@@ -480,15 +483,26 @@ def get_video_thumbnail(video_path):
 
     video_file = Path(video_path)
     if not video_file.exists():
+        logger.debug("Video file not found: {}", video_path)
         return None
 
-    # Use existing thumbnail generation function
+    # Check for existing thumbnail next to the video file
+    # Format: video.mp4 → video.thumb.jpg
+    expected_thumb = video_file.parent / f"{video_file.stem}.thumb.jpg"
+    if expected_thumb.exists():
+        return str(expected_thumb)
+
+    # Generate thumbnail if it doesn't exist (only happens once per video)
     try:
+        logger.info("Generating thumbnail for input video: {}", video_file.name)
         thumb_path = video_utils.generate_thumbnail_fast(str(video_file))
-        return thumb_path
+        if thumb_path:
+            logger.info("Generated thumbnail: {}", thumb_path)
+            return thumb_path
     except Exception as e:
         logger.error("Failed to generate thumbnail for {}: {}", video_path, e)
-        return None
+
+    return None
 
 
 def on_prompt_row_select(dataframe_data, evt: gr.SelectData):

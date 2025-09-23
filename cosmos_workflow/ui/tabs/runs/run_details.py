@@ -122,26 +122,25 @@ def build_input_gallery(spec_data: dict, prompt_inputs: dict, run_id: str) -> tu
         if prompt_inputs.get("video"):
             path = Path(prompt_inputs["video"])
             if path.exists():
-                input_videos.append((str(path), "Color/Visual"))
+                input_videos.append(str(path))
                 control_weights["vis"] = 1.0
 
         # Process each control type
         control_types = {"edge": "Edge", "depth": "Depth", "seg": "Segmentation"}
 
-        for control_key, control_label in control_types.items():
+        for control_key, _control_label in control_types.items():
             control_config = spec_data.get(control_key, {})
             weight = control_config.get("control_weight", 0)
 
             # Only process if weight > 0
             if weight > 0:
                 control_weights[control_key] = weight
-                label_with_weight = f"{control_label} (Weight: {weight})"
 
                 # First try prompt's input for this control
                 if prompt_inputs.get(control_key):
                     control_path = Path(prompt_inputs[control_key])
                     if control_path.exists():
-                        input_videos.append((str(control_path), label_with_weight))
+                        input_videos.append(str(control_path))
                         continue
 
                 # If no prompt input, check for AI-generated control
@@ -153,9 +152,9 @@ def build_input_gallery(spec_data: dict, prompt_inputs: dict, run_id: str) -> tu
                 )
 
                 if indexed_path.exists():
-                    input_videos.append((str(indexed_path), label_with_weight))
+                    input_videos.append(str(indexed_path))
                 elif non_indexed_path.exists():
-                    input_videos.append((str(non_indexed_path), label_with_weight))
+                    input_videos.append(str(non_indexed_path))
 
     # Fallback if no spec.json - use prompt inputs with default weights
     elif prompt_inputs:
@@ -165,13 +164,11 @@ def build_input_gallery(spec_data: dict, prompt_inputs: dict, run_id: str) -> tu
             "depth": ("Depth", 0.5),
             "seg": ("Segmentation", 0.5),
         }
-        for key, (label, default_weight) in video_keys.items():
+        for key, (_label, default_weight) in video_keys.items():
             if prompt_inputs.get(key):
                 path = Path(prompt_inputs[key])
                 if path.exists():
-                    if key != "video":
-                        label = f"{label} (Weight: {default_weight})"
-                    input_videos.append((str(path), label))
+                    input_videos.append(str(path))
                     if key == "video":
                         control_weights["vis"] = default_weight
                     else:

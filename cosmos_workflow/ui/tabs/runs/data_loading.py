@@ -4,16 +4,18 @@ This module eliminates code duplication by providing a single, configurable
 loader for all run data fetching scenarios.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import gradio as gr
 
 from cosmos_workflow.api.cosmos_api import CosmosAPI
+from cosmos_workflow.ui.tabs.runs.display_builders import (
+    build_gallery_data,
+    build_runs_table_data,
+    calculate_runs_statistics,
+)
+from cosmos_workflow.ui.tabs.runs.filters import apply_date_filter, apply_run_filters
 from cosmos_workflow.utils.logging import logger
-
-# Thread pool for parallel thumbnail generation
-THUMBNAIL_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
 
 class RunFilters:
@@ -85,9 +87,9 @@ class RunsLoader:
             filtered_runs = filtered_runs[:display_limit]
 
             # Build output data
-            gallery_data = _build_gallery_data(filtered_runs, limit=50)
-            table_data = _build_runs_table_data(filtered_runs)
-            stats = _calculate_runs_statistics(filtered_runs, total_filtered)
+            gallery_data = build_gallery_data(filtered_runs, limit=50)
+            table_data = build_runs_table_data(filtered_runs)
+            stats = calculate_runs_statistics(filtered_runs, total_filtered)
 
             logger.info(
                 "Runs data loaded: {} total, {} shown, {} gallery items",
@@ -171,8 +173,8 @@ class RunsLoader:
         self, runs: list[dict[str, Any]], filters: RunFilters
     ) -> list[dict[str, Any]]:
         """Apply all filters to the runs list."""
-        filtered = _apply_date_filter(runs, filters.date_filter)
-        filtered = _apply_run_filters(
+        filtered = apply_date_filter(runs, filters.date_filter)
+        filtered = apply_run_filters(
             filtered, filters.type_filter, filters.search_text, filters.rating_filter
         )
         return filtered
@@ -324,21 +326,3 @@ def load_runs_with_filters(
             gr.update(visible=False),  # Hide filter indicator
             gr.update(value=""),  # Clear filter text
         )
-
-
-# Import helper functions from the new specialized modules
-from cosmos_workflow.ui.tabs.runs.display_builders import (
-    build_gallery_data as _build_gallery_data,
-)
-from cosmos_workflow.ui.tabs.runs.display_builders import (
-    build_runs_table_data as _build_runs_table_data,
-)
-from cosmos_workflow.ui.tabs.runs.display_builders import (
-    calculate_runs_statistics as _calculate_runs_statistics,
-)
-from cosmos_workflow.ui.tabs.runs.filters import (
-    apply_date_filter as _apply_date_filter,
-)
-from cosmos_workflow.ui.tabs.runs.filters import (
-    apply_run_filters as _apply_run_filters,
-)

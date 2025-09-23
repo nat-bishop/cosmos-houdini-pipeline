@@ -75,7 +75,13 @@ def prepare_upscale_ui_data(
     """
     source_run_id = exec_config.get("source_run_id", "")
     input_video_source = exec_config.get("input_video_source", "")
+    # Ensure control_weight is a float or use default
     control_weight = exec_config.get("control_weight", 0.5)
+    if isinstance(control_weight, str):
+        try:
+            control_weight = float(control_weight)
+        except (ValueError, TypeError):
+            control_weight = 0.5
     upscale_prompt = exec_config.get("prompt", "")
 
     upscale_stats_text = f"""

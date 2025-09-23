@@ -239,9 +239,15 @@ ui/
 - **Result**: app.py reduced from 2772 → 2232 lines (-540 lines)
 - **Best Practice**: Used functools.partial instead of wrapper functions for dependency injection
 
-#### Step 4.4: Move Run Handlers from app.py (~800 lines)
-- [ ] Move all run-related handlers to runs_handlers.py
-- [ ] Update imports and event bindings
+#### Step 4.4: Move Run Handlers from app.py (~800 lines) ✅ COMPLETED
+- [x] Moved load_runs_with_filters function to runs_handlers.py (80 lines)
+- [x] Moved navigation helper functions for runs tab (78 lines):
+  - [x] handle_runs_tab_with_pending_data
+  - [x] handle_runs_tab_with_filter
+  - [x] handle_runs_tab_default
+- [x] Updated imports and event bindings
+- **Result**: app.py reduced from 2,232 → 2,061 lines (-171 lines)
+- **Note**: Less than 800 lines moved as most run handlers were already extracted earlier
 
 #### Step 4.5: Extract Core Logic (~600 lines)
 - [ ] Create core/ directory with:
@@ -445,6 +451,9 @@ _Track discoveries, issues, and decisions here as you work:_
 - **Delete dead code immediately** - unused functions just create confusion
 - **Extract helpers incrementally** - don't break working code
 - **Complex UI functions** may benefit from helper extraction without full rewrite
+- **functools.partial** is the Pythonic way to inject dependencies (Phase 4.3)
+- **Some refactoring estimates may be high** - Phase 4.4 expected 800 lines but only 171 were left to move
+- **Navigation logic** naturally groups together - consider keeping related handlers in one module
 
 ---
 
@@ -506,11 +515,12 @@ _Track discoveries, issues, and decisions here as you work:_
 - **Step 4.1**: ✅ Moved job handlers (-192 lines)
 - **Step 4.2**: ✅ Consolidated inputs tab (-288 lines)
 - **Step 4.3**: ✅ Moved prompt handlers (-540 lines)
-- **Step 4.4-4.6**: 🔄 Pending
+- **Step 4.4**: ✅ Moved run handlers (-171 lines)
+- **Step 4.5-4.6**: 🔄 Pending
 
 ### Key Metrics
-- **app.py reduction**: 3,255 → 2,232 lines (31.4% reduction)
-- **Total lines eliminated**: ~1,023 lines
+- **app.py reduction**: 3,255 → 2,061 lines (36.7% reduction)
+- **Total lines eliminated**: ~1,194 lines
 - **Modules created**: 7 specialized handler modules
 - **Best practices applied**: functools.partial, NamedTuple, utility extraction
 

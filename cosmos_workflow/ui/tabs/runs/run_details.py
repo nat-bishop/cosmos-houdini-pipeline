@@ -52,7 +52,7 @@ def resolve_video_paths(outputs: dict, run_id: str, ops) -> tuple:
     Returns:
         Tuple of (video_paths, output_gallery, output_video)
     """
-    output_video = ""
+    output_video = None  # Initialize as None instead of empty string
     video_paths = []
     output_gallery = []
 
@@ -60,8 +60,9 @@ def resolve_video_paths(outputs: dict, run_id: str, ops) -> tuple:
     if isinstance(outputs, dict) and "output_path" in outputs:
         output_path = outputs["output_path"]
         if output_path and output_path.endswith(".mp4"):
-            output_video = str(Path(output_path))
-            if Path(output_video).exists():
+            video_path = str(Path(output_path))
+            if Path(video_path).exists():
+                output_video = video_path
                 video_paths = [output_video]
 
     # Old structure: outputs.files array
@@ -69,10 +70,11 @@ def resolve_video_paths(outputs: dict, run_id: str, ops) -> tuple:
         files = outputs.get("files", [])
         for file_path in files:
             if file_path.endswith("output.mp4"):
-                output_video = str(Path(file_path))
-                if Path(output_video).exists():
+                video_path = str(Path(file_path))
+                if Path(video_path).exists():
+                    output_video = video_path
                     video_paths = [output_video]
-                break
+                    break
 
     # Set output gallery from video paths
     if video_paths:

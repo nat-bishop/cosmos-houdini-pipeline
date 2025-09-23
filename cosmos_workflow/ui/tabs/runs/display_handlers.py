@@ -325,7 +325,9 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
         runs_input_video_2=gr.update(value=input_videos[1] if len(input_videos) > 1 else None),
         runs_input_video_3=gr.update(value=input_videos[2] if len(input_videos) > 2 else None),
         runs_input_video_4=gr.update(value=input_videos[3] if len(input_videos) > 3 else None),
-        runs_output_video=gr.update(value=output_video, visible=bool(output_video)),
+        runs_output_video=gr.update(
+            value=output_video if output_video else None, visible=bool(output_video)
+        ),
         runs_prompt_text=gr.update(value=prompt_text or ""),
         # Enhancement content components
         runs_original_prompt_enhance=gr.update(value=prepared_data.get("original_prompt", "")),
@@ -367,7 +369,9 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
         runs_selected_id=run_id,
         runs_selected_info=gr.update(value=f"Selected: {run_id}"),
         # Upscaled output components
-        runs_output_video_upscaled=gr.update(value=upscaled_video, visible=bool(upscaled_video)),
+        runs_output_video_upscaled=gr.update(
+            value=upscaled_video if upscaled_video else None, visible=bool(upscaled_video)
+        ),
         runs_upscaled_tab=gr.update(visible=show_upscaled_tab),
     )
 

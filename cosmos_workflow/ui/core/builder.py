@@ -318,13 +318,11 @@ def wire_prompts_events(components, api, simple_queue_service):
     # Bind services to handlers
     run_inference_bound = functools.partial(
         run_inference_on_selected,
-        api=api,
-        simple_queue_service=simple_queue_service,
+        queue_service=simple_queue_service,
     )
     run_enhance_bound = functools.partial(
         run_enhance_on_selected,
-        api=api,
-        simple_queue_service=simple_queue_service,
+        queue_service=simple_queue_service,
     )
 
     # Refresh button
@@ -387,31 +385,62 @@ def wire_prompts_events(components, api, simple_queue_service):
         )
 
     # Inference and enhance buttons
-    if "run_inference_btn" in components and "prompts_table" in components:
-        components["run_inference_btn"].click(
-            fn=run_inference_bound,
-            inputs=[components["prompts_table"]],
-            outputs=[
-                components["queue_table"],
-                components["prompt_action_result"],
-                components["status_display"],
-            ],
-            show_progress=True,
+    if "run_inference_btn" in components and "ops_prompts_table" in components:
+        # Inference needs all weight sliders and parameters
+        inference_inputs = filter_none_components(
+            [
+                components.get("ops_prompts_table"),
+                components.get("weight_vis"),
+                components.get("weight_edge"),
+                components.get("weight_depth"),
+                components.get("weight_seg"),
+                components.get("inf_steps"),
+                components.get("inf_guidance"),
+                components.get("inf_seed"),
+                components.get("inf_fps"),
+                components.get("inf_sigma_max"),
+                components.get("inf_blur_strength"),
+                components.get("inf_canny_threshold"),
+            ]
         )
 
-    if "run_enhance_btn" in components and "prompts_table" in components:
-        components["run_enhance_btn"].click(
-            fn=run_enhance_bound,
-            inputs=[components["prompts_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("queue_table"),
-                    components.get("prompt_action_result"),
-                    components.get("status_display"),
-                ]
-            ),
-            show_progress=True,
+        if inference_inputs:
+            components["run_inference_btn"].click(
+                fn=run_inference_bound,
+                inputs=inference_inputs,
+                outputs=filter_none_components(
+                    [
+                        components.get("queue_table"),
+                        components.get("inference_status"),
+                        components.get("status_display"),
+                    ]
+                ),
+                show_progress=True,
+            )
+
+    if "run_enhance_btn" in components and "ops_prompts_table" in components:
+        # Enhance needs dataframe, create_new, and force_overwrite
+        enhance_inputs = filter_none_components(
+            [
+                components.get("ops_prompts_table"),
+                components.get("enhance_create_new"),
+                components.get("enhance_force"),
+            ]
         )
+
+        if enhance_inputs:
+            components["run_enhance_btn"].click(
+                fn=run_enhance_bound,
+                inputs=enhance_inputs,
+                outputs=filter_none_components(
+                    [
+                        components.get("queue_table"),
+                        components.get("enhance_status"),
+                        components.get("status_display"),
+                    ]
+                ),
+                show_progress=True,
+            )
 
     # Selection controls
     if "select_all_btn" in components and "ops_prompts_table" in components:
@@ -876,6 +905,7 @@ def wire_jobs_events(components, api, simple_queue_service):
     wire_jobs_control_events(components)
     wire_queue_control_events(components, simple_queue_service)
     wire_queue_selection_events(components, simple_queue_service)
+    wire_queue_timers(components, simple_queue_service)
 
 
 def wire_jobs_control_events(components):
@@ -993,16 +1023,94 @@ def wire_jobs_control_events(components):
         )
 
 
+def wire_queue_timers(components, simple_queue_service):
+    """Wire timer events for automatic queue refresh and processing.
+
+    Args:
+        components: Dictionary of UI components
+        simple_queue_service: SimplifiedQueueService instance
+    """
+    import gradio as gr
+
+    from cosmos_workflow.ui.queue_handlers import QueueHandlers
+
+    queue_handlers = QueueHandlers(simple_queue_service)
+
+    # Create timer for auto-refreshing queue display every 5 seconds
+    if "queue_table" in components and "queue_status" in components:
+        refresh_timer = gr.Timer(value=5, active=True)
+        refresh_timer.tick(
+            fn=queue_handlers.get_queue_display,
+            outputs=[
+                components["queue_status"],
+                components["queue_table"],
+            ],
+        )
+        logger.info("Queue auto-refresh timer created (5 seconds)")
+
+    # Create timer for auto-processing queue every 2 seconds
+    def auto_process_queue():
+        """Process next job in queue automatically."""
+        try:
+            # Check if queue is paused
+            if hasattr(simple_queue_service, "queue_paused") and simple_queue_service.queue_paused:
+                logger.debug("Queue is paused, skipping processing")
+                return  # Return nothing instead of None
+
+            # Only process if there are actually jobs in the queue
+            status = simple_queue_service.get_queue_status()
+            queued_count = status.get("total_queued", 0)
+
+            if queued_count > 0:
+                logger.debug("Queue has {} jobs, attempting to process next", queued_count)
+                result = simple_queue_service.process_next_job()
+                if result:
+                    logger.info("Processed job from queue")
+                # Don't return the result since outputs=[] expects no return
+        except Exception as e:
+            logger.error("Error in auto_process_queue: {}", e)
+
+    process_timer = gr.Timer(value=2, active=True)
+    process_timer.tick(
+        fn=auto_process_queue,
+        outputs=[],  # No outputs needed
+    )
+    logger.info("Queue auto-process timer created (2 seconds)")
+
+
 def wire_queue_control_events(components, simple_queue_service):
     """Wire queue control events (pause, resume, clear, etc)."""
     from cosmos_workflow.ui.queue_handlers import QueueHandlers
 
     queue_handlers = QueueHandlers(simple_queue_service)
 
-    # Queue control buttons
+    # Queue pause checkbox handler
+    if "queue_pause_checkbox" in components:
+
+        def toggle_queue_pause(is_paused):
+            """Toggle queue pause state."""
+            simple_queue_service.set_queue_paused(is_paused)
+            status_text = "⏸️ **Queue: Paused**" if is_paused else "✅ **Queue: Active**"
+            logger.info("Queue {} by user", "paused" if is_paused else "resumed")
+
+            # Get updated queue display
+            status, table = queue_handlers.get_queue_display()
+            return gr.update(value=status_text), status, table
+
+        components["queue_pause_checkbox"].change(
+            fn=toggle_queue_pause,
+            inputs=[components["queue_pause_checkbox"]],
+            outputs=[
+                components.get("queue_status_indicator"),
+                components.get("queue_status"),
+                components.get("queue_table"),
+            ],
+        )
+
+    # Legacy queue control buttons (if they exist)
     if "pause_queue_btn" in components:
         components["pause_queue_btn"].click(
-            fn=queue_handlers.pause_queue,
+            fn=lambda: simple_queue_service.set_queue_paused(True),
             outputs=[
                 components.get("queue_status"),
                 components.get("queue_table"),
@@ -1011,7 +1119,7 @@ def wire_queue_control_events(components, simple_queue_service):
 
     if "resume_queue_btn" in components:
         components["resume_queue_btn"].click(
-            fn=queue_handlers.resume_queue,
+            fn=lambda: simple_queue_service.set_queue_paused(False),
             outputs=[
                 components.get("queue_status"),
                 components.get("queue_table"),
@@ -1053,16 +1161,38 @@ def wire_queue_selection_events(components, simple_queue_service):
 
     queue_handlers = QueueHandlers(simple_queue_service)
 
-    # Queue table selection
+    # Queue table selection with fixed handler using df_utils
     if "queue_table" in components:
+        from cosmos_workflow.ui.utils import dataframe as df_utils
+
+        def handle_queue_select(table_data, evt: gr.SelectData):
+            """Handle queue table selection with proper event format."""
+            if evt is None or table_data is None:
+                return "No selection", gr.update(visible=False), None
+
+            # Get selected row index
+            row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
+
+            # Use the existing utility function that handles both DataFrame and list formats
+            job_id = df_utils.get_cell_value(table_data, row_idx, 1, default=None)
+
+            if job_id:
+                details = queue_handlers.get_job_details(job_id)
+                # Also get the status to determine if we should show cancel button
+                status = df_utils.get_cell_value(table_data, row_idx, 3, default=None)
+                show_cancel = status == "queued"
+                return details, gr.update(visible=show_cancel), job_id
+
+            return "No selection", gr.update(visible=False), None
+
         components["queue_table"].select(
-            fn=queue_handlers.on_queue_select,
+            fn=handle_queue_select,
             inputs=[components["queue_table"]],
             outputs=filter_none_components(
                 [
-                    components.get("queue_selected_info"),
-                    components.get("queue_actions_row"),
-                    components.get("queue_selected_id"),
+                    components.get("job_details"),
+                    components.get("cancel_job_btn"),
+                    components.get("selected_job_id"),
                 ]
             ),
         )

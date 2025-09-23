@@ -722,14 +722,21 @@ def run_inference_on_selected(
         # Show immediate feedback with queue position
         if position:
             gr.Info(f"🎯 Added to queue at position #{position} - Job ID: {job_id}")
-            return f"✅ Job {job_id} queued at position #{position}\n📋 {len(selected_ids)} prompt(s) will be processed"
+            status_msg = f"✅ Job {job_id} queued at position #{position}\n📋 {len(selected_ids)} prompt(s) will be processed"
         else:
             gr.Info(f"🚀 Job {job_id} starting immediately")
-            return f"✅ Job {job_id} starting now\n📋 Processing {len(selected_ids)} prompt(s)"
+            status_msg = (
+                f"✅ Job {job_id} starting now\n📋 Processing {len(selected_ids)} prompt(s)"
+            )
+
+        # Return 3 values: queue_table (None to refresh), inference_status, status_display
+        return None, status_msg, gr.update(value=status_msg, visible=True)
 
     except Exception as e:
         logger.error("Failed to run inference: {}", e)
-        return f"❌ Error: {e}"
+        error_msg = f"❌ Error: {e}"
+        # Return 3 values on error as well
+        return None, error_msg, gr.update(value=error_msg, visible=True)
 
 
 def run_enhance_on_selected(
@@ -788,15 +795,20 @@ def run_enhance_on_selected(
                 f"🌟 Added {len(job_ids)} enhancement job(s) to queue starting at position #{position}"
             )
             action = "create new" if create_new else "update"
-            return f"✅ Queued {len(job_ids)} enhancement job(s)\n📋 Will {action} {len(selected_ids)} prompt(s)\nFirst job at position #{position}"
+            status_msg = f"✅ Queued {len(job_ids)} enhancement job(s)\n📋 Will {action} {len(selected_ids)} prompt(s)\nFirst job at position #{position}"
         else:
             gr.Info(f"🌟 Starting {len(job_ids)} enhancement job(s) now")
             action = "creating new" if create_new else "updating"
-            return f"✅ Started {len(job_ids)} enhancement job(s)\n📋 {action.title()} {len(selected_ids)} prompt(s)"
+            status_msg = f"✅ Started {len(job_ids)} enhancement job(s)\n📋 {action.title()} {len(selected_ids)} prompt(s)"
+
+        # Return 3 values: queue_table (None to refresh), enhance_status, status_display
+        return None, status_msg, gr.update(value=status_msg, visible=True)
 
     except Exception as e:
         import traceback
 
         logger.error("Failed to run enhancement: {}", str(e))
         logger.error("Traceback: {}", traceback.format_exc())
-        return f"❌ Error: {e}"
+        error_msg = f"❌ Error: {e}"
+        # Return 3 values on error as well
+        return None, error_msg, gr.update(value=error_msg, visible=True)

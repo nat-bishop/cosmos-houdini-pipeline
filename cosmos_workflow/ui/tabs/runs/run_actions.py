@@ -173,11 +173,9 @@ def show_upscale_dialog(run_id):
     """
     if not run_id:
         return (
-            gr.update(visible=False),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
+            gr.update(visible=False),  # Hide dialog
+            gr.update(),  # Preview text
+            gr.update(),  # Hidden ID
         )
 
     try:
@@ -187,8 +185,6 @@ def show_upscale_dialog(run_id):
         if not run:
             return (
                 gr.update(visible=False),
-                gr.update(),
-                gr.update(),
                 gr.update(),
                 gr.update(),
             )
@@ -212,30 +208,22 @@ Proceeding will create a new upscale job."""
 **Status**: {run.get("status", "unknown")}
 **Created**: {run.get("created_at", "")[:19]}
 
+{status_text}
+
 This will create a new 4K upscaled version of the output video.
 """
 
-        # Get prompt text for editing
-        prompt_text = run.get("prompt_text", "")
-        if not prompt_text and run.get("prompt_id"):
-            prompt = ops.get_prompt(run["prompt_id"])
-            if prompt:
-                prompt_text = prompt.get("prompt_text", "")
-
+        # Return only the expected 3 values
         return (
             gr.update(visible=True),  # Show dialog
             gr.update(value=preview),  # Preview text
-            gr.update(value=status_text),  # Status text
-            gr.update(interactive=True),  # Enable confirm button
-            gr.update(interactive=True),  # Enable cancel button
+            run_id,  # Hidden run ID for the confirmation handler
         )
 
     except Exception as e:
         logger.error("Error preparing upscale dialog: {}", e)
         return (
             gr.update(visible=False),
-            gr.update(),
-            gr.update(),
             gr.update(),
             gr.update(),
         )

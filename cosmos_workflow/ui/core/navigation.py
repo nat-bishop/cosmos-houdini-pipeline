@@ -6,6 +6,7 @@ when moving between different UI tabs.
 
 import gradio as gr
 
+from cosmos_workflow.ui.constants import TabIndex
 from cosmos_workflow.ui.tabs.jobs_handlers import check_running_jobs
 from cosmos_workflow.ui.tabs.runs.navigation import (
     handle_runs_tab_default,
@@ -46,7 +47,7 @@ def handle_tab_select(tab_index, nav_state, pending_data):
     and manages cross-tab data flow.
 
     Args:
-        tab_index: Index of selected tab (0=Inputs, 1=Prompts, 2=Runs, 3=Jobs)
+        tab_index: Index of selected tab (TabIndex enum value)
         nav_state: Navigation state dict with filter info
         pending_data: Pending navigation data from cross-tab actions
 
@@ -60,23 +61,23 @@ def handle_tab_select(tab_index, nav_state, pending_data):
         pending_data is not None,
     )
 
-    # Auto-refresh Jobs tab when switching to it (index 3)
-    if tab_index == 3:
+    # Auto-refresh Jobs tab when switching to it
+    if tab_index == TabIndex.JOBS:
         updates = handle_jobs_tab_refresh()
         return (nav_state, pending_data, *updates)
 
     # Check if there's pending navigation data (from View Runs button)
-    if tab_index == 2 and pending_data is not None:
+    if tab_index == TabIndex.RUNS and pending_data is not None:
         updates = handle_runs_tab_with_pending_data(pending_data)
         return (nav_state, None, *updates)
 
-    # Check if we're navigating to Runs tab (index 2) with pending filter
-    elif tab_index == 2 and nav_state and nav_state.get("filter_type") == "prompt_ids":
+    # Check if we're navigating to Runs tab with pending filter
+    elif tab_index == TabIndex.RUNS and nav_state and nav_state.get("filter_type") == "prompt_ids":
         updates = handle_runs_tab_with_filter(nav_state)
         return (nav_state, None, *updates)
 
     # Check if we're navigating to Runs tab without filter - load default data
-    elif tab_index == 2 and (not nav_state or nav_state.get("filter_type") is None):
+    elif tab_index == TabIndex.RUNS and (not nav_state or nav_state.get("filter_type") is None):
         updates = handle_runs_tab_default()
         final_nav_state = (
             nav_state
@@ -104,34 +105,37 @@ def handle_tab_select(tab_index, nav_state, pending_data):
     )
 
 
-def get_tab_index(tab_name: str) -> int:
-    """Convert tab name to index.
+def get_tab_index(tab_name: str) -> TabIndex:
+    """Convert tab name to TabIndex enum.
 
     Args:
-        tab_name: Name of the tab
+        tab_name: Name of the tab (case-insensitive)
 
     Returns:
-        int: Tab index (0-3)
+        TabIndex: Tab index enum value
     """
-    tab_mapping = {
-        "inputs": 0,
-        "prompts": 1,
-        "runs": 2,
-        "jobs": 3,
-    }
-    return tab_mapping.get(tab_name.lower(), 0)
+    try:
+        return TabIndex.from_name(tab_name)
+    except KeyError:
+        logger.warning(f"Unknown tab name: {tab_name}, defaulting to INPUTS")
+        return TabIndex.INPUTS
 
 
-def get_tab_name(tab_index: int) -> str:
+def get_tab_name(tab_index: int | TabIndex) -> str:
     """Convert tab index to name.
 
     Args:
-        tab_index: Index of the tab (0-3)
+        tab_index: Index of the tab (int or TabIndex enum)
 
     Returns:
-        str: Tab name
+        str: Tab name with proper capitalization
     """
-    tab_names = ["Inputs", "Prompts", "Runs", "Jobs"]
-    if 0 <= tab_index < len(tab_names):
-        return tab_names[tab_index]
-    return "Unknown"
+    if isinstance(tab_index, int):
+        # Convert int to TabIndex if valid
+        try:
+            tab_index = TabIndex(tab_index)
+        except ValueError:
+            return "Unknown"
+
+    # Return the enum name with proper capitalization
+    return tab_index.name.capitalize()

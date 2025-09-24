@@ -8,8 +8,8 @@ import functools
 
 import gradio as gr
 
+from cosmos_workflow.ui.core.safe_wiring import safe_wire
 from cosmos_workflow.ui.core.state import create_ui_states
-from cosmos_workflow.ui.core.utils import filter_none_components
 from cosmos_workflow.ui.styles_simple import get_custom_css
 from cosmos_workflow.ui.tabs.inputs_ui import create_inputs_tab_ui
 from cosmos_workflow.ui.tabs.jobs_ui import create_jobs_tab_ui
@@ -236,26 +236,26 @@ def wire_inputs_events(components, config, api):
         def handle_input_select(evt: gr.SelectData, gallery_data):
             return on_input_select(evt, gallery_data, inputs_dir)
 
-        components["input_gallery"].select(
-            fn=handle_input_select,
+        safe_wire(
+            components["input_gallery"],
+            "select",
+            handle_input_select,
             inputs=[components["input_gallery"]],
-            outputs=filter_none_components(
-                [
-                    components.get("selected_dir_path"),
-                    components.get("preview_group"),
-                    components.get("input_tabs_group"),
-                    components.get("input_name"),
-                    components.get("input_path"),
-                    components.get("input_created"),
-                    components.get("input_resolution"),
-                    components.get("input_duration"),
-                    components.get("input_fps"),
-                    components.get("input_codec"),
-                    components.get("input_files"),
-                    components.get("video_preview_gallery"),
-                    components.get("create_video_dir"),
-                ]
-            ),
+            outputs=[
+                components.get("selected_dir_path"),
+                components.get("preview_group"),
+                components.get("input_tabs_group"),
+                components.get("input_name"),
+                components.get("input_path"),
+                components.get("input_created"),
+                components.get("input_resolution"),
+                components.get("input_duration"),
+                components.get("input_fps"),
+                components.get("input_codec"),
+                components.get("input_files"),
+                components.get("video_preview_gallery"),
+                components.get("create_video_dir"),
+            ],
         )
 
     # Input filtering events
@@ -276,21 +276,19 @@ def wire_inputs_events(components, config, api):
         )
 
     if "inputs_sort" in components:
-        components["inputs_sort"].change(
-            fn=lambda search, date_f, sort: load_input_gallery(inputs_dir, search, date_f, sort),
-            inputs=filter_none_components(
-                [
-                    components.get("inputs_search"),
-                    components.get("inputs_date_filter"),
-                    components.get("inputs_sort"),
-                ]
-            ),
-            outputs=filter_none_components(
-                [
-                    components.get("input_gallery"),
-                    components.get("inputs_results_count"),
-                ]
-            ),
+        safe_wire(
+            components["inputs_sort"],
+            "change",
+            lambda search, date_f, sort: load_input_gallery(inputs_dir, search, date_f, sort),
+            inputs=[
+                components.get("inputs_search"),
+                components.get("inputs_date_filter"),
+                components.get("inputs_sort"),
+            ],
+            outputs=[
+                components.get("input_gallery"),
+                components.get("inputs_results_count"),
+            ],
         )
 
 
@@ -330,157 +328,155 @@ def wire_prompts_events(components, api, simple_queue_service):
     if "refresh_prompts_btn" in components:
         components["refresh_prompts_btn"].click(
             fn=list_prompts,
-            outputs=filter_none_components([components.get("prompts_table")]),
+            outputs=[components.get("prompts_table")],
             show_progress=False,
         )
 
     # Filtering events
     if "prompt_search" in components:
-        components["prompt_search"].change(
-            fn=filter_prompts,
-            inputs=filter_none_components(
-                [
-                    components.get("prompt_search"),
-                    components.get("prompt_status_filter"),
-                    components.get("prompts_table"),
-                ]
-            ),
-            outputs=filter_none_components([components.get("prompts_table")]),
+        safe_wire(
+            components["prompt_search"],
+            "change",
+            filter_prompts,
+            inputs=[
+                components.get("prompt_search"),
+                components.get("prompt_status_filter"),
+                components.get("prompts_table"),
+            ],
+            outputs=[components.get("prompts_table")],
             show_progress=False,
         )
 
     if "prompt_status_filter" in components:
-        components["prompt_status_filter"].change(
-            fn=filter_prompts,
-            inputs=filter_none_components(
-                [
-                    components.get("prompt_search"),
-                    components.get("prompt_status_filter"),
-                    components.get("prompts_table"),
-                ]
-            ),
-            outputs=filter_none_components([components.get("prompts_table")]),
+        safe_wire(
+            components["prompt_status_filter"],
+            "change",
+            filter_prompts,
+            inputs=[
+                components.get("prompt_search"),
+                components.get("prompt_status_filter"),
+                components.get("prompts_table"),
+            ],
+            outputs=[components.get("prompts_table")],
             show_progress=False,
         )
 
     # Table selection
     if "prompts_table" in components:
-        components["prompts_table"].select(
-            fn=on_prompt_row_select,
+        safe_wire(
+            components["prompts_table"],
+            "select",
+            on_prompt_row_select,
             inputs=[components["prompts_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("selected_prompt_id"),
-                    components.get("prompt_details"),
-                    components.get("prompt_video_gallery"),
-                    components.get("run_inference_btn"),
-                    components.get("run_enhance_btn"),
-                    components.get("prompt_run_stats"),
-                    components.get("runs_for_prompt"),
-                    components.get("view_runs_for_prompt_btn"),
-                    components.get("prompt_action_result"),
-                    components.get("status_display"),
-                ]
-            ),
+            outputs=[
+                components.get("selected_prompt_id"),
+                components.get("prompt_details"),
+                components.get("prompt_video_gallery"),
+                components.get("run_inference_btn"),
+                components.get("run_enhance_btn"),
+                components.get("prompt_run_stats"),
+                components.get("runs_for_prompt"),
+                components.get("view_runs_for_prompt_btn"),
+                components.get("prompt_action_result"),
+                components.get("status_display"),
+            ],
             show_progress=True,
         )
 
     # Inference and enhance buttons
     if "run_inference_btn" in components and "ops_prompts_table" in components:
         # Inference needs all weight sliders and parameters
-        inference_inputs = filter_none_components(
-            [
-                components.get("ops_prompts_table"),
-                components.get("weight_vis"),
-                components.get("weight_edge"),
-                components.get("weight_depth"),
-                components.get("weight_seg"),
-                components.get("inf_steps"),
-                components.get("inf_guidance"),
-                components.get("inf_seed"),
-                components.get("inf_fps"),
-                components.get("inf_sigma_max"),
-                components.get("inf_blur_strength"),
-                components.get("inf_canny_threshold"),
-            ]
-        )
+        inference_inputs = [
+            components.get("ops_prompts_table"),
+            components.get("weight_vis"),
+            components.get("weight_edge"),
+            components.get("weight_depth"),
+            components.get("weight_seg"),
+            components.get("inf_steps"),
+            components.get("inf_guidance"),
+            components.get("inf_seed"),
+            components.get("inf_fps"),
+            components.get("inf_sigma_max"),
+            components.get("inf_blur_strength"),
+            components.get("inf_canny_threshold"),
+        ]
 
+        inference_inputs = [i for i in inference_inputs if i is not None]
         if inference_inputs:
-            components["run_inference_btn"].click(
-                fn=run_inference_bound,
+            safe_wire(
+                components["run_inference_btn"],
+                "click",
+                run_inference_bound,
                 inputs=inference_inputs,
-                outputs=filter_none_components(
-                    [
-                        components.get("queue_table"),
-                        components.get("inference_status"),
-                        components.get("status_display"),
-                    ]
-                ),
+                outputs=[
+                    components.get("queue_table"),
+                    components.get("inference_status"),
+                    components.get("status_display"),
+                ],
                 show_progress=True,
             )
 
     if "run_enhance_btn" in components and "ops_prompts_table" in components:
         # Enhance needs dataframe, create_new, and force_overwrite
-        enhance_inputs = filter_none_components(
-            [
-                components.get("ops_prompts_table"),
-                components.get("enhance_create_new"),
-                components.get("enhance_force"),
-            ]
-        )
+        enhance_inputs = [
+            components.get("ops_prompts_table"),
+            components.get("enhance_create_new"),
+            components.get("enhance_force"),
+        ]
+        enhance_inputs = [i for i in enhance_inputs if i is not None]
 
         if enhance_inputs:
-            components["run_enhance_btn"].click(
-                fn=run_enhance_bound,
+            safe_wire(
+                components["run_enhance_btn"],
+                "click",
+                run_enhance_bound,
                 inputs=enhance_inputs,
-                outputs=filter_none_components(
-                    [
-                        components.get("queue_table"),
-                        components.get("enhance_status"),
-                        components.get("status_display"),
-                    ]
-                ),
+                outputs=[
+                    components.get("queue_table"),
+                    components.get("enhance_status"),
+                    components.get("status_display"),
+                ],
                 show_progress=True,
             )
 
     # Selection controls
     if "select_all_btn" in components and "ops_prompts_table" in components:
-        components["select_all_btn"].click(
-            fn=select_all_prompts,
+        safe_wire(
+            components["select_all_btn"],
+            "click",
+            select_all_prompts,
             inputs=[components["ops_prompts_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("ops_prompts_table"),
-                    components.get("selection_count"),
-                ]
-            ),
+            outputs=[
+                components.get("ops_prompts_table"),
+                components.get("selection_count"),
+            ],
         )
 
     if "clear_selection_btn" in components and "ops_prompts_table" in components:
-        components["clear_selection_btn"].click(
-            fn=clear_selection,
+        safe_wire(
+            components["clear_selection_btn"],
+            "click",
+            clear_selection,
             inputs=[components["ops_prompts_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("ops_prompts_table"),
-                    components.get("selection_count"),
-                ]
-            ),
+            outputs=[
+                components.get("ops_prompts_table"),
+                components.get("selection_count"),
+            ],
         )
 
     # Delete operations
     if "delete_selected_btn" in components and "ops_prompts_table" in components:
-        components["delete_selected_btn"].click(
-            fn=preview_delete_prompts,
+        safe_wire(
+            components["delete_selected_btn"],
+            "click",
+            preview_delete_prompts,
             inputs=[components["ops_prompts_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("prompts_delete_dialog"),
-                    components.get("prompts_delete_preview"),
-                    components.get("prompts_delete_outputs_checkbox"),
-                    components.get("prompts_delete_ids_hidden"),
-                ]
-            ),
+            outputs=[
+                components.get("prompts_delete_dialog"),
+                components.get("prompts_delete_preview"),
+                components.get("prompts_delete_outputs_checkbox"),
+                components.get("prompts_delete_ids_hidden"),
+            ],
             scroll_to_output=True,  # Scroll to delete confirmation dialog
         )
 
@@ -495,19 +491,18 @@ def wire_prompts_events(components, api, simple_queue_service):
         logger.debug(
             f"confirm_delete_prompts outputs before filtering: {[c is not None for c in outputs_list]}"
         )
-        filtered_outputs = filter_none_components(outputs_list)
+        filtered_outputs = [o for o in outputs_list if o is not None]
         logger.debug(
             f"confirm_delete_prompts outputs after filtering: {len(filtered_outputs)} components"
         )
         # Since prompts_table doesn't exist, we need to adjust the outputs
         # The function returns 3 values but only 2 components exist: ops_prompts_table and prompts_delete_dialog
         # So we need to remove the middle return value
-        filtered_outputs = filter_none_components(
-            [
-                components.get("ops_prompts_table"),
-                components.get("prompts_delete_dialog"),
-            ]
-        )
+        filtered_outputs = [
+            components.get("ops_prompts_table"),
+            components.get("prompts_delete_dialog"),
+        ]
+        filtered_outputs = [o for o in filtered_outputs if o is not None]
 
         components["prompts_confirm_delete_btn"].click(
             fn=confirm_delete_prompts,
@@ -525,31 +520,30 @@ def wire_prompts_events(components, api, simple_queue_service):
                 components.get("prompts_runs_filter", gr.Dropdown(value="all", visible=False)),
                 components.get("prompts_date_filter", gr.Dropdown(value="all", visible=False)),
             ],
-            outputs=filter_none_components([components.get("ops_prompts_table")]),
+            outputs=[components.get("ops_prompts_table")],
         )
 
     if "prompts_cancel_delete_btn" in components:
         components["prompts_cancel_delete_btn"].click(
             fn=cancel_delete_prompts,
-            outputs=filter_none_components([components.get("prompts_delete_dialog")]),
+            outputs=[components.get("prompts_delete_dialog")],
         )
 
     # Ops prompts table selection
     if "ops_prompts_table" in components:
-        outputs = filter_none_components(
-            [
-                components.get("selected_prompt_id"),
-                components.get("selected_prompt_name"),
-                components.get("selected_prompt_text"),
-                components.get("selected_prompt_negative"),
-                components.get("selected_prompt_created"),
-                components.get("selected_prompt_video_dir"),
-                components.get("selected_prompt_enhanced"),
-                components.get("selected_prompt_runs_stats"),
-                components.get("selected_prompt_rating"),
-                components.get("selected_prompt_video_thumb"),
-            ]
-        )
+        outputs = [
+            components.get("selected_prompt_id"),
+            components.get("selected_prompt_name"),
+            components.get("selected_prompt_text"),
+            components.get("selected_prompt_negative"),
+            components.get("selected_prompt_created"),
+            components.get("selected_prompt_video_dir"),
+            components.get("selected_prompt_enhanced"),
+            components.get("selected_prompt_runs_stats"),
+            components.get("selected_prompt_rating"),
+            components.get("selected_prompt_video_thumb"),
+        ]
+        outputs = [o for o in outputs if o is not None]
         if outputs:
             components["ops_prompts_table"].select(
                 fn=on_prompt_row_select,
@@ -956,52 +950,48 @@ def wire_jobs_control_events(components, simple_queue_service=None):
     )
 
     # Stream button
-    if "stream_btn" in components:
-        components["stream_btn"].click(
-            fn=refresh_and_stream,
-            inputs=None,  # refresh_and_stream doesn't take any inputs
-            outputs=filter_none_components(
-                [
-                    components.get("running_jobs_display"),
-                    components.get("job_status"),
-                    components.get("active_job_card"),
-                    components.get("jobs_log_display"),
-                ]
-            ),
-        )
+    safe_wire(
+        components.get("stream_btn"),
+        "click",
+        refresh_and_stream,
+        inputs=None,
+        outputs=[
+            components.get("running_jobs_display"),
+            components.get("job_status"),
+            components.get("active_job_card"),
+            components.get("jobs_log_display"),
+        ],
+    )
 
     # Kill job operations
-    if "kill_job_btn" in components:
-        components["kill_job_btn"].click(
-            fn=show_kill_confirmation,
-            outputs=filter_none_components(
-                [
-                    components.get("kill_confirmation"),  # The confirmation dialog group
-                    components.get("kill_preview"),  # The preview text
-                ]
-            ),
-        )
+    safe_wire(
+        components.get("kill_job_btn"),
+        "click",
+        show_kill_confirmation,
+        outputs=[
+            components.get("kill_confirmation"),  # The confirmation dialog group
+            components.get("kill_preview"),  # The preview text
+        ],
+    )
 
-    if "confirm_kill_btn" in components:
-        components["confirm_kill_btn"].click(
-            fn=execute_kill_job,
-            outputs=filter_none_components(
-                [
-                    components.get("kill_confirmation"),  # Hide dialog
-                    components.get("job_status"),  # Status message
-                ]
-            ),
-        )
+    safe_wire(
+        components.get("confirm_kill_btn"),
+        "click",
+        execute_kill_job,
+        outputs=[
+            components.get("kill_confirmation"),  # Hide dialog
+            components.get("job_status"),  # Status message
+        ],
+    )
 
-    if "cancel_kill_btn" in components:
-        components["cancel_kill_btn"].click(
-            fn=cancel_kill_confirmation,
-            outputs=filter_none_components(
-                [
-                    components.get("kill_confirmation"),  # Hide dialog
-                ]
-            ),
-        )
+    safe_wire(
+        components.get("cancel_kill_btn"),
+        "click",
+        cancel_kill_confirmation,
+        outputs=[
+            components.get("kill_confirmation"),  # Hide dialog
+        ],
+    )
 
     # Additional job control events
     if "clear_logs_btn" in components:
@@ -1010,9 +1000,11 @@ def wire_jobs_control_events(components, simple_queue_service=None):
             """Clear the job logs display."""
             return gr.update(value="")
 
-        components["clear_logs_btn"].click(
-            fn=clear_logs,
-            outputs=filter_none_components([components.get("jobs_log_display")]),
+        safe_wire(
+            components.get("clear_logs_btn"),
+            "click",
+            clear_logs,
+            outputs=[components.get("jobs_log_display")],
         )
 
     if "auto_advance_toggle" in components:
@@ -1050,13 +1042,11 @@ def wire_jobs_control_events(components, simple_queue_service=None):
         components["cancel_job_btn"].click(
             fn=cancel_job_bound,
             inputs=[components.get("selected_job_id")],
-            outputs=filter_none_components(
-                [
-                    components.get("job_status"),
-                    components.get("queue_status"),
-                    components.get("queue_table"),
-                ]
-            ),
+            outputs=[
+                components.get("job_status"),
+                components.get("queue_status"),
+                components.get("queue_table"),
+            ],
         )
 
 
@@ -1225,13 +1215,11 @@ def wire_queue_selection_events(components, simple_queue_service):
         components["queue_table"].select(
             fn=handle_queue_select,
             inputs=[components["queue_table"]],
-            outputs=filter_none_components(
-                [
-                    components.get("job_details"),
-                    components.get("cancel_job_btn"),
-                    components.get("selected_job_id"),
-                ]
-            ),
+            outputs=[
+                components.get("job_details"),
+                components.get("cancel_job_btn"),
+                components.get("selected_job_id"),
+            ],
         )
 
     # Queue item actions
@@ -1239,27 +1227,23 @@ def wire_queue_selection_events(components, simple_queue_service):
         components["remove_queue_item_btn"].click(
             fn=queue_handlers.remove_item,
             inputs=[components.get("queue_selected_id")],
-            outputs=filter_none_components(
-                [
-                    components.get("queue_status"),
-                    components.get("queue_table"),
-                    components.get("queue_selected_info"),
-                    components.get("queue_actions_row"),
-                ]
-            ),
+            outputs=[
+                components.get("queue_status"),
+                components.get("queue_table"),
+                components.get("queue_selected_info"),
+                components.get("queue_actions_row"),
+            ],
         )
 
     if "prioritize_queue_item_btn" in components:
         components["prioritize_queue_item_btn"].click(
             fn=queue_handlers.prioritize_item,
             inputs=[components.get("queue_selected_id")],
-            outputs=filter_none_components(
-                [
-                    components.get("queue_status"),
-                    components.get("queue_table"),
-                    components.get("queue_selected_info"),
-                ]
-            ),
+            outputs=[
+                components.get("queue_status"),
+                components.get("queue_table"),
+                components.get("queue_selected_info"),
+            ],
         )
 
 
@@ -1370,7 +1354,7 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
 
         app.load(
             fn=load_initial_runs,
-            outputs=filter_none_components(runs_outputs),
+            outputs=[o for o in runs_outputs if o is not None],
         )
 
     # Load initial data for jobs/queue tab
@@ -1379,12 +1363,10 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
 
         app.load(
             fn=queue_handlers.get_queue_display,
-            outputs=filter_none_components(
-                [
-                    components.get("queue_status"),
-                    components.get("queue_table"),
-                ]
-            ),
+            outputs=[
+                components.get("queue_status"),
+                components.get("queue_table"),
+            ],
         )
 
     logger.info("Initial data loading configured")
@@ -1444,19 +1426,18 @@ def wire_cross_tab_navigation(components):
                 gr.update(value=filter_display),
             )
 
-        outputs = filter_none_components(
-            [
-                components.get("navigation_state"),
-                components.get("pending_nav_data"),
-                components.get("selection_count"),
-                components.get("selected_tab"),  # Hidden number component for tab index
-                components.get("runs_gallery"),
-                components.get("runs_table"),
-                components.get("runs_stats"),
-                components.get("runs_nav_filter_row"),
-                components.get("runs_prompt_filter"),
-            ]
-        )
+        outputs = [
+            components.get("navigation_state"),
+            components.get("pending_nav_data"),
+            components.get("selection_count"),
+            components.get("selected_tab"),  # Hidden number component for tab index
+            components.get("runs_gallery"),
+            components.get("runs_table"),
+            components.get("runs_stats"),
+            components.get("runs_nav_filter_row"),
+            components.get("runs_prompt_filter"),
+        ]
+        outputs = [o for o in outputs if o is not None]
 
         if outputs:
             components["view_runs_btn"].click(
@@ -1487,19 +1468,15 @@ def wire_cross_tab_navigation(components):
         if "view_runs_for_input_btn" in components:
             components["view_runs_for_input_btn"].click(
                 fn=navigate_to_runs_for_input,
-                inputs=filter_none_components(
-                    [
-                        components.get("selected_dir_path"),  # Fixed: using correct component name
-                        components.get("navigation_state"),
-                    ]
-                ),
-                outputs=filter_none_components(
-                    [
-                        components.get("tabs"),
-                        components.get("navigation_state"),
-                        components.get("pending_nav_data"),
-                    ]
-                ),
+                inputs=[
+                    components.get("selected_dir_path"),  # Fixed: using correct component name
+                    components.get("navigation_state"),
+                ],
+                outputs=[
+                    components.get("tabs"),
+                    components.get("navigation_state"),
+                    components.get("pending_nav_data"),
+                ],
             )
 
     # Navigate from inputs to prompts
@@ -1533,13 +1510,12 @@ def wire_cross_tab_navigation(components):
                 1,  # Prompts tab index
             )
 
-        outputs = filter_none_components(
-            [
-                components.get("prompt_search"),
-                components.get("ops_prompts_table"),  # Fixed: was "prompts_table"
-                components.get("selected_tab"),
-            ]
-        )
+        outputs = [
+            components.get("prompt_search"),
+            components.get("ops_prompts_table"),  # Fixed: was "prompts_table"
+            components.get("selected_tab"),
+        ]
+        outputs = [o for o in outputs if o is not None]
 
         if outputs:
             components["view_prompts_for_input_btn"].click(

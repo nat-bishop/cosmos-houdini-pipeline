@@ -125,7 +125,9 @@ def confirm_delete_run(run_id, delete_outputs):
 
     try:
         ops = CosmosAPI()
-        result = ops.delete_run(run_id, delete_outputs=delete_outputs)
+        # CosmosAPI expects keep_outputs, which is opposite of delete_outputs
+        keep_outputs = not delete_outputs
+        result = ops.delete_run(run_id, keep_outputs=keep_outputs)
 
         if result.get("success"):
             return (

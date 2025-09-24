@@ -327,7 +327,7 @@ def create_prompts_tab_ui():
                         components["enhance_status"] = gr.Markdown("")
 
         # Delete confirmation dialog - placed outside split view for better layout
-        with gr.Group(
+        with gr.Column(
             visible=False, elem_classes=["delete-confirmation-container", "detail-card"]
         ) as components["prompts_delete_dialog"]:
             gr.Markdown("### ⚠️ Confirm Deletion")

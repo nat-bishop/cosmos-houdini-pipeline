@@ -398,7 +398,7 @@ ui/
 
 ---
 
-## Phase 5: Apply Gradio Best Practices (Week 3)
+## Phase 6: Apply Gradio Best Practices (Week 3) - DEFERRED
 
 ### Tasks
 
@@ -501,6 +501,85 @@ def setup_runs_events(components):
 - [ ] Changing UI layout doesn't break handlers
 - [ ] Can modify one feature without touching others
 - [ ] Clear naming conventions throughout
+
+---
+
+## Comprehensive Lessons from the Refactoring Journey
+
+### What We Learned About Refactoring
+
+#### 1. Incomplete Refactoring Creates New Problems
+- **The builder.py Problem**: We successfully reduced app.py from 2,063 to 152 lines but created a new 1,243-line monolith in builder.py
+- **Lesson**: Moving complexity isn't the same as modularizing it. True refactoring requires breaking down complexity, not relocating it.
+
+#### 2. Framework Limitations Matter
+- **gr.Group vs gr.Column**: Discovered Gradio doesn't allow layout components (Group) as outputs, only interactive components
+- **Lesson**: Understand framework constraints before choosing component types. Test ALL UI interactions, not just page loads.
+
+#### 3. Service Initialization Side Effects
+- **SimplifiedQueueService Issue**: New instances triggered cleanup that removed active jobs
+- **Lesson**: Be aware of singleton patterns and initialization side effects. Use dependency injection (functools.partial) for shared services.
+
+#### 4. Component Naming Across Modules
+- **Event Wiring Mismatches**: Component names must match exactly between UI definition and event wiring
+- **Lesson**: With modular architecture, establish clear naming conventions and validate references across files.
+
+#### 5. The Trade-offs of Modularization
+
+**Benefits Achieved:**
+- **Findability**: Can locate any code in seconds vs minutes
+- **Testability**: Components can be tested in isolation
+- **Team Collaboration**: Multiple developers can work without conflicts
+- **Clear Boundaries**: Each module has single responsibility
+
+**Costs Incurred:**
+- **Coordination Complexity**: Changes span multiple files
+- **More Files**: From 1 file to 20+ files
+- **Import Management**: More complex dependency tracking
+- **Initial Learning Curve**: New developers need to understand structure
+
+### Metrics That Matter
+
+#### Before Refactoring:
+- **app.py**: 3,255 lines (monolithic)
+- **runs_handlers.py**: 1,823 lines (secondary monolith)
+- **Total modules**: ~5
+- **Average file size**: >1,000 lines
+- **Code duplication**: ~30%
+
+#### After Refactoring:
+- **app.py**: 152 lines (92.6% reduction)
+- **runs_handlers.py**: DELETED
+- **Total modules**: 25+
+- **Average file size**: ~200 lines
+- **Code duplication**: <5%
+- **New problem**: builder.py at 1,243 lines
+
+### Key Success Factors
+
+1. **Incremental Approach**: Each phase provided value independently
+2. **Feature Parity First**: Never broke existing functionality
+3. **Test Continuously**: Caught issues early with UI testing
+4. **Document Decisions**: This plan evolved with learnings
+5. **Use Framework Patterns**: functools.partial for DI, NamedTuple for returns
+
+### Red Flags to Watch For
+
+1. **New Monoliths Forming**: builder.py became the new app.py
+2. **Over-abstraction**: Avoid creating abstractions for single use cases
+3. **Lost Context**: Important relationships harder to see across files
+4. **Service State**: Singleton patterns with initialization side effects
+5. **Framework Fighting**: Using components in unintended ways (gr.Group as output)
+
+### The Bottom Line
+
+**Was the refactoring worth it?** YES, with caveats:
+- The code is significantly more maintainable
+- New features are easier to add
+- Testing is now possible at component level
+- BUT: Refactoring must be complete to realize full benefits
+
+**Next critical step**: Complete Phase 5 to break down builder.py, otherwise we've just moved the problem.
 
 ---
 
@@ -714,3 +793,150 @@ _Track discoveries, issues, and decisions here as you work:_
 - **Total refactoring impact**: Reduced monolithic code by 92.6%
 - **Modular architecture**: 5 core modules + handler separation
 - **Maintainability**: Clear separation of concerns achieved
+
+---
+
+## Post-Refactor Bug Fixes (2025-09-24)
+
+### Critical Issues Discovered After Refactoring
+
+Three critical bugs were discovered in the refactored Gradio UI that required immediate fixes:
+
+#### 1. SimplifiedQueueService Singleton Issue ✅ FIXED
+**Problem**: Clicking "Cancel Selected Job" was removing running jobs from the queue display.
+- **Root Cause**: Creating new SimplifiedQueueService instances triggered `_cleanup_orphaned_jobs()` on initialization
+- **Solution**: Used `functools.partial` to inject shared queue_service instance into handlers
+- **Files Modified**:
+  - `cosmos_workflow/ui/tabs/jobs_handlers.py` - Updated function signature
+  - `cosmos_workflow/ui/core/builder.py` - Added functools.partial for dependency injection
+
+#### 2. Kill Job Confirmation Dialog Component Mismatch ✅ FIXED
+**Problem**: Clicking "Kill active job" threw error instead of showing confirmation dialog
+- **Root Cause**: Component names in UI definition didn't match event wiring references
+- **Solution**: Fixed component references from "kill_confirm_row" to "kill_confirmation"
+- **File Modified**: `cosmos_workflow/ui/core/builder.py`
+
+#### 3. gr.Group Cannot Be Used as Output Component ✅ FIXED
+**Problem**: Delete dialogs threw "gr.Group not a valid output component" error
+- **Root Cause**: Gradio limitation - only interactive components can be outputs, not layout containers
+- **Solution**: Changed all dialog containers from `gr.Group` to `gr.Column`
+- **Files Modified**:
+  - `cosmos_workflow/ui/tabs/runs_ui.py` - Changed delete dialog container
+  - `cosmos_workflow/ui/tabs/prompts_ui.py` - Changed delete dialog container
+  - `cosmos_workflow/ui/tabs/jobs_ui.py` - Changed kill confirmation container
+
+### Why These Bugs Emerged After Refactoring
+
+The refactoring exposed existing issues that were hidden in the monolithic structure:
+
+1. **Service Initialization**: The singleton pattern issue became apparent when services were separated
+2. **Component Naming**: Mismatches were harder to spot across multiple files vs single file
+3. **Gradio Limitations**: The gr.Group issue existed before but wasn't triggered during testing
+
+### Lessons Learned
+
+- **Test all UI interactions** after refactoring, not just page loads
+- **Component names must match exactly** between UI definition and event wiring
+- **Understand framework limitations** (gr.Group vs gr.Column for dialogs)
+- **Watch for service initialization side effects** when using singleton patterns
+
+---
+
+## Phase 5: Refactor builder.py - The New Monolith (NEW - Added 2025-09-24)
+
+### The Problem
+
+After successfully refactoring app.py from 2,063 lines to 152 lines, we've created a new problem:
+**builder.py has become a 1,243-line monolith** containing ALL event wiring logic.
+
+This is a classic refactoring antipattern - we moved the complexity rather than truly modularizing it.
+
+### Current builder.py Responsibilities (Too Many!)
+1. Creating the entire UI structure (build_ui_components)
+2. Wiring ALL event handlers for every tab
+3. Managing state initialization
+4. Setting up timers and auto-refresh
+5. Cross-tab navigation logic
+6. Initial data loading
+
+### Proposed Solution: True Modularization
+
+Break builder.py into focused, single-responsibility modules:
+
+```
+core/
+├── builder.py (50-100 lines) - ONLY orchestration
+├── wiring/
+│   ├── __init__.py - Export wire_all_events
+│   ├── prompts_wiring.py (~150 lines) - Prompts tab events
+│   ├── runs_wiring.py (~200 lines) - Runs tab events
+│   ├── inputs_wiring.py (~100 lines) - Inputs tab events
+│   ├── jobs_wiring.py (~150 lines) - Jobs tab events
+│   └── navigation_wiring.py (~100 lines) - Cross-tab navigation
+├── initialization.py (~100 lines) - State and data loading
+└── timers.py (~50 lines) - Auto-refresh and timer setup
+```
+
+### Alternative Pattern: Self-Wiring Components
+
+Each tab could wire its own events internally:
+
+```python
+# tabs/prompts_ui.py
+def create_prompts_tab_ui():
+    components = _create_components()  # Build UI
+    _wire_events(components)           # Wire events locally
+    return components
+```
+
+Then builder.py becomes trivial:
+
+```python
+# core/builder.py (simplified to ~50 lines)
+def create_ui():
+    tabs = {
+        'prompts': create_prompts_tab_ui(),  # Already wired!
+        'runs': create_runs_tab_ui(),        # Already wired!
+        'inputs': create_inputs_tab_ui(),    # Already wired!
+        'jobs': create_jobs_tab_ui()         # Already wired!
+    }
+
+    wire_cross_tab_navigation(tabs)  # Only cross-cutting concerns
+    setup_timers(tabs)               # Auto-refresh setup
+    return tabs
+```
+
+### Benefits of This Approach
+
+1. **Single Responsibility**: Each module does ONE thing
+2. **Easier Testing**: Can test wiring in isolation
+3. **Better Organization**: Know exactly where to find specific event wiring
+4. **Reduced Coupling**: Changes to one tab don't affect others
+5. **Maintainability**: No more 1,000+ line files to navigate
+
+### Implementation Tasks
+
+#### Phase 5.1: Create Wiring Modules
+- [ ] Create `core/wiring/` directory
+- [ ] Extract prompts wiring to `prompts_wiring.py`
+- [ ] Extract runs wiring to `runs_wiring.py`
+- [ ] Extract inputs wiring to `inputs_wiring.py`
+- [ ] Extract jobs wiring to `jobs_wiring.py`
+- [ ] Extract navigation to `navigation_wiring.py`
+
+#### Phase 5.2: Simplify builder.py
+- [ ] Reduce builder.py to orchestration only
+- [ ] Move initialization to `initialization.py`
+- [ ] Move timers to `timers.py`
+- [ ] Target: builder.py < 100 lines
+
+#### Phase 5.3: Consider Self-Wiring Pattern
+- [ ] Evaluate if tabs should wire their own events
+- [ ] Prototype with one tab
+- [ ] Make decision based on results
+
+### Success Metrics
+- [ ] No file > 300 lines (except documented exceptions)
+- [ ] builder.py reduced from 1,243 to < 100 lines
+- [ ] Each wiring module handles single tab
+- [ ] All event wiring still works correctly

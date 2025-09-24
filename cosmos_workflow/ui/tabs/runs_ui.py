@@ -177,7 +177,7 @@ def create_runs_tab_ui():
                             )
 
                         # Delete confirmation dialog
-                        with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                        with gr.Column(visible=False, elem_classes=["detail-card"]) as components[
                             "runs_delete_dialog"
                         ]:
                             components["runs_delete_preview"] = gr.Markdown()

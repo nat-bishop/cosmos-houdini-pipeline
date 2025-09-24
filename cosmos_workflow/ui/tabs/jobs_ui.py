@@ -113,7 +113,7 @@ Currently idle - no jobs running
                     )
 
                     # Kill confirmation dialog (hidden by default)
-                    with gr.Group(visible=False) as components["kill_confirmation"]:
+                    with gr.Column(visible=False) as components["kill_confirmation"]:
                         gr.Markdown("⚠️ **Confirm Kill Active Job**")
                         components["kill_preview"] = gr.Markdown(
                             "This will stop the currently running container."

@@ -4,6 +4,8 @@ This module coordinates the building of UI components and wiring of events
 by delegating to specialized modules for each tab.
 """
 
+from typing import Any
+
 import gradio as gr
 
 from cosmos_workflow.ui.core.state import create_ui_states
@@ -22,7 +24,7 @@ from cosmos_workflow.ui.tabs.runs_ui import create_runs_tab_ui
 from cosmos_workflow.utils.logging import logger
 
 
-def build_ui_components(config):
+def build_ui_components(config: Any) -> tuple[gr.Blocks, dict[str, Any]]:
     """Build all UI components and tabs.
 
     Args:
@@ -74,7 +76,7 @@ def build_ui_components(config):
     return app, components
 
 
-def wire_header_events(components, api, config):
+def wire_header_events(components: dict[str, Any], api: Any, config: Any) -> None:
     """Wire header and manual refresh events.
 
     Args:
@@ -110,7 +112,7 @@ def wire_header_events(components, api, config):
                 stats,
             )
         except Exception as e:
-            logger.error(f"Error refreshing data: {e}")
+            logger.error("Error refreshing data - Type: %s, Message: %s", type(e).__name__, str(e))
             return (
                 gr.update(value=f"**Status:** ❌ Error refreshing: {e!s}"),
                 gr.update(),
@@ -140,7 +142,9 @@ def wire_header_events(components, api, config):
             )
 
 
-def wire_all_events(app, components, config, api, simple_queue_service):
+def wire_all_events(
+    app: gr.Blocks, components: dict[str, Any], config: Any, api: Any, simple_queue_service: Any
+) -> None:
     """Wire all event handlers for the application.
 
     This is the main orchestrator that calls all specialized event wiring functions.
@@ -165,10 +169,16 @@ def wire_all_events(app, components, config, api, simple_queue_service):
     # Load initial data
     wire_initial_data_load(app, components, config, api, simple_queue_service)
 
-    logger.info("All events wired successfully")
+    logger.info(
+        "All events wired successfully - Components: %d, Config: %s",
+        len(components),
+        type(config).__name__,
+    )
 
 
-def wire_initial_data_load(app, components, config, api, simple_queue_service):
+def wire_initial_data_load(
+    app: gr.Blocks, components: dict[str, Any], config: Any, api: Any, simple_queue_service: Any
+) -> None:
     """Wire initial data loading events when the app starts.
 
     Args:
@@ -239,4 +249,11 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
             ],
         )
 
-    logger.info("Initial data loading configured")
+    logger.info(
+        "Initial data loading configured - %d components initialized",
+        sum(
+            1
+            for k in ["input_gallery", "ops_prompts_table", "runs_gallery", "queue_table"]
+            if k in components
+        ),
+    )

@@ -1,5 +1,7 @@
 """Cross-tab navigation event wiring."""
 
+from typing import Any
+
 import gradio as gr
 
 from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
@@ -7,7 +9,7 @@ from cosmos_workflow.ui.tabs.runs import load_runs_for_multiple_prompts
 from cosmos_workflow.utils.logging import logger
 
 
-def wire_cross_tab_navigation(components):
+def wire_cross_tab_navigation(components: dict[str, Any]) -> None:
     """Wire cross-tab navigation events.
 
     Handles navigation between tabs with data filtering and loading.
@@ -15,7 +17,7 @@ def wire_cross_tab_navigation(components):
     # View runs button from prompts tab - this needs the full navigation
     if "view_runs_btn" in components:
 
-        def prepare_runs_navigation(selected_prompt_ids):
+        def prepare_runs_navigation(selected_prompt_ids: list[str] | None) -> tuple[Any, ...]:
             """Navigate to runs tab with prompt filter and load data."""
             if not selected_prompt_ids:
                 return (
@@ -30,7 +32,10 @@ def wire_cross_tab_navigation(components):
                     gr.update(value=""),
                 )
 
-            logger.info(f"Navigating to runs with {len(selected_prompt_ids)} prompts")
+            logger.info(
+                "Cross-tab navigation - Target: runs, Filter: prompts, Count: %d",
+                len(selected_prompt_ids),
+            )
 
             # Load filtered runs data
             gallery, table, stats, prompt_names = load_runs_for_multiple_prompts(
@@ -87,7 +92,9 @@ def wire_cross_tab_navigation(components):
     # View runs button from inputs tab
     if "view_runs_for_input_btn" in components:
 
-        def navigate_to_runs_for_input(selected_dir, nav_state):
+        def navigate_to_runs_for_input(
+            selected_dir: str | None, nav_state: Any
+        ) -> tuple[Any, Any, dict | None]:
             """Navigate to runs tab for input directory."""
             if not selected_dir:
                 return gr.update(), nav_state, None
@@ -118,12 +125,16 @@ def wire_cross_tab_navigation(components):
     # Navigate from inputs to prompts
     if "view_prompts_for_input_btn" in components:
 
-        def prepare_prompts_navigation_from_input(input_name):
+        def prepare_prompts_navigation_from_input(
+            input_name: str | None,
+        ) -> tuple[Any, Any, int]:
             """Navigate to Prompts tab with search filter for input directory."""
             if not input_name:
                 return gr.update(), gr.update(), 1
 
-            logger.info(f"Navigating to prompts with search: {input_name}")
+            logger.info(
+                "Cross-tab navigation - Target: prompts, Filter: input, Value: %s", input_name
+            )
 
             # Extract just the directory name (remove any path prefixes)
             search_term = input_name.split("/")[-1] if "/" in input_name else input_name

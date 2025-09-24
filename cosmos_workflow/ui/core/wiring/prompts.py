@@ -1,6 +1,7 @@
 """Event wiring for Prompts tab components."""
 
 import functools
+from typing import Any
 
 import gradio as gr
 
@@ -21,7 +22,7 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
 from cosmos_workflow.utils.logging import logger
 
 
-def wire_prompts_events(components, api, simple_queue_service):
+def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_service: Any) -> None:
     """Wire events for the Prompts tab.
 
     Args:

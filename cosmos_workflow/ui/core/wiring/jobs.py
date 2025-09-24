@@ -1,6 +1,7 @@
 """Event wiring for Jobs tab components."""
 
 import functools
+from typing import Any
 
 import gradio as gr
 
@@ -16,7 +17,7 @@ from cosmos_workflow.ui.tabs.jobs_handlers import (
 from cosmos_workflow.utils.logging import logger
 
 
-def wire_jobs_events(components, api, simple_queue_service):
+def wire_jobs_events(components: dict[str, Any], api: Any, simple_queue_service: Any) -> None:
     """Wire events for the Jobs tab.
 
     Args:
@@ -30,7 +31,9 @@ def wire_jobs_events(components, api, simple_queue_service):
     wire_queue_timers(components, simple_queue_service)
 
 
-def wire_jobs_control_events(components, simple_queue_service=None):
+def wire_jobs_control_events(
+    components: dict[str, Any], simple_queue_service: Any | None = None
+) -> None:
     """Wire job control events (stream, kill, etc).
 
     Args:
@@ -84,7 +87,7 @@ def wire_jobs_control_events(components, simple_queue_service=None):
     # Additional job control events
     if "clear_logs_btn" in components:
 
-        def clear_logs():
+        def clear_logs() -> Any:
             """Clear the job logs display."""
             return gr.update(value="")
 
@@ -97,7 +100,7 @@ def wire_jobs_control_events(components, simple_queue_service=None):
 
     if "auto_advance_toggle" in components:
 
-        def toggle_auto_advance(enabled):
+        def toggle_auto_advance(enabled: bool) -> Any:
             """Toggle auto-advance for job logs."""
             return gr.update(value=f"Auto-advance: {'Enabled' if enabled else 'Disabled'}")
 
@@ -109,9 +112,9 @@ def wire_jobs_control_events(components, simple_queue_service=None):
 
     if "batch_size" in components:
 
-        def update_batch_size(size):
+        def update_batch_size(size: int) -> None:
             """Update batch processing size."""
-            logger.info(f"Batch size updated to: {size}")
+            logger.info("Batch size configuration updated - New size: %d", size)
             # Don't return anything if no output is expected
 
         if "batch_size" in components:
@@ -136,7 +139,7 @@ def wire_jobs_control_events(components, simple_queue_service=None):
         )
 
 
-def wire_queue_timers(components, simple_queue_service):
+def wire_queue_timers(components: dict[str, Any], simple_queue_service: Any) -> None:
     """Wire timer events for automatic queue refresh and processing.
 
     Args:
@@ -155,15 +158,17 @@ def wire_queue_timers(components, simple_queue_service):
                 components["queue_table"],
             ],
         )
-        logger.info("Queue auto-refresh timer created (5 seconds)")
+        logger.info("Queue auto-refresh timer created - Interval: %d seconds, Active: True", 5)
 
     # Create timer for auto-processing queue every 2 seconds
-    def auto_process_queue():
+    def auto_process_queue() -> None:
         """Process next job in queue automatically."""
         try:
             # Check if queue is paused
             if hasattr(simple_queue_service, "queue_paused") and simple_queue_service.queue_paused:
-                logger.debug("Queue is paused, skipping processing")
+                logger.debug(
+                    "Queue processing skipped - Paused: %s", simple_queue_service.queue_paused
+                )
                 return  # Return nothing instead of None
 
             # Only process if there are actually jobs in the queue
@@ -171,34 +176,37 @@ def wire_queue_timers(components, simple_queue_service):
             queued_count = status.get("total_queued", 0)
 
             if queued_count > 0:
-                logger.debug("Queue has {} jobs, attempting to process next", queued_count)
+                logger.debug("Queue processing - Jobs: %d, Processing next", queued_count)
                 result = simple_queue_service.process_next_job()
                 if result:
-                    logger.info("Processed job from queue")
+                    logger.info("Job processed successfully - Result: %s", type(result).__name__)
                 # Don't return the result since outputs=[] expects no return
         except Exception as e:
-            logger.error("Error in auto_process_queue: {}", e)
+            logger.error("Queue processing error - Type: %s, Message: %s", type(e).__name__, str(e))
 
     process_timer = gr.Timer(value=2, active=True)
     process_timer.tick(
         fn=auto_process_queue,
         outputs=[],  # No outputs needed
     )
-    logger.info("Queue auto-process timer created (2 seconds)")
+    logger.info("Queue auto-process timer created - Interval: %d seconds, Active: True", 2)
 
 
-def wire_queue_control_events(components, simple_queue_service):
+def wire_queue_control_events(components: dict[str, Any], simple_queue_service: Any) -> None:
     """Wire queue control events (pause, resume, clear, etc)."""
     queue_handlers = QueueHandlers(simple_queue_service)
 
     # Queue pause checkbox handler
     if "queue_pause_checkbox" in components:
 
-        def toggle_queue_pause(is_paused):
+        def toggle_queue_pause(is_paused: bool) -> tuple:
             """Toggle queue pause state."""
             simple_queue_service.set_queue_paused(is_paused)
             status_text = "⏸️ **Queue: Paused**" if is_paused else "✅ **Queue: Active**"
-            logger.info("Queue {} by user", "paused" if is_paused else "resumed")
+            logger.info(
+                "Queue state changed - Action: %s, User-initiated: True",
+                "paused" if is_paused else "resumed",
+            )
 
             # Get updated queue display
             status, table = queue_handlers.get_queue_display()
@@ -262,7 +270,7 @@ def wire_queue_control_events(components, simple_queue_service):
         )
 
 
-def wire_queue_selection_events(components, simple_queue_service):
+def wire_queue_selection_events(components: dict[str, Any], simple_queue_service: Any) -> None:
     """Wire queue table selection events."""
     queue_handlers = QueueHandlers(simple_queue_service)
 

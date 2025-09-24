@@ -79,14 +79,21 @@ def safe_wire(
     # Get the event method dynamically
     event_method = getattr(component, event, None)
     if event_method is None:
-        logger.warning(f"Component has no '{event}' event method")
+        logger.warning(
+            "Event method not found - Component: %s, Event: %s", type(component).__name__, event
+        )
         return None
 
     try:
         # Call the event method with filtered inputs/outputs
         return event_method(fn=handler, inputs=inputs, outputs=outputs, **kwargs)
     except Exception as e:
-        logger.error(f"Error wiring {event} event: {e}")
+        logger.error(
+            "Event wiring failed - Event: %s, Handler: %s, Error: %s",
+            event,
+            handler.__name__ if hasattr(handler, "__name__") else str(handler),
+            str(e),
+        )
         return None
 
 
@@ -113,12 +120,14 @@ def safe_click(
         Event object if successful, None otherwise
     """
     if component_name not in components:
-        logger.debug(f"Component '{component_name}' not found, skipping click event")
+        logger.debug(
+            "Component not found for event - Name: %s, Event: click, Skipping", component_name
+        )
         return None
 
     component = components[component_name]
     if component is None:
-        logger.debug(f"Component '{component_name}' is None, skipping click event")
+        logger.debug("Component is None - Name: %s, Event: click, Skipping", component_name)
         return None
 
     # Process inputs
@@ -144,7 +153,7 @@ def safe_click(
     try:
         return component.click(fn=fn, inputs=inputs, outputs=outputs, **kwargs)
     except Exception as e:
-        logger.error(f"Error wiring click event for {component_name}: {e}")
+        logger.error("Click event wiring failed - Component: %s, Error: %s", component_name, str(e))
         return None
 
 
@@ -158,7 +167,9 @@ def safe_change(
 ) -> Any | None:
     """Safely wire a change event to a component."""
     if component_name not in components:
-        logger.debug(f"Component '{component_name}' not found, skipping change event")
+        logger.debug(
+            "Component not found for event - Name: %s, Event: change, Skipping", component_name
+        )
         return None
 
     component = components[component_name]
@@ -183,7 +194,9 @@ def safe_change(
     try:
         return component.change(fn=fn, inputs=inputs, outputs=outputs, **kwargs)
     except Exception as e:
-        logger.error(f"Error wiring change event for {component_name}: {e}")
+        logger.error(
+            "Change event wiring failed - Component: %s, Error: %s", component_name, str(e)
+        )
         return None
 
 
@@ -197,7 +210,9 @@ def safe_select(
 ) -> Any | None:
     """Safely wire a select event to a component."""
     if component_name not in components:
-        logger.debug(f"Component '{component_name}' not found, skipping select event")
+        logger.debug(
+            "Component not found for event - Name: %s, Event: select, Skipping", component_name
+        )
         return None
 
     component = components[component_name]
@@ -222,7 +237,9 @@ def safe_select(
     try:
         return component.select(fn=fn, inputs=inputs, outputs=outputs, **kwargs)
     except Exception as e:
-        logger.error(f"Error wiring select event for {component_name}: {e}")
+        logger.error(
+            "Select event wiring failed - Component: %s, Error: %s", component_name, str(e)
+        )
         return None
 
 
@@ -263,5 +280,7 @@ def wire_event_safe(
     elif event_type == "select":
         return safe_select(components, component_name, fn, **kwargs)
     else:
-        logger.warning(f"Unknown event type: {event_type}")
+        logger.warning(
+            "Unknown event type requested - Type: %s, Component: %s", event_type, component_name
+        )
         return None

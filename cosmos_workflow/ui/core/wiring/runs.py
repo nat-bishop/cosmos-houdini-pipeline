@@ -1,6 +1,7 @@
 """Event wiring for Runs tab components."""
 
 import functools
+from typing import Any
 
 import gradio as gr
 
@@ -21,7 +22,7 @@ from cosmos_workflow.ui.tabs.runs import (
 from cosmos_workflow.utils.logging import logger
 
 
-def wire_runs_events(components, api):
+def wire_runs_events(components: dict[str, Any], api: Any) -> None:
     """Wire events for the Runs tab.
 
     This handles all runs-related events including filtering, selection,
@@ -38,7 +39,7 @@ def wire_runs_events(components, api):
     wire_runs_rating_events(components, api)
 
 
-def wire_runs_filtering_events(components):
+def wire_runs_filtering_events(components: dict[str, Any]) -> None:
     """Wire runs filtering events."""
     # Check if all filter components exist
     filter_keys = [
@@ -74,7 +75,7 @@ def wire_runs_filtering_events(components):
                 )
 
 
-def wire_runs_selection_events(components):
+def wire_runs_selection_events(components: dict[str, Any]) -> None:
     """Wire runs table and gallery selection events."""
     # Define the output keys for run details
     runs_output_keys = [
@@ -146,7 +147,7 @@ def wire_runs_selection_events(components):
             # Add index tracking
             outputs_with_index = [*outputs, components.get("runs_selected_index")]
 
-            def on_gallery_select_with_index(evt: gr.SelectData):
+            def on_gallery_select_with_index(evt: gr.SelectData) -> list[Any]:
                 result = on_runs_gallery_select(evt)
                 return [*result, evt.index if evt else 0]
 
@@ -157,15 +158,15 @@ def wire_runs_selection_events(components):
             )
 
 
-def wire_runs_navigation_events(components):
+def wire_runs_navigation_events(components: dict[str, Any]) -> None:
     """Wire gallery navigation buttons."""
     if all(k in components for k in ["runs_prev_btn", "runs_next_btn", "runs_selected_index"]):
 
-        def navigate_gallery_prev(current_index):
+        def navigate_gallery_prev(current_index: int) -> tuple[Any, int]:
             new_index = max(0, current_index - 1)
             return gr.update(selected_index=new_index), new_index
 
-        def navigate_gallery_next(current_index):
+        def navigate_gallery_next(current_index: int) -> tuple[Any, int]:
             new_index = current_index + 1
             return gr.update(selected_index=new_index), new_index
 
@@ -182,7 +183,7 @@ def wire_runs_navigation_events(components):
         )
 
 
-def wire_runs_action_events(components, api):
+def wire_runs_action_events(components: dict[str, Any], api: Any) -> None:
     """Wire run action events (delete, upscale, etc)."""
     # Delete operations
     if "runs_delete_selected_btn" in components:
@@ -280,10 +281,10 @@ def wire_runs_action_events(components, api):
         )
 
 
-def wire_runs_rating_events(components, api):
+def wire_runs_rating_events(components: dict[str, Any], api: Any) -> None:
     """Wire star rating button events."""
 
-    def handle_star_click(star_value, run_id, *filter_args):
+    def handle_star_click(star_value: int, run_id: str | None, *filter_args) -> list[Any]:
         """Handle star button click and save rating."""
         if not run_id:
             # No run selected, return unchanged
@@ -292,7 +293,9 @@ def wire_runs_rating_events(components, api):
         # Save the rating
         if api:
             api.set_run_rating(run_id, star_value)
-            logger.info("Set rating {} for run {}", star_value, run_id)
+            logger.info(
+                "Run rating updated - Run ID: %s, Rating: %d/5, Source: UI", run_id, star_value
+            )
 
         # Refresh the runs display
         (

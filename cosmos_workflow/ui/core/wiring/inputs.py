@@ -2,6 +2,7 @@
 
 import functools
 from pathlib import Path
+from typing import Any
 
 import gradio as gr
 
@@ -15,7 +16,7 @@ from cosmos_workflow.ui.tabs.inputs_handlers import (
 )
 
 
-def wire_inputs_events(components, config, api):
+def wire_inputs_events(components: dict[str, Any], config: Any, api: Any) -> None:
     """Wire events for the Inputs tab.
 
     Args:

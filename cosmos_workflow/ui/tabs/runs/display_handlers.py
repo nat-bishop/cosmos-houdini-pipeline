@@ -216,28 +216,11 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     video_paths, output_gallery, output_video = _resolve_video_paths(outputs, run_id, ops)
     logger.info("Output video path: {}", output_video)
 
-    # Always get prompt name from database - this should never fail
-    prompt_name = ""
-    if prompt_id:
+    # Get prompt_text if missing from run details
+    if not prompt_text and prompt_id:
         prompt = ops.get_prompt(prompt_id)
         if prompt:
-            prompt_name = prompt.get("name", "")
-            # Also get prompt_text if it's missing from run details
-            if not prompt_text:
-                prompt_text = prompt.get("prompt_text", "")
-
-            # Error if prompt exists but has no name
-            if not prompt_name:
-                logger.error("ERROR: Prompt {} exists but has no name field", prompt_id)
-                prompt_name = "Not Found"
-        else:
-            # Error if prompt_id doesn't exist in database
-            logger.error("ERROR: Prompt {} not found in database for run {}", prompt_id, run_id)
-            prompt_name = "Not Found"
-    else:
-        # Error if run has no prompt_id
-        logger.error("ERROR: Run {} has no prompt_id", run_id)
-        prompt_name = "Not Found"
+            prompt_text = prompt.get("prompt_text", "")
 
     # Get rating and prompt info (not used in current display)
 
@@ -385,9 +368,12 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
         gr.update(value=run_id),  # runs_info_id
         gr.update(value=status),  # runs_info_status
         gr.update(value=model_type),  # runs_info_type
-        gr.update(value=metadata.get("duration", "")),  # runs_info_timestamp
+        gr.update(value=metadata.get("duration", "")),  # runs_info_duration
         gr.update(value=prompt_id or ""),  # runs_info_prompt_id
-        gr.update(value=prompt_name or ""),  # runs_info_prompt_name
+        gr.update(value=metadata.get("created_at", "")),  # runs_info_created
+        gr.update(value=metadata.get("completed_at", "")),  # runs_info_completed
+        gr.update(value=str(output_video) if output_video else ""),  # runs_info_output_path
+        gr.update(value="\n".join([str(v) for v in input_videos])),  # runs_info_input_paths
         # Star rating buttons - update value and variant to show rating
         gr.update(
             value="★" if rating >= 1 else "☆", variant="primary" if rating >= 1 else "secondary"

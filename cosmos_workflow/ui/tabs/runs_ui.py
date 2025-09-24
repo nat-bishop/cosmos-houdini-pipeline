@@ -517,11 +517,6 @@ def create_runs_tab_ui():
                                     interactive=False,
                                 )
 
-                            components["runs_info_prompt_name"] = gr.Textbox(
-                                label="Prompt Name",
-                                interactive=False,
-                            )
-
                             with gr.Row():
                                 components["runs_info_created"] = gr.Textbox(
                                     label="Created",

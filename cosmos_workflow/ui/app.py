@@ -110,14 +110,14 @@ def launch_ui(share=False, auto_reload=False):
     """
     app = create_ui()
 
-    logger.info(
+    startup_msg = (
         "=" * 80 + "\n"
-        "🚀 Cosmos Workflow Manager UI Starting\n"
-        "   Architecture: Modular (Phase 4.7 Complete)\n"
-        "   Lines of Code: ~200 (was 2,063)\n"
-        "   create_ui(): ~20 lines (was 1,782)\n"
-        "=" * 80
+        "Cosmos Workflow Manager UI Starting\n"
+        "   Architecture: Modular (Phase 6 Complete)\n"
+        "   Lines of Code: ~260 (was 2,063)\n"
+        "   create_ui(): ~20 lines (was 1,782)\n" + "=" * 80
     )
+    logger.info(startup_msg)
 
     # Launch with appropriate settings
     app.launch(

@@ -249,11 +249,12 @@ def wire_initial_data_load(
             ],
         )
 
+    initialized_count = sum(
+        1
+        for k in ["input_gallery", "ops_prompts_table", "runs_gallery", "queue_table"]
+        if k in components
+    )
     logger.info(
         "Initial data loading configured - %d components initialized",
-        sum(
-            1
-            for k in ["input_gallery", "ops_prompts_table", "runs_gallery", "queue_table"]
-            if k in components
-        ),
+        initialized_count,
     )

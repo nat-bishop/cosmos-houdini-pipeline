@@ -158,7 +158,7 @@ def wire_queue_timers(components: dict[str, Any], simple_queue_service: Any) -> 
                 components["queue_table"],
             ],
         )
-        logger.info("Queue auto-refresh timer created - Interval: %d seconds, Active: True", 5)
+        logger.info("Queue auto-refresh timer created - Interval: %d seconds, Active: %s", 5, True)
 
     # Create timer for auto-processing queue every 2 seconds
     def auto_process_queue() -> None:
@@ -189,7 +189,7 @@ def wire_queue_timers(components: dict[str, Any], simple_queue_service: Any) -> 
         fn=auto_process_queue,
         outputs=[],  # No outputs needed
     )
-    logger.info("Queue auto-process timer created - Interval: %d seconds, Active: True", 2)
+    logger.info("Queue auto-process timer created - Interval: %d seconds, Active: %s", 2, True)
 
 
 def wire_queue_control_events(components: dict[str, Any], simple_queue_service: Any) -> None:

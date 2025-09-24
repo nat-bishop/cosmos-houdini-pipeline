@@ -11,10 +11,7 @@ from typing import Any
 import gradio as gr
 
 from cosmos_workflow.api.cosmos_api import CosmosAPI
-from cosmos_workflow.ui.models.responses import (
-    RunDetailsResponse,
-    create_empty_run_details_response,
-)
+from cosmos_workflow.ui.models.responses import create_empty_run_details_response
 
 # Import helper functions from new specialized modules
 from cosmos_workflow.ui.tabs.runs.model_handlers import (
@@ -175,7 +172,7 @@ def update_runs_selection_info(table_data, evt: gr.SelectData):
 
     if evt is None or table_data is None:
         logger.warning("No evt or table_data")
-        return gr.update(visible=False), ""
+        return gr.update(value="No run selected"), ""
 
     # Get selected row index
     row_idx = evt.index[0] if isinstance(evt.index, list | tuple) else evt.index
@@ -186,10 +183,10 @@ def update_runs_selection_info(table_data, evt: gr.SelectData):
 
     if not run_id:
         logger.warning("No run_id found in selected row")
-        return gr.update(visible=False), ""
+        return gr.update(value="No run selected"), ""
 
-    # Show the row and update the hidden run_id
-    return gr.update(visible=True), run_id
+    # Show the row and update the hidden run_id with selection info
+    return gr.update(value=f"**Selected:** {run_id[:8]}..."), run_id
 
 
 def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> list[Any]:
@@ -222,11 +219,19 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     video_paths, output_gallery, output_video = _resolve_video_paths(outputs, run_id, ops)
     logger.info("Output video path: {}", output_video)
 
-    # Get prompt text if not in run details
+    # Get prompt details if not in run details
+    prompt_name = ""
     if not prompt_text and prompt_id:
         prompt = ops.get_prompt(prompt_id)
         if prompt:
             prompt_text = prompt.get("prompt_text", "")
+            prompt_name = prompt.get("name", "")
+
+    # Create a prompt name if not available
+    if not prompt_name and prompt_text:
+        # Use first few words of prompt as name
+        words = prompt_text.split()[:5]
+        prompt_name = " ".join(words) + "..." if len(words) >= 5 else prompt_text
 
     # Get rating and prompt info (not used in current display)
 
@@ -247,6 +252,13 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
                     upscaled_video = str(Path(upscaled_path))
                     show_upscaled_tab = True
                     logger.info("Found upscaled video: {}", upscaled_video)
+            else:
+                logger.info("Upscaled outputs format issue: {}", upscaled_outputs)
+        else:
+            if upscaled_run:
+                logger.info("Upscaled run status: {}", upscaled_run.get("status"))
+            else:
+                logger.info("No upscaled run found for {}", run_id)
 
     # Use helper to load spec and weights
     spec_data = _load_spec_and_weights(run_id)
@@ -259,7 +271,9 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
             prompt_inputs = prompt.get("inputs", {})
 
     # Use helper to build input gallery
-    input_videos, control_weights = _build_input_gallery(spec_data, prompt_inputs, run_id)
+    input_videos, control_weights, video_labels = _build_input_gallery(
+        spec_data, prompt_inputs, run_id
+    )
 
     # Get execution config and parameters
     exec_config = run_details.get("execution_config", {})
@@ -297,6 +311,15 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     show_enhance = model_type == "enhance"
     show_upscale = model_type == "upscale"
 
+    logger.info(
+        "Content visibility - Transfer: {}, Enhance: {}, Upscale: {}, Upscaled Tab: {}",
+        show_transfer,
+        show_enhance,
+        show_upscale,
+        show_upscaled_tab,
+    )
+    logger.info("Upscaled video path: {}, Output video path: {}", upscaled_video, output_video)
+
     # Build params display
     params_display = ""
     if exec_config:
@@ -310,69 +333,90 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     # Get rating if available
     rating = run_details.get("rating", 0)
 
-    # Create the response matching the actual RunDetailsResponse fields
-    response = RunDetailsResponse(
+    # Return only the components that actually exist in the UI
+    # This list must match the runs_output_keys in wiring/runs.py EXACTLY in order
+    return [
         # Main visibility controls
-        runs_details_group=gr.update(visible=True),
-        runs_detail_id=run_id,
-        runs_detail_status=status,
-        # Content block visibility (model-specific views)
-        runs_main_content_transfer=gr.update(visible=show_transfer),
-        runs_main_content_enhance=gr.update(visible=show_enhance),
-        runs_main_content_upscale=gr.update(visible=show_upscale),
-        # Transfer content components (input videos)
-        runs_input_video_1=gr.update(value=input_videos[0] if len(input_videos) > 0 else None),
-        runs_input_video_2=gr.update(value=input_videos[1] if len(input_videos) > 1 else None),
-        runs_input_video_3=gr.update(value=input_videos[2] if len(input_videos) > 2 else None),
-        runs_input_video_4=gr.update(value=input_videos[3] if len(input_videos) > 3 else None),
-        runs_output_video=gr.update(
+        gr.update(visible=True),  # runs_details_group
+        run_id,  # runs_detail_id
+        status,  # runs_detail_status
+        # Content block visibility
+        gr.update(visible=show_transfer),  # runs_main_content_transfer
+        gr.update(visible=show_enhance),  # runs_main_content_enhance
+        gr.update(visible=show_upscale),  # runs_main_content_upscale (ONLY for upscale model runs)
+        # Transfer content (input videos with labels)
+        gr.update(
+            value=input_videos[0] if len(input_videos) > 0 else None,
+            label=video_labels[0] if len(video_labels) > 0 else "Video 1",
+            visible=len(input_videos) > 0,
+        ),  # runs_input_video_1
+        gr.update(
+            value=input_videos[1] if len(input_videos) > 1 else None,
+            label=video_labels[1] if len(video_labels) > 1 else "Video 2",
+            visible=len(input_videos) > 1,
+        ),  # runs_input_video_2
+        gr.update(
+            value=input_videos[2] if len(input_videos) > 2 else None,
+            label=video_labels[2] if len(video_labels) > 2 else "Video 3",
+            visible=len(input_videos) > 2,
+        ),  # runs_input_video_3
+        gr.update(
+            value=input_videos[3] if len(input_videos) > 3 else None,
+            label=video_labels[3] if len(video_labels) > 3 else "Video 4",
+            visible=len(input_videos) > 3,
+        ),  # runs_input_video_4
+        gr.update(
             value=output_video if output_video else None, visible=bool(output_video)
-        ),
-        runs_prompt_text=gr.update(value=prompt_text or ""),
-        # Enhancement content components
-        runs_original_prompt_enhance=gr.update(value=prepared_data.get("original_prompt", "")),
-        runs_enhanced_prompt_enhance=gr.update(value=prepared_data.get("enhanced_prompt", "")),
-        runs_enhance_stats=gr.update(value=prepared_data.get("enhance_stats", "")),
-        # Upscale content components
-        runs_output_video_upscale=gr.update(value=upscaled_video if show_upscale else None),
-        runs_original_video_upscale=gr.update(value=output_video if show_upscale else None),
-        runs_upscale_stats=gr.update(value=prepared_data.get("upscale_stats", "")),
-        runs_upscale_prompt=gr.update(value=prepared_data.get("upscale_prompt", "")),
+        ),  # runs_output_video
+        gr.update(
+            visible=show_upscaled_tab
+        ),  # runs_upscaled_tab - Show tab for transfer runs with upscales
+        gr.update(
+            value=upscaled_video if show_upscaled_tab else None
+        ),  # runs_output_video_upscaled - Upscaled video in tab
+        gr.update(value=prompt_text or ""),  # runs_prompt_text
+        # Enhancement content
+        gr.update(value=prepared_data.get("original_prompt", "")),  # runs_original_prompt_enhance
+        gr.update(value=prepared_data.get("enhanced_prompt", "")),  # runs_enhanced_prompt_enhance
+        gr.update(value=prepared_data.get("enhance_stats", "")),  # runs_enhance_stats
+        # Upscale content (ONLY for upscale model runs, not transfer runs with upscales)
+        gr.update(
+            value=output_video if show_upscale else None
+        ),  # runs_output_video_upscale - This is the upscaled output
+        gr.update(
+            value=prepared_data.get("original_video", "") if show_upscale else None
+        ),  # runs_original_video_upscale - The original before upscaling
+        gr.update(value=prepared_data.get("upscale_stats", "")),  # runs_upscale_stats
+        gr.update(value=prepared_data.get("upscale_prompt", "")),  # runs_upscale_prompt
         # Info tab components
-        runs_info_id=gr.update(value=run_id),
-        runs_info_prompt_id=gr.update(value=prompt_id or ""),
-        runs_info_status=gr.update(value=status),
-        runs_info_duration=gr.update(value=metadata.get("duration", "")),
-        runs_info_type=gr.update(value=model_type),
-        runs_info_prompt_name=gr.update(value=prompt_text[:50] if prompt_text else ""),
-        # Star rating buttons (5 separate buttons)
-        star_1=gr.update(variant="primary" if rating >= 1 else "secondary"),
-        star_2=gr.update(variant="primary" if rating >= 2 else "secondary"),
-        star_3=gr.update(variant="primary" if rating >= 3 else "secondary"),
-        star_4=gr.update(variant="primary" if rating >= 4 else "secondary"),
-        star_5=gr.update(variant="primary" if rating >= 5 else "secondary"),
-        # Additional info fields
-        runs_info_rating=gr.update(value=rating),
-        runs_info_created=gr.update(value=metadata.get("created_at", "")),
-        runs_info_completed=gr.update(value=metadata.get("completed_at", "")),
-        runs_info_output_path=gr.update(value=str(output_video) if output_video else ""),
-        runs_info_input_paths=gr.update(value="\n".join([str(v) for v in input_videos])),
-        # Parameters and Logs tabs
-        runs_params_json=gr.update(value=params_display),
-        runs_log_path=gr.update(value=log_path or ""),
-        runs_log_output=gr.update(value=logs_content),
-        # Action buttons
-        runs_upscale_selected_btn=gr.update(
+        gr.update(value=run_id),  # runs_info_id
+        gr.update(value=status),  # runs_info_status
+        gr.update(value=model_type),  # runs_info_type
+        gr.update(value=metadata.get("duration", "")),  # runs_info_timestamp
+        gr.update(value=prompt_id or ""),  # runs_info_prompt_id
+        gr.update(value=prompt_name or ""),  # runs_info_prompt_name
+        # Star rating buttons - update value and variant to show rating
+        gr.update(
+            value="★" if rating >= 1 else "☆", variant="primary" if rating >= 1 else "secondary"
+        ),  # star_1
+        gr.update(
+            value="★" if rating >= 2 else "☆", variant="primary" if rating >= 2 else "secondary"
+        ),  # star_2
+        gr.update(
+            value="★" if rating >= 3 else "☆", variant="primary" if rating >= 3 else "secondary"
+        ),  # star_3
+        gr.update(
+            value="★" if rating >= 4 else "☆", variant="primary" if rating >= 4 else "secondary"
+        ),  # star_4
+        gr.update(
+            value="★" if rating >= 5 else "☆", variant="primary" if rating >= 5 else "secondary"
+        ),  # star_5
+        # Parameters and Logs
+        gr.update(value=params_display),  # runs_params_json
+        gr.update(value=log_path or ""),  # runs_log_path
+        gr.update(value=logs_content),  # runs_log_output
+        # Action button
+        gr.update(
             visible=model_type == "transfer" and status == "completed" and not show_upscaled_tab
-        ),
-        # Selected run tracking
-        runs_selected_id=run_id,
-        runs_selected_info=gr.update(value=f"Selected: {run_id}"),
-        # Upscaled output components
-        runs_output_video_upscaled=gr.update(
-            value=upscaled_video if upscaled_video else None, visible=bool(upscaled_video)
-        ),
-        runs_upscaled_tab=gr.update(visible=show_upscaled_tab),
-    )
-
-    return list(response)
+        ),  # runs_upscale_selected_btn
+    ]

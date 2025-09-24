@@ -92,6 +92,8 @@ def wire_runs_selection_events(components: dict[str, Any]) -> None:
         "runs_input_video_3",
         "runs_input_video_4",
         "runs_output_video",
+        "runs_upscaled_tab",  # Tab visibility for upscaled output
+        "runs_output_video_upscaled",  # Upscaled video in tab
         "runs_prompt_text",
         # Enhancement content
         "runs_original_prompt_enhance",
@@ -109,25 +111,33 @@ def wire_runs_selection_events(components: dict[str, Any]) -> None:
         "runs_info_timestamp",
         "runs_info_prompt_id",
         "runs_info_prompt_name",
-        "runs_info_duration",
-        "runs_info_seed",
-        "runs_info_gpu",
-        "runs_info_rating",
-        "runs_model_version_display",
+        # Star rating buttons
+        "star_1",
+        "star_2",
+        "star_3",
+        "star_4",
+        "star_5",
+        # Additional fields
+        "runs_params_json",
         "runs_log_path",
         "runs_log_output",
-        "runs_detail_main_video",
-        "runs_detail_thumb_video",
-        "runs_output_video_upscaled",
-        "runs_upscaled_tab",
+        "runs_upscale_selected_btn",
     ]
 
     # Wire table selection
     if "runs_table" in components:
         outputs = [components.get(k) for k in runs_output_keys if k in components]
         if outputs:
+            # Track which components are actually present for the handler
+            present_keys = [k for k in runs_output_keys if k in components]
+
+            def on_table_select_filtered(table_data, evt: gr.SelectData) -> list[Any]:
+                result = on_runs_table_select(table_data, evt)
+                # Filter result to only include values for present components
+                return [result[runs_output_keys.index(k)] for k in present_keys]
+
             components["runs_table"].select(
-                fn=on_runs_table_select,
+                fn=on_table_select_filtered,
                 inputs=[components["runs_table"]],
                 outputs=outputs,
             )
@@ -147,14 +157,42 @@ def wire_runs_selection_events(components: dict[str, Any]) -> None:
             # Add index tracking
             outputs_with_index = [*outputs, components.get("runs_selected_index")]
 
+            # Track which components are actually present for the handler
+            present_keys = [k for k in runs_output_keys if k in components]
+
             def on_gallery_select_with_index(evt: gr.SelectData) -> list[Any]:
                 result = on_runs_gallery_select(evt)
-                return [*result, evt.index if evt else 0]
+                # Filter result to only include values for present components
+                filtered_result = [result[runs_output_keys.index(k)] for k in present_keys]
+                return [*filtered_result, evt.index if evt else 0]
 
             components["runs_gallery"].select(
                 fn=on_gallery_select_with_index,
                 inputs=[],
                 outputs=outputs_with_index,
+            )
+
+        # Update selection info for gallery too
+        if "runs_selected_info" in components and "runs_selected_id" in components:
+
+            def update_gallery_selection_info(evt: gr.SelectData) -> tuple[Any, str]:
+                """Update selection info when gallery item is selected."""
+                if evt is None:
+                    return gr.update(value="No run selected"), ""
+
+                # Extract run ID from gallery selection
+                result = on_runs_gallery_select(evt)
+                if result and len(result) > 1:
+                    run_id = result[1]  # runs_detail_id is at index 1
+                    if run_id:
+                        return gr.update(value=f"**Selected:** {run_id[:8]}..."), run_id
+
+                return gr.update(value="No run selected"), ""
+
+            components["runs_gallery"].select(
+                fn=update_gallery_selection_info,
+                inputs=[],
+                outputs=[components["runs_selected_info"], components["runs_selected_id"]],
             )
 
 
@@ -317,11 +355,15 @@ def wire_runs_rating_events(components: dict[str, Any], api: Any) -> None:
             version_filter,
         )
 
-        # Return updated star states
+        # Return updated star states with filled/empty stars
         return [
-            gr.update(variant="primary" if i <= star_value else "secondary") for i in range(1, 6)
+            gr.update(
+                value="★" if i <= star_value else "☆",
+                variant="primary" if i <= star_value else "secondary",
+            )
+            for i in range(1, 6)
         ] + [
-            gr.update(value=f"**Current Rating:** {star_value}/5"),
+            gr.update(value=star_value),  # runs_info_rating expects a number, not a string
             gallery_data,
             table_data,
             stats,

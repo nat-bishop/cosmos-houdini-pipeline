@@ -4,7 +4,6 @@ This module contains helper functions used to extract metadata, resolve paths,
 and prepare data for run details display.
 """
 
-import json
 from datetime import datetime
 from pathlib import Path
 
@@ -83,106 +82,104 @@ def resolve_video_paths(outputs: dict, run_id: str, ops) -> tuple:
     return video_paths, output_gallery, output_video
 
 
-def load_spec_and_weights(run_id: str) -> dict:
-    """Load spec.json and extract control weights.
+def extract_control_weights(exec_config: dict) -> dict:
+    """Extract control weights from execution config.
 
     Args:
-        run_id: Run ID to locate spec.json
+        exec_config: Execution configuration dictionary
 
     Returns:
-        Dictionary with spec data or empty dict if not found
+        Dictionary with standardized control weights for vis, edge, depth, seg
     """
-    spec_data = {}
-    if run_id:
-        spec_path = Path(f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/inputs/spec.json")
-        if spec_path.exists():
-            try:
-                with open(spec_path) as f:
-                    spec_data = json.load(f)
-                logger.info("Loaded spec.json for run {}", run_id)
-            except Exception as e:
-                logger.warning("Failed to load spec.json: {}", str(e))
-    return spec_data
+    weights = {"vis": 0, "edge": 0, "depth": 0, "seg": 0}
+
+    if not exec_config:
+        return weights
+
+    # Extract weights from nested structure (e.g., {"vis": {"control_weight": 1.0}})
+    for control_type in ["vis", "edge", "depth", "seg"]:
+        if control_type in exec_config:
+            config_value = exec_config[control_type]
+            if isinstance(config_value, dict):
+                weights[control_type] = config_value.get("control_weight", 0)
+            elif isinstance(config_value, int | float):
+                # Handle direct numeric values
+                weights[control_type] = float(config_value)
+
+    # Also check for a top-level "weights" key (alternative structure)
+    if "weights" in exec_config:
+        weights_section = exec_config["weights"]
+        if isinstance(weights_section, dict):
+            for control_type in ["vis", "edge", "depth", "seg"]:
+                if control_type in weights_section:
+                    weights[control_type] = float(weights_section.get(control_type, 0))
+
+    return weights
 
 
-def build_input_gallery(spec_data: dict, prompt_inputs: dict, run_id: str) -> tuple:
-    """Build input video gallery from spec data and prompt inputs.
+def build_input_gallery(prompt_inputs: dict, run_id: str, exec_config: dict) -> tuple:
+    """Build input video gallery from execution config and prompt inputs.
 
     Args:
-        spec_data: Loaded spec.json data
         prompt_inputs: Input paths from prompt
         run_id: Run ID for locating generated controls
+        exec_config: Execution config with control weights
 
     Returns:
         Tuple of (input_videos list, control_weights dict, video_labels list)
     """
     input_videos = []
-    control_weights = {"vis": 0, "edge": 0, "depth": 0, "seg": 0}
     video_labels = []
 
-    if spec_data:
-        # Add main video from prompt if it exists
-        if prompt_inputs.get("video"):
+    # Extract control weights using helper function
+    control_weights = extract_control_weights(exec_config)
+
+    if not exec_config:
+        logger.error(
+            "ERROR: No execution_config found for run {}. This indicates corrupted or incomplete run data.",
+            run_id,
+        )
+
+    if prompt_inputs:
+        # Add main video if weight > 0
+        if prompt_inputs.get("video") and control_weights["vis"] > 0:
             path = Path(prompt_inputs["video"])
             if path.exists():
-                # Get actual vis weight from spec_data
-                vis_weight = spec_data.get("vis", {}).get("control_weight", 1.0)
                 input_videos.append(str(path))
-                control_weights["vis"] = vis_weight
-                video_labels.append(f"Color ({vis_weight:.2f})")
+                video_labels.append(f"Color ({control_weights['vis']:.2f})")
 
-        # Process each control type
-        control_types = {"edge": "Edge", "depth": "Depth", "seg": "Segmentation"}
+        # Add control videos
+        control_map = {
+            "edge": "Edge",
+            "depth": "Depth",
+            "seg": "Segmentation",
+        }
 
-        for control_key, control_label in control_types.items():
-            control_config = spec_data.get(control_key, {})
-            weight = control_config.get("control_weight", 0)
-
-            # Only process if weight > 0
+        for key, label in control_map.items():
+            weight = control_weights[key]
             if weight > 0:
-                control_weights[control_key] = weight
-
                 # First try prompt's input for this control
-                if prompt_inputs.get(control_key):
-                    control_path = Path(prompt_inputs[control_key])
-                    if control_path.exists():
-                        input_videos.append(str(control_path))
-                        video_labels.append(f"{control_label} ({weight:.2f})")
+                if prompt_inputs.get(key):
+                    path = Path(prompt_inputs[key])
+                    if path.exists():
+                        input_videos.append(str(path))
+                        video_labels.append(f"{label} ({weight:.2f})")
                         continue
 
                 # If no prompt input, check for AI-generated control
                 indexed_path = Path(
-                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control_0.mp4"
+                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{key}_input_control_0.mp4"
                 )
                 non_indexed_path = Path(
-                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{control_key}_input_control.mp4"
+                    f"F:/Art/cosmos-houdini-experiments/outputs/run_{run_id}/outputs/{key}_input_control.mp4"
                 )
 
                 if indexed_path.exists():
                     input_videos.append(str(indexed_path))
-                    video_labels.append(f"{control_label} ({weight:.2f})")
+                    video_labels.append(f"{label} ({weight:.2f})")
                 elif non_indexed_path.exists():
                     input_videos.append(str(non_indexed_path))
-                    video_labels.append(f"{control_label} ({weight:.2f})")
-
-    # Fallback if no spec.json - use prompt inputs with default weights
-    elif prompt_inputs:
-        video_keys = {
-            "video": ("Color/Visual", 1.0),
-            "edge": ("Edge", 0.5),
-            "depth": ("Depth", 0.5),
-            "seg": ("Segmentation", 0.5),
-        }
-        for key, (label, default_weight) in video_keys.items():
-            if prompt_inputs.get(key):
-                path = Path(prompt_inputs[key])
-                if path.exists():
-                    input_videos.append(str(path))
-                    video_labels.append(f"{label} ({default_weight:.2f})")
-                    if key == "video":
-                        control_weights["vis"] = default_weight
-                    else:
-                        control_weights[key] = default_weight
+                    video_labels.append(f"{label} ({weight:.2f})")
 
     return input_videos, control_weights, video_labels
 
@@ -211,14 +208,14 @@ def read_log_content(log_path: str, lines: int = 15) -> str:
 # Maintain backward compatibility with underscore-prefixed names
 _extract_run_metadata = extract_run_metadata
 _resolve_video_paths = resolve_video_paths
-_load_spec_and_weights = load_spec_and_weights
 _build_input_gallery = build_input_gallery
 _read_log_content = read_log_content
+_extract_control_weights = extract_control_weights
 
 __all__ = [
     "build_input_gallery",
+    "extract_control_weights",
     "extract_run_metadata",
-    "load_spec_and_weights",
     "read_log_content",
     "resolve_video_paths",
 ]

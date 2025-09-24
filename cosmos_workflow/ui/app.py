@@ -72,16 +72,9 @@ def _register_shutdown_handlers():
         """Clean up resources on shutdown."""
         logger.info("Shutting down Gradio UI...")
 
-        # Shutdown queue service
-        if queue_service:
-            try:
-                queue_service.shutdown()
-                logger.info("Queue service shut down successfully")
-            except Exception as e:
-                logger.error(f"Error shutting down queue service: {e}")
-
-        # No longer need to shutdown thumbnail executor as we removed thread pool
-        # Thumbnails are now generated synchronously during output download
+        # SimplifiedQueueService doesn't need cleanup - it has no background threads
+        # or exclusive resources to release. The database connection is shared
+        # across the app and handled elsewhere.
 
         logger.info("Gradio UI shutdown complete")
 
@@ -121,7 +114,7 @@ def launch_ui(share=False, auto_reload=False):
 
     # Launch with appropriate settings
     app.launch(
-        server_name="0.0.0.0",
+        server_name="0.0.0.0",  # noqa: S104
         server_port=7860,
         share=share,
         show_error=True,

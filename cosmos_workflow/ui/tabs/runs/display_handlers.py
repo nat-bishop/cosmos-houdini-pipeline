@@ -30,9 +30,6 @@ from cosmos_workflow.ui.tabs.runs.run_details import (
     extract_run_metadata as _extract_run_metadata,
 )
 from cosmos_workflow.ui.tabs.runs.run_details import (
-    load_spec_and_weights as _load_spec_and_weights,
-)
-from cosmos_workflow.ui.tabs.runs.run_details import (
     read_log_content as _read_log_content,
 )
 from cosmos_workflow.ui.tabs.runs.run_details import (
@@ -260,9 +257,6 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
             else:
                 logger.info("No upscaled run found for {}", run_id)
 
-    # Use helper to load spec and weights
-    spec_data = _load_spec_and_weights(run_id)
-
     # Get prompt inputs if available
     prompt_inputs = {}
     if prompt_id:
@@ -270,23 +264,13 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
         if prompt:
             prompt_inputs = prompt.get("inputs", {})
 
-    # Use helper to build input gallery
-    input_videos, control_weights, video_labels = _build_input_gallery(
-        spec_data, prompt_inputs, run_id
-    )
-
-    # Get execution config and parameters
+    # Get execution config - our source of truth for control weights
     exec_config = run_details.get("execution_config", {})
-    if not any(control_weights.values()):
-        # No weights from spec.json, try execution_config
-        if "weights" in exec_config:
-            weights = exec_config["weights"]
-            control_weights = {
-                "vis": weights.get("vis", 0.0),
-                "edge": weights.get("edge", 0.0),
-                "depth": weights.get("depth", 0.0),
-                "seg": weights.get("seg", 0.0),
-            }
+
+    # Build input gallery from execution config
+    input_videos, control_weights, video_labels = _build_input_gallery(
+        prompt_inputs, run_id, exec_config
+    )
 
     # Get advanced params (currently not displayed but may be needed later)
 

@@ -53,8 +53,8 @@ from cosmos_workflow.ui.tabs.runs.run_actions import (
 )
 from cosmos_workflow.ui.tabs.runs.run_details import (
     build_input_gallery,
+    extract_control_weights,
     extract_run_metadata,
-    load_spec_and_weights,
     read_log_content,
     resolve_video_paths,
 )

@@ -474,22 +474,26 @@ def wire_prompts_events(components, api, simple_queue_service):
             inputs=[components["ops_prompts_table"]],
             outputs=filter_none_components(
                 [
-                    components.get("delete_dialog"),
-                    components.get("delete_preview"),
-                    components.get("delete_selected_ids"),
+                    components.get("prompts_delete_dialog"),
+                    components.get("prompts_delete_preview"),
+                    components.get("prompts_delete_outputs_checkbox"),
+                    components.get("prompts_delete_ids_hidden"),
                 ]
             ),
         )
 
-    if "prompts_confirm_delete_btn" in components and "delete_selected_ids" in components:
+    if "prompts_confirm_delete_btn" in components and "prompts_delete_ids_hidden" in components:
         components["prompts_confirm_delete_btn"].click(
             fn=confirm_delete_prompts,
-            inputs=[components["delete_selected_ids"]],
+            inputs=[
+                components["prompts_delete_ids_hidden"],
+                components.get("prompts_delete_outputs_checkbox"),
+            ],
             outputs=filter_none_components(
                 [
                     components.get("ops_prompts_table"),
                     components.get("prompts_table"),
-                    components.get("delete_dialog"),
+                    components.get("prompts_delete_dialog"),
                     components.get("selection_count"),
                 ]
             ),
@@ -498,7 +502,7 @@ def wire_prompts_events(components, api, simple_queue_service):
     if "prompts_cancel_delete_btn" in components:
         components["prompts_cancel_delete_btn"].click(
             fn=cancel_delete_prompts,
-            outputs=filter_none_components([components.get("delete_dialog")]),
+            outputs=filter_none_components([components.get("prompts_delete_dialog")]),
         )
 
     # Ops prompts table selection
@@ -739,8 +743,9 @@ def wire_runs_action_events(components, api):
                 components.get("runs_delete_outputs_checkbox"),
             ],
             outputs=[
-                components.get("runs_selected_info"),
-                components.get("runs_delete_dialog"),
+                components.get("runs_delete_dialog"),  # Hide dialog (1st return value)
+                components.get("runs_selected_id"),  # Clear selected ID (2nd return value)
+                components.get("runs_selected_info"),  # Status message (3rd return value)
             ],
         ).then(
             fn=load_runs_with_filters,
@@ -768,8 +773,7 @@ def wire_runs_action_events(components, api):
         components["runs_cancel_delete_btn"].click(
             fn=cancel_delete_run,
             outputs=[
-                components.get("runs_selected_info"),
-                components.get("runs_delete_dialog"),
+                components.get("runs_delete_dialog"),  # Hide dialog (only return value)
             ],
         )
 
@@ -902,14 +906,19 @@ def wire_jobs_events(components, api, simple_queue_service):
         api: CosmosAPI instance
         simple_queue_service: SimplifiedQueueService instance
     """
-    wire_jobs_control_events(components)
+    wire_jobs_control_events(components, simple_queue_service)
     wire_queue_control_events(components, simple_queue_service)
     wire_queue_selection_events(components, simple_queue_service)
     wire_queue_timers(components, simple_queue_service)
 
 
-def wire_jobs_control_events(components):
-    """Wire job control events (stream, kill, etc)."""
+def wire_jobs_control_events(components, simple_queue_service=None):
+    """Wire job control events (stream, kill, etc).
+
+    Args:
+        components: Dictionary of UI components
+        simple_queue_service: SimplifiedQueueService instance (optional, for cancel job)
+    """
     from cosmos_workflow.ui.tabs.jobs_handlers import (
         cancel_kill_confirmation,
         execute_kill_job,
@@ -938,8 +947,8 @@ def wire_jobs_control_events(components):
             fn=show_kill_confirmation,
             outputs=filter_none_components(
                 [
-                    components.get("kill_confirm_row"),
-                    components.get("kill_job_btn"),
+                    components.get("kill_confirmation"),  # The confirmation dialog group
+                    components.get("kill_preview"),  # The preview text
                 ]
             ),
         )
@@ -949,11 +958,8 @@ def wire_jobs_control_events(components):
             fn=execute_kill_job,
             outputs=filter_none_components(
                 [
-                    components.get("running_jobs_display"),
-                    components.get("job_status"),
-                    components.get("active_job_card"),
-                    components.get("kill_confirm_row"),
-                    components.get("kill_job_btn"),
+                    components.get("kill_confirmation"),  # Hide dialog
+                    components.get("job_status"),  # Status message
                 ]
             ),
         )
@@ -963,8 +969,7 @@ def wire_jobs_control_events(components):
             fn=cancel_kill_confirmation,
             outputs=filter_none_components(
                 [
-                    components.get("kill_confirm_row"),
-                    components.get("kill_job_btn"),
+                    components.get("kill_confirmation"),  # Hide dialog
                 ]
             ),
         )
@@ -1007,11 +1012,14 @@ def wire_jobs_control_events(components):
                 outputs=None,  # No output expected
             )
 
-    if "cancel_job_btn" in components:
+    if "cancel_job_btn" in components and simple_queue_service:
         from cosmos_workflow.ui.tabs.jobs_handlers import cancel_selected_job
 
+        cancel_job_bound = functools.partial(
+            cancel_selected_job, queue_service=simple_queue_service
+        )
         components["cancel_job_btn"].click(
-            fn=cancel_selected_job,
+            fn=cancel_job_bound,
             inputs=[components.get("selected_job_id")],
             outputs=filter_none_components(
                 [

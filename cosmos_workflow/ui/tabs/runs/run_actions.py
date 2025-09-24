@@ -52,8 +52,7 @@ def preview_delete_run(selected_run_id):
             gr.update(visible=False),
             gr.update(),
             gr.update(),
-            gr.update(),
-            gr.update(),
+            None,
         )
 
     try:
@@ -65,8 +64,7 @@ def preview_delete_run(selected_run_id):
                 gr.update(visible=False),
                 gr.update(),
                 gr.update(),
-                gr.update(),
-                gr.update(),
+                None,
             )
 
         # Build preview text
@@ -94,9 +92,8 @@ This will permanently delete the run from the database.
         return (
             gr.update(visible=True),  # Show dialog
             gr.update(value=preview),  # Preview text
-            gr.update(value="", placeholder="Type 'DELETE' to confirm"),  # Clear confirmation
-            gr.update(interactive=False),  # Disable confirm button initially
-            gr.update(interactive=True),  # Enable cancel button
+            gr.update(value=False),  # Reset checkbox to unchecked
+            selected_run_id,  # Pass the run ID to the hidden field
         )
 
     except Exception as e:
@@ -105,8 +102,7 @@ This will permanently delete the run from the database.
             gr.update(visible=False),
             gr.update(),
             gr.update(),
-            gr.update(),
-            gr.update(),
+            None,
         )
 
 

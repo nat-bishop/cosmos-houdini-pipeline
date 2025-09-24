@@ -336,20 +336,20 @@ Currently idle - no jobs running"""
         return f"Error: {e}", "Error checking containers", error_display
 
 
-def cancel_selected_job(job_id):
-    """Cancel the selected job and refresh the queue."""
+def cancel_selected_job(job_id, queue_service):
+    """Cancel the selected job and refresh the queue.
+
+    Args:
+        job_id: The ID of the job to cancel
+        queue_service: The shared SimplifiedQueueService instance
+    """
     # Handle None gracefully
     if not job_id:
         return "No job selected", None, []
 
-    from cosmos_workflow.database.connection import DatabaseConnection
-    from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
     from cosmos_workflow.ui.queue_handlers import QueueHandlers
 
-    # Initialize services
-    database_path = "outputs/cosmos.db"
-    db_connection = DatabaseConnection(database_path)
-    queue_service = SimplifiedQueueService(db_connection=db_connection)
+    # Use the shared queue service
     queue_handlers = QueueHandlers(queue_service)
 
     # Cancel the job

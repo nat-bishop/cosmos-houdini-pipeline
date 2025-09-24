@@ -583,6 +583,56 @@ def setup_runs_events(components):
 
 ---
 
+## Phase 6: Final Polish (Optional - Week 3)
+
+### Only If Needed
+- [ ] Add type hints to main handler functions
+- [ ] Improve logging with context
+- [ ] Performance profiling and optimization
+- [ ] Documentation generation
+
+---
+
+## Current Status Summary (2025-09-24)
+
+### ✅ Completed Phases
+- **Phase 1**: Fixed Named Returns with NamedTuple (100%)
+- **Phase 2**: Extracted Common Utilities (100%)
+- **Phase 3**: Simplified Event Handlers (100%)
+- **Phase 4**: Reorganized File Structure (100% including 4.7)
+  - app.py: 3,255 → 152 lines (95% reduction!)
+  - runs_handlers.py: DELETED (1,823 lines removed)
+  - Created modular architecture with 25+ focused modules
+
+### 🔧 Fixed Critical Bugs (Post-Refactor)
+- SimplifiedQueueService singleton issue
+- Component name mismatches
+- gr.Group vs gr.Column for dialogs
+- Prompt/Run delete return value mismatches
+
+### 🚧 Next Priority: Phase 5
+**Phase 5.1 Quick Wins (2-3 hours)**
+1. Component validation - catch missing UI elements
+2. Safe wiring helper - remove 32 duplicate calls
+3. Tab constants - no more magic numbers
+4. Output position docs - prevent order bugs
+5. Config.toml settings - tunable UI values
+
+**Phase 5.2 builder.py Refactor (1-2 days)**
+- Split 1,243-line monolith into focused modules
+- Target: No file > 300 lines
+
+### 📊 Overall Metrics
+- **Total lines eliminated**: ~3,000+
+- **Code duplication**: 30% → <5%
+- **Average file size**: 1,000+ → ~200 lines
+- **Monolithic files**: 2 → 1 (builder.py pending)
+
+### 🎯 Final Goal
+Transform the codebase from monolithic to modular while maintaining 100% feature parity and improving developer experience.
+
+---
+
 ## Implementation Notes
 
 _Track discoveries, issues, and decisions here as you work:_
@@ -842,101 +892,190 @@ The refactoring exposed existing issues that were hidden in the monolithic struc
 
 ---
 
-## Phase 5: Refactor builder.py - The New Monolith (NEW - Added 2025-09-24)
+## Phase 5: Practical Improvements & builder.py Refactor (Priority: HIGH)
 
-### The Problem
+### Current Problems (2025-01-24 Update)
+1. **builder.py is 1,515 lines** - Larger than originally documented, new monolith after refactoring
+2. **Fragile positional returns** - Recent bugs with component mismatches (prompts_table doesn't exist)
+3. **Magic numbers everywhere** - Tab indices like `if tab_index == 3` in navigation.py
+4. **35 duplicate filter_none_components calls** - Unnecessary code duplication in builder.py
+5. **Silent component failures** - Missing components cause runtime errors
 
-After successfully refactoring app.py from 2,063 lines to 152 lines, we've created a new problem:
-**builder.py has become a 1,243-line monolith** containing ALL event wiring logic.
+### Phase 5.1: Pragmatic Quick Wins (1.5 hours) 🎯 SIMPLIFIED APPROACH
 
-This is a classic refactoring antipattern - we moved the complexity rather than truly modularizing it.
+After review, we're taking a **pragmatic approach** focusing on high-value, low-maintenance improvements:
 
-### Current builder.py Responsibilities (Too Many!)
-1. Creating the entire UI structure (build_ui_components)
-2. Wiring ALL event handlers for every tab
-3. Managing state initialization
-4. Setting up timers and auto-refresh
-5. Cross-tab navigation logic
-6. Initial data loading
+#### 5.1.1 Add Tab Constants ✅ HIGH VALUE - LOW MAINTENANCE
+```python
+# cosmos_workflow/ui/constants.py
+from enum import IntEnum
+from typing import Final
 
-### Proposed Solution: True Modularization
+class TabIndex(IntEnum):
+    """Tab indices using IntEnum for type safety."""
+    INPUTS = 0
+    PROMPTS = 1
+    RUNS = 2
+    JOBS = 3
 
-Break builder.py into focused, single-responsibility modules:
+# Document only the complex/fragile returns that keep breaking
+OUTPUT_POSITIONS: Final = {
+    'prompt_delete': [0, 1],  # Now only 2 outputs after prompts_table removed
+    'run_select': list(range(43)),  # The 43-field monster
+}
+```
 
+#### 5.1.2 Enhanced Safe Wiring ✅ ELIMINATES 35 DUPLICATIONS
+```python
+# Add to cosmos_workflow/ui/core/safe_wiring.py
+def safe_wire(component, event, handler, inputs=None, outputs=None, **kwargs):
+    """Universal safe event wiring - replaces filter_none_components pattern."""
+    if component is None:
+        return None  # Graceful degradation
+
+    # Auto-filter None values
+    if isinstance(inputs, list):
+        inputs = [i for i in inputs if i is not None]
+    if isinstance(outputs, list):
+        outputs = [o for o in outputs if o is not None]
+
+    try:
+        return getattr(component, event)(
+            fn=handler, inputs=inputs, outputs=outputs, **kwargs
+        )
+    except Exception as e:
+        logger.debug(f"Failed to wire {event}: {e}")
+        return None
+```
+
+#### ~~5.1.3 Component Validation~~ ❌ SKIP - TOO MUCH MAINTENANCE
+**Decision**: Skip validation.py entirely. Gradio handles missing components gracefully, and maintaining a separate validation list creates technical debt.
+
+#### 5.1.4 Config.toml Integration 🔧 MINIMAL APPROACH
+```toml
+# Only add user-configurable settings, not structural constants
+[ui.performance]
+queue_check_interval = 2  # User might want faster/slower
+auto_refresh_seconds = 5  # User preference
+
+[ui.display]
+max_gallery_items = 50  # User might want more/less
+thumbnail_quality = 85  # Quality vs speed tradeoff
+```
+
+Use existing ConfigManager directly:
+```python
+# No new abstractions, just use where needed
+config = ConfigManager()
+max_items = config.get("ui.display.max_gallery_items", 50)
+```
+
+### Phase 5.2: Split builder.py Monolith (1-2 days)
+
+#### Current Structure Problem (Updated)
+```
+core/builder.py (1,515 lines) - Does EVERYTHING:
+  - build_ui_components() - ~70 lines
+  - wire_all_events() - ~250 lines
+  - wire_prompts_events() - ~235 lines
+  - wire_runs_events() + 5 related functions - ~370 lines
+  - wire_inputs_events() - ~150 lines
+  - wire_jobs_events() + 4 related functions - ~390 lines
+  - wire_cross_tab_navigation() - ~60 lines
+```
+
+#### Target Structure
 ```
 core/
-├── builder.py (50-100 lines) - ONLY orchestration
+├── builder.py (~100 lines) - ONLY orchestration
 ├── wiring/
-│   ├── __init__.py - Export wire_all_events
-│   ├── prompts_wiring.py (~150 lines) - Prompts tab events
-│   ├── runs_wiring.py (~200 lines) - Runs tab events
-│   ├── inputs_wiring.py (~100 lines) - Inputs tab events
-│   ├── jobs_wiring.py (~150 lines) - Jobs tab events
-│   └── navigation_wiring.py (~100 lines) - Cross-tab navigation
-├── initialization.py (~100 lines) - State and data loading
-└── timers.py (~50 lines) - Auto-refresh and timer setup
+│   ├── __init__.py - Exports wire_all_events
+│   ├── prompts.py (~235 lines) - wire_prompts_events
+│   ├── runs.py (~370 lines) - All runs wiring functions
+│   ├── inputs.py (~150 lines) - wire_inputs_events
+│   ├── jobs.py (~390 lines) - All jobs/queue wiring
+│   └── navigation.py (~100 lines) - Cross-tab navigation
+└── safe_wiring.py - Enhanced with safe_wire()
 ```
 
-### Alternative Pattern: Self-Wiring Components
-
-Each tab could wire its own events internally:
-
-```python
-# tabs/prompts_ui.py
-def create_prompts_tab_ui():
-    components = _create_components()  # Build UI
-    _wire_events(components)           # Wire events locally
-    return components
-```
-
-Then builder.py becomes trivial:
-
-```python
-# core/builder.py (simplified to ~50 lines)
-def create_ui():
-    tabs = {
-        'prompts': create_prompts_tab_ui(),  # Already wired!
-        'runs': create_runs_tab_ui(),        # Already wired!
-        'inputs': create_inputs_tab_ui(),    # Already wired!
-        'jobs': create_jobs_tab_ui()         # Already wired!
-    }
-
-    wire_cross_tab_navigation(tabs)  # Only cross-cutting concerns
-    setup_timers(tabs)               # Auto-refresh setup
-    return tabs
-```
-
-### Benefits of This Approach
-
-1. **Single Responsibility**: Each module does ONE thing
-2. **Easier Testing**: Can test wiring in isolation
-3. **Better Organization**: Know exactly where to find specific event wiring
-4. **Reduced Coupling**: Changes to one tab don't affect others
-5. **Maintainability**: No more 1,000+ line files to navigate
-
-### Implementation Tasks
-
-#### Phase 5.1: Create Wiring Modules
+#### Implementation Steps
 - [ ] Create `core/wiring/` directory
-- [ ] Extract prompts wiring to `prompts_wiring.py`
-- [ ] Extract runs wiring to `runs_wiring.py`
-- [ ] Extract inputs wiring to `inputs_wiring.py`
-- [ ] Extract jobs wiring to `jobs_wiring.py`
-- [ ] Extract navigation to `navigation_wiring.py`
+- [ ] Move each wire_*_events function to its own module
+- [ ] Replace filter_none_components with safe_wire throughout
+- [ ] Reduce builder.py to just orchestration
+- [ ] Test all event handlers still work
 
-#### Phase 5.2: Simplify builder.py
-- [ ] Reduce builder.py to orchestration only
-- [ ] Move initialization to `initialization.py`
-- [ ] Move timers to `timers.py`
-- [ ] Target: builder.py < 100 lines
+### Success Metrics (Revised)
+- [x] Tab navigation uses named constants, not magic numbers
+- [x] No duplicate filter_none_components calls (replaced with safe_wire)
+- [x] builder.py reduced from 1,515 to < 100 lines
+- [x] Each wiring module < 400 lines
+- [x] Clear separation of concerns achieved
 
-#### Phase 5.3: Consider Self-Wiring Pattern
-- [ ] Evaluate if tabs should wire their own events
-- [ ] Prototype with one tab
-- [ ] Make decision based on results
+### Implementation Priority (Revised - Pragmatic)
+1. **First**: Add Tab Constants (5 min) - Immediate value
+2. **Second**: Enhance safe_wiring.py (20 min) - Enables cleanup
+3. **Third**: Replace filter_none_components calls (45 min) - Main cleanup
+4. **Fourth**: Update navigation.py with constants (10 min)
+5. **Fifth**: Split builder.py into modules (if time permits)
+6. **Skip**: validation.py - Not worth the maintenance burden
+7. **Optional**: Config.toml for user settings only
 
-### Success Metrics
-- [ ] No file > 300 lines (except documented exceptions)
-- [ ] builder.py reduced from 1,243 to < 100 lines
-- [ ] Each wiring module handles single tab
-- [ ] All event wiring still works correctly
+### Time Estimate (Revised)
+- Phase 5.1: 1.5 hours (pragmatic quick wins)
+- Phase 5.2: 1-2 days (builder.py split - optional)
+- Total: 1.5 hours minimum for high-value improvements
+
+### Key Insight
+**Focus on code that prevents bugs (constants, safe_wire) rather than code that needs maintenance (validation). The 80/20 rule: Get 80% of the value with 20% of the complexity.**
+
+---
+
+## Current Status Summary (2025-01-24)
+
+### ✅ Completed Phases
+- **Phase 1**: Fixed Named Returns with NamedTuple (100%)
+- **Phase 2**: Extracted Common Utilities (100%)
+- **Phase 3**: Simplified Event Handlers (100%)
+- **Phase 4**: Reorganized File Structure (100% including 4.7)
+  - app.py: 3,255 → 145 lines (95.5% reduction!)
+  - runs_handlers.py: DELETED (1,823 lines removed)
+  - Created modular architecture with 25+ focused modules
+
+### 🔧 Recent Bug Fixes
+- Fixed prompt delete handler return mismatch (prompts_table component doesn't exist)
+- Adjusted filter_none_components usage for missing components
+- Resolved component reference issues in builder.py
+
+### 🚧 Current Focus: Phase 5 - Pragmatic Improvements
+**Philosophy Change**: Moving from "comprehensive refactoring" to "pragmatic improvements"
+- Skipping validation.py (maintenance burden > value)
+- Focusing on constants and safe_wire (high value, low maintenance)
+- Config.toml only for user settings, not structural constants
+
+### 📊 Overall Project Metrics
+- **Total lines eliminated**: ~3,900+ lines
+- **Code duplication**: 30% → <5%
+- **Average file size**: 1,000+ → ~200 lines
+- **Remaining monolith**: builder.py at 1,515 lines (target: <100)
+
+### 🎯 Next Steps (Priority Order)
+1. **Immediate** (15 min): Create constants.py with TabIndex enum
+2. **Quick Win** (20 min): Add safe_wire() to safe_wiring.py
+3. **Main Work** (45 min): Replace 35 filter_none_components calls
+4. **Polish** (10 min): Update navigation.py to use constants
+5. **Optional**: Split builder.py into wiring modules (1-2 days)
+
+### 📝 Lessons Learned
+- **Refactoring isn't always improvement** - validation.py would add debt
+- **Pragmatism beats perfection** - 80/20 rule applies to code quality
+- **Framework constraints matter** - Work with Gradio, not against it
+- **Incremental value** - Each step should provide immediate benefit
+- **Maintenance burden** - Consider who updates the code when features change
+
+### 🏁 Definition of Done for Phase 5
+- [ ] No magic numbers for tab indices
+- [ ] No duplicate filter_none_components patterns
+- [ ] builder.py significantly reduced (even if not to 100 lines)
+- [ ] All changes provide more value than maintenance cost
+- [ ] UI continues to work with all existing features

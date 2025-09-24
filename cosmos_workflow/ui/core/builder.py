@@ -308,6 +308,7 @@ def wire_prompts_events(components, api, simple_queue_service):
         confirm_delete_prompts,
         filter_prompts,
         list_prompts,
+        load_ops_prompts,
         on_prompt_row_select,
         preview_delete_prompts,
         run_enhance_on_selected,
@@ -480,23 +481,51 @@ def wire_prompts_events(components, api, simple_queue_service):
                     components.get("prompts_delete_ids_hidden"),
                 ]
             ),
+            scroll_to_output=True,  # Scroll to delete confirmation dialog
         )
 
     if "prompts_confirm_delete_btn" in components and "prompts_delete_ids_hidden" in components:
+        # Debug: Check which components exist
+        outputs_list = [
+            components.get("ops_prompts_table"),
+            components.get("prompts_table"),
+            components.get("prompts_delete_dialog"),
+            components.get("selection_count"),
+        ]
+        logger.debug(
+            f"confirm_delete_prompts outputs before filtering: {[c is not None for c in outputs_list]}"
+        )
+        filtered_outputs = filter_none_components(outputs_list)
+        logger.debug(
+            f"confirm_delete_prompts outputs after filtering: {len(filtered_outputs)} components"
+        )
+        # Since prompts_table doesn't exist, we need to adjust the outputs
+        # The function returns 3 values but only 2 components exist: ops_prompts_table and prompts_delete_dialog
+        # So we need to remove the middle return value
+        filtered_outputs = filter_none_components(
+            [
+                components.get("ops_prompts_table"),
+                components.get("prompts_delete_dialog"),
+            ]
+        )
+
         components["prompts_confirm_delete_btn"].click(
             fn=confirm_delete_prompts,
             inputs=[
                 components["prompts_delete_ids_hidden"],
                 components.get("prompts_delete_outputs_checkbox"),
             ],
-            outputs=filter_none_components(
-                [
-                    components.get("ops_prompts_table"),
-                    components.get("prompts_table"),
-                    components.get("prompts_delete_dialog"),
-                    components.get("selection_count"),
-                ]
-            ),
+            outputs=filtered_outputs,
+        ).then(
+            fn=load_ops_prompts,
+            inputs=[
+                components.get("prompts_limit_slider", gr.Number(value=50, visible=False)),
+                components.get("prompts_search", gr.Textbox(value="", visible=False)),
+                components.get("prompts_enhanced_filter", gr.Dropdown(value="all", visible=False)),
+                components.get("prompts_runs_filter", gr.Dropdown(value="all", visible=False)),
+                components.get("prompts_date_filter", gr.Dropdown(value="all", visible=False)),
+            ],
+            outputs=filter_none_components([components.get("ops_prompts_table")]),
         )
 
     if "prompts_cancel_delete_btn" in components:
@@ -1310,6 +1339,13 @@ def wire_initial_data_load(app, components, config, api, simple_queue_service):
             fn=load_initial_prompts,
             outputs=[components["ops_prompts_table"]],
         )
+
+        # Also refresh prompts when tab is selected
+        if "prompts_tab" in components:
+            components["prompts_tab"].select(
+                fn=load_initial_prompts,
+                outputs=[components["ops_prompts_table"]],
+            )
 
     # Load initial data for runs tab
     if "runs_gallery" in components:

@@ -178,18 +178,14 @@ def confirm_delete_prompts(prompt_ids_string, delete_outputs):
         if not prompt_ids_string:
             return (
                 gr.update(),  # ops_prompts_table
-                gr.update(),  # prompts_table
                 gr.update(visible=False),  # Hide dialog
-                gr.update(value="No prompts selected"),  # Status message
             )
 
         prompt_ids = prompt_ids_string.split(",")
         if not prompt_ids:
             return (
                 gr.update(),  # ops_prompts_table
-                gr.update(),  # prompts_table
                 gr.update(visible=False),  # Hide dialog
-                gr.update(value="No prompts selected"),  # Status message
             )
 
         # Create CosmosAPI instance
@@ -199,9 +195,7 @@ def confirm_delete_prompts(prompt_ids_string, delete_outputs):
         if not ops:
             return (
                 gr.update(),  # ops_prompts_table
-                gr.update(),  # prompts_table
                 gr.update(visible=False),  # Hide dialog
-                gr.update(value="Error: Cannot connect to API"),  # Status message
             )
 
         # Delete each prompt
@@ -248,31 +242,25 @@ def confirm_delete_prompts(prompt_ids_string, delete_outputs):
             msg += f"\n\n⚠️ Failed to delete: {', '.join(failed_prompts)}"
 
         # Need to refresh the tables after deletion
-        # Return: ops_prompts_table, prompts_table, prompts_delete_dialog, selection_count
+        # Return: ops_prompts_table, prompts_delete_dialog
+        # Note: prompts_table doesn't exist as a component, so we skip it
         return (
             gr.update(),  # ops_prompts_table - will be refreshed by .then()
-            gr.update(),  # prompts_table - will be refreshed by .then()
             gr.update(visible=False),  # Hide dialog
-            gr.update(value=msg),  # Update selection count with status message
         )
 
     except Exception as e:
         logger.error("Error deleting prompts: {}", str(e))
         return (
             gr.update(),  # ops_prompts_table
-            gr.update(),  # prompts_table
             gr.update(visible=False),  # Hide dialog
-            gr.update(value=f"❌ Error: {e}"),  # Error message in selection count
         )
 
 
 def cancel_delete_prompts():
     """Cancel prompt deletion."""
-    # Return: selection_count, prompts_delete_dialog
-    return (
-        gr.update(value="Deletion cancelled"),  # selection_count
-        gr.update(visible=False),  # Hide dialog
-    )
+    # Return: prompts_delete_dialog only (filtered by filter_none_components)
+    return gr.update(visible=False)  # Hide dialog
 
 
 def list_prompts(limit=50):

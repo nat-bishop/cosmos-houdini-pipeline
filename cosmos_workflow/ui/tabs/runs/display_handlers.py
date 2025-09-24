@@ -216,19 +216,28 @@ def _build_run_details_response(run_details: dict[str, Any], ops: CosmosAPI) -> 
     video_paths, output_gallery, output_video = _resolve_video_paths(outputs, run_id, ops)
     logger.info("Output video path: {}", output_video)
 
-    # Get prompt details if not in run details
+    # Always get prompt name from database - this should never fail
     prompt_name = ""
-    if not prompt_text and prompt_id:
+    if prompt_id:
         prompt = ops.get_prompt(prompt_id)
         if prompt:
-            prompt_text = prompt.get("prompt_text", "")
             prompt_name = prompt.get("name", "")
+            # Also get prompt_text if it's missing from run details
+            if not prompt_text:
+                prompt_text = prompt.get("prompt_text", "")
 
-    # Create a prompt name if not available
-    if not prompt_name and prompt_text:
-        # Use first few words of prompt as name
-        words = prompt_text.split()[:5]
-        prompt_name = " ".join(words) + "..." if len(words) >= 5 else prompt_text
+            # Error if prompt exists but has no name
+            if not prompt_name:
+                logger.error("ERROR: Prompt {} exists but has no name field", prompt_id)
+                prompt_name = "Not Found"
+        else:
+            # Error if prompt_id doesn't exist in database
+            logger.error("ERROR: Prompt {} not found in database for run {}", prompt_id, run_id)
+            prompt_name = "Not Found"
+    else:
+        # Error if run has no prompt_id
+        logger.error("ERROR: Run {} has no prompt_id", run_id)
+        prompt_name = "Not Found"
 
     # Get rating and prompt info (not used in current display)
 

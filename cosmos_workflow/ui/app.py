@@ -72,9 +72,50 @@ def _register_shutdown_handlers():
         """Clean up resources on shutdown."""
         logger.info("Shutting down Gradio UI...")
 
+        # Log active threads before cleanup
+        import threading
+
+        active_threads = threading.active_count()
+        thread_names = [t.name for t in threading.enumerate()]
+        logger.info("Active threads before cleanup: %d - %s", active_threads, thread_names)
+
         # SimplifiedQueueService doesn't need cleanup - it has no background threads
         # or exclusive resources to release. The database connection is shared
         # across the app and handled elsewhere.
+
+        # Try to properly close Gradio app if it exists
+        if "app" in globals() and hasattr(globals()["app"], "close"):
+            try:
+                globals()["app"].close()
+                logger.info("Gradio app closed successfully")
+            except Exception as e:
+                logger.error("Error closing Gradio app: %s", e)
+
+        # Close all Gradio instances (best practice)
+        try:
+            import gradio as gr
+
+            gr.close_all()
+            logger.info("All Gradio instances closed")
+        except Exception as e:
+            logger.error("Error closing all Gradio instances: %s", e)
+
+        # Log active threads after cleanup
+        active_threads_after = threading.active_count()
+        thread_names_after = [t.name for t in threading.enumerate()]
+        logger.info(
+            "Active threads after cleanup: %d - %s", active_threads_after, thread_names_after
+        )
+
+        # Give threads a moment to shut down
+        import time
+
+        time.sleep(2)
+
+        # Final thread check
+        final_threads = threading.active_count()
+        final_names = [t.name for t in threading.enumerate()]
+        logger.info("Final thread count: %d - %s", final_threads, final_names)
 
         logger.info("Gradio UI shutdown complete")
 
@@ -136,3 +177,7 @@ if __name__ == "__main__":
         logger.info("Auto-reload enabled - UI will restart on code changes")
 
     launch_ui(share=share, auto_reload=auto_reload)
+
+
+# Create module-level variable for Gradio CLI compatibility
+app = create_ui()

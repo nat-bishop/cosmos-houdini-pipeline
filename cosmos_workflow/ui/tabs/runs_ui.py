@@ -7,6 +7,8 @@ Business logic remains in the main app.py file.
 
 import gradio as gr
 
+from cosmos_workflow.ui.constants import MAX_RESULTS_LIMIT
+
 
 def create_runs_tab_ui():
     """Create the Runs tab UI components.
@@ -102,7 +104,7 @@ def create_runs_tab_ui():
                         value=50,
                         label="Max Results",
                         minimum=10,
-                        maximum=200,
+                        maximum=MAX_RESULTS_LIMIT,
                         info="Maximum number of runs to display",
                     )
 

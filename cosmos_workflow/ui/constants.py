@@ -66,6 +66,7 @@ MAX_CONCURRENT_THUMBNAILS: Final[int] = 4
 # Display defaults - These could be overridden by config.toml
 MAX_GALLERY_ITEMS: Final[int] = 50
 MAX_TABLE_ROWS: Final[int] = 100
+MAX_RESULTS_LIMIT: Final[int] = 1000  # Maximum runs that can be displayed
 THUMBNAIL_SIZE: Final[tuple[int, int]] = (384, 216)
 THUMBNAIL_QUALITY: Final[int] = 85
 

@@ -523,8 +523,7 @@ class DataRepository:
 
         try:
             with self.db.get_session() as session:
-                # Always exclude upscale model_type runs - they're implementation details
-                query = session.query(Run).filter(Run.model_type != "upscale")
+                query = session.query(Run)
 
                 # Apply filters
                 if status:

@@ -167,7 +167,7 @@ def ui(port, host, share, reload, watch, debug):
         app_path = Path(__file__).parent.parent / "ui" / "app.py"
 
         # Build the command - use file path with --demo-name
-        cmd = ["gradio", str(app_path), "--demo-name", "demo"]
+        cmd = ["gradio", str(app_path), "--demo-name", "app"]
 
         # Add watch directories
         for watch_dir in watch_dirs:

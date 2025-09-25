@@ -256,3 +256,35 @@ def format_time_ago(timestamp: str | None) -> str:
 
     except Exception:
         return format_timestamp(timestamp)  # Fallback to absolute time
+
+
+def parse_timestamp_safe(timestamp: str | None) -> datetime | None:
+    """Parse timestamp string to datetime object safely.
+
+    Handles ISO format with or without timezone info.
+    Returns None if parsing fails.
+
+    Args:
+        timestamp: ISO format timestamp string
+
+    Returns:
+        datetime object or None if parsing fails
+    """
+    if not timestamp:
+        return None
+
+    try:
+        # Handle Z suffix (UTC)
+        if timestamp.endswith("Z"):
+            timestamp = timestamp[:-1] + "+00:00"
+
+        # Parse the timestamp
+        dt = datetime.fromisoformat(timestamp)
+
+        # If timezone-naive, assume UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt
+    except Exception:
+        return None

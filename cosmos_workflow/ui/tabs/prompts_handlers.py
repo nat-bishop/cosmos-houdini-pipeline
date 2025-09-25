@@ -10,6 +10,7 @@ from cosmos_workflow.api import CosmosAPI
 from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
 from cosmos_workflow.ui.utils import dataframe as df_utils
 from cosmos_workflow.ui.utils import video as video_utils
+from cosmos_workflow.ui.utils.formatting import parse_timestamp_safe, truncate_text
 from cosmos_workflow.utils.logging import logger
 
 
@@ -267,7 +268,7 @@ def confirm_delete_prompts(prompt_ids_string, delete_outputs):
 
 def cancel_delete_prompts():
     """Cancel prompt deletion."""
-    # Return: prompts_delete_dialog only (filtered by filter_none_components)
+    # Return: prompts_delete_dialog visibility update
     return gr.update(visible=False)  # Hide dialog
 
 
@@ -287,8 +288,7 @@ def list_prompts(limit=50):
             prompt_text = prompt.get("prompt_text", "")
 
             # Truncate long prompt text for display
-            if len(prompt_text) > 50:
-                prompt_text = prompt_text[:47] + "..."
+            prompt_text = truncate_text(prompt_text, max_length=50)
 
             # Format created_at timestamp
             created_at = prompt.get("created_at", "")
@@ -362,16 +362,10 @@ def filter_prompts(
             if not created_str:
                 continue
 
-            try:
-                # Handle both timezone-aware and naive dates
-                if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                    # Has timezone info
-                    created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                else:
-                    # No timezone info - assume UTC
-                    created = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-
-                # Fix: properly calculate days_old with timezone-aware datetime
+            # Use safe timestamp parser
+            created = parse_timestamp_safe(created_str)
+            if created:
+                # Calculate days old
                 days_old = (now - created).days
 
                 if date_filter == "today" and days_old == 0:
@@ -382,10 +376,6 @@ def filter_prompts(
                     filtered_by_date.append(prompt)
                 elif date_filter == "older_than_30_days" and days_old > 30:
                     filtered_by_date.append(prompt)
-            except Exception as e:
-                # Skip prompts with invalid date format
-                logger.debug("Skipping prompt with invalid date format: %s", e)
-                continue
 
         filtered = filtered_by_date
 
@@ -439,8 +429,7 @@ def load_ops_prompts(
             created = prompt.get("created_at", "")[:19] if prompt.get("created_at") else ""
 
             # Truncate text for display
-            if len(text) > 60:
-                text = text[:57] + "..."
+            text = truncate_text(text, max_length=60)
 
             # Add with selection checkbox (False by default) and created date
             table_data.append([False, prompt_id, name, text, created])

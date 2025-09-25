@@ -4,9 +4,9 @@ This module contains functions for building gallery data, table data,
 and statistics for the runs display.
 """
 
-from datetime import datetime, timezone
 from pathlib import Path
 
+from cosmos_workflow.ui.utils.formatting import format_duration
 from cosmos_workflow.utils.logging import logger
 
 
@@ -113,27 +113,11 @@ def build_runs_table_data(runs: list) -> list:
         status = run.get("status", "unknown")
         model_type = run.get("model_type", "transfer")
 
-        # Calculate duration
-        duration = "N/A"
-        if run.get("created_at") and run.get("completed_at"):
-            try:
-                created_str = run["created_at"]
-                if "Z" in created_str or "+" in created_str or "-" in created_str[-6:]:
-                    start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                else:
-                    start = datetime.fromisoformat(created_str).replace(tzinfo=timezone.utc)
-
-                completed_str = run["completed_at"]
-                if "Z" in completed_str or "+" in completed_str or "-" in completed_str[-6:]:
-                    end = datetime.fromisoformat(completed_str.replace("Z", "+00:00"))
-                else:
-                    end = datetime.fromisoformat(completed_str).replace(tzinfo=timezone.utc)
-
-                duration_delta = end - start
-                duration = str(duration_delta).split(".")[0]
-            except (ValueError, TypeError) as e:
-                # Unable to parse dates, leave duration as-is
-                logger.debug("Unable to parse dates for duration calculation: %s", e)
+        # Calculate duration using the formatting helper
+        duration = format_duration(run.get("created_at"), run.get("completed_at"))
+        # Convert "-" to "N/A" for consistency with existing UI expectations
+        if duration == "-":
+            duration = "N/A"
 
         created = run.get("created_at", "")[:19] if run.get("created_at") else ""
         rating = run.get("rating")

@@ -10,7 +10,6 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     cancel_delete_prompts,
     clear_selection,
     confirm_delete_prompts,
-    filter_prompts,
     list_prompts,
     load_ops_prompts,
     on_prompt_row_select,
@@ -48,34 +47,33 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
             show_progress=False,
         )
 
-    # Filtering events
-    if "prompt_search" in components:
-        safe_wire(
-            components["prompt_search"],
-            "change",
-            filter_prompts,
-            inputs=[
-                components.get("prompt_search"),
-                components.get("prompt_status_filter"),
-                components.get("prompts_table"),
-            ],
-            outputs=[components.get("prompts_table")],
-            show_progress=False,
-        )
+    # Wire filtering events for ops_prompts_table
+    filter_components = [
+        "prompts_search",
+        "prompts_enhanced_filter",
+        "prompts_runs_filter",
+        "prompts_date_filter",
+        "ops_limit",
+    ]
 
-    if "prompt_status_filter" in components:
-        safe_wire(
-            components["prompt_status_filter"],
-            "change",
-            filter_prompts,
-            inputs=[
-                components.get("prompt_search"),
-                components.get("prompt_status_filter"),
-                components.get("prompts_table"),
-            ],
-            outputs=[components.get("prompts_table")],
-            show_progress=False,
-        )
+    # Check if all filter components exist
+    if all(comp in components for comp in filter_components):
+        filter_inputs = [
+            components["ops_limit"],
+            components["prompts_search"],
+            components["prompts_enhanced_filter"],
+            components["prompts_runs_filter"],
+            components["prompts_date_filter"],
+        ]
+
+        # Wire each filter component to reload the table
+        for filter_comp_name in filter_components:
+            components[filter_comp_name].change(
+                fn=load_ops_prompts,
+                inputs=filter_inputs,
+                outputs=[components["ops_prompts_table"]],
+                show_progress=False,
+            )
 
     # Table selection
     if "prompts_table" in components:
@@ -245,8 +243,9 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
             outputs=[components.get("prompts_delete_dialog")],
         )
 
-    # Ops prompts table selection
+    # Ops prompts table selection and checkbox changes
     if "ops_prompts_table" in components:
+        # Wire selection event for row details
         outputs = [
             components.get("selected_prompt_id"),
             components.get("selected_prompt_name"),
@@ -265,4 +264,15 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
                 fn=on_prompt_row_select,
                 inputs=[components["ops_prompts_table"]],
                 outputs=outputs,
+            )
+
+        # Wire change event to update selection count when checkboxes are clicked
+        if "selection_count" in components:
+            from cosmos_workflow.ui.tabs.prompts_handlers import update_selection_count
+
+            components["ops_prompts_table"].change(
+                fn=update_selection_count,
+                inputs=[components["ops_prompts_table"]],
+                outputs=[components["selection_count"]],
+                show_progress=False,
             )

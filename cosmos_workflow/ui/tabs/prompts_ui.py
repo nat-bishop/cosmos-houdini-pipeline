@@ -81,6 +81,7 @@ def create_prompts_tab_ui():
                             minimum=1,
                             maximum=500,
                             scale=1,
+                            interactive=True,  # Make it editable
                         )
 
                     # Enhanced prompts table with selection
@@ -112,7 +113,7 @@ def create_prompts_tab_ui():
                             "→ View Runs", size="sm", variant="primary", visible=True
                         )
                         components["selection_count"] = gr.Markdown(
-                            "**0** prompts selected", elem_classes=["selection-counter"]
+                            "No Prompts Selected", elem_classes=["selection-counter"]
                         )
 
             # Right: Split view for details and operations

@@ -18,13 +18,15 @@ def select_all_prompts(table_data):
     try:
         # Handle empty data
         if table_data is None:
-            return [], "**0** prompts selected"
+            return [], "No Prompts Selected"
 
         # Use utility to select all
         updated_data = df_utils.select_all(table_data)
         count = df_utils.count_selected(updated_data)
 
-        if count == 1:
+        if count == 0:
+            return updated_data, "No Prompts Selected"
+        elif count == 1:
             return updated_data, f"**{count}** prompt selected"
         else:
             return updated_data, f"**{count}** prompts selected"
@@ -39,11 +41,11 @@ def clear_selection(table_data):
     try:
         # Handle empty data
         if table_data is None:
-            return [], "**0** prompts selected"
+            return [], "No Prompts Selected"
 
         # Use utility to clear selection
         updated_data = df_utils.clear_selection(table_data)
-        return updated_data, "**0** prompts selected"
+        return updated_data, "No Prompts Selected"
 
     except Exception as e:
         logger.error("Error clearing selection: {}", str(e))
@@ -55,13 +57,15 @@ def update_selection_count(table_data):
     try:
         if table_data is None:
             logger.debug("update_selection_count: table_data is None")
-            return "**0** prompts selected"
+            return "No Prompts Selected"
 
         # Use utility to count selected
         count = df_utils.count_selected(table_data)
         logger.info("update_selection_count: count={}", count)
 
-        if count == 1:
+        if count == 0:
+            return "No Prompts Selected"
+        elif count == 1:
             return f"**{count}** prompt selected"
         else:
             return f"**{count}** prompts selected"

@@ -211,20 +211,36 @@ def wire_initial_data_load(
 
     # Load initial data for prompts tab - fixed to use ops_prompts_table
     if "ops_prompts_table" in components:
-
-        def load_initial_prompts():
-            return load_ops_prompts(
-                limit=50,
-                search_text="",
-                enhanced_filter="all",
-                runs_filter="all",
-                date_filter="all",
+        if "ops_limit" in components:
+            # Wire the initial load to use the actual limit component's default value
+            app.load(
+                fn=load_ops_prompts,
+                inputs=[
+                    components.get("ops_limit", gr.Number(value=50, visible=False)),
+                    components.get("prompts_search", gr.Textbox(value="", visible=False)),
+                    components.get(
+                        "prompts_enhanced_filter", gr.Dropdown(value="all", visible=False)
+                    ),
+                    components.get("prompts_runs_filter", gr.Dropdown(value="all", visible=False)),
+                    components.get("prompts_date_filter", gr.Dropdown(value="all", visible=False)),
+                ],
+                outputs=[components["ops_prompts_table"]],
             )
+        else:
+            # Fallback if components don't exist
+            def load_initial_prompts():
+                return load_ops_prompts(
+                    limit=50,
+                    search_text="",
+                    enhanced_filter="all",
+                    runs_filter="all",
+                    date_filter="all",
+                )
 
-        app.load(
-            fn=load_initial_prompts,
-            outputs=[components["ops_prompts_table"]],
-        )
+            app.load(
+                fn=load_initial_prompts,
+                outputs=[components["ops_prompts_table"]],
+            )
 
     # Load initial data for runs tab
     if all(k in components for k in ["runs_gallery", "runs_table", "runs_stats"]):

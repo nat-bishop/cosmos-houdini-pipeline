@@ -10,7 +10,6 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     cancel_delete_prompts,
     clear_selection,
     confirm_delete_prompts,
-    list_prompts,
     load_ops_prompts,
     on_prompt_row_select,
     preview_delete_prompts,
@@ -18,7 +17,6 @@ from cosmos_workflow.ui.tabs.prompts_handlers import (
     run_inference_on_selected,
     select_all_prompts,
 )
-from cosmos_workflow.utils.logging import logger
 
 
 def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_service: Any) -> None:
@@ -39,13 +37,8 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
         queue_service=simple_queue_service,
     )
 
-    # Refresh button
-    if "refresh_prompts_btn" in components:
-        components["refresh_prompts_btn"].click(
-            fn=list_prompts,
-            outputs=[components.get("prompts_table")],
-            show_progress=False,
-        )
+    # Refresh button - removed as prompts_table doesn't exist anymore
+    # The ops_prompts_table is refreshed via filter changes instead
 
     # Wire filtering events for ops_prompts_table
     filter_components = [
@@ -75,27 +68,7 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
                 show_progress=False,
             )
 
-    # Table selection
-    if "prompts_table" in components:
-        safe_wire(
-            components["prompts_table"],
-            "select",
-            on_prompt_row_select,
-            inputs=[components["prompts_table"]],
-            outputs=[
-                components.get("selected_prompt_id"),
-                components.get("prompt_details"),
-                components.get("prompt_video_gallery"),
-                components.get("run_inference_btn"),
-                components.get("run_enhance_btn"),
-                components.get("prompt_run_stats"),
-                components.get("runs_for_prompt"),
-                components.get("view_runs_for_prompt_btn"),
-                components.get("prompt_action_result"),
-                components.get("status_display"),
-            ],
-            show_progress=True,
-        )
+    # Old prompts_table selection removed - using ops_prompts_table now
 
     # Inference and enhance buttons
     if "run_inference_btn" in components and "ops_prompts_table" in components:
@@ -155,27 +128,35 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
 
     # Selection controls
     if "select_all_btn" in components and "ops_prompts_table" in components:
+        outputs = [
+            components.get("ops_prompts_table"),
+            components.get("selection_count"),
+        ]
+        if "selected_prompt_ids_state" in components:
+            outputs.append(components.get("selected_prompt_ids_state"))
+
         safe_wire(
             components["select_all_btn"],
             "click",
             select_all_prompts,
             inputs=[components["ops_prompts_table"]],
-            outputs=[
-                components.get("ops_prompts_table"),
-                components.get("selection_count"),
-            ],
+            outputs=outputs,
         )
 
     if "clear_selection_btn" in components and "ops_prompts_table" in components:
+        outputs = [
+            components.get("ops_prompts_table"),
+            components.get("selection_count"),
+        ]
+        if "selected_prompt_ids_state" in components:
+            outputs.append(components.get("selected_prompt_ids_state"))
+
         safe_wire(
             components["clear_selection_btn"],
             "click",
             clear_selection,
             inputs=[components["ops_prompts_table"]],
-            outputs=[
-                components.get("ops_prompts_table"),
-                components.get("selection_count"),
-            ],
+            outputs=outputs,
         )
 
     # Delete operations
@@ -195,23 +176,7 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
         )
 
     if "prompts_confirm_delete_btn" in components and "prompts_delete_ids_hidden" in components:
-        # Debug: Check which components exist
-        outputs_list = [
-            components.get("ops_prompts_table"),
-            components.get("prompts_table"),
-            components.get("prompts_delete_dialog"),
-            components.get("selection_count"),
-        ]
-        logger.debug(
-            f"confirm_delete_prompts outputs before filtering: {[c is not None for c in outputs_list]}"
-        )
-        filtered_outputs = [o for o in outputs_list if o is not None]
-        logger.debug(
-            f"confirm_delete_prompts outputs after filtering: {len(filtered_outputs)} components"
-        )
-        # Since prompts_table doesn't exist, we need to adjust the outputs
-        # The function returns 3 values but only 2 components exist: ops_prompts_table and prompts_delete_dialog
-        # So we need to remove the middle return value
+        # Clean outputs - only ops_prompts_table and dialog exist
         filtered_outputs = [
             components.get("ops_prompts_table"),
             components.get("prompts_delete_dialog"),
@@ -266,13 +231,18 @@ def wire_prompts_events(components: dict[str, Any], api: Any, simple_queue_servi
                 outputs=outputs,
             )
 
-        # Wire change event to update selection count when checkboxes are clicked
+        # Wire change event to update selection count and IDs when checkboxes are clicked
         if "selection_count" in components:
             from cosmos_workflow.ui.tabs.prompts_handlers import update_selection_count
+
+            # Include the state component in outputs if it exists
+            outputs = [components["selection_count"]]
+            if "selected_prompt_ids_state" in components:
+                outputs.append(components["selected_prompt_ids_state"])
 
             components["ops_prompts_table"].change(
                 fn=update_selection_count,
                 inputs=[components["ops_prompts_table"]],
-                outputs=[components["selection_count"]],
+                outputs=outputs,
                 show_progress=False,
             )

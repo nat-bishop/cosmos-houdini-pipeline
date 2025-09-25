@@ -212,9 +212,27 @@ def wire_initial_data_load(
     # Load initial data for prompts tab - fixed to use ops_prompts_table
     if "ops_prompts_table" in components:
         if "ops_limit" in components:
+            # Also initialize the selection count and state on load
+            outputs = [components["ops_prompts_table"]]
+            if "selection_count" in components:
+                outputs.append(components["selection_count"])
+            if "selected_prompt_ids_state" in components:
+                outputs.append(components["selected_prompt_ids_state"])
+
+            def load_initial_prompts_with_state(limit, search, enhanced, runs, date):
+                """Load prompts and initialize selection state."""
+                table_data = load_ops_prompts(limit, search, enhanced, runs, date)
+                # Initialize with empty selection
+                if len(outputs) == 3:
+                    return table_data, "No Prompts Selected", []
+                elif len(outputs) == 2:
+                    return table_data, "No Prompts Selected"
+                else:
+                    return table_data
+
             # Wire the initial load to use the actual limit component's default value
             app.load(
-                fn=load_ops_prompts,
+                fn=load_initial_prompts_with_state,
                 inputs=[
                     components.get("ops_limit", gr.Number(value=50, visible=False)),
                     components.get("prompts_search", gr.Textbox(value="", visible=False)),
@@ -224,7 +242,7 @@ def wire_initial_data_load(
                     components.get("prompts_runs_filter", gr.Dropdown(value="all", visible=False)),
                     components.get("prompts_date_filter", gr.Dropdown(value="all", visible=False)),
                 ],
-                outputs=[components["ops_prompts_table"]],
+                outputs=outputs,
             )
         else:
             # Fallback if components don't exist

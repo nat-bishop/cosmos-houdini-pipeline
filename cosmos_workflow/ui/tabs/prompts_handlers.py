@@ -18,22 +18,23 @@ def select_all_prompts(table_data):
     try:
         # Handle empty data
         if table_data is None:
-            return [], "No Prompts Selected"
+            return [], "No Prompts Selected", []
 
         # Use utility to select all
         updated_data = df_utils.select_all(table_data)
         count = df_utils.count_selected(updated_data)
+        selected_ids = get_selected_prompt_ids(updated_data)
 
         if count == 0:
-            return updated_data, "No Prompts Selected"
+            return updated_data, "No Prompts Selected", selected_ids
         elif count == 1:
-            return updated_data, f"**{count}** prompt selected"
+            return updated_data, f"**{count}** prompt selected", selected_ids
         else:
-            return updated_data, f"**{count}** prompts selected"
+            return updated_data, f"**{count}** prompts selected", selected_ids
 
     except Exception as e:
         logger.error("Error selecting all prompts: {}", str(e))
-        return table_data, "Error selecting prompts"
+        return table_data, "Error selecting prompts", []
 
 
 def clear_selection(table_data):
@@ -41,38 +42,41 @@ def clear_selection(table_data):
     try:
         # Handle empty data
         if table_data is None:
-            return [], "No Prompts Selected"
+            return [], "No Prompts Selected", []
 
         # Use utility to clear selection
         updated_data = df_utils.clear_selection(table_data)
-        return updated_data, "No Prompts Selected"
+        return updated_data, "No Prompts Selected", []
 
     except Exception as e:
         logger.error("Error clearing selection: {}", str(e))
-        return table_data, "Error clearing selection"
+        return table_data, "Error clearing selection", []
 
 
 def update_selection_count(table_data):
-    """Update the count of selected prompts."""
+    """Update the count of selected prompts and return selected IDs."""
     try:
         if table_data is None:
             logger.debug("update_selection_count: table_data is None")
-            return "No Prompts Selected"
+            return "No Prompts Selected", []
 
         # Use utility to count selected
         count = df_utils.count_selected(table_data)
         logger.info("update_selection_count: count={}", count)
 
+        # Get selected IDs for the state
+        selected_ids = get_selected_prompt_ids(table_data)
+
         if count == 0:
-            return "No Prompts Selected"
+            return "No Prompts Selected", selected_ids
         elif count == 1:
-            return f"**{count}** prompt selected"
+            return f"**{count}** prompt selected", selected_ids
         else:
-            return f"**{count}** prompts selected"
+            return f"**{count}** prompts selected", selected_ids
 
     except Exception as e:
         logger.error("Error updating selection count: {}", str(e))
-        return "Error counting selection"
+        return "Error counting selection", []
 
 
 def get_selected_prompt_ids(table_data):

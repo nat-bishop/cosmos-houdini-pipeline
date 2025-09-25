@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Major UI Refactoring and Navigation Improvements (2025-01-25)
+- **Cross-tab Navigation System**: Complete navigation between all tabs with intelligent filtering
+  - Navigate from Inputs tab to Runs tab with filtering by input directory
+  - Navigate from Inputs tab to Prompts tab with automatic search filtering
+  - Navigate from Prompts tab to Runs tab with selected prompts filtering
+  - Clear Filter functionality maintains filter state and shows active filters
+  - Persistent navigation state for seamless workflow between tabs
+
+- **Enhanced Prompts Tab Management**:
+  - Advanced filtering system with search, enhanced status, run status, and date range filters
+  - Interactive limit control with options from 10 to 500 prompts
+  - Selection tracking system with checkbox functionality for batch operations
+  - Batch operations including "Select All", "Clear Selection", and "Delete Selected"
+  - "View Runs" button that filters runs by currently selected prompts
+  - Enhanced status indicators showing AI-enhanced prompts with visual checkboxes
+
+- **Improved Runs Tab Features**:
+  - Persistent filtering when navigating from other tabs with filter indicators
+  - Filter display showing active filters from cross-tab navigation
+  - Version filtering for upscaled content with proper version detection
+  - Rating filter functionality integrated with existing filter system
+  - Clear filter functionality that properly resets navigation state
+
+- **Code Architecture Improvements**:
+  - Removed 2,852 lines of legacy backward compatibility functions
+  - Simplified data loading pipeline with unified RunsLoader class
+  - Unified filter system across all tabs using consistent filter patterns
+  - Enhanced state management for cross-tab communication
+  - Modular architecture with specialized wiring modules for maintainability
+
 ### Fixed - Prompt Filter Persistence in Gradio UI (2025-01-21)
 - **Fixed persistent prompt filtering in Runs tab**
   - Fixed bug where filter_type mismatch ("prompts" vs "prompt_ids") prevented navigation state from working

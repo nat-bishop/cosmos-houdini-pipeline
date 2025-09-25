@@ -68,10 +68,11 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Metadata Display**: Resolution, duration, creation time, and file information
 - **Auto-fill Integration**: Selected inputs automatically populate prompt creation
 
-#### Navigation Features
-- **View Prompts Button**: "→ View Prompts Using This Input" - navigates to Prompts tab with filter applied
-- **View Runs Button**: "→ View Runs Using This Input" - navigates to Runs tab showing only runs from prompts that use the selected input directory
-- **Cross-Tab Navigation**: Seamless workflow from input discovery to prompt creation to run results
+#### Cross-Tab Navigation Features
+- **View Prompts Button**: "→ View Prompts Using This Input" - automatically navigates to Prompts tab and applies search filter for the selected input directory name
+- **View Runs Button**: "→ View Runs Using This Input" - navigates to Runs tab and filters to show only runs from prompts that use the selected input directory
+- **Intelligent Filtering**: Navigation automatically finds related prompts and runs, displaying filter status
+- **Seamless Workflow**: Complete workflow from input discovery to prompt creation to run results with persistent filter state
 
 #### Create Prompt Section
 - **Video Directory**: Auto-filled when selecting inputs, supports manual entry
@@ -87,12 +88,13 @@ The interface is organized into five main tabs, each serving specific workflow n
 
 ### 🚀 Prompts Tab
 
-**Purpose**: Unified prompt management and AI operations with enhanced status tracking.
+**Purpose**: Unified prompt management and AI operations with enhanced status tracking and cross-tab navigation.
 
-#### Features Removed for Simplification
-- **Model Type Filters**: Removed to focus on core functionality
-- **Model Type Dropdowns**: Simplified interface without model selection
-- **Model Type Display**: Cleaner prompt details without model type clutter
+#### Enhanced Filtering and Selection System
+- **Advanced Filtering**: Search text, enhanced status, run status, and date range filters working in combination
+- **Interactive Limit Control**: Adjustable display limits from 10 to 500 prompts for performance optimization
+- **Selection System**: Checkbox-based selection with real-time count display and batch operations
+- **Cross-Tab Integration**: Receives filters from Inputs tab navigation with visual filter indicators
 
 #### Enhanced Prompt Details
 - **Enhanced Status Indicator**: ✨ Enhanced checkbox shows AI-enhanced prompts
@@ -117,9 +119,10 @@ The interface is organized into five main tabs, each serving specific workflow n
 - **Force Overwrite**: Option to delete existing runs when overwriting
 
 #### Selection and Batch Operations
-- **Interactive Table**: Checkbox selection with real-time count display
-- **Clear Selection**: One-click deselection of all items
-- **Batch Processing**: Run operations on multiple selected prompts
+- **Interactive Table**: Checkbox selection with real-time count display showing "X prompt(s) selected"
+- **Batch Controls**: "Select All", "Clear Selection", and "Delete Selected" buttons for efficient management
+- **View Runs Integration**: "View Runs" button navigates to Runs tab filtered by currently selected prompts
+- **Cross-Tab Navigation**: Selected prompts automatically filter runs in target tab with visual indicators
 - **Workflow Management**: Use "Run Status" filter to identify prompts ready for inference or cleanup
 
 #### Run Status Filter Usage
@@ -149,9 +152,16 @@ This filter works in combination with other filters (search, enhanced status, da
 
 ### 📊 Run History Tab
 
-**Purpose**: Advanced run management with comprehensive filtering, search, and batch operations.
+**Purpose**: Advanced run management with comprehensive filtering, search, batch operations, and cross-tab navigation support.
 
 #### Advanced Filtering System
+
+**Cross-Tab Navigation Support**:
+- **Filter Indicators**: Shows active filters when navigating from other tabs ("Filtering by X prompt(s)" or "Filtering by input: directory_name")
+- **Persistent Filtering**: Maintains cross-tab filters when applying additional status, date, or search filters
+- **Clear Filter Button**: Resets all filters including navigation state while maintaining other filter options
+- **Filter State Display**: Visual indication of active filters with clear descriptions
+
 **Status Filters**:
 - All runs
 - Completed runs
@@ -172,6 +182,10 @@ This filter works in combination with other filters (search, enhanced status, da
 - Search by run ID
 - Real-time results as you type
 - Case-insensitive matching
+
+**Version and Rating Filters**:
+- **Version Filtering**: Filter upscaled content by version numbers for tracking different upscaling iterations
+- **Rating Filter**: Filter runs by user ratings (1-5 stars) to focus on high-quality outputs
 
 **Result Configuration**:
 - Configurable limits (10-500 runs)
@@ -308,38 +322,66 @@ The Active Jobs tab features a simplified, reliable job queue system designed ex
 
 ### Cross-Tab Navigation System
 
-The interface features a sophisticated navigation system that allows seamless workflow progression from input discovery to final results.
+The interface features a sophisticated navigation system that enables seamless workflow progression from input discovery to final results with intelligent filtering and state management.
 
-#### Workflow Navigation Path
-1. **Inputs Tab**: Browse and select input video directories
-2. **Navigation to Prompts**: Use "→ View Prompts Using This Input" to see all prompts created from the selected input
-3. **Navigation to Runs**: Use "→ View Runs Using This Input" to see all runs generated from prompts using the selected input
-4. **Result Browsing**: Use Previous/Next buttons in Run Details to navigate through video results
+#### Complete Workflow Navigation Paths
 
-#### Navigation Features
+**Primary Workflow**:
+1. **Inputs Tab**: Browse and select input video directories with multimodal preview
+2. **Navigation to Prompts**: Use "→ View Prompts Using This Input" to see prompts using the selected input with automatic search filtering
+3. **Navigation to Runs**: Use "→ View Runs Using This Input" to see runs from prompts that use the selected input directory
+4. **Result Browsing**: Navigate through results with filter indicators showing active filtering
+
+**Alternative Workflow**:
+1. **Prompts Tab**: Select multiple prompts using checkbox selection system
+2. **Navigation to Runs**: Use "View Runs" button to filter runs by currently selected prompts
+3. **Filter Management**: Use "Clear Filter" to reset navigation state while preserving other filters
+
+#### Advanced Navigation Features
 
 **From Inputs Tab**:
-- **View Prompts Button**: Filters Prompts tab to show only prompts created from the selected input directory
-- **View Runs Button**: Filters Runs tab to show only runs from prompts that use the selected input directory
-- **Automatic Filtering**: Navigation automatically applies appropriate filters and updates the target tab
+- **View Prompts Button**: Automatically navigates to Prompts tab and applies search filter using the input directory name
+- **View Runs Button**: Finds all prompts using the selected input, then filters Runs tab to show related runs
+- **Intelligent Directory Matching**: Extracts directory name from full paths for accurate filtering
+- **Filter Status Display**: Shows which input directory is being used for filtering
 
-**In Run Details**:
-- **Previous Button (◀)**: Navigate to the previous item in the gallery
-- **Next Button (▶)**: Navigate to the next item in the gallery
-- **Index Tracking**: Maintains current position in gallery for consistent navigation
-- **Bounds Protection**: Previous button stops at the first item, Next button is handled by Gradio's bounds
+**From Prompts Tab**:
+- **View Runs Button**: Filters Runs tab by currently selected prompts with visual selection count
+- **Selection State Management**: Maintains prompt selection IDs for cross-tab filtering
+- **Multi-Prompt Filtering**: Supports filtering by multiple selected prompts simultaneously
+- **Filter Indicator**: Shows "Filtering by X prompt(s)" with prompt names listed
 
-#### Implementation Details
+**In Runs Tab**:
+- **Persistent Filter State**: Maintains cross-tab filters when applying additional status, date, or search filters
+- **Filter Display Panel**: Shows active filters with clear descriptions and source information
+- **Clear Filter Functionality**: Resets navigation state while preserving other filter options
+- **Filter Combination**: Cross-tab filters work alongside traditional filters (status, date, search, rating)
 
-**Cross-Tab Navigation**:
-- Uses `prepare_runs_navigation_from_input()` function to find all prompts using the selected input directory
-- Calls existing `prepare_runs_navigation()` function to apply filtering and switch to Runs tab
-- Updates navigation state and applies filter indicators to show active filtering
+#### Navigation State Management
 
-**Gallery Navigation**:
-- Uses `navigate_gallery_prev()` and `navigate_gallery_next()` functions in app.py
-- Maintains gallery selection index using Gradio State component
-- Updates gallery selection without requiring thumbnail clicks
+**State Persistence**:
+- **Navigation State Object**: Stores filter_type, filter_values, and source_tab information
+- **Persistent Filtering**: Navigation filters remain active when switching between tabs
+- **Filter Combination**: Cross-tab filters combine with local filters for refined results
+- **State Reset**: Clear Filter button properly resets navigation state while maintaining filter UI
+
+**Filter Types**:
+- **prompt_ids**: Filtering by specific prompt selections from Prompts tab
+- **input**: Filtering by input directory from Inputs tab
+- **Combined Filtering**: Multiple filter types can work together for precise results
+
+#### Technical Implementation
+
+**Cross-Tab Navigation Functions**:
+- `prepare_runs_navigation()`: Handles navigation from Prompts tab with selected prompt filtering
+- `navigate_to_runs_for_input()`: Handles navigation from Inputs tab with input directory filtering
+- `prepare_prompts_navigation_from_input()`: Handles navigation from Inputs tab to Prompts tab with search
+- **Automatic Tab Switching**: JavaScript integration automatically switches to target tab after data loading
+
+**Filter Integration**:
+- **Unified Filter System**: Cross-tab filters integrate seamlessly with existing filter infrastructure
+- **Filter State Updates**: Navigation functions update both data and UI state simultaneously
+- **Filter Indicators**: Visual feedback shows active navigation filters with clear descriptions
 
 ### Enhanced Status System
 

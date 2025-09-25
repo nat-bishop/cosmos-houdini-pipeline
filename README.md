@@ -248,15 +248,27 @@ Local Machine                                    Remote GPU Server (H100)
 - Direct exit code handling from Docker containers
 
 ### **Advanced Web Interface (Gradio)**
+- **Cross-Tab Navigation System**: Complete workflow navigation between all tabs with intelligent filtering
+  - Navigate from Inputs tab to Runs tab filtering by input directory
+  - Navigate from Inputs tab to Prompts tab with automatic search filtering
+  - Navigate from Prompts tab to Runs tab with selected prompts filtering
+  - Persistent filter state with clear visual indicators showing active filters
+- **Enhanced Prompts Tab**: Advanced filtering with search, enhanced status, run status, and date range filters
+  - Interactive limit control (10-500 prompts) for performance optimization
+  - Selection tracking with checkbox functionality and real-time count display
+  - Batch operations including "Select All", "Clear Selection", and "Delete Selected"
+  - "View Runs" button that filters runs by currently selected prompts
+- **Improved Runs Tab**: Persistent filtering when navigating from other tabs with filter indicators
+  - Filter display showing active cross-tab filters ("Filtering by X prompt(s)" or "Filtering by input: directory_name")
+  - Version filtering for upscaled content and rating filter functionality
+  - Clear Filter functionality that properly resets navigation state while preserving other filters
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
 - **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
 - **Active Jobs Tab**: Real-time container monitoring with auto-refresh, log streaming, and job queue management
-- **Enhanced Navigation**: Cross-tab navigation from inputs to prompts to runs with seamless filtering
 - **Gallery Navigation**: Previous/Next buttons in Run Details for browsing through video results
 - **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
 - **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
-- **Prompt Management**: "Run Status" filter to identify unused prompts vs prompts with existing runs for better workflow organization
-- **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search across all runs
+- **Advanced Filtering**: Multi-criteria filtering by status, date range, text search, and rating across all runs
 - **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
 - **Simplified Production Job Queue System**:
   - **UI-Only Architecture**: Queue system exclusively for Gradio UI while CLI uses direct execution

@@ -142,6 +142,8 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             # GPU executor expects synchronous completion with "completed" or "failed"
                             mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
@@ -176,6 +178,8 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             # GPU executor expects synchronous completion with "completed" or "failed"
                             mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
@@ -212,6 +216,8 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             # GPU executor expects synchronous completion with "completed" or "failed"
                             mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
@@ -272,6 +278,8 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             mock_docker.run_upscaling.return_value = {
                                 "status": "completed",
                                 "duration_seconds": 180,
@@ -306,6 +314,8 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             # GPU executor expects synchronous completion with "completed" or "failed"
                             mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()

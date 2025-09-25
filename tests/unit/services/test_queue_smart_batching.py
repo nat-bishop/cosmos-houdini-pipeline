@@ -20,6 +20,13 @@ class TestQueueSmartBatching:
         """Create a SimplifiedQueueService instance with mocks."""
         cosmos_api = Mock()
         db_connection = Mock()
+
+        # Mock the get_session context manager
+        mock_session = Mock()
+        mock_session.query().filter_by().all.return_value = []
+        db_connection.get_session.return_value.__enter__ = Mock(return_value=mock_session)
+        db_connection.get_session.return_value.__exit__ = Mock(return_value=None)
+
         service = SimplifiedQueueService(cosmos_api, db_connection)
         return service
 
@@ -41,7 +48,9 @@ class TestQueueSmartBatching:
         """Analyze queue in strict mode should group identical controls only."""
         # Setup mock database session
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = mock_jobs
+        mock_query = Mock()
+        mock_query.filter_by.return_value.order_by.return_value.all.return_value = mock_jobs
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -61,7 +70,9 @@ class TestQueueSmartBatching:
     def test_analyze_queue_for_smart_batching_mixed_mode(self, queue_service, mock_jobs):
         """Analyze queue in mixed mode should optimize control overhead."""
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = mock_jobs
+        mock_query = Mock()
+        mock_query.filter_by.return_value.order_by.return_value.all.return_value = mock_jobs
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -79,7 +90,9 @@ class TestQueueSmartBatching:
     def test_analyze_queue_empty(self, queue_service):
         """Empty queue should return None analysis."""
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = []
+        mock_query = Mock()
+        mock_query.filter_by.return_value.order_by.return_value.all.return_value = []
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -100,7 +113,9 @@ class TestQueueSmartBatching:
         ]
 
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = jobs
+        mock_query = Mock()
+        mock_query.filter_by.return_value.order_by.return_value.all.return_value = jobs
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -130,7 +145,10 @@ class TestQueueSmartBatching:
 
         # Mock database session
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = mock_jobs
+        mock_query = Mock()
+        mock_query.filter_by.return_value.order_by.return_value.all.return_value = mock_jobs
+        mock_query.filter_by.return_value.count.return_value = 6
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -154,7 +172,9 @@ class TestQueueSmartBatching:
         queue_service._analysis_queue_size = 10  # Different from current queue
 
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = mock_jobs  # 6 jobs
+        mock_query = Mock()
+        mock_query.filter_by.return_value.count.return_value = 6  # Current queue size
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -186,7 +206,9 @@ class TestQueueSmartBatching:
 
         # Mock current queue size check
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = [Mock()] * 6
+        mock_query = Mock()
+        mock_query.filter_by.return_value.count.return_value = 6
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -204,7 +226,9 @@ class TestQueueSmartBatching:
         queue_service._analysis_queue_size = 10
 
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = [Mock()] * 5  # Different size
+        mock_query = Mock()
+        mock_query.filter_by.return_value.count.return_value = 5  # Different size
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -226,7 +250,9 @@ class TestQueueSmartBatching:
         # Analysis should be cleared when queue changes
         # This would be triggered by checking queue size mismatch
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = [Mock()] * 6
+        mock_query = Mock()
+        mock_query.filter_by.return_value.count.return_value = 6
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -244,7 +270,9 @@ class TestQueueSmartBatching:
         queue_service._analysis_queue_size = 2
 
         mock_session = Mock()
-        mock_session.query().filter_by().all.return_value = [Mock(), Mock()]
+        mock_query = Mock()
+        mock_query.filter_by.return_value.count.return_value = 2
+        mock_session.query.return_value = mock_query
         queue_service.db_connection.get_session.return_value.__enter__ = Mock(
             return_value=mock_session
         )
@@ -256,7 +284,7 @@ class TestQueueSmartBatching:
         results = queue_service.execute_smart_batches()
 
         assert results is not None
-        assert "error" in results or results.get("batches_failed", 0) > 0
+        assert "error" in results or "failures" in results
 
     def _create_mock_job(self, job_id, job_type):
         """Helper to create mock job objects."""

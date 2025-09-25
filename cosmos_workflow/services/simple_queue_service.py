@@ -57,6 +57,10 @@ class SimplifiedQueueService:
         self.batch_size = 4  # Default batch size for GPU processing
         self.queue_paused = False  # Control flag for queue processing
 
+        # Smart batching state
+        self._smart_batch_analysis = None
+        self._analysis_queue_size = 0
+
         # Clean up any orphaned jobs from previous session
         self._cleanup_orphaned_jobs()
 
@@ -679,3 +683,216 @@ class SimplifiedQueueService:
         except Exception as e:
             logger.error("Error cleaning up orphaned runs: {}", e)
             # Don't fail startup if run cleanup fails
+
+    # Smart Batching Methods
+
+    def analyze_queue_for_smart_batching(self, mix_controls: bool = False) -> dict[str, Any] | None:
+        """Analyze queued jobs for batching opportunities.
+
+        Args:
+            mix_controls: If True, use mixed mode (master batch approach).
+                         If False, use strict mode (identical controls only).
+
+        Returns:
+            Analysis dictionary with batches and efficiency metrics, or None if empty
+        """
+        from cosmos_workflow.utils.smart_batching import (
+            calculate_batch_efficiency,
+            filter_batchable_jobs,
+            get_control_signature,
+            get_safe_batch_size,
+            group_jobs_mixed,
+            group_jobs_strict,
+        )
+
+        with self.db_connection.get_session() as session:
+            # Get all queued jobs
+            queued_jobs = (
+                session.query(JobQueue)
+                .filter_by(status="queued")
+                .order_by(JobQueue.created_at)
+                .all()
+            )
+
+            # Filter to only batchable jobs
+            batchable_jobs = filter_batchable_jobs(queued_jobs)
+
+            if not batchable_jobs:
+                self._smart_batch_analysis = None
+                self._analysis_queue_size = 0
+                return None
+
+            # Determine safe batch size based on control complexity
+            max_controls = 0
+            for job in batchable_jobs:
+                signature = get_control_signature(job.config or {})
+                max_controls = max(max_controls, len(signature))
+
+            safe_batch_size = get_safe_batch_size(max_controls, self.batch_size)
+
+            # Group jobs based on mode
+            if mix_controls:
+                batches = group_jobs_mixed(batchable_jobs, safe_batch_size)
+            else:
+                batches = group_jobs_strict(batchable_jobs, safe_batch_size)
+
+            # Calculate efficiency metrics
+            efficiency = calculate_batch_efficiency(batches, batchable_jobs)
+
+            # Create human-readable preview
+            preview_lines = [
+                "⚡ Smart Batching Analysis:",
+                f"- {efficiency['job_count_before']} jobs → {efficiency['job_count_after']} batches",
+                f"- Estimated speedup: {efficiency['estimated_speedup']:.1f}x",
+                f"- Mode: {'Mixed (master controls)' if mix_controls else 'Strict (identical controls)'}",
+            ]
+
+            if batches:
+                preview_lines.append("\nBatch breakdown:")
+                for i, batch in enumerate(batches, 1):
+                    if "signature" in batch:
+                        controls = batch["signature"] if batch["signature"] else "no controls"
+                    else:
+                        controls = (
+                            f"master: {', '.join(batch['master_controls'])}"
+                            if batch["master_controls"]
+                            else "no controls"
+                        )
+                    preview_lines.append(f"  Batch {i}: {len(batch['jobs'])} jobs ({controls})")
+
+            preview = "\n".join(preview_lines)
+
+            # Store analysis for later execution
+            analysis = {
+                "batches": batches,
+                "efficiency": efficiency,
+                "preview": preview,
+            }
+
+            self._smart_batch_analysis = analysis
+            self._analysis_queue_size = len(queued_jobs)
+
+            return analysis
+
+    def execute_smart_batches(self) -> dict[str, Any]:
+        """Execute the stored smart batch analysis.
+
+        Returns:
+            Results dictionary with execution status and metrics
+        """
+        # Check if analysis exists
+        if not self._smart_batch_analysis:
+            return {"error": "No analysis available. Run analyze_queue_for_smart_batching first."}
+
+        # Check if queue has changed (simple size check)
+        with self.db_connection.get_session() as session:
+            current_queue_size = session.query(JobQueue).filter_by(status="queued").count()
+
+            if current_queue_size != self._analysis_queue_size:
+                return {"error": "Analysis is stale - queue has changed. Please re-analyze."}
+
+        # Execute batches
+        batches = self._smart_batch_analysis["batches"]
+        efficiency = self._smart_batch_analysis["efficiency"]
+
+        jobs_executed = 0
+        batches_created = 0
+        failures = []
+
+        for batch_config in batches:
+            try:
+                # Collect prompt IDs from all jobs in batch
+                all_prompt_ids = []
+                for job in batch_config["jobs"]:
+                    all_prompt_ids.extend(job.prompt_ids)
+
+                # Get the control configuration
+                if "signature" in batch_config:
+                    # Strict mode: use first job's weights
+                    weights = batch_config["jobs"][0].config.get("weights", {})
+                else:
+                    # Mixed mode: create master weights
+                    weights = {}
+                    for control in batch_config.get("master_controls", []):
+                        # Set all master controls to a default weight
+                        weights[control] = 0.5
+
+                # Mark jobs as running
+                with self.db_connection.get_session() as session:
+                    for job in batch_config["jobs"]:
+                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
+                        if db_job:
+                            db_job.status = "running"
+                            db_job.started_at = datetime.now(timezone.utc)
+                    session.commit()
+
+                # Execute batch inference
+                result = self.cosmos_api.batch_inference(
+                    prompt_ids=all_prompt_ids,
+                    shared_weights=weights,
+                    batch_size=len(batch_config["jobs"]),
+                )
+
+                # Mark jobs as completed
+                with self.db_connection.get_session() as session:
+                    for job in batch_config["jobs"]:
+                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
+                        if db_job:
+                            db_job.status = "completed"
+                            db_job.completed_at = datetime.now(timezone.utc)
+                            db_job.result = result
+                            session.delete(db_job)  # Remove from queue
+                    session.commit()
+
+                jobs_executed += len(batch_config["jobs"])
+                batches_created += 1
+
+            except Exception as e:
+                logger.error("Failed to execute batch: {}", e)
+                failures.append({"batch": batches_created + 1, "error": str(e)})
+
+                # Mark jobs as failed
+                with self.db_connection.get_session() as session:
+                    for job in batch_config["jobs"]:
+                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
+                        if db_job:
+                            db_job.status = "failed"
+                            db_job.completed_at = datetime.now(timezone.utc)
+                            db_job.result = {"error": str(e)}
+                    session.commit()
+
+        # Clear analysis after execution
+        self._smart_batch_analysis = None
+        self._analysis_queue_size = 0
+
+        if failures:
+            return {
+                "jobs_executed": jobs_executed,
+                "batches_created": batches_created,
+                "speedup": efficiency["estimated_speedup"],
+                "failures": failures,
+            }
+
+        return {
+            "jobs_executed": jobs_executed,
+            "batches_created": batches_created,
+            "speedup": efficiency["estimated_speedup"],
+        }
+
+    def get_smart_batch_preview(self) -> str:
+        """Get human-readable preview of stored analysis.
+
+        Returns:
+            Preview string, or empty string if no analysis or stale
+        """
+        if not self._smart_batch_analysis:
+            return ""
+
+        # Check if analysis is still valid
+        with self.db_connection.get_session() as session:
+            current_queue_size = session.query(JobQueue).filter_by(status="queued").count()
+
+            if current_queue_size != self._analysis_queue_size:
+                return ""
+
+        return self._smart_batch_analysis.get("preview", "")

@@ -22,7 +22,7 @@ class TestSmartBatchingWorkflow:
         # Create test database
         db_path = tmp_path / "test.db"
         db_connection = DatabaseConnection(str(db_path))
-        db_connection.initialize_database()
+        db_connection.create_tables()
 
         # Mock CosmosAPI
         cosmos_api = Mock(spec=CosmosAPI)

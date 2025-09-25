@@ -93,33 +93,111 @@ def wire_cross_tab_navigation(components: dict[str, Any]) -> None:
     if "view_runs_for_input_btn" in components:
 
         def navigate_to_runs_for_input(
-            selected_dir: str | None, nav_state: Any
-        ) -> tuple[Any, Any, dict | None]:
-            """Navigate to runs tab for input directory."""
+            selected_dir: str | None,
+        ) -> tuple[Any, ...]:
+            """Navigate to runs tab for input directory with filtering."""
             if not selected_dir:
-                return gr.update(), nav_state, None
+                return (
+                    {"filter_type": None, "filter_values": [], "source_tab": None},
+                    None,
+                    "No input directory selected",
+                    2,  # Runs tab index
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(visible=False),
+                    gr.update(value=""),
+                )
 
-            # Prepare navigation data
-            pending_data = {
-                "filter_type": "input",
-                "filter_value": selected_dir,
-                "source_tab": "inputs",
-            }
+            logger.info(
+                "Cross-tab navigation - Target: runs, Filter: input, Value: %s",
+                selected_dir,
+            )
 
-            return gr.update(selected=2), nav_state, pending_data
+            # Extract just the directory name
+            dir_name = selected_dir.split("/")[-1] if "/" in selected_dir else selected_dir
+            dir_name = dir_name.split("\\")[-1] if "\\" in dir_name else dir_name
 
-        if "view_runs_for_input_btn" in components:
+            # Import here to avoid circular dependency
+            from cosmos_workflow.api.cosmos_api import CosmosAPI
+
+            # Find prompts that use this input
+            api = CosmosAPI()
+            prompts = api.list_prompts(limit=100)
+            matching_prompt_ids = []
+            matching_prompt_names = []
+
+            for prompt in prompts:
+                inputs = prompt.get("inputs", {})
+                video_path = inputs.get("video", "")
+                if dir_name in video_path:
+                    matching_prompt_ids.append(prompt.get("id"))
+                    matching_prompt_names.append(
+                        prompt.get("parameters", {}).get("name", "unnamed")
+                    )
+
+            if not matching_prompt_ids:
+                return (
+                    {"filter_type": None, "filter_values": [], "source_tab": None},
+                    None,
+                    f"No prompts found using input '{dir_name}'",
+                    2,  # Runs tab index
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(visible=False),
+                    gr.update(value=""),
+                )
+
+            # Load filtered runs data
+            gallery, table, stats, _ = load_runs_for_multiple_prompts(
+                matching_prompt_ids, "all", "all", "all", "", "50", None
+            )
+
+            # Format filter display
+            filter_display = f"**Filtering by input: {dir_name}**\n"
+            filter_display += f"Found {len(matching_prompt_names)} prompt(s) using this input\n"
+            for name in matching_prompt_names[:3]:
+                filter_display += f"• {name}\n"
+            if len(matching_prompt_names) > 3:
+                filter_display += f"• ... and {len(matching_prompt_names) - 3} more"
+
+            return (
+                {
+                    "filter_type": "input",
+                    "filter_values": matching_prompt_ids,
+                    "source_tab": "inputs",
+                },
+                None,
+                f"Viewing runs for input '{dir_name}'",
+                2,  # Runs tab index
+                gallery,
+                table,
+                stats,
+                gr.update(visible=True),
+                gr.update(value=filter_display),
+            )
+
+        outputs = [
+            components.get("navigation_state"),
+            components.get("pending_nav_data"),
+            components.get("selection_count"),
+            components.get("selected_tab"),
+            components.get("runs_gallery"),
+            components.get("runs_table"),
+            components.get("runs_stats"),
+            components.get("runs_nav_filter_row"),
+            components.get("runs_prompt_filter"),
+        ]
+        outputs = [o for o in outputs if o is not None]
+
+        if outputs:
             components["view_runs_for_input_btn"].click(
                 fn=navigate_to_runs_for_input,
-                inputs=[
-                    components.get("selected_dir_path"),  # Fixed: using correct component name
-                    components.get("navigation_state"),
-                ],
-                outputs=[
-                    components.get("tabs"),
-                    components.get("navigation_state"),
-                    components.get("pending_nav_data"),
-                ],
+                inputs=[components.get("selected_dir_path")],
+                outputs=outputs,
+                js="() => { setTimeout(() => { document.querySelectorAll('.tab-nav button, button[role=\"tab\"]')[2]?.click(); }, 100); return []; }",
+                queue=False,
             )
 
     # Navigate from inputs to prompts
@@ -127,10 +205,10 @@ def wire_cross_tab_navigation(components: dict[str, Any]) -> None:
 
         def prepare_prompts_navigation_from_input(
             input_name: str | None,
-        ) -> tuple[Any, Any, int]:
+        ) -> tuple[Any, Any]:
             """Navigate to Prompts tab with search filter for input directory."""
             if not input_name:
-                return gr.update(), gr.update(), 1
+                return gr.update(), gr.update()
 
             logger.info(
                 "Cross-tab navigation - Target: prompts, Filter: input, Value: %s", input_name
@@ -152,13 +230,11 @@ def wire_cross_tab_navigation(components: dict[str, Any]) -> None:
             return (
                 gr.update(value=search_term),  # Update search box with directory name only
                 filtered_table,  # Update table
-                1,  # Prompts tab index
             )
 
         outputs = [
-            components.get("prompt_search"),
-            components.get("ops_prompts_table"),  # Fixed: was "prompts_table"
-            components.get("selected_tab"),
+            components.get("prompts_search"),  # Fixed: was "prompt_search"
+            components.get("ops_prompts_table"),
         ]
         outputs = [o for o in outputs if o is not None]
 

@@ -11,7 +11,7 @@ from cosmos_workflow.ui.tabs.runs import (
     confirm_delete_run,
     execute_upscale,
     load_run_logs,
-    load_runs_data_with_version_filter,
+    load_runs_data,
     load_runs_with_filters,
     on_runs_gallery_select,
     on_runs_table_select,
@@ -53,8 +53,9 @@ def wire_runs_filtering_events(components: dict[str, Any]) -> None:
     ]
 
     if all(k in components for k in filter_keys):
-        filter_inputs = [components[k] for k in filter_keys]
-        filter_inputs.append(components.get("navigation_state"))
+        # Create inputs list for the load function - includes navigation_state for reading
+        load_inputs = [components[k] for k in filter_keys]
+        load_inputs.append(components.get("navigation_state"))
 
         filter_outputs = [
             components.get("runs_gallery"),
@@ -66,13 +67,45 @@ def wire_runs_filtering_events(components: dict[str, Any]) -> None:
         ]
 
         # Wire change events for all filter components
+        # IMPORTANT: We pass the same inputs but the change event only triggers
+        # when the specific filter component changes, not when navigation_state changes
         for filter_key in filter_keys:
             if filter_key in components:
                 components[filter_key].change(
                     fn=load_runs_with_filters,
-                    inputs=filter_inputs,
+                    inputs=load_inputs,
                     outputs=filter_outputs,
                 )
+
+        # Wire clear filter button
+        if "clear_nav_filter_btn" in components:
+
+            def clear_navigation_filter(*args):
+                """Clear the navigation filter and reload all runs."""
+                # Return cleared navigation state and hide filter display
+                return (
+                    gr.update(),  # runs_gallery - will be refreshed
+                    gr.update(),  # runs_table - will be refreshed
+                    gr.update(),  # runs_stats - will be refreshed
+                    {
+                        "filter_type": None,
+                        "filter_values": [],
+                        "source_tab": None,
+                    },  # Clear navigation_state
+                    gr.update(visible=False),  # Hide runs_nav_filter_row
+                    gr.update(value=""),  # Clear runs_prompt_filter text
+                )
+
+            components["clear_nav_filter_btn"].click(
+                fn=clear_navigation_filter,
+                inputs=load_inputs,  # Pass same inputs for consistency
+                outputs=filter_outputs,
+            ).then(
+                # Reload data after clearing filter
+                fn=load_runs_with_filters,
+                inputs=load_inputs,
+                outputs=filter_outputs,
+            )
 
 
 def wire_runs_selection_events(components: dict[str, Any]) -> None:
@@ -348,14 +381,14 @@ def wire_runs_rating_events(components: dict[str, Any], api: Any) -> None:
             rating_filter,
             version_filter,
         ) = filter_args
-        gallery_data, table_data, stats = load_runs_data_with_version_filter(
+        # Use load_runs_data which now handles all filtering internally
+        gallery_data, table_data, stats = load_runs_data(
             status_filter,
             date_filter,
             type_filter,
             search_text,
             limit,
             rating_filter,
-            version_filter,
         )
 
         # Return updated star states with filled/empty stars

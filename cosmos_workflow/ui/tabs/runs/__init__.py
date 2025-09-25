@@ -11,10 +11,9 @@ This package contains:
 - navigation: Tab navigation and cross-tab communication
 """
 
-# Re-export main functions for backward compatibility
+# Re-export main functions
 from cosmos_workflow.ui.tabs.runs.data_loading import (
     load_runs_data,
-    load_runs_data_with_version_filter,
     load_runs_for_multiple_prompts,
     load_runs_with_filters,
 )
@@ -77,7 +76,6 @@ __all__ = [
     "handle_runs_tab_with_pending_data",
     "load_run_logs",
     "load_runs_data",
-    "load_runs_data_with_version_filter",
     "load_runs_for_multiple_prompts",
     "load_runs_with_filters",
     "on_runs_gallery_select",

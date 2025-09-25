@@ -7,7 +7,7 @@ including filtering and state management.
 import gradio as gr
 
 from cosmos_workflow.ui.tabs.runs.data_loading import (
-    load_runs_data_with_version_filter,
+    load_runs_data,
     load_runs_for_multiple_prompts,
 )
 from cosmos_workflow.utils.logging import logger
@@ -106,9 +106,7 @@ def handle_runs_tab_default():
     """
     logger.info("Switching to Runs tab without filter - loading default data")
 
-    gallery_data, table_data, stats = load_runs_data_with_version_filter(
-        "all", "all", "all", "", 50, "all", "best"
-    )
+    gallery_data, table_data, stats = load_runs_data("all", "all", "all", "", 50, "all")
 
     if table_data is None:
         table_data = []

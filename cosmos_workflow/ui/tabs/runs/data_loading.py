@@ -193,11 +193,27 @@ class RunsLoader:
         return prompt_names
 
 
-# Legacy function signatures for backward compatibility
-def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, rating_filter=None):
+# Main function for loading runs with all filters
+def load_runs_data(
+    status_filter="all",
+    date_filter="all",
+    type_filter="all",
+    search_text="",
+    limit=50,
+    rating_filter=None,
+):
     """Load runs data for table with filtering and populate video grid.
 
-    Legacy function maintained for backward compatibility.
+    Args:
+        status_filter: Filter by run status
+        date_filter: Filter by date range
+        type_filter: Filter by run type
+        search_text: Search text for filtering
+        limit: Maximum number of runs to display
+        rating_filter: Filter by rating
+
+    Returns:
+        Tuple of (gallery_data, table_data, stats_text)
     """
     loader = RunsLoader()
     filters = RunFilters(
@@ -207,36 +223,32 @@ def load_runs_data(status_filter, date_filter, type_filter, search_text, limit, 
         search_text=search_text,
         limit=limit,
         rating_filter=rating_filter,
-    )
-    return loader.load_runs(filters)
-
-
-def load_runs_data_with_version_filter(
-    status_filter, date_filter, type_filter, search_text, limit, rating_filter, version_filter
-):
-    """Load runs data with version filtering support.
-
-    Legacy function maintained for backward compatibility.
-    """
-    loader = RunsLoader()
-    filters = RunFilters(
-        status_filter=status_filter,
-        date_filter=date_filter,
-        type_filter=type_filter,
-        search_text=search_text,
-        limit=limit,
-        rating_filter=rating_filter,
-        version_filter=version_filter,
     )
     return loader.load_runs(filters)
 
 
 def load_runs_for_multiple_prompts(
-    prompt_ids, status_filter, date_filter, type_filter, search_text, limit, rating_filter=None
+    prompt_ids,
+    status_filter="all",
+    date_filter="all",
+    type_filter="all",
+    search_text="",
+    limit="50",
+    rating_filter=None,
 ):
     """Load runs data for multiple prompt IDs.
 
-    Legacy function maintained for backward compatibility.
+    Args:
+        prompt_ids: List of prompt IDs to filter by
+        status_filter: Filter by run status
+        date_filter: Filter by date range
+        type_filter: Filter by run type
+        search_text: Search text for filtering
+        limit: Maximum number of runs to display
+        rating_filter: Filter by rating
+
+    Returns:
+        Tuple of (gallery_data, table_data, stats_text, prompt_names)
     """
     loader = RunsLoader()
     filters = RunFilters(
@@ -263,18 +275,33 @@ def load_runs_with_filters(
 ):
     """Load runs data with all filters, including persistent prompt filter from navigation state.
 
-    Legacy function maintained for backward compatibility.
+    This is the main entry point for loading runs with full filter support including
+    navigation state for cross-tab filtering.
+
+    Args:
+        status_filter: Filter by run status
+        date_filter: Filter by date range
+        type_filter: Filter by run type
+        search_text: Search text for filtering
+        limit: Maximum number of runs to display
+        rating_filter: Filter by rating
+        version_filter: Filter by version (all/not upscaled/upscaled)
+        nav_state: Navigation state containing cross-tab filter info
+
+    Returns:
+        Tuple of (gallery, table, stats, nav_state, filter_row_visibility, filter_text)
     """
-    # Check if we have active prompt filtering
+    # Check if we have active prompt filtering from navigation
     if (
         nav_state
-        and nav_state.get("filter_type") == "prompt_ids"
+        and nav_state.get("filter_type") in ["prompt_ids", "input"]
         and nav_state.get("filter_values")
     ):
         prompt_ids = nav_state.get("filter_values", [])
-        logger.info(f"Loading runs with prompt filter for {len(prompt_ids)} prompts")
+        filter_type = nav_state.get("filter_type")
+        logger.info("Loading runs with {} filter for {} prompts", filter_type, len(prompt_ids))
 
-        # Use the multi-prompt loader with all filters
+        # Load with prompt filter
         gallery, table, stats, prompt_names = load_runs_for_multiple_prompts(
             prompt_ids,
             status_filter,
@@ -285,17 +312,21 @@ def load_runs_with_filters(
             rating_filter,
         )
 
-        # Format prompt names for display
-        if prompt_names:
+        # Format filter display based on type
+        filter_display = ""
+        if filter_type == "input" and nav_state.get("source_tab") == "inputs":
+            # For input-based filtering, show the input context
+            filter_display = "**Filtering by input directory**\n"
+            filter_display += f"Found {len(prompt_names)} prompt(s) using this input\n"
+        elif prompt_names:
             filter_display = f"**Filtering by {len(prompt_names)} prompt(s):**\n"
-            display_names = []
+
+        # Add prompt names
+        if prompt_names:
             for name in prompt_names[:3]:
-                display_names.append(f"• {name}")
-            filter_display += "\n".join(display_names)
+                filter_display += f"• {name}\n"
             if len(prompt_names) > 3:
-                filter_display += f"\n• ... and {len(prompt_names) - 3} more"
-        else:
-            filter_display = ""
+                filter_display += f"• ... and {len(prompt_names) - 3} more"
 
         return (
             gallery,
@@ -306,17 +337,19 @@ def load_runs_with_filters(
             gr.update(value=filter_display),  # Update filter text
         )
     else:
-        # No prompt filtering, use regular loader with version filter
-        logger.info("Loading runs with version filter: {}", version_filter)
-        gallery, table, stats = load_runs_data_with_version_filter(
-            status_filter,
-            date_filter,
-            type_filter,
-            search_text,
-            limit,
-            rating_filter,
-            version_filter,
+        # No navigation filtering, use regular loader
+        logger.info("Loading runs with standard filters")
+        loader = RunsLoader()
+        filters = RunFilters(
+            status_filter=status_filter,
+            date_filter=date_filter,
+            type_filter=type_filter,
+            search_text=search_text,
+            limit=limit,
+            rating_filter=rating_filter,
+            version_filter=version_filter,
         )
+        gallery, table, stats = loader.load_runs(filters)
 
         return (
             gallery,

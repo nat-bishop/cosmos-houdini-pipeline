@@ -697,7 +697,8 @@ def run_inference_on_selected(
         selected_ids = df_utils.get_selected_ids(dataframe_data, id_column=1)
 
         if not selected_ids:
-            return "❌ No prompts selected"
+            msg = "❌ No prompts selected"
+            return None, msg, gr.update(value=msg, visible=True)
 
         # Build weights dictionary
         weights = {
@@ -780,7 +781,8 @@ def run_enhance_on_selected(
         selected_ids = df_utils.get_selected_ids(dataframe_data, id_column=1)
 
         if not selected_ids:
-            return "❌ No prompts selected"
+            msg = "❌ No prompts selected"
+            return None, msg, gr.update(value=msg, visible=True)
 
         # Always use pixtral model
         model = "pixtral"

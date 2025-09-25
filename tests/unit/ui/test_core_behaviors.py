@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Tests for core UI behaviors without UI component dependencies."""
 
-import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime, timezone
+
+import pytest
 
 
 class TestPromptOperations:
@@ -26,10 +26,7 @@ class TestPromptOperations:
 
         # Run enhancement
         queue_table, status, display = run_enhance_on_selected(
-            table_data,
-            create_new=True,
-            force_overwrite=False,
-            queue_service=mock_queue
+            table_data, create_new=True, force_overwrite=False, queue_service=mock_queue
         )
 
         # Verify behavior
@@ -56,7 +53,7 @@ class TestPromptOperations:
         # Test with specific weights
         weights = {"vis": 0.3, "edge": 0.2, "depth": 0.25, "seg": 0.25}
 
-        result = run_inference_on_selected(
+        _ = run_inference_on_selected(
             table_data,
             weight_vis=weights["vis"],
             weight_edge=weights["edge"],
@@ -69,7 +66,7 @@ class TestPromptOperations:
             sigma_max=2.0,
             blur_strength=0.75,
             canny_threshold=150,
-            queue_service=mock_queue
+            queue_service=mock_queue,
         )
 
         # Verify job configuration
@@ -120,7 +117,7 @@ class TestQueueBehaviors:
             "status": "queued",
             "job_type": "inference",
             "priority": 50,
-            "created_at": "2025-01-15T10:00:00Z"
+            "created_at": "2025-01-15T10:00:00Z",
         }
         mock_service.get_position.return_value = 5
 
@@ -139,9 +136,7 @@ class TestQueueBehaviors:
         mock_service.get_queue_status.return_value = {
             "total_queued": 3,
             "running": None,
-            "queued": [
-                {"id": "job_123", "position": 1, "type": "inference", "prompt_count": 1}
-            ]
+            "queued": [{"id": "job_123", "position": 1, "type": "inference", "prompt_count": 1}],
         }
         mock_service.get_job_status.return_value = {"status": "queued"}
         mock_service.get_position.return_value = 1
@@ -169,9 +164,7 @@ class TestQueueBehaviors:
         mock_queue.get_position.return_value = 2
 
         result = run_inference_on_selected(
-            table_data, 0.5, 0.5, 0.5, 0.5,
-            30, 8.0, 42, 24, 1.0, 0.5, 100,
-            mock_queue
+            table_data, 0.5, 0.5, 0.5, 0.5, 30, 8.0, 42, 24, 1.0, 0.5, 100, mock_queue
         )
 
         # Should create a single batch job
@@ -189,7 +182,7 @@ class TestStatusDisplay:
         """Test GPU status information formatting."""
         from cosmos_workflow.ui.tabs.jobs_handlers import check_running_jobs
 
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.check_status.return_value = {
                 "ssh_status": "connected",
                 "docker_status": {"docker_running": True},
@@ -200,10 +193,10 @@ class TestStatusDisplay:
                     "memory_percentage": "33%",
                     "gpu_utilization": "75%",
                     "temperature": "65°C",
-                    "cuda_version": "12.1"
+                    "cuda_version": "12.1",
                 },
                 "container": None,
-                "active_run": None
+                "active_run": None,
             }
 
             details, status, display = check_running_jobs()
@@ -221,7 +214,7 @@ class TestStatusDisplay:
         """Test active job status display."""
         from cosmos_workflow.ui.tabs.jobs_handlers import check_running_jobs
 
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.check_status.return_value = {
                 "ssh_status": "connected",
                 "active_run": {
@@ -229,13 +222,13 @@ class TestStatusDisplay:
                     "model_type": "transfer",
                     "prompt_id": "ps_source",
                     "status": "running",
-                    "started_at": "2025-01-15T10:00:00Z"
+                    "started_at": "2025-01-15T10:00:00Z",
                 },
                 "container": {
                     "name": "cosmos_transfer_rs_active",
                     "status": "running",
-                    "id": "abc123def456"
-                }
+                    "id": "abc123def456",
+                },
             }
 
             details, status, display = check_running_jobs()
@@ -256,13 +249,13 @@ class TestDataTransformations:
         """Test transformation of API data to table format."""
         from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
 
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.list_prompts.return_value = [
                 {
                     "id": "ps_12345678",
                     "prompt_text": "A very long prompt text that should be truncated for display",
                     "parameters": {"name": "test_prompt", "enhanced": True},
-                    "created_at": "2025-01-15T10:30:45.123456Z"
+                    "created_at": "2025-01-15T10:30:45.123456Z",
                 }
             ]
 
@@ -279,8 +272,8 @@ class TestDataTransformations:
     def test_selection_state_management(self):
         """Test managing selection state across operations."""
         from cosmos_workflow.ui.tabs.prompts_handlers import (
-            select_all_prompts,
             clear_selection,
+            select_all_prompts,
             update_selection_count,
         )
 

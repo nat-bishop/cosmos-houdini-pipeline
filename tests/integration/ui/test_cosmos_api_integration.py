@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Integration test to verify UI handlers work correctly with CosmosAPI responses."""
 
-import pytest
-from unittest.mock import Mock, patch
 from datetime import datetime, timezone
+from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestUICosmosAPIIntegration:
@@ -13,7 +14,7 @@ class TestUICosmosAPIIntegration:
         """Test that prompt handlers work with actual API response format."""
         from cosmos_workflow.ui.tabs.prompts_handlers import load_ops_prompts
 
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             # Use REAL response shape from CosmosAPI.list_prompts()
             mock_api.return_value.list_prompts.return_value = [
                 {
@@ -24,19 +25,16 @@ class TestUICosmosAPIIntegration:
                         "enhanced": False,
                         "negative_prompt": "blurry, dark, low quality",
                         "fps": 24,
-                        "resolution": "1024x576"
+                        "resolution": "1024x576",
                     },
                     "inputs": {
                         "video": "/inputs/sunset/color.mp4",
                         "depth": "/inputs/sunset/depth.mp4",
-                        "seg": "/inputs/sunset/segmentation.mp4"
+                        "seg": "/inputs/sunset/segmentation.mp4",
                     },
                     "created_at": "2025-01-15T10:30:45.123456",
                     "updated_at": "2025-01-15T10:30:45.123456",
-                    "metadata": {
-                        "source": "user_upload",
-                        "tags": ["nature", "sunset"]
-                    }
+                    "metadata": {"source": "user_upload", "tags": ["nature", "sunset"]},
                 },
                 {
                     "id": "ps_7f3a2b1c4d5e6890",
@@ -45,14 +43,12 @@ class TestUICosmosAPIIntegration:
                         "name": "cyberpunk_city",
                         "enhanced": True,
                         "enhancement_model": "pixtral",
-                        "negative_prompt": ""
+                        "negative_prompt": "",
                     },
-                    "inputs": {
-                        "video": "/inputs/city/color.mp4"
-                    },
+                    "inputs": {"video": "/inputs/city/color.mp4"},
                     "created_at": "2025-01-14T08:15:30Z",
-                    "updated_at": "2025-01-14T09:20:15Z"
-                }
+                    "updated_at": "2025-01-14T09:20:15Z",
+                },
             ]
 
             result = load_ops_prompts(limit=10, search_text="", enhanced_filter="all")
@@ -78,7 +74,7 @@ class TestUICosmosAPIIntegration:
         """Test that run handlers work with actual API response format."""
         from cosmos_workflow.ui.tabs.runs.run_actions import preview_delete_run
 
-        with patch('cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI") as mock_api:
             # Use REAL response shape from CosmosAPI.get_run()
             mock_api.return_value.get_run.return_value = {
                 "id": "rs_9c8d7e6f5a4b3210",
@@ -92,27 +88,24 @@ class TestUICosmosAPIIntegration:
                     "seed": 42,
                     "fps": 24,
                     "sigma_max": 1.0,
-                    "blur_strength": 0.5
+                    "blur_strength": 0.5,
                 },
                 "outputs": {
                     "output_path": "/outputs/runs/rs_9c8d7e6f5a4b3210/output.mp4",
                     "files": ["output.mp4", "metadata.json", "preview.jpg"],
                     "size_bytes": 15728640,
-                    "duration_seconds": 3.5
+                    "duration_seconds": 3.5,
                 },
                 "created_at": "2025-01-15T10:35:00Z",
                 "updated_at": "2025-01-15T10:37:45Z",
                 "started_at": "2025-01-15T10:35:05Z",
                 "completed_at": "2025-01-15T10:37:45Z",
                 "rating": 4,
-                "metadata": {
-                    "container_id": "abc123def456",
-                    "gpu_used": "NVIDIA RTX 4090"
-                }
+                "metadata": {"container_id": "abc123def456", "gpu_used": "NVIDIA RTX 4090"},
             }
 
             # Mock Path for output file checking
-            with patch('cosmos_workflow.ui.tabs.runs.run_actions.Path') as mock_path:
+            with patch("cosmos_workflow.ui.tabs.runs.run_actions.Path") as mock_path:
                 mock_path.return_value.exists.return_value = True
                 mock_path.return_value.name = "output.mp4"
 
@@ -121,7 +114,11 @@ class TestUICosmosAPIIntegration:
                 # Verify the preview was generated correctly (gr.update returns dict)
                 assert dialog.get("visible") is True
                 # preview_text is a gr.update dict, get the actual value
-                preview_value = preview_text.get("value", "") if isinstance(preview_text, dict) else preview_text
+                preview_value = (
+                    preview_text.get("value", "")
+                    if isinstance(preview_text, dict)
+                    else preview_text
+                )
                 assert "rs_9c8d7e6f5a4b" in preview_value  # Only first part of ID shown
                 assert "completed" in preview_value.lower()
                 assert "transfer" in preview_value.lower()
@@ -143,7 +140,7 @@ class TestUICosmosAPIIntegration:
                 "prompt_ids": ["ps_001"],
                 "status": "running",
                 "elapsed_time": 45,
-                "started_at": "2025-01-15T10:35:00Z"
+                "started_at": "2025-01-15T10:35:00Z",
             },
             "queued": [
                 {
@@ -152,7 +149,7 @@ class TestUICosmosAPIIntegration:
                     "position": 1,
                     "prompt_count": 3,
                     "prompt_ids": ["ps_002", "ps_003", "ps_004"],
-                    "priority": 50
+                    "priority": 50,
                 },
                 {
                     "id": "job_ghi789",
@@ -160,9 +157,9 @@ class TestUICosmosAPIIntegration:
                     "position": 2,
                     "prompt_count": 1,
                     "prompt_ids": ["ps_005"],
-                    "priority": 50
-                }
-            ]
+                    "priority": 50,
+                },
+            ],
         }
 
         handler = QueueHandlers(mock_service)
@@ -195,7 +192,7 @@ class TestUICosmosAPIIntegration:
         """Test job status display with actual API status response."""
         from cosmos_workflow.ui.tabs.jobs_handlers import check_running_jobs
 
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             # Use REAL response shape from CosmosAPI.check_status()
             mock_api.return_value.check_status.return_value = {
                 "ssh_status": "connected",
@@ -204,7 +201,7 @@ class TestUICosmosAPIIntegration:
                     "docker_running": True,
                     "version": "24.0.7",
                     "containers_running": 1,
-                    "containers_total": 5
+                    "containers_total": 5,
                 },
                 "gpu_info": {
                     "name": "NVIDIA GeForce RTX 4090",
@@ -219,7 +216,7 @@ class TestUICosmosAPIIntegration:
                     "cuda_version": "12.1",
                     "driver_version": "535.129.03",
                     "clock_current": "2520 MHz",
-                    "clock_max": "2520 MHz"
+                    "clock_max": "2520 MHz",
                 },
                 "active_run": {
                     "id": "rs_active123",
@@ -227,7 +224,7 @@ class TestUICosmosAPIIntegration:
                     "model_type": "transfer",
                     "status": "running",
                     "started_at": "2025-01-15T10:30:00Z",
-                    "progress": 0.65
+                    "progress": 0.65,
                 },
                 "container": {
                     "id": "c8f7e6d5c4b3a2190f8e7d6c5b4a3928",
@@ -235,13 +232,13 @@ class TestUICosmosAPIIntegration:
                     "name": "cosmos_transfer_rs_active123",
                     "status": "running",
                     "created": "2025-01-15T10:30:00Z",
-                    "image": "cosmos-inference:latest"
+                    "image": "cosmos-inference:latest",
                 },
                 "disk_usage": {
                     "outputs_dir": "45.6 GB",
                     "inputs_dir": "12.3 GB",
-                    "total": "57.9 GB"
-                }
+                    "total": "57.9 GB",
+                },
             }
 
             details, status, display = check_running_jobs()
@@ -285,12 +282,12 @@ class TestUICosmosAPIIntegration:
         mock_queue.add_job.return_value = "job_enh_123abc"
         mock_queue.get_position.return_value = None  # Immediate execution
 
-        with patch('gradio.Info') as mock_info:
+        with patch("gradio.Info"):
             result = run_enhance_on_selected(
                 table_data,
                 create_new=False,  # Update existing
                 force_overwrite=True,
-                queue_service=mock_queue
+                queue_service=mock_queue,
             )
 
             # Verify job was added correctly
@@ -318,22 +315,22 @@ class TestUICosmosAPIIntegration:
                 "prompt_text": "Morning scene",
                 "parameters": {"name": "morning", "enhanced": True},
                 "inputs": {"video": "/inputs/morning/color.mp4"},
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "id": "ps_week_002",
                 "prompt_text": "Evening scene",
                 "parameters": {"name": "evening", "enhanced": False},
                 "inputs": {"video": "/inputs/evening/color.mp4"},
-                "created_at": "2025-01-10T15:00:00Z"  # 5 days ago
+                "created_at": "2025-01-10T15:00:00Z",  # 5 days ago
             },
             {
                 "id": "ps_old_003",
                 "prompt_text": "Night scene",
                 "parameters": {"name": "night", "enhanced": True},
                 "inputs": {"video": "/inputs/night/color.mp4"},
-                "created_at": "2024-12-01T10:00:00Z"  # Over 30 days ago
-            }
+                "created_at": "2024-12-01T10:00:00Z",  # Over 30 days ago
+            },
         ]
 
         # Test search filter
@@ -347,7 +344,7 @@ class TestUICosmosAPIIntegration:
         assert all(p["parameters"]["enhanced"] for p in filtered)
 
         # Test date filter with mock datetime
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.datetime') as mock_dt:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.datetime") as mock_dt:
             mock_now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
             mock_dt.now.return_value = mock_now
             mock_dt.fromisoformat = datetime.fromisoformat

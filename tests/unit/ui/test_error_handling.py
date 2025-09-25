@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 """Tests for UI error handling and graceful failures - ensuring robustness."""
 
-import pytest
 from unittest.mock import Mock, patch
 
-from cosmos_workflow.ui.tabs.prompts_handlers import (
-    load_ops_prompts,
-    on_prompt_row_select,
-    preview_delete_prompts,
-    run_inference_on_selected,
-    run_enhance_on_selected,
-)
-from cosmos_workflow.ui.tabs.runs.run_actions import (
-    preview_delete_run,
-    confirm_delete_run,
-    show_upscale_dialog,
-)
+import pytest
+
 from cosmos_workflow.ui.queue_handlers import QueueHandlers
 from cosmos_workflow.ui.tabs.jobs_handlers import (
     check_running_jobs,
     execute_kill_job,
+)
+from cosmos_workflow.ui.tabs.prompts_handlers import (
+    load_ops_prompts,
+    on_prompt_row_select,
+    preview_delete_prompts,
+    run_enhance_on_selected,
+    run_inference_on_selected,
+)
+from cosmos_workflow.ui.tabs.runs.run_actions import (
+    confirm_delete_run,
+    preview_delete_run,
+    show_upscale_dialog,
 )
 
 
@@ -28,7 +29,7 @@ class TestPromptsErrorHandling:
 
     def test_load_ops_prompts_api_failure(self):
         """Test graceful handling when API fails."""
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.list_prompts.side_effect = Exception("Database connection failed")
 
             result = load_ops_prompts()
@@ -38,7 +39,7 @@ class TestPromptsErrorHandling:
 
     def test_load_ops_prompts_malformed_data(self):
         """Test handling of malformed API responses."""
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             # Return malformed data
             mock_api.return_value.list_prompts.return_value = [
                 {"id": "ps_001"},  # Missing required fields
@@ -48,8 +49,8 @@ class TestPromptsErrorHandling:
                     "id": "ps_002",
                     "prompt_text": "Valid",
                     "parameters": {"name": "test"},
-                    "created_at": "2025-01-15T10:00:00Z"
-                }  # Valid one
+                    "created_at": "2025-01-15T10:00:00Z",
+                },  # Valid one
             ]
 
             result = load_ops_prompts()
@@ -77,11 +78,9 @@ class TestPromptsErrorHandling:
         mock_evt = Mock()
         mock_evt.index = [0]
 
-        table_data = [
-            [False, "ps_001", "Test", "Text", "2025-01-15"]
-        ]
+        table_data = [[False, "ps_001", "Test", "Text", "2025-01-15"]]
 
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.get_prompt.side_effect = Exception("Network error")
 
             result = on_prompt_row_select(table_data, mock_evt)
@@ -94,10 +93,12 @@ class TestPromptsErrorHandling:
         """Test delete preview with no selection."""
         table_data = [
             [False, "ps_001", "Test", "Text", "2025-01-15"],
-            [False, "ps_002", "Test2", "Text2", "2025-01-15"]
+            [False, "ps_002", "Test2", "Text2", "2025-01-15"],
         ]
 
-        dialog_visible, preview_text, checkbox_state, ids_string = preview_delete_prompts(table_data)
+        dialog_visible, preview_text, checkbox_state, ids_string = preview_delete_prompts(
+            table_data
+        )
 
         # gr.update returns dict
         assert isinstance(dialog_visible, dict)
@@ -112,10 +113,12 @@ class TestPromptsErrorHandling:
             [True, "ps_001", "Test", "Text", "2025-01-15"]  # Selected
         ]
 
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.preview_prompt_deletion.side_effect = Exception("API Error")
 
-            dialog_visible, preview_text, checkbox_state, ids_string = preview_delete_prompts(table_data)
+            dialog_visible, preview_text, checkbox_state, ids_string = preview_delete_prompts(
+                table_data
+            )
 
             # Should handle error gracefully
             assert isinstance(dialog_visible, dict)
@@ -138,7 +141,7 @@ class TestRunsErrorHandling:
 
     def test_preview_delete_run_api_failure(self):
         """Test delete preview when API fails."""
-        with patch('cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI") as mock_api:
             mock_api.return_value.get_run.side_effect = Exception("Database error")
 
             result = preview_delete_run("rs_12345")
@@ -149,7 +152,7 @@ class TestRunsErrorHandling:
 
     def test_confirm_delete_run_api_failure(self):
         """Test delete confirmation when API fails."""
-        with patch('cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI") as mock_api:
             mock_api.return_value.delete_run.side_effect = Exception("Permission denied")
 
             dialog, selected_id, status = confirm_delete_run("rs_12345", True)
@@ -160,7 +163,7 @@ class TestRunsErrorHandling:
 
     def test_show_upscale_dialog_missing_run(self):
         """Test upscale dialog when run doesn't exist."""
-        with patch('cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.runs.run_actions.CosmosAPI") as mock_api:
             mock_api.return_value.get_run.return_value = None
 
             dialog, preview, run_id = show_upscale_dialog("rs_12345")
@@ -210,7 +213,7 @@ class TestQueueErrorHandling:
         mock_service.get_queue_status.return_value = {
             "total_queued": 0,
             "running": None,
-            "queued": []
+            "queued": [],
         }
 
         handler = QueueHandlers(mock_service)
@@ -225,15 +228,11 @@ class TestInferenceErrorHandling:
 
     def test_run_inference_no_selection(self):
         """Test inference with no prompts selected."""
-        table_data = [
-            [False, "ps_001", "Test", "Text", "2025-01-15"]
-        ]
+        table_data = [[False, "ps_001", "Test", "Text", "2025-01-15"]]
 
         mock_service = Mock()
         result = run_inference_on_selected(
-            table_data, 0.5, 0.5, 0.5, 0.5,
-            30, 8.0, 42, 24, 1.0, 0.5, 100,
-            mock_service
+            table_data, 0.5, 0.5, 0.5, 0.5, 30, 8.0, 42, 24, 1.0, 0.5, 100, mock_service
         )
 
         # Implementation has been fixed to return tuple
@@ -251,25 +250,23 @@ class TestInferenceErrorHandling:
         mock_service.add_job.side_effect = Exception("Queue full")
 
         result = run_inference_on_selected(
-            table_data, 0.5, 0.5, 0.5, 0.5,
-            30, 8.0, 42, 24, 1.0, 0.5, 100,
-            mock_service
+            table_data, 0.5, 0.5, 0.5, 0.5, 30, 8.0, 42, 24, 1.0, 0.5, 100, mock_service
         )
 
         assert "Error" in result[1]
 
     def test_run_enhance_invalid_params(self):
         """Test enhancement with invalid parameters."""
-        table_data = [
-            [True, "ps_001", "Test", "Text", "2025-01-15"]
-        ]
+        table_data = [[True, "ps_001", "Test", "Text", "2025-01-15"]]
 
         mock_service = Mock()
         mock_service.add_job.side_effect = ValueError("Invalid configuration")
 
         result = run_enhance_on_selected(
-            table_data, True, None,  # None for force_overwrite
-            mock_service
+            table_data,
+            True,
+            None,  # None for force_overwrite
+            mock_service,
         )
 
         # Should handle the error gracefully
@@ -281,7 +278,7 @@ class TestJobsErrorHandling:
 
     def test_check_running_jobs_api_failure(self):
         """Test checking jobs when API fails."""
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.check_status.side_effect = Exception("Connection refused")
 
             details, status, display = check_running_jobs()
@@ -291,7 +288,7 @@ class TestJobsErrorHandling:
 
     def test_check_running_jobs_partial_data(self):
         """Test with incomplete status information."""
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             # Return partial data
             mock_api.return_value.check_status.return_value = {
                 "ssh_status": "connected",
@@ -306,11 +303,11 @@ class TestJobsErrorHandling:
 
     def test_execute_kill_job_no_containers(self):
         """Test killing when no containers exist."""
-        with patch('cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.jobs_handlers.CosmosAPI") as mock_api:
             mock_api.return_value.get_active_containers.return_value = []
             mock_api.return_value.kill_containers.return_value = {
                 "status": "success",
-                "killed_count": 0
+                "killed_count": 0,
             }
 
             dialog, message = execute_kill_job()
@@ -327,8 +324,8 @@ class TestEdgeCases:
     def test_empty_table_operations(self):
         """Test operations on empty tables."""
         from cosmos_workflow.ui.tabs.prompts_handlers import (
-            select_all_prompts,
             clear_selection,
+            select_all_prompts,
             update_selection_count,
         )
 
@@ -378,9 +375,7 @@ class TestEdgeCases:
         table_data = [[True, "ps_001", "Test", "Text", "2025-01-15"]]
 
         result = run_inference_on_selected(
-            table_data, 0.5, 0.5, 0.5, 0.5,
-            30, 8.0, 42, 24, 1.0, 0.5, 100,
-            mock_service
+            table_data, 0.5, 0.5, 0.5, 0.5, 30, 8.0, 42, 24, 1.0, 0.5, 100, mock_service
         )
 
         # Should handle gracefully

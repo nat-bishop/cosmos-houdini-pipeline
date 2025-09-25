@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Tests for UI data transformation and business logic - no UI dependencies."""
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
 from cosmos_workflow.ui.tabs.prompts_handlers import (
-    calculate_run_statistics,
     calculate_average_rating,
+    calculate_run_statistics,
     filter_prompts,
     get_selected_prompt_ids,
 )
@@ -219,14 +220,14 @@ class TestPromptFiltering:
         filtered = filter_prompts(
             sample_prompts,
             search_text="a",  # Matches "A beautiful" and "Mountain landscape"
-            enhanced_filter="enhanced"
+            enhanced_filter="enhanced",
         )
         assert len(filtered) == 2
         assert all(p["parameters"]["enhanced"] for p in filtered)
 
     def test_filter_prompts_with_runs(self, sample_prompts):
         """Test filtering by run status."""
-        with patch('cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI') as mock_api:
+        with patch("cosmos_workflow.ui.tabs.prompts_handlers.CosmosAPI") as mock_api:
             mock_api_instance = Mock()
             mock_api.return_value = mock_api_instance
 

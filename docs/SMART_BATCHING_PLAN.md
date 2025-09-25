@@ -1,300 +1,411 @@
-# Smart Batching Implementation Plan
+# Smart Batching Implementation Plan (TDD Approach)
 
 ## Overview
-Refactor the job queue system to support intelligent batching of similar jobs for 2-5x performance improvements. This plan simplifies the current multi-selection interface and adds smart grouping based on control configurations.
+Implement smart batching as an **overlay optimization** for the existing queue system. Smart batching analyzes already-queued jobs and reorganizes them into optimized batches for 2-5x performance improvements. This approach preserves existing workflows while adding optional batching capabilities.
 
 ## Key Design Decisions
-- **Single job queue model**: Remove multi-selection, add jobs individually
-- **Queue reordering allowed**: Batching can optimize job order
+- **TDD approach**: Write comprehensive tests first, implement to pass tests
+- **Overlay optimization**: Works on top of existing queue, no workflow changes required
+- **User-initiated only**: Smart batching requires explicit user action when queue is paused
+- **Preserves existing UI**: Keep familiar multi-select interface initially
 - **Two batching modes**: Strict (identical controls) or Mixed (master batch)
 - **Conservative memory management**: Use proven batch sizes based on control count
-- **Transparency over complexity**: Show users exactly what's being batched and why
+- **Non-invasive**: Zero impact when not used - existing functionality unchanged
+
+## Smart Batching Prerequisites
+- **Queue must be paused**: Smart batching only available when queue toggle is set to "Don't proceed"
+- **User-initiated**: Batching happens only when user clicks "Analyze for Smart Batching"
+- **Preview required**: User sees optimization preview before execution
+- **Optional feature**: System works normally if smart batching is never used
 
 ---
 
-## Phase 1: Simplify Prompts Tab UI
-**Goal**: Remove multi-selection complexity, use single row selection
+## Phase 1: TDD Foundation - Write Tests First
+**Goal**: Define core behavior through pragmatic tests
 **Estimated Time**: 1-2 hours
 
-### Tasks
-- [ ] Remove checkbox column from prompts table (`prompts_ui.py`)
-- [ ] Set table to `interactive=False`
-- [ ] Remove "Select All" and "Clear Selection" buttons
-- [ ] Update "Delete Selected" to work with selected row
-- [ ] Update "View Runs" to use selected row instead of checkboxes
-- [ ] Update event handlers in `app.py` to use row selection
-- [ ] Remove all checkbox-related state management
+### Testing Philosophy (Solo Developer)
+- Focus on happy path and main failure modes
+- Don't test implementation details, test behavior
+- Skip exhaustive edge case testing initially
+- Add tests when bugs are found (test-driven debugging)
 
-### Testing Checklist
-- [ ] Row selection highlights correctly
-- [ ] Delete works with selected row
-- [ ] View runs works with selected row
-- [ ] Prompt details display for selected row
-- [ ] No checkbox artifacts remain
+### Test Files to Create
+- `tests/unit/utils/test_smart_batching.py` - Core batching algorithms
+- `tests/unit/services/test_queue_smart_batching.py` - Queue service extensions
+- `tests/integration/test_smart_batching_workflow.py` - End-to-end workflow
+
+### Test Coverage Requirements
+```python
+# Control signature extraction
+test_get_control_signature_single_control()
+test_get_control_signature_multiple_controls()
+test_get_control_signature_no_controls()
+test_get_control_signature_zero_weights()
+
+# Job grouping - strict mode
+test_group_jobs_strict_identical_controls()
+test_group_jobs_strict_mixed_controls() # should create separate groups
+test_group_jobs_strict_respects_batch_limits()
+test_group_jobs_strict_with_different_prompt_counts()
+
+# Job grouping - mixed mode
+test_group_jobs_mixed_optimizes_control_overhead()
+test_group_jobs_mixed_creates_master_batch()
+test_group_jobs_mixed_respects_batch_limits()
+test_group_jobs_mixed_master_control_selection() # verify union algorithm
+
+# Conservative batch sizing
+test_safe_batch_size_single_control() # max 8
+test_safe_batch_size_two_controls() # max 4
+test_safe_batch_size_three_plus_controls() # max 2
+test_safe_batch_size_respects_user_override()
+
+# State management
+test_analysis_invalidation_on_queue_change()
+
+# Error handling
+test_batch_with_job_failure() # basic failure handling
+
+# Edge cases
+test_empty_job_list()
+test_single_job()
+test_non_batchable_jobs_excluded()
+test_all_jobs_different_controls()
+test_mixed_batchable_and_non_batchable_jobs()
+```
 
 ### Success Criteria
-- Simpler, cleaner UI
-- All operations work with single selection
-- Code is less complex
+- All test scenarios defined with expected behavior
+- Edge cases and error conditions covered
+- Clear requirements for implementation
+- Tests fail initially (red phase of TDD)
 
 ---
 
-## Phase 2: Convert to Single-Job Queue Model
-**Goal**: Replace multi-inference with "Add to Queue" for individual jobs
-**Estimated Time**: 1 hour
-
-### Tasks
-- [ ] Replace "Run Inference" section with "Add to Queue"
-- [ ] Remove prompt count displays
-- [ ] Add single "Add to Queue" button for selected prompt
-- [ ] Update handlers to add individual jobs (batch_size=1)
-- [ ] Remove batch inference UI elements
-- [ ] Update queue service to handle single job additions
-
-### Testing Checklist
-- [ ] "Add to Queue" adds single job
-- [ ] Queue displays individual jobs
-- [ ] Jobs execute correctly
-- [ ] No multi-selection artifacts remain
-
-### Success Criteria
-- Simplified inference workflow
-- Clear one-click queue addition
-- Maintains existing functionality
-
----
-
-## Phase 3: Create Smart Batching Utilities
-**Goal**: Build core batching algorithms
+## Phase 2: Core Smart Batching Logic Implementation
+**Goal**: Implement utilities to make all tests pass (green phase)
 **Estimated Time**: 2-3 hours
 
 ### New File: `cosmos_workflow/utils/smart_batching.py`
 
-### Functions to Implement
+### Functions to Implement (Following TDD)
 ```python
 def get_control_signature(job_config: dict) -> tuple[str, ...]:
     """Extract sorted tuple of active controls from job config.
     Example: {'weights': {'edge': 0.5, 'depth': 0}} -> ('edge',)
+    Only includes controls with weight > 0.
     """
-
-def count_active_controls(job_config: dict) -> int:
-    """Count number of active controls (weight > 0)."""
 
 def group_jobs_strict(jobs: list[JobQueue], max_batch_size: int) -> list[dict]:
     """Group jobs with identical control signatures only.
     Returns list of batch configurations with 'jobs' and 'signature'.
+    Jobs with different signatures go in separate batches.
     """
 
 def group_jobs_mixed(jobs: list[JobQueue], max_batch_size: int) -> list[dict]:
     """Group jobs allowing mixed controls using master batch approach.
-    Optimizes to minimize total control overhead.
+    Creates batches that minimize total control overhead.
+    Master controls = union of all controls in the batch.
     Returns list of batch configurations with 'jobs' and 'master_controls'.
+    Algorithm: Group jobs to minimize total unique controls across all batches.
     """
 
-def calculate_batch_metrics(batches: list[dict]) -> dict:
+def calculate_batch_efficiency(batches: list[dict], original_jobs: list) -> dict:
     """Calculate efficiency metrics for batch configuration.
-    Returns: time_estimate, speedup_factor, control_overhead, etc.
+    Returns: estimated_speedup, control_reduction, job_count_before/after.
     """
 
-def get_safe_batch_size(num_controls: int, user_max: int) -> int:
+def get_safe_batch_size(num_controls: int, user_max: int = 16) -> int:
     """Conservative batch sizing based on control count.
     1 control: min(8, user_max)
     2 controls: min(4, user_max)
     3+ controls: min(2, user_max)
+    Note: Consider making these configurable via config.toml in future.
+    """
+
+def filter_batchable_jobs(jobs: list[JobQueue]) -> list[JobQueue]:
+    """Filter jobs that can be batched together.
+    Excludes: enhance, upscale job types
+    Includes: inference, batch_inference
     """
 ```
 
-### Testing Checklist
-- [ ] Control signature extraction works correctly
-- [ ] Strict grouping creates correct groups
-- [ ] Mixed grouping optimizes control overhead
-- [ ] Batch metrics are accurate
-- [ ] Safe batch sizes are conservative
+### Implementation Guidelines
+- Make tests pass with minimal, clean code
+- No over-engineering - implement exactly what tests require
+- Focus on correctness, readability
+- Conservative approach to memory/batch sizing
 
 ### Success Criteria
-- Clean, readable algorithms
-- Comprehensive test coverage
-- No over-engineering
+- All tests pass (green phase)
+- Clean, readable implementation
+- Conservative batch sizing verified
+- No premature optimization
 
 ---
 
-## Phase 4: Extend Queue Service for Batching
-**Goal**: Add batching capabilities to SimplifiedQueueService
+## Phase 3: Queue Service Smart Batching Extension
+**Goal**: Add smart batching overlay to existing queue system
 **Estimated Time**: 1-2 hours
 
-### Methods to Add to `simple_queue_service.py`
+### Extensions to `cosmos_workflow/services/simple_queue_service.py`
 
 ```python
-def get_batchable_jobs(self, limit: int = 100) -> list[JobQueue]:
-    """Get all queued inference/batch_inference jobs.
-    Excludes enhance and upscale jobs.
+def analyze_queue_for_smart_batching(self, mix_controls: bool = False) -> dict:
+    """Analyze queued jobs for batching opportunities.
+    Returns analysis with batch preview and efficiency metrics.
+    Stores analysis for later execution.
     """
 
-def create_smart_batches(self, mix_controls: bool = False) -> list[dict]:
-    """Create optimized batches from queued jobs.
-    Uses strict or mixed mode based on mix_controls flag.
-    Returns list of batch configurations.
+def execute_smart_batches(self) -> dict:
+    """Execute the stored smart batch analysis.
+    Validates queue hasn't changed (simple size check).
+    Claims jobs, executes batches, returns results with speedup metric.
     """
 
-def claim_batch_jobs(self, job_ids: list[str]) -> bool:
-    """Atomically claim multiple jobs for batch processing.
-    Uses database transaction to prevent race conditions.
-    """
-
-def execute_smart_batches(self, batches: list[dict]) -> dict:
-    """Execute all smart batches.
-    Returns results with performance metrics.
+def get_smart_batch_preview(self) -> str:
+    """Get human-readable preview of stored analysis.
+    Returns empty string if no analysis or if stale.
     """
 ```
 
-### Testing Checklist
-- [ ] Correctly identifies batchable jobs
-- [ ] Creates valid batch configurations
-- [ ] Atomic job claiming works
-- [ ] Batch execution completes successfully
-- [ ] Non-batchable jobs are excluded
+### Key Design Principles
+- **Overlay approach**: Works with existing queue, doesn't change core behavior
+- **Atomic operations**: Use existing database transaction patterns
+- **Graceful degradation**: If batching fails, jobs can still run individually
+- **Preserve queue state**: Analysis doesn't modify queue until execution
 
 ### Success Criteria
-- Clean integration with existing service
-- Maintains atomicity guarantees
-- Preserves error handling
+- Integration tests pass
+- Existing queue functionality unaffected
+- Atomic job claiming works correctly
+- Batch execution uses existing CosmosAPI patterns
 
 ---
 
-## Phase 5: Add Smart Batching UI Controls
-**Goal**: Add batching interface to Active Jobs tab
+## Phase 4: Smart Batching UI Controls
+**Goal**: Add user interface for smart batching analysis and execution
 **Estimated Time**: 1-2 hours
 
-### UI Components to Add (`jobs_ui.py`)
+### UI Components to Add to `cosmos_workflow/ui/tabs/jobs_ui.py`
 
 ```python
-# After pause_queue_checkbox:
-components["mix_controls_checkbox"] = gr.Checkbox(
-    label="Mix Control Inputs",
-    value=False,
-    info="Allow batching jobs with different controls"
-)
-
-# Smart batch group (visible when paused)
+# Smart batching section (only visible when queue is paused)
 with gr.Group(visible=False) as components["smart_batch_group"]:
-    gr.Markdown("#### ⚡ Smart Batching")
-    components["batch_preview"] = gr.Markdown("")
-    components["execute_batch_btn"] = gr.Button(
-        "Execute Smart Batch",
-        variant="primary"
+    gr.Markdown("#### ⚡ Smart Batching Optimization")
+    gr.Markdown("Analyze queued jobs to create optimized batches for better performance.")
+
+    with gr.Row():
+        components["analyze_batching_btn"] = gr.Button(
+            "Analyze for Smart Batching",
+            variant="secondary"
+        )
+        components["mix_controls_checkbox"] = gr.Checkbox(
+            label="Allow Mixed Controls",
+            value=False,
+            info="Group jobs with different control inputs using master batch approach"
+        )
+
+    components["batch_analysis"] = gr.Markdown("", visible=False)
+    components["execute_smart_batch_btn"] = gr.Button(
+        "Execute Smart Batches",
+        variant="primary",
+        visible=False
     )
 ```
 
-### Event Handlers to Add (`app.py`)
+### Event Handlers to Add
 
 ```python
-def analyze_batches(paused: bool, mix_controls: bool):
-    """Analyze queue for batching opportunities."""
+def analyze_smart_batching(mix_controls: bool, queue_service):
+    """Analyze queue and show preview."""
+    analysis = queue_service.analyze_queue_for_smart_batching(mix_controls)
+    preview = queue_service.get_smart_batch_preview()
 
-def execute_smart_batches():
-    """Execute the analyzed batches."""
+    if not preview:
+        return "No batchable jobs found.", gr.update(visible=False)
+
+    return preview, gr.update(visible=True)
+
+def execute_smart_batching(queue_service):
+    """Execute the smart batches."""
+    results = queue_service.execute_smart_batches()
+    return f"Completed: {results['jobs_executed']} jobs → {results['batches_created']} batches (Speedup: {results['speedup']:.1f}x)"
 ```
 
-### Testing Checklist
-- [ ] Controls show/hide with pause state
-- [ ] Batch preview displays correctly
-- [ ] Mix controls toggle changes analysis
-- [ ] Execute button processes batches
-- [ ] Progress feedback during execution
+### UI Behavior Requirements
+- **Smart batch controls only visible when queue is paused**
+- **Analysis is non-destructive** - just shows preview
+- **Clear preview** shows what will be batched and expected benefits
+- **Execution confirmation** required before actual batching
+- **Progress feedback** during batch execution
 
 ### Success Criteria
-- Clear, intuitive UI
-- Transparent batch preview
-- Smooth execution flow
+- Smart batch controls show/hide correctly with pause state
+- Analysis provides clear, informative preview
+- Execution works smoothly with good feedback
+- No impact on existing UI when not used
 
 ---
 
-## Phase 6: Integration Testing
-**Goal**: Ensure all components work together
+## Phase 5: Integration Testing & Validation
+**Goal**: Validate complete workflow and performance improvements
 **Estimated Time**: 1-2 hours
 
-### Test Scenarios
+### End-to-End Test Scenarios
 
-1. **Basic Flow**
-   - [ ] Add individual jobs to queue
-   - [ ] Pause queue
-   - [ ] View batch analysis
-   - [ ] Execute smart batch
-   - [ ] Verify results
+1. **Basic Smart Batching Workflow**
+   - Add multiple jobs with similar controls to queue
+   - Pause queue
+   - Analyze for smart batching
+   - Review preview
+   - Execute smart batches
+   - Verify results and performance
 
 2. **Strict Mode Testing**
-   - [ ] Add jobs with identical controls
-   - [ ] Add jobs with different controls
-   - [ ] Verify correct grouping
-   - [ ] Check execution efficiency
+   - Queue jobs with identical control signatures
+   - Queue jobs with different control signatures
+   - Verify strict mode groups only identical signatures
+   - Check batch size limits respected
 
 3. **Mixed Mode Testing**
-   - [ ] Enable mix controls
-   - [ ] Add varied jobs
-   - [ ] Verify master batch creation
-   - [ ] Check overhead optimization
+   - Enable "Allow Mixed Controls"
+   - Queue jobs with varied control configurations
+   - Verify master batch approach used
+   - Check control overhead optimization
 
-4. **Edge Cases**
-   - [ ] Empty queue
-   - [ ] Single job
-   - [ ] Non-batchable jobs (enhance/upscale)
-   - [ ] Maximum batch size limits
+4. **Edge Cases & Error Handling**
+   - Empty queue analysis
+   - Single job in queue
+   - Queue with only non-batchable jobs (enhance/upscale)
+   - Queue exceeding batch size limits
+   - Network errors during batch execution
 
 ### Performance Benchmarks
-- [ ] Measure speedup for identical controls (target: 3-5x)
-- [ ] Measure mixed mode efficiency (target: 2-3x)
-- [ ] Document actual vs theoretical speedup
+- **Strict mode**: Measure speedup for identical controls (target: 3-5x)
+- **Mixed mode**: Measure efficiency for varied controls (target: 2-3x)
+- **Memory usage**: Verify conservative batch sizes prevent OOM errors
+- **Queue throughput**: Compare batched vs individual execution times
 
 ### Success Criteria
-- All test scenarios pass
-- Performance improvements demonstrated
-- No regressions in existing functionality
+- All test scenarios pass without errors
+- Performance improvements meet or exceed targets
+- Existing functionality completely unaffected
+- Smart batching provides clear user value
 
 ---
+
+## Phase 6: Future UI Simplification (Optional Future Work)
+**Goal**: Eventually simplify multi-select interface once smart batching is proven
+**Status**: Future enhancement, not part of current implementation
+
+### Potential Future Changes
+- Replace multi-select checkboxes with single "Add to Queue" buttons
+- Simplify inference workflow to individual job queuing
+- Remove bulk operation complexity from UI
+- Focus on smart batching as primary optimization method
+
+### Migration Strategy
+- Deploy smart batching overlay first and validate adoption
+- Gather user feedback on batching effectiveness
+- Consider UI simplification only after smart batching is proven valuable
+- Maintain backward compatibility during any future UI changes
+
+---
+
+## Critical Implementation Considerations
+
+### State Management (Keep It Simple)
+- **Analysis Storage**: Store analyzed batch configurations in SimplifiedQueueService instance
+- **Staleness Check**: Simple check - if queue size changed, analysis is stale
+- **Invalidation**: Clear stored analysis when queue changes
+
+### Error Handling Strategy
+- **Partial Batch Failures**: If individual jobs fail within a batch:
+  - Continue processing remaining jobs in batch
+  - Mark failed jobs with error status individually
+  - Return detailed failure report with successful and failed job IDs
+- **Batch Execution Rollback**: If entire batch fails:
+  - Revert all claimed jobs back to 'queued' status
+  - Log detailed error for debugging
+  - Allow user to retry with smaller batches or individually
+
+### Mixed Mode Algorithm Details
+- **Master Control Selection**: Union of all controls in the batch
+  - Example: Job1 has [edge], Job2 has [depth], Job3 has [edge, depth]
+  - Master controls = [edge, depth] for all three jobs
+- **Optimization Goal**: Minimize total number of unique controls across all batches
+- **Grouping Strategy**: Greedy algorithm that groups jobs with most control overlap first
+
+### User Feedback (Simple)
+- **Progress**: Simple "Executing smart batches..." message during execution
+- **Results**: Show actual speedup achieved after completion (for validation)
+- **Stale Warning**: Simple warning if queue changed since analysis
+
+## Solo Developer Best Practices
+
+### YAGNI (You Aren't Gonna Need It)
+- Start with the simplest implementation that delivers value
+- Don't add features "just in case" - add them when needed
+- Focus on core 2-5x speedup benefit, not edge cases
+- Perfect is the enemy of good - ship working code
+
+### MVP Focus
+- **Phase 1-2**: Core algorithms with basic tests
+- **Phase 3-4**: Simple integration with existing queue
+- **Phase 5**: Minimal UI - just enough to use the feature
+- **Skip initially**: Metrics, telemetry, complex state management, fancy UI
 
 ## Implementation Notes
 
-### What We're Building
-- Simple, transparent batching system
-- Two clear modes: strict and mixed
-- Conservative memory management
-- User-visible efficiency metrics
+### What Smart Batching IS
+- **Optional optimization overlay** that works with existing queue
+- **User-controlled feature** that requires explicit activation
+- **Conservative approach** using proven batch sizes and algorithms
+- **Transparent system** showing users exactly what's being optimized
+- **Performance enhancement** delivering 2-5x speedup for compatible jobs
+- **Non-invasive feature** with zero impact when not used
 
-### What We're NOT Building
-- Complex memory prediction
-- Dynamic retry mechanisms
-- Automatic reordering beyond grouping
-- Machine learning optimization
-- Priority queues
+### What Smart Batching IS NOT
+- Automatic background optimization
+- Complex machine learning system
+- Memory prediction or dynamic scaling
+- Replacement for existing queue functionality
+- Required feature for normal operation
 
-### Key Files Modified
-- `cosmos_workflow/ui/tabs/prompts_ui.py` - Remove multi-selection
-- `cosmos_workflow/ui/tabs/prompts_handlers.py` - Update to single selection
-- `cosmos_workflow/utils/smart_batching.py` - NEW: Batching algorithms
-- `cosmos_workflow/services/simple_queue_service.py` - Add batching methods
-- `cosmos_workflow/ui/tabs/jobs_ui.py` - Add batching controls
-- `cosmos_workflow/ui/app.py` - Wire up events
+### Key Technical Constraints
+- **Queue must be paused**: Smart batching only works when queue is stopped
+- **User-initiated analysis**: No automatic batching decisions
+- **Preview before execution**: Users see and approve optimizations
+- **Conservative batch sizing**: Proven limits prevent memory issues
+- **Atomic operations**: Uses existing database transaction patterns
+- **Graceful fallback**: Individual job execution if batching fails
 
-### Migration Path
-1. Phase 1-2 can be deployed immediately (UI simplification)
-2. Phase 3-4 can be developed in parallel (backend)
-3. Phase 5 connects frontend to backend
-4. Phase 6 validates the complete system
+### Files Modified/Created
+```
+New Files:
+├── cosmos_workflow/utils/smart_batching.py
+├── tests/unit/utils/test_smart_batching.py
+├── tests/unit/services/test_queue_smart_batching.py
+└── tests/integration/test_smart_batching_workflow.py
 
----
+Modified Files:
+├── cosmos_workflow/services/simple_queue_service.py (add batching methods)
+├── cosmos_workflow/ui/tabs/jobs_ui.py (add smart batch controls)
+└── cosmos_workflow/ui/core/wiring/jobs.py (wire smart batch events)
+```
 
-## Rollback Plan
-Each phase is independently valuable and can be rolled back:
-- Phase 1-2: Revert to checkbox-based selection
-- Phase 3-4: Remove batching utilities (no user impact)
-- Phase 5: Hide batching UI controls
-- System remains functional at each stage
+### Rollback Strategy
+Each phase can be independently rolled back:
+- **Phase 1-2**: Remove test files and utility module (no user impact)
+- **Phase 3**: Remove queue service extensions (no user impact)
+- **Phase 4**: Hide smart batching UI controls
+- **Existing functionality remains 100% intact** at all phases
 
----
-
-## Future Enhancements (Post-MVP)
-- Batch size learning from successful runs
-- Memory usage profiling
-- Automatic retry with smaller batches on OOM
-- Batch scheduling optimization
-- Historical performance analytics
+### Success Metrics
+- **Performance**: 2-5x demonstrated speedup for batched operations
+- **Usability**: Clear, intuitive interface with helpful previews
+- **Reliability**: No regressions in existing queue functionality
+- **Adoption**: Users find smart batching valuable and use it regularly
+- **Safety**: Conservative approach prevents memory or stability issues

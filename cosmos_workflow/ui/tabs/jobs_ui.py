@@ -105,6 +105,31 @@ Currently idle - no jobs running
                             info="Number of videos to process simultaneously on GPU",
                         )
 
+                    # Smart batching section (only visible when queue is paused)
+                    with gr.Group(visible=False) as components["smart_batch_group"]:
+                        gr.Markdown("#### ⚡ Smart Batching Optimization")
+                        gr.Markdown(
+                            "Analyze queued jobs to create optimized batches for better performance."
+                        )
+
+                        with gr.Row():
+                            components["analyze_batching_btn"] = gr.Button(
+                                "Analyze for Smart Batching",
+                                variant="secondary",
+                            )
+                            components["mix_controls_checkbox"] = gr.Checkbox(
+                                label="Allow Mixed Controls",
+                                value=False,
+                                info="Group jobs with different control inputs using master batch approach",
+                            )
+
+                        components["batch_analysis"] = gr.Markdown("", visible=False)
+                        components["execute_smart_batch_btn"] = gr.Button(
+                            "Execute Smart Batches",
+                            variant="primary",
+                            visible=False,
+                        )
+
                     components["kill_job_btn"] = gr.Button(
                         "🛑 Kill Active Job",
                         variant="stop",

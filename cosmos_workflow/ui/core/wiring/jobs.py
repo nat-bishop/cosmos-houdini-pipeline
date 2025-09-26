@@ -29,6 +29,7 @@ def wire_jobs_events(components: dict[str, Any], api: Any, simple_queue_service:
     wire_queue_control_events(components, simple_queue_service)
     wire_queue_selection_events(components, simple_queue_service)
     wire_queue_timers(components, simple_queue_service)
+    wire_smart_batching_events(components, simple_queue_service)
 
 
 def wire_jobs_control_events(
@@ -210,7 +211,13 @@ def wire_queue_control_events(components: dict[str, Any], simple_queue_service: 
 
             # Get updated queue display
             status, table = queue_handlers.get_queue_display()
-            return gr.update(value=status_text), status, table
+            # Show/hide smart batching controls based on pause state
+            return (
+                gr.update(value=status_text),
+                status,
+                table,
+                gr.update(visible=is_paused),  # smart_batch_group visibility
+            )
 
         components["queue_pause_checkbox"].change(
             fn=toggle_queue_pause,
@@ -219,6 +226,7 @@ def wire_queue_control_events(components: dict[str, Any], simple_queue_service: 
                 components.get("queue_status_indicator"),
                 components.get("queue_status"),
                 components.get("queue_table"),
+                components.get("smart_batch_group"),
             ],
         )
 
@@ -331,3 +339,73 @@ def wire_queue_selection_events(components: dict[str, Any], simple_queue_service
                 components.get("queue_selected_info"),
             ],
         )
+
+
+def wire_smart_batching_events(components: dict[str, Any], simple_queue_service: Any) -> None:
+    """Wire smart batching events."""
+    if "analyze_batching_btn" not in components:
+        return
+
+    def analyze_smart_batching(mix_controls: bool) -> tuple:
+        """Analyze queue for smart batching opportunities."""
+        try:
+            analysis = simple_queue_service.analyze_queue_for_smart_batching(mix_controls)
+            if not analysis:
+                return gr.update(
+                    value="No batchable jobs found in queue.", visible=True
+                ), gr.update(visible=False)
+
+            preview = analysis.get("preview", "")
+            return gr.update(value=preview, visible=True), gr.update(visible=True)
+        except Exception as e:
+            logger.error("Error analyzing queue for smart batching: %s", e)
+            return gr.update(value="Error: {}".format(str(e)), visible=True), gr.update(  # noqa: UP032
+                visible=False
+            )
+
+    def execute_smart_batching() -> tuple:
+        """Execute the smart batches."""
+        try:
+            results = simple_queue_service.execute_smart_batches()
+            if "error" in results:
+                message = "❌ Error: {}".format(results["error"])
+            else:
+                message = "✅ Completed: {} jobs → {} batches (Speedup: {:.1f}x)".format(
+                    results["jobs_executed"], results["batches_created"], results["speedup"]
+                )
+
+            # Update queue display after execution
+            queue_handlers = QueueHandlers(simple_queue_service)
+            status, table = queue_handlers.get_queue_display()
+
+            return gr.update(value=message, visible=True), gr.update(visible=False), status, table
+        except Exception as e:
+            logger.error("Error executing smart batches: %s", e)
+            return (
+                gr.update(value="❌ Error: {}".format(str(e)), visible=True),  # noqa: UP032
+                gr.update(visible=True),
+                gr.update(),
+                gr.update(),
+            )
+
+    # Wire analyze button
+    components["analyze_batching_btn"].click(
+        fn=analyze_smart_batching,
+        inputs=[components["mix_controls_checkbox"]],
+        outputs=[
+            components["batch_analysis"],
+            components["execute_smart_batch_btn"],
+        ],
+    )
+
+    # Wire execute button
+    components["execute_smart_batch_btn"].click(
+        fn=execute_smart_batching,
+        inputs=None,
+        outputs=[
+            components["batch_analysis"],
+            components["execute_smart_batch_btn"],
+            components.get("queue_status"),
+            components.get("queue_table"),
+        ],
+    )

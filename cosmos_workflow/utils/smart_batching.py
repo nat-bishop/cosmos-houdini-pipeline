@@ -4,8 +4,13 @@ Provides algorithms for grouping jobs into efficient batches to reduce
 GPU processing overhead and improve throughput.
 """
 
+from typing import TYPE_CHECKING, Any
 
-def get_control_signature(job_config: dict) -> tuple[str, ...]:
+if TYPE_CHECKING:
+    from cosmos_workflow.database.models import JobQueue
+
+
+def get_control_signature(job_config: dict[str, Any]) -> tuple[str, ...]:
     """Extract sorted tuple of active controls from job config.
 
     Args:
@@ -19,7 +24,7 @@ def get_control_signature(job_config: dict) -> tuple[str, ...]:
     return tuple(sorted(active_controls))
 
 
-def group_jobs_strict(jobs: list, max_batch_size: int) -> list[dict]:
+def group_jobs_strict(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
     """Group jobs with identical control signatures only.
 
     Args:
@@ -50,7 +55,7 @@ def group_jobs_strict(jobs: list, max_batch_size: int) -> list[dict]:
     return batches
 
 
-def group_jobs_mixed(jobs: list, max_batch_size: int) -> list[dict]:
+def group_jobs_mixed(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
     """Group jobs allowing mixed controls using master batch approach.
 
     Creates batches that minimize total control overhead by grouping
@@ -85,7 +90,9 @@ def group_jobs_mixed(jobs: list, max_batch_size: int) -> list[dict]:
     return batches
 
 
-def calculate_batch_efficiency(batches: list[dict], original_jobs: list) -> dict:
+def calculate_batch_efficiency(
+    batches: list[dict[str, Any]], original_jobs: list["JobQueue"]
+) -> dict[str, Any]:
     """Calculate efficiency metrics for batch configuration.
 
     Args:
@@ -164,7 +171,7 @@ def get_safe_batch_size(num_controls: int, user_max: int = 16) -> int:
     return min(safe_size, user_max)
 
 
-def filter_batchable_jobs(jobs: list) -> list:
+def filter_batchable_jobs(jobs: list["JobQueue"]) -> list["JobQueue"]:
     """Filter jobs that can be batched together.
 
     Args:

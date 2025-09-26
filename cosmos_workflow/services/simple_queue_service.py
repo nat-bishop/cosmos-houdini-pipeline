@@ -742,9 +742,13 @@ class SimplifiedQueueService:
             # Create human-readable preview
             preview_lines = [
                 "⚡ Smart Batching Analysis:",
-                f"- {efficiency['job_count_before']} jobs → {efficiency['job_count_after']} batches",
-                f"- Estimated speedup: {efficiency['estimated_speedup']:.1f}x",
-                f"- Mode: {'Mixed (master controls)' if mix_controls else 'Strict (identical controls)'}",
+                "- {} jobs → {} batches".format(
+                    efficiency["job_count_before"], efficiency["job_count_after"]
+                ),
+                "- Estimated speedup: {:.1f}x".format(efficiency["estimated_speedup"]),
+                "- Mode: {}".format(
+                    "Mixed (master controls)" if mix_controls else "Strict (identical controls)"
+                ),
             ]
 
             if batches:
@@ -753,12 +757,13 @@ class SimplifiedQueueService:
                     if "signature" in batch:
                         controls = batch["signature"] if batch["signature"] else "no controls"
                     else:
-                        controls = (
-                            f"master: {', '.join(batch['master_controls'])}"
-                            if batch["master_controls"]
-                            else "no controls"
-                        )
-                    preview_lines.append(f"  Batch {i}: {len(batch['jobs'])} jobs ({controls})")
+                        if batch["master_controls"]:
+                            controls = "master: {}".format(", ".join(batch["master_controls"]))
+                        else:
+                            controls = "no controls"
+                    preview_lines.append(
+                        "  Batch {}: {} jobs ({})".format(i, len(batch["jobs"]), controls)
+                    )
 
             preview = "\n".join(preview_lines)
 

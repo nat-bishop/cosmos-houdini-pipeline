@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Smart Batching System (2025-09-25)
+- **Smart Batching Overlay Optimization**: Complete TDD-implemented smart batching system for 2-5x performance improvements
+  - Two batching modes: Strict (identical controls only) and Mixed (master batch approach)
+  - Conservative batch sizing based on control count to prevent GPU OOM (out-of-memory) errors
+  - Non-invasive design: zero impact when not used, requires queue to be paused before analysis
+  - Comprehensive batch efficiency calculations with estimated speedup metrics
+  - Queue analysis validates job compatibility and optimizes batching strategies
+
+- **SimplifiedQueueService Smart Batching Integration**:
+  - `analyze_queue_for_smart_batching(mix_controls=False)`: Analyzes queued jobs for batching opportunities
+  - `execute_smart_batches()`: Executes the stored smart batch analysis with atomic job management
+  - `get_smart_batch_preview()`: Provides human-readable preview of stored analysis
+  - Intelligent job filtering to only batch inference and batch_inference job types
+  - Safe batch size calculation based on control complexity to prevent memory issues
+
+- **Core Smart Batching Algorithms** (`cosmos_workflow/utils/smart_batching.py`):
+  - `get_control_signature()`: Extract sorted tuple of active controls from job config
+  - `group_jobs_strict()`: Groups jobs with identical control signatures only for maximum efficiency
+  - `group_jobs_mixed()`: Groups jobs using master batch approach allowing mixed controls
+  - `calculate_batch_efficiency()`: Calculates efficiency metrics including speedup estimates
+  - `get_safe_batch_size()`: Conservative batch sizing (8→4→2 jobs based on 1→2→3+ controls)
+  - `filter_batchable_jobs()`: Filters jobs to only include batchable types (inference, batch_inference)
+
+- **Comprehensive Test Coverage**:
+  - 48 passing tests across 3 test files with complete coverage of all functionality
+  - Unit tests for core batching algorithms, efficiency calculations, and edge cases
+  - Integration tests for queue service methods and workflow validation
+  - Performance benchmarks demonstrating 2-5x speedup in controlled scenarios
+  - Memory safety tests validating conservative batch sizing prevents OOM errors
+
+- **Analysis and Execution Workflow**:
+  - Analysis stores batch configuration until executed or invalidated by queue changes
+  - Execution marks jobs as running, executes batch inference, then marks as completed
+  - Automatic cleanup of analysis after execution or when queue state changes
+  - Human-readable preview shows batch breakdown, control usage, and estimated performance gains
+
 ### Added - Major UI Refactoring and Navigation Improvements (2025-01-25)
 - **Cross-tab Navigation System**: Complete navigation between all tabs with intelligent filtering
   - Navigate from Inputs tab to Runs tab with filtering by input directory

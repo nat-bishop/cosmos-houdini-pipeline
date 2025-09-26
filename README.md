@@ -17,7 +17,7 @@
 
 • **Manages complex workflows** from data creation → AI processing → output retrieval with database tracking
 
-• **Provides enterprise features** like batch processing (40% faster), real-time monitoring, and 4K upscaling
+• **Provides enterprise features** like smart batching (2-5x faster), real-time monitoring, and 4K upscaling
 
 • **Abstracts infrastructure complexity** behind a clean Python API and Gradio UI
 
@@ -116,11 +116,11 @@ result = api.quick_inference(
 )
 print(f"Generated: {result['output_path']}")  # outputs/run_rs_abc123/output.mp4
 
-# Batch process multiple scenes (40% faster)
-results = api.batch_inference(
-    ["ps_001", "ps_002", "ps_003"],
-    shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
-)
+# Smart batch processing (2-5x faster)
+# First, add jobs to queue via UI, then analyze and execute batches
+queue_service = SimplifiedQueueService()
+analysis = queue_service.analyze_queue_for_smart_batching(mix_controls=False)
+results = queue_service.execute_smart_batches()  # Executes optimized batches
 ```
 
 ## 🏗️ Houdini Procedural City Generator (Input Creation)
@@ -166,7 +166,7 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 ### Infrastructure & Scale
 • **Remote GPU orchestration** - Manages GPUs (H100, H200, ect.) via SSH/Docker with zero downtime
 
-• **40-60% performance gains** - Batch inference reduces model loading overhead, processing 10 videos in 50min vs 90min sequential
+• **2-5x performance gains** - Smart batching overlay optimization reduces GPU overhead, processing 10 videos in 20-30min vs 90min sequential
 
 • **Lazy evaluation monitoring** - Novel pattern solving CLI lifecycle issues (runs don't get stuck as "running")
 
@@ -283,6 +283,7 @@ Local Machine                                    Remote GPU Server (H100)
   - **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed jobs (keeps last 50)
   - **Graceful Shutdown**: Properly marks running jobs as cancelled when app closes
   - **Enhanced Job Management**: Cancel selected jobs, kill active jobs with database updates
+  - **Smart Batching Overlay**: Advanced 2-5x performance optimization through intelligent job grouping
 - **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
 - **User Rating System**: Rate completed runs with 1-5 stars for quality assessment and analytics

@@ -103,6 +103,20 @@ def execute_kill_job():
                         job.result = {"reason": "Container killed by user"}
                         logger.info("Marked job %s as cancelled", job.id)
 
+                        # Update Run records for cancelled jobs
+                        for prompt_id in job.prompt_ids:
+                            try:
+                                runs = api.service.list_runs(prompt_id=prompt_id, limit=10)
+                                for run in runs:
+                                    if run.get("status") in ["pending", "running", "uploading"]:
+                                        api.service.update_run(
+                                            run["id"],
+                                            error_message="Container killed by user"
+                                        )
+                                        logger.info("Updated run %s to failed status", run["id"])
+                            except Exception as e:
+                                logger.error("Failed to update runs for prompt %s: %s", prompt_id, e)
+
                     session.commit()
                     logger.info(
                         "Cancelled %d running job(s) after killing containers", len(running_jobs)

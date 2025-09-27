@@ -892,6 +892,9 @@ class SimplifiedQueueService:
                 len(created_job_ids),
             )
 
+        # Capture speedup before clearing analysis
+        speedup = self._smart_batch_analysis["efficiency"].get("speedup", 1.0)
+
         # Clear analysis after successful reorganization
         self._smart_batch_analysis = None
         self._analysis_queue_size = 0
@@ -899,6 +902,7 @@ class SimplifiedQueueService:
         return {
             "jobs_deleted": len(all_source_job_ids),
             "batches_created": len(created_job_ids),
+            "speedup": speedup,
             "mode": mode,
             "message": f"Queue reorganized successfully. {len(all_source_job_ids)} jobs → {len(created_job_ids)} batches",
         }

@@ -927,7 +927,29 @@ class DockerExecutor:
                 is_batch=True,
             )
 
-        # Get output files after completion
+            # Exit code 137 means container was killed (SIGKILL)
+            # This typically happens when user kills the job or system OOM
+            if exit_code == 137:
+                logger.error("Container was killed (exit code 137) - likely user-initiated or OOM")
+                return {
+                    "batch_name": batch_name,
+                    "output_dir": f"{self.remote_dir}/outputs/{batch_name}",
+                    "status": "failed",
+                    "error": "Container killed (exit code 137)",
+                    "exit_code": exit_code,
+                }
+
+            # For other non-zero exit codes, also return failed status
+            return {
+                "batch_name": batch_name,
+                "output_dir": f"{self.remote_dir}/outputs/{batch_name}",
+                "status": "failed",
+                "error": f"Batch inference failed with exit code {exit_code}",
+                "exit_code": exit_code,
+            }
+
+        # Only check for output files if exit code was 0
+        # Get output files after successful completion
         remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         output_files = self._get_batch_output_files(batch_name)
 

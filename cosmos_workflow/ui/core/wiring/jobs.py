@@ -371,7 +371,7 @@ def wire_smart_batching_events(components: dict[str, Any], simple_queue_service:
                 message = "❌ Error: {}".format(results["error"])
             else:
                 message = "✅ Completed: {} jobs → {} batches (Speedup: {:.1f}x)".format(
-                    results["jobs_executed"], results["batches_created"], results["speedup"]
+                    results["jobs_deleted"], results["batches_created"], results["speedup"]
                 )
 
             # Update queue display after execution

@@ -699,8 +699,12 @@ class CosmosAPI:
                     model_type="transfer",  # Explicitly specify model type for inference
                     metadata={"batch_id": batch_id},  # Pass batch_id for correct log path
                 )
-                logger.debug("Created run {} for prompt {} with {} controls",
-                           run["id"], prompt_id, len(weights) if weights else 0)
+                logger.debug(
+                    "Created run {} for prompt {} with {} controls",
+                    run["id"],
+                    prompt_id,
+                    len(weights) if weights else 0,
+                )
                 runs_and_prompts.append((run, prompt))
 
             except ValueError as e:

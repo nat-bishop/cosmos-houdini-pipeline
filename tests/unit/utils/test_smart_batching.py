@@ -180,7 +180,9 @@ class TestRunLevelMixedGrouping:
         jobs = [
             MockJob("job1", {"weights": {"edge": 0.5}, "num_steps": 25}, ["ps_1", "ps_2"]),
             MockJob("job2", {"weights": {"depth": 0.3}, "num_steps": 25}, ["ps_3"]),
-            MockJob("job3", {"weights": {"edge": 0.5}, "num_steps": 30}, ["ps_4"]),  # Different steps
+            MockJob(
+                "job3", {"weights": {"edge": 0.5}, "num_steps": 30}, ["ps_4"]
+            ),  # Different steps
         ]
 
         batches = group_runs_mixed(jobs, max_batch_size=10)
@@ -224,17 +226,19 @@ class TestBatchEfficiencyCalculation:
         jobs = [MockJob(f"job{i}", {"weights": {"edge": 0.5}}, [f"ps_{i}"]) for i in range(4)]
 
         # Create batch with diverse controls (simulating mixed mode)
-        batches = [{
-            "prompt_ids": ["ps_0", "ps_1", "ps_2", "ps_3"],
-            "config": {
-                "weights_list": [
-                    {"edge": 0.5},
-                    {"depth": 0.3},
-                    {"seg": 0.2},
-                    {"edge": 0.4, "depth": 0.3, "seg": 0.1}  # Many controls
-                ]
+        batches = [
+            {
+                "prompt_ids": ["ps_0", "ps_1", "ps_2", "ps_3"],
+                "config": {
+                    "weights_list": [
+                        {"edge": 0.5},
+                        {"depth": 0.3},
+                        {"seg": 0.2},
+                        {"edge": 0.4, "depth": 0.3, "seg": 0.1},  # Many controls
+                    ]
+                },
             }
-        }]
+        ]
 
         efficiency = calculate_batch_efficiency(batches, jobs, "mixed")
 

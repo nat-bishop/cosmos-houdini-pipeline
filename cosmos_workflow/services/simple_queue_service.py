@@ -767,7 +767,9 @@ class SimplifiedQueueService:
             ]
 
             if mix_controls and total_batches > 0:
-                preview_lines.append("⚠️ Mixed mode may run slower per batch but needs fewer batches")
+                preview_lines.append(
+                    "⚠️ Mixed mode may run slower per batch but needs fewer batches"
+                )
 
             if batches:
                 preview_lines.append("\nBatch breakdown:")
@@ -780,7 +782,9 @@ class SimplifiedQueueService:
                     for weights in batch["config"].get("weights_list", []):
                         control_types.update(weights.keys())
 
-                    controls_desc = ", ".join(sorted(control_types)) if control_types else "no controls"
+                    controls_desc = (
+                        ", ".join(sorted(control_types)) if control_types else "no controls"
+                    )
 
                     preview_lines.append(
                         f"  Batch {i}: {num_runs} runs from {num_source_jobs} jobs ({controls_desc})"
@@ -796,8 +800,12 @@ class SimplifiedQueueService:
                 "mode": mode,
             }
 
-            logger.info("Smart batch analysis complete: %d batches from %d jobs (%s mode)",
-                       len(batches), len(batchable_jobs), mode)
+            logger.info(
+                "Smart batch analysis complete: %d batches from %d jobs (%s mode)",
+                len(batches),
+                len(batchable_jobs),
+                mode,
+            )
 
             self._smart_batch_analysis = analysis
             self._analysis_queue_size = len(queued_jobs)
@@ -823,8 +831,11 @@ class SimplifiedQueueService:
             current_queue_size = session.query(JobQueue).filter_by(status="queued").count()
 
             if current_queue_size != self._analysis_queue_size:
-                logger.warning("Queue has changed since analysis: was %d, now %d",
-                             self._analysis_queue_size, current_queue_size)
+                logger.warning(
+                    "Queue has changed since analysis: was %d, now %d",
+                    self._analysis_queue_size,
+                    current_queue_size,
+                )
                 return {"error": "Analysis is stale - queue has changed. Please re-analyze."}
 
         # Get batches and mode from analysis
@@ -856,9 +867,13 @@ class SimplifiedQueueService:
                 session.add(new_job)
                 created_job_ids.append(job_id)
 
-                logger.info("Created %s batch job %s: %d runs from %d original jobs",
-                          mode, job_id, len(batch["prompt_ids"]),
-                          len(batch["source_job_ids"]))
+                logger.info(
+                    "Created %s batch job %s: %d runs from %d original jobs",
+                    mode,
+                    job_id,
+                    len(batch["prompt_ids"]),
+                    len(batch["source_job_ids"]),
+                )
 
             # Delete original jobs
             deleted_count = 0
@@ -871,8 +886,11 @@ class SimplifiedQueueService:
             # Commit all changes atomically
             session.commit()
 
-            logger.info("Queue reorganization complete: %d jobs deleted, %d batches created",
-                       deleted_count, len(created_job_ids))
+            logger.info(
+                "Queue reorganization complete: %d jobs deleted, %d batches created",
+                deleted_count,
+                len(created_job_ids),
+            )
 
         # Clear analysis after successful reorganization
         self._smart_batch_analysis = None

@@ -284,8 +284,14 @@ class TestBatchInferenceRefactored:
         ops.batch_inference(["ps_test1", "ps_test2"], weights_list=weights_list)
 
         # Verify different weights are used for each run
-        assert mock_service.create_run.call_args_list[0][1]["execution_config"]["weights"] == weights_list[0]
-        assert mock_service.create_run.call_args_list[1][1]["execution_config"]["weights"] == weights_list[1]
+        assert (
+            mock_service.create_run.call_args_list[0][1]["execution_config"]["weights"]
+            == weights_list[0]
+        )
+        assert (
+            mock_service.create_run.call_args_list[1][1]["execution_config"]["weights"]
+            == weights_list[1]
+        )
 
     def test_batch_inference_skips_missing_prompts(self, ops, mock_service, mock_orchestrator):
         """Test batch_inference gracefully handles missing prompts."""

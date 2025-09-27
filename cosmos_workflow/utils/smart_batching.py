@@ -39,10 +39,7 @@ def get_execution_signature(config: dict[str, Any]) -> str:
         JSON string of execution parameters
     """
     # Extract all non-weight params that must match
-    exec_params = {
-        k: v for k, v in config.items()
-        if k not in ["weights", "weights_list"]
-    }
+    exec_params = {k: v for k, v in config.items() if k not in ["weights", "weights_list"]}
 
     # Add defaults for consistency
     exec_params.setdefault("num_steps", 25)
@@ -80,15 +77,18 @@ def group_runs_strict(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[
 
         # Extract individual runs with their source
         for prompt_id in job.prompt_ids:
-            groups[group_key].append({
-                "prompt_id": prompt_id,
-                "weights": job.config.get("weights", {}),
-                "source_job_id": job.id,
-                "exec_params": job.config
-            })
+            groups[group_key].append(
+                {
+                    "prompt_id": prompt_id,
+                    "weights": job.config.get("weights", {}),
+                    "source_job_id": job.id,
+                    "exec_params": job.config,
+                }
+            )
 
-        logger.debug("Job %s with %d runs -> strict group %s",
-                    job.id, len(job.prompt_ids), control_sig)
+        logger.debug(
+            "Job %s with %d runs -> strict group %s", job.id, len(job.prompt_ids), control_sig
+        )
 
     # Log grouping results
     logger.info("Strict grouping: %d groups from %d jobs", len(groups), len(jobs))
@@ -124,16 +124,22 @@ def group_runs_mixed(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[s
 
         # Extract individual runs
         for prompt_id in job.prompt_ids:
-            groups[exec_sig].append({
-                "prompt_id": prompt_id,
-                "weights": job.config.get("weights", {}),
-                "source_job_id": job.id,
-                "exec_params": job.config
-            })
+            groups[exec_sig].append(
+                {
+                    "prompt_id": prompt_id,
+                    "weights": job.config.get("weights", {}),
+                    "source_job_id": job.id,
+                    "exec_params": job.config,
+                }
+            )
 
         control_sig = get_control_signature(job.config)
-        logger.debug("Job %s with %d runs -> mixed group (controls: %s)",
-                    job.id, len(job.prompt_ids), control_sig)
+        logger.debug(
+            "Job %s with %d runs -> mixed group (controls: %s)",
+            job.id,
+            len(job.prompt_ids),
+            control_sig,
+        )
 
     # Log grouping results
     logger.info("Mixed grouping: %d groups from %d jobs", len(groups), len(jobs))
@@ -142,16 +148,15 @@ def group_runs_mixed(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[s
         control_sigs = set()
         for run in runs:
             control_sigs.add(tuple(sorted(run["weights"].keys())))
-        logger.debug("  Group with %d runs, %d unique control signatures",
-                    len(runs), len(control_sigs))
+        logger.debug(
+            "  Group with %d runs, %d unique control signatures", len(runs), len(control_sigs)
+        )
 
     return _create_batches_from_groups(groups, max_batch_size, "mixed")
 
 
 def _create_batches_from_groups(
-    groups: dict[Any, list[dict[str, Any]]],
-    max_batch_size: int,
-    mode: str
+    groups: dict[Any, list[dict[str, Any]]], max_batch_size: int, mode: str
 ) -> list[dict[str, Any]]:
     """Convert grouped runs into batch configurations.
 
@@ -169,15 +174,22 @@ def _create_batches_from_groups(
         # Log group info
         if isinstance(group_key, tuple) and len(group_key) == 2:
             _, control_sig = group_key
-            logger.info("%s mode: creating batches for %d runs with controls %s",
-                       mode.capitalize(), len(runs), control_sig)
+            logger.info(
+                "%s mode: creating batches for %d runs with controls %s",
+                mode.capitalize(),
+                len(runs),
+                control_sig,
+            )
         else:
-            logger.info("%s mode: creating batches for %d runs with mixed controls",
-                       mode.capitalize(), len(runs))
+            logger.info(
+                "%s mode: creating batches for %d runs with mixed controls",
+                mode.capitalize(),
+                len(runs),
+            )
 
         # Split into batches respecting max_batch_size
         for i in range(0, len(runs), max_batch_size):
-            batch_runs = runs[i:i + max_batch_size]
+            batch_runs = runs[i : i + max_batch_size]
 
             # Extract exec params from first run (all same in group)
             base_config = batch_runs[0]["exec_params"].copy()
@@ -186,29 +198,32 @@ def _create_batches_from_groups(
             base_config.pop("weights", None)
             base_config["weights_list"] = [r["weights"] for r in batch_runs]
 
-            batches.append({
-                "prompt_ids": [r["prompt_id"] for r in batch_runs],
-                "config": base_config,
-                "source_job_ids": list(set(r["source_job_id"] for r in batch_runs)),
-                "mode": mode
-            })
+            batches.append(
+                {
+                    "prompt_ids": [r["prompt_id"] for r in batch_runs],
+                    "config": base_config,
+                    "source_job_ids": list(set(r["source_job_id"] for r in batch_runs)),
+                    "mode": mode,
+                }
+            )
 
             # Log batch details
             control_types = set()
             for r in batch_runs:
                 control_types.update(r["weights"].keys())
-            logger.debug("  Batch %d: %d runs, %d source jobs, controls: %s",
-                        len(batches), len(batch_runs),
-                        len(set(r["source_job_id"] for r in batch_runs)),
-                        control_types if control_types else "none")
+            logger.debug(
+                "  Batch %d: %d runs, %d source jobs, controls: %s",
+                len(batches),
+                len(batch_runs),
+                len(set(r["source_job_id"] for r in batch_runs)),
+                control_types if control_types else "none",
+            )
 
     return batches
 
 
 def calculate_batch_efficiency(
-    batches: list[dict[str, Any]],
-    original_jobs: list["JobQueue"],
-    mode: str = "strict"
+    batches: list[dict[str, Any]], original_jobs: list["JobQueue"], mode: str = "strict"
 ) -> dict[str, Any]:
     """Calculate efficiency metrics for batch configuration.
 
@@ -231,7 +246,7 @@ def calculate_batch_efficiency(
             "original_jobs": original_job_count,
             "total_batches": 0,
             "speedup": 1.0,
-            "mode": mode
+            "mode": mode,
         }
 
     # Base speedup from batching runs
@@ -268,15 +283,21 @@ def calculate_batch_efficiency(
     # Ensure reasonable bounds
     final_speedup = max(1.0, min(adjusted_speedup, total_runs))
 
-    logger.info("Efficiency: %d runs from %d jobs -> %d batches (%.1fx speedup, %s mode)",
-               total_runs, original_job_count, total_batches, final_speedup, mode)
+    logger.info(
+        "Efficiency: %d runs from %d jobs -> %d batches (%.1fx speedup, %s mode)",
+        total_runs,
+        original_job_count,
+        total_batches,
+        final_speedup,
+        mode,
+    )
 
     return {
         "total_runs": total_runs,
         "original_jobs": original_job_count,
         "total_batches": total_batches,
         "speedup": final_speedup,
-        "mode": mode
+        "mode": mode,
     }
 
 

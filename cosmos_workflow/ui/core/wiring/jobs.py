@@ -51,7 +51,7 @@ def wire_jobs_control_events(
             components.get("running_jobs_display"),
             components.get("job_status"),
             components.get("active_job_card"),
-            components.get("jobs_log_display"),
+            components.get("log_display"),
         ],
     )
 
@@ -96,7 +96,7 @@ def wire_jobs_control_events(
             components.get("clear_logs_btn"),
             "click",
             clear_logs,
-            outputs=[components.get("jobs_log_display")],
+            outputs=[components.get("log_display")],
         )
 
     if "auto_advance_toggle" in components:

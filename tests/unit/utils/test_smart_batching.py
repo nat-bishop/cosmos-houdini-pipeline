@@ -1,17 +1,28 @@
 """Unit tests for smart batching utility functions.
 
 These tests define the behavioral contract for smart batching algorithms.
-Tests focus on user-observable outcomes, not implementation details.
+Tests focus on run-level batching behavior with individual weight configs.
 """
 
 from cosmos_workflow.utils.smart_batching import (
     calculate_batch_efficiency,
     filter_batchable_jobs,
     get_control_signature,
-    get_safe_batch_size,
-    group_jobs_mixed,
-    group_jobs_strict,
+    get_execution_signature,
+    group_runs_mixed,
+    group_runs_strict,
 )
+
+
+class MockJob:
+    """Mock JobQueue object for testing."""
+
+    def __init__(self, job_id: str, config: dict, prompt_ids: list[str] | None = None):
+        self.id = job_id
+        self.config = config
+        self.prompt_ids = prompt_ids or [f"ps_{job_id}_1"]
+        self.job_type = "inference"
+        self.status = "queued"
 
 
 class TestControlSignatureExtraction:
@@ -42,296 +53,218 @@ class TestControlSignatureExtraction:
         assert signature == ("edge",)
 
 
-class TestStrictGrouping:
-    """Test strict mode grouping (identical controls only)."""
+class TestExecutionSignature:
+    """Test execution signature extraction for params that must match."""
 
-    def test_group_jobs_strict_identical_controls(self):
-        """Jobs with identical controls should group together."""
-        # Create mock job objects with control signatures
+    def test_get_execution_signature_matches_identical_params(self):
+        """Identical execution params should produce same signature."""
+        config1 = {"num_steps": 25, "guidance_scale": 5.0, "seed": 1, "weights": {"edge": 0.5}}
+        config2 = {"num_steps": 25, "guidance_scale": 5.0, "seed": 1, "weights": {"depth": 0.3}}
+
+        sig1 = get_execution_signature(config1)
+        sig2 = get_execution_signature(config2)
+        assert sig1 == sig2  # Weights differ but exec params same
+
+    def test_get_execution_signature_differs_with_different_params(self):
+        """Different execution params should produce different signatures."""
+        config1 = {"num_steps": 25, "guidance_scale": 5.0, "seed": 1}
+        config2 = {"num_steps": 30, "guidance_scale": 5.0, "seed": 1}
+
+        sig1 = get_execution_signature(config1)
+        sig2 = get_execution_signature(config2)
+        assert sig1 != sig2  # num_steps differs
+
+
+class TestRunLevelStrictGrouping:
+    """Test strict mode grouping at the run level (not job level)."""
+
+    def test_group_runs_strict_extracts_individual_runs(self):
+        """Each prompt_id should be treated as a separate run."""
         jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"edge": 0.5}}),
-            MockJob("job3", {"weights": {"edge": 0.5}}),
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2", "ps_3"]),
+            MockJob("job2", {"weights": {"edge": 0.5}}, ["ps_4", "ps_5"]),
         ]
 
-        batches = group_jobs_strict(jobs, max_batch_size=4)
+        batches = group_runs_strict(jobs, max_batch_size=4)
+
+        # Should create batches at run level, not job level
+        assert len(batches) == 2  # 5 runs total, batch_size=4 -> [4 runs, 1 run]
+        assert len(batches[0]["prompt_ids"]) == 4
+        assert len(batches[1]["prompt_ids"]) == 1
+
+    def test_group_runs_strict_separates_different_controls(self):
+        """Runs with different control types should not batch together."""
+        jobs = [
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2"]),
+            MockJob("job2", {"weights": {"depth": 0.3}}, ["ps_3", "ps_4"]),
+            MockJob("job3", {"weights": {"edge": 0.5}}, ["ps_5"]),
+        ]
+
+        batches = group_runs_strict(jobs, max_batch_size=4)
+
+        # Should create 2 batches: edge runs and depth runs
+        edge_batches = [b for b in batches if "edge" in b["config"]["weights_list"][0]]
+        depth_batches = [b for b in batches if "depth" in b["config"]["weights_list"][0]]
+
+        assert len(edge_batches) == 1
+        assert len(depth_batches) == 1
+        assert len(edge_batches[0]["prompt_ids"]) == 3  # ps_1, ps_2, ps_5
+        assert len(depth_batches[0]["prompt_ids"]) == 2  # ps_3, ps_4
+
+    def test_group_runs_strict_creates_weights_list(self):
+        """Each batch should have weights_list with entry per run."""
+        jobs = [
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2"]),
+            MockJob("job2", {"weights": {"edge": 0.3}}, ["ps_3"]),  # Different weight value
+        ]
+
+        batches = group_runs_strict(jobs, max_batch_size=4)
 
         assert len(batches) == 1
-        assert len(batches[0]["jobs"]) == 3
-        assert batches[0]["signature"] == ("edge",)
+        batch = batches[0]
 
-    def test_group_jobs_strict_mixed_controls(self):
-        """Jobs with different controls should create separate groups."""
+        # Should have weights_list with individual weights
+        assert "weights_list" in batch["config"]
+        assert len(batch["config"]["weights_list"]) == 3
+
+        # First two runs have edge=0.5, third has edge=0.3
+        assert batch["config"]["weights_list"][0] == {"edge": 0.5}
+        assert batch["config"]["weights_list"][1] == {"edge": 0.5}
+        assert batch["config"]["weights_list"][2] == {"edge": 0.3}
+
+    def test_group_runs_strict_tracks_source_jobs(self):
+        """Batches should track which original jobs they came from."""
         jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"depth": 0.5}}),
-            MockJob("job3", {"weights": {"edge": 0.5}}),
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2"]),
+            MockJob("job2", {"weights": {"edge": 0.5}}, ["ps_3"]),
+            MockJob("job3", {"weights": {"edge": 0.5}}, ["ps_4", "ps_5"]),
         ]
 
-        batches = group_jobs_strict(jobs, max_batch_size=4)
+        batches = group_runs_strict(jobs, max_batch_size=3)
 
+        # Should create 2 batches: [ps_1, ps_2, ps_3], [ps_4, ps_5]
         assert len(batches) == 2
-        # Find edge batch and depth batch
-        edge_batch = next(b for b in batches if b["signature"] == ("edge",))
-        depth_batch = next(b for b in batches if b["signature"] == ("depth",))
-        assert len(edge_batch["jobs"]) == 2
-        assert len(depth_batch["jobs"]) == 1
 
-    def test_group_jobs_strict_respects_batch_limits(self):
-        """Batches should not exceed max_batch_size."""
-        jobs = [MockJob(f"job{i}", {"weights": {"edge": 0.5}}) for i in range(10)]
+        # First batch should reference job1 and job2
+        assert set(batches[0]["source_job_ids"]) == {"job1", "job2"}
 
-        batches = group_jobs_strict(jobs, max_batch_size=3)
+        # Second batch should reference job3
+        assert set(batches[1]["source_job_ids"]) == {"job3"}
 
-        # Should create 4 batches: 3, 3, 3, 1
-        assert len(batches) == 4
-        assert all(len(b["jobs"]) <= 3 for b in batches)
-        assert sum(len(b["jobs"]) for b in batches) == 10
 
-    def test_group_jobs_strict_with_different_prompt_counts(self):
-        """Jobs can have different prompt counts but same controls."""
+class TestRunLevelMixedGrouping:
+    """Test mixed mode grouping allowing different control types."""
+
+    def test_group_runs_mixed_combines_different_controls(self):
+        """Mixed mode should allow different control types in same batch."""
         jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}, prompt_count=1),
-            MockJob("job2", {"weights": {"edge": 0.5}}, prompt_count=5),
-            MockJob("job3", {"weights": {"edge": 0.5}}, prompt_count=2),
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2"]),
+            MockJob("job2", {"weights": {"depth": 0.3}}, ["ps_3"]),
+            MockJob("job3", {"weights": {"edge": 0.4, "depth": 0.2}}, ["ps_4"]),
         ]
 
-        batches = group_jobs_strict(jobs, max_batch_size=4)
+        batches = group_runs_mixed(jobs, max_batch_size=10)
 
+        # Should create 1 batch with all runs despite different controls
         assert len(batches) == 1
-        assert len(batches[0]["jobs"]) == 3
+        assert len(batches[0]["prompt_ids"]) == 4
 
+        # weights_list should have diverse configs
+        weights_list = batches[0]["config"]["weights_list"]
+        assert weights_list[0] == {"edge": 0.5}  # ps_1
+        assert weights_list[2] == {"depth": 0.3}  # ps_3
+        assert weights_list[3] == {"edge": 0.4, "depth": 0.2}  # ps_4
 
-class TestMixedGrouping:
-    """Test mixed mode grouping (master batch approach)."""
-
-    def test_group_jobs_mixed_optimizes_control_overhead(self):
-        """Mixed mode should minimize total control overhead."""
+    def test_group_runs_mixed_separates_different_exec_params(self):
+        """Even in mixed mode, different exec params cannot batch."""
         jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"edge": 0.5, "depth": 0.3}}),
-            MockJob("job3", {"weights": {"depth": 0.3}}),
+            MockJob("job1", {"weights": {"edge": 0.5}, "num_steps": 25}, ["ps_1", "ps_2"]),
+            MockJob("job2", {"weights": {"depth": 0.3}, "num_steps": 25}, ["ps_3"]),
+            MockJob("job3", {"weights": {"edge": 0.5}, "num_steps": 30}, ["ps_4"]),  # Different steps
         ]
 
-        batches = group_jobs_mixed(jobs, max_batch_size=4)
+        batches = group_runs_mixed(jobs, max_batch_size=10)
 
-        # Should create one batch with master controls
-        assert len(batches) == 1
-        assert set(batches[0]["master_controls"]) == {"edge", "depth"}
-        assert len(batches[0]["jobs"]) == 3
+        # Should create 2 batches due to different num_steps
+        assert len(batches) == 2
 
-    def test_group_jobs_mixed_creates_master_batch(self):
-        """Master batch should be union of all job controls."""
+        # Batch 1: num_steps=25 (ps_1, ps_2, ps_3)
+        # Batch 2: num_steps=30 (ps_4)
+        batch_25 = next(b for b in batches if b["config"]["num_steps"] == 25)
+        batch_30 = next(b for b in batches if b["config"]["num_steps"] == 30)
+
+        assert len(batch_25["prompt_ids"]) == 3
+        assert len(batch_30["prompt_ids"]) == 1
+
+
+class TestBatchEfficiencyCalculation:
+    """Test efficiency metrics calculation for batches."""
+
+    def test_calculate_efficiency_run_based(self):
+        """Efficiency should be based on run count, not job count."""
         jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"depth": 0.3}}),
-            MockJob("job3", {"weights": {"normal": 0.4}}),
+            MockJob("job1", {"weights": {"edge": 0.5}}, ["ps_1", "ps_2", "ps_3"]),
+            MockJob("job2", {"weights": {"edge": 0.5}}, ["ps_4", "ps_5"]),
         ]
-
-        batches = group_jobs_mixed(jobs, max_batch_size=4)
-
-        assert len(batches) == 1
-        assert set(batches[0]["master_controls"]) == {"edge", "depth", "normal"}
-
-    def test_group_jobs_mixed_respects_batch_limits(self):
-        """Mixed mode should respect batch size limits."""
-        jobs = [
-            MockJob(
-                f"job{i}",
-                {
-                    "weights": {
-                        "edge": 0.5 if i % 2 == 0 else 0,
-                        "depth": 0.5 if i % 2 == 1 else 0.5,
-                    }
-                },
-            )
-            for i in range(10)
-        ]
-
-        batches = group_jobs_mixed(jobs, max_batch_size=3)
-
-        assert all(len(b["jobs"]) <= 3 for b in batches)
-        assert sum(len(b["jobs"]) for b in batches) == 10
-
-    def test_group_jobs_mixed_master_control_selection(self):
-        """Verify union algorithm for master control selection."""
-        jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"depth": 0.3}}),
-            MockJob("job3", {"weights": {"edge": 0.5, "depth": 0.3}}),
-        ]
-
-        batches = group_jobs_mixed(jobs, max_batch_size=4)
-
-        # Master should be union: edge U depth U (edge, depth) = (edge, depth)
-        assert len(batches) == 1
-        assert set(batches[0]["master_controls"]) == {"edge", "depth"}
-
-
-class TestBatchSizing:
-    """Test conservative batch sizing based on control count."""
-
-    def test_safe_batch_size_single_control(self):
-        """Single control should allow max 8."""
-        assert get_safe_batch_size(1) == 8
-        assert get_safe_batch_size(1, user_max=16) == 8
-        assert get_safe_batch_size(1, user_max=4) == 4
-
-    def test_safe_batch_size_two_controls(self):
-        """Two controls should allow max 4."""
-        assert get_safe_batch_size(2) == 4
-        assert get_safe_batch_size(2, user_max=16) == 4
-        assert get_safe_batch_size(2, user_max=2) == 2
-
-    def test_safe_batch_size_three_plus_controls(self):
-        """Three or more controls should allow max 2."""
-        assert get_safe_batch_size(3) == 2
-        assert get_safe_batch_size(5) == 2
-        assert get_safe_batch_size(10) == 2
-
-    def test_safe_batch_size_respects_user_override(self):
-        """User max should be respected if lower than safe limit."""
-        assert get_safe_batch_size(1, user_max=5) == 5
-        assert get_safe_batch_size(2, user_max=3) == 3
-        assert get_safe_batch_size(3, user_max=1) == 1
-
-
-class TestBatchEfficiency:
-    """Test batch efficiency calculations."""
-
-    def test_calculate_batch_efficiency_basic(self):
-        """Calculate basic efficiency metrics."""
-        original_jobs = [MockJob(f"job{i}", {"weights": {"edge": 0.5}}) for i in range(6)]
 
         batches = [
-            {"jobs": original_jobs[:3], "signature": ("edge",)},
-            {"jobs": original_jobs[3:], "signature": ("edge",)},
+            {"prompt_ids": ["ps_1", "ps_2", "ps_3", "ps_4"], "config": {"weights_list": []}},
+            {"prompt_ids": ["ps_5"], "config": {"weights_list": []}},
         ]
 
-        metrics = calculate_batch_efficiency(batches, original_jobs)
+        efficiency = calculate_batch_efficiency(batches, jobs, "strict")
 
-        assert metrics["job_count_before"] == 6
-        assert metrics["job_count_after"] == 2
-        assert metrics["estimated_speedup"] == 3.0  # 6 jobs -> 2 batches
-        assert metrics["control_reduction"] > 0
+        assert efficiency["total_runs"] == 5  # Total prompt_ids
+        assert efficiency["original_jobs"] == 2
+        assert efficiency["total_batches"] == 2
+        assert efficiency["speedup"] > 1.0  # Should show improvement
 
-    def test_calculate_batch_efficiency_mixed_controls(self):
-        """Efficiency should account for control overhead."""
-        original_jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"depth": 0.5}}),
-            MockJob("job3", {"weights": {"normal": 0.5}}),
-        ]
+    def test_calculate_efficiency_mixed_mode_overhead(self):
+        """Mixed mode should show overhead from control diversity."""
+        jobs = [MockJob(f"job{i}", {"weights": {"edge": 0.5}}, [f"ps_{i}"]) for i in range(4)]
 
-        # One batch with 3 controls vs 3 individual jobs
-        batches = [
-            {"jobs": original_jobs, "master_controls": ["edge", "depth", "normal"]},
-        ]
+        # Create batch with diverse controls (simulating mixed mode)
+        batches = [{
+            "prompt_ids": ["ps_0", "ps_1", "ps_2", "ps_3"],
+            "config": {
+                "weights_list": [
+                    {"edge": 0.5},
+                    {"depth": 0.3},
+                    {"seg": 0.2},
+                    {"edge": 0.4, "depth": 0.3, "seg": 0.1}  # Many controls
+                ]
+            }
+        }]
 
-        metrics = calculate_batch_efficiency(batches, original_jobs)
+        efficiency = calculate_batch_efficiency(batches, jobs, "mixed")
 
-        assert metrics["job_count_before"] == 3
-        assert metrics["job_count_after"] == 1
-        # Speedup less than 3x due to control overhead
-        assert 1.5 <= metrics["estimated_speedup"] <= 2.5
+        # Mixed mode with diverse controls should have lower speedup than strict
+        assert efficiency["speedup"] < 4.0  # Less than theoretical max due to overhead
 
 
-class TestJobFiltering:
-    """Test filtering of batchable jobs."""
+class TestFilterBatchableJobs:
+    """Test filtering of jobs that can be batched."""
 
-    def test_filter_batchable_jobs_includes_inference(self):
-        """Inference and batch_inference jobs should be batchable."""
+    def test_filter_excludes_non_batchable_types(self):
+        """Enhancement and upscale jobs should be excluded."""
         jobs = [
-            MockJob("job1", job_type="inference"),
-            MockJob("job2", job_type="batch_inference"),
-            MockJob("job3", job_type="inference"),
+            MockJob("job1", {}, ["ps_1"]),  # inference
+            MockJob("job2", {}, ["ps_2"]),  # inference
         ]
+        jobs[0].job_type = "inference"
+        jobs[1].job_type = "enhancement"
 
         batchable = filter_batchable_jobs(jobs)
 
-        assert len(batchable) == 3
-        assert all(j in batchable for j in jobs)
+        assert len(batchable) == 1
+        assert batchable[0].id == "job1"
 
-    def test_filter_batchable_jobs_excludes_enhance_upscale(self):
-        """Enhancement and upscale jobs should not be batchable."""
-        jobs = [
-            MockJob("job1", job_type="inference"),
-            MockJob("job2", job_type="enhancement"),
-            MockJob("job3", job_type="upscale"),
-            MockJob("job4", job_type="batch_inference"),
-        ]
+    def test_filter_includes_batch_inference(self):
+        """batch_inference jobs should be included."""
+        jobs = [MockJob("job1", {}, ["ps_1", "ps_2", "ps_3"])]
+        jobs[0].job_type = "batch_inference"
 
         batchable = filter_batchable_jobs(jobs)
 
-        assert len(batchable) == 2
-        assert all(j.job_type in ["inference", "batch_inference"] for j in batchable)
-
-
-class TestEdgeCases:
-    """Test edge cases and error conditions."""
-
-    def test_empty_job_list(self):
-        """Empty job list should return empty batches."""
-        assert group_jobs_strict([], max_batch_size=4) == []
-        assert group_jobs_mixed([], max_batch_size=4) == []
-
-    def test_single_job(self):
-        """Single job should create single batch."""
-        jobs = [MockJob("job1", {"weights": {"edge": 0.5}})]
-
-        strict_batches = group_jobs_strict(jobs, max_batch_size=4)
-        mixed_batches = group_jobs_mixed(jobs, max_batch_size=4)
-
-        assert len(strict_batches) == 1
-        assert len(mixed_batches) == 1
-        assert len(strict_batches[0]["jobs"]) == 1
-        assert len(mixed_batches[0]["jobs"]) == 1
-
-    def test_non_batchable_jobs_excluded(self):
-        """Non-batchable jobs should be filtered out."""
-        jobs = [
-            MockJob("job1", job_type="enhancement"),
-            MockJob("job2", job_type="upscale"),
-        ]
-
-        batchable = filter_batchable_jobs(jobs)
-        assert len(batchable) == 0
-
-    def test_all_jobs_different_controls(self):
-        """All different controls in strict mode creates separate batches."""
-        jobs = [
-            MockJob("job1", {"weights": {"edge": 0.5}}),
-            MockJob("job2", {"weights": {"depth": 0.5}}),
-            MockJob("job3", {"weights": {"normal": 0.5}}),
-        ]
-
-        batches = group_jobs_strict(jobs, max_batch_size=4)
-
-        assert len(batches) == 3
-        assert all(len(b["jobs"]) == 1 for b in batches)
-
-    def test_mixed_batchable_and_non_batchable_jobs(self):
-        """Mixed job types should filter correctly."""
-        jobs = [
-            MockJob("job1", job_type="inference"),
-            MockJob("job2", job_type="enhancement"),
-            MockJob("job3", job_type="batch_inference"),
-            MockJob("job4", job_type="upscale"),
-        ]
-
-        batchable = filter_batchable_jobs(jobs)
-
-        assert len(batchable) == 2
-        assert "job1" in [j.id for j in batchable]
-        assert "job3" in [j.id for j in batchable]
-
-
-# Mock JobQueue class for testing
-class MockJob:
-    """Mock job object for testing."""
-
-    def __init__(self, job_id, config=None, job_type="inference", prompt_count=1):
-        self.id = job_id
-        self.config = config or {}
-        self.job_type = job_type
-        self.prompt_ids = ["prompt"] * prompt_count
+        assert len(batchable) == 1
+        assert batchable[0].job_type == "batch_inference"

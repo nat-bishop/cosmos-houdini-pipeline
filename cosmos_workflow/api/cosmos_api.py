@@ -629,7 +629,7 @@ class CosmosAPI:
     def batch_inference(
         self,
         prompt_ids: list[str],
-        shared_weights: dict[str, float] | None = None,
+        weights_list: list[dict[str, float]],
         batch_size: int = 4,
         **kwargs,
     ) -> dict[str, Any]:
@@ -637,13 +637,14 @@ class CosmosAPI:
 
         This method processes multiple prompts efficiently by creating and executing
         all runs together. Provides 40-60% performance improvement over individual runs
-        by reducing model loading overhead. Runs are created internally.
+        by reducing model loading overhead. Each prompt can have different control weights.
 
         Args:
             prompt_ids: List of prompt IDs to run
-            shared_weights: Weights to use for all prompts (optional)
+            weights_list: List of weight dicts, one per prompt (can have different controls)
             batch_size: Number of videos to process simultaneously on GPU (default: 4)
             **kwargs: Additional execution parameters (num_steps, guidance, seed, etc.)
+                     These MUST be identical for all prompts in the batch.
 
         Returns:
             Dictionary containing batch results:
@@ -657,27 +658,39 @@ class CosmosAPI:
             Missing prompts are logged and skipped gracefully.
             All operations complete before returning control.
         """
+        # Validate inputs
+        if len(prompt_ids) != len(weights_list):
+            raise ValueError("prompt_ids and weights_list must have same length")
+
         logger.info("Batch inference for {} prompts", len(prompt_ids))
+
+        # Log control diversity
+        if weights_list:
+            control_signatures = [tuple(sorted(w.keys())) for w in weights_list if w]
+            unique_signatures = set(control_signatures)
+            logger.info("Control diversity: {} unique control signatures", len(unique_signatures))
+            if len(unique_signatures) > 1:
+                logger.debug("Mixed control batch - base spec will include all controls")
 
         # Handle empty list case
         if not prompt_ids:
             logger.warning("Empty prompt list provided for batch inference")
             return self.orchestrator.execute_batch_runs([])
 
-        # Build execution config once for all prompts
-        execution_config = self._build_execution_config(weights=shared_weights, **kwargs)
-
-        # Generate unique batch_id for tracking using UUID4 (similar to prompt/run IDs)
+        # Generate unique batch_id for tracking
         batch_id = self._generate_batch_id()
-        execution_config["batch_id"] = batch_id
         logger.info("Created batch {} for {} prompts", batch_id, len(prompt_ids))
 
-        # Create runs for all prompts
+        # Create runs with individual weights
         runs_and_prompts = []
-        for prompt_id in prompt_ids:
+        for prompt_id, weights in zip(prompt_ids, weights_list):
             try:
                 # Validate prompt
                 prompt = self._validate_prompt(prompt_id)
+
+                # Build execution config with individual weights
+                execution_config = self._build_execution_config(weights=weights, **kwargs)
+                execution_config["batch_id"] = batch_id
 
                 # Create run directly with service
                 run = self.service.create_run(
@@ -686,7 +699,8 @@ class CosmosAPI:
                     model_type="transfer",  # Explicitly specify model type for inference
                     metadata={"batch_id": batch_id},  # Pass batch_id for correct log path
                 )
-                logger.info("Created run {} for prompt {}", run["id"], prompt_id)
+                logger.debug("Created run {} for prompt {} with {} controls",
+                           run["id"], prompt_id, len(weights) if weights else 0)
                 runs_and_prompts.append((run, prompt))
 
             except ValueError as e:

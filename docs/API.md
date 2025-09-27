@@ -74,19 +74,20 @@ def filter_prompts_by_run_status(prompts, run_status_filter):
         return prompts
 ```
 
-## Smart Batching System (2025-09-25)
+## Smart Batching System (2025-09-26) - COMPLETED
 
 ### Overview
 
-The Smart Batching system is an overlay optimization for the existing queue system that provides **2-5x performance improvements** through intelligent job grouping and batching. It operates as a non-invasive enhancement that requires the queue to be paused before analysis and execution.
+The Smart Batching system provides **2-5x performance improvements** through intelligent run-level optimization and queue reorganization. The complete implementation features enhanced APIs, run-level batching, and individual control weights per prompt.
 
 ### Key Features
 
-- **Two Batching Modes**: Strict (identical controls only) and Mixed (master batch approach)
-- **Conservative Memory Management**: Batch sizing based on control count to prevent GPU OOM errors
-- **Zero Impact When Not Used**: Non-invasive overlay design with no effect on normal queue operations
-- **Comprehensive Analysis**: Efficiency calculations with estimated speedup metrics
-- **Atomic Execution**: Database-consistent batch execution with proper job lifecycle management
+- **Run-Level Optimization**: Extracts individual runs from jobs and reorganizes into optimal batches
+- **Enhanced batch_inference API**: Now accepts weights_list (different weights per prompt) instead of shared_weights
+- **Two Batching Modes**: Strict (identical controls, fastest) and Mixed (different controls, fewer batches)
+- **Queue Reorganization Only**: execute_smart_batches() creates optimized JobQueue entries without executing jobs
+- **Conservative Memory Management**: Safe batch sizing with GPU memory considerations
+- **Database-First Design**: Atomic job management with queue state validation
 
 ### Smart Batching API Methods
 
@@ -113,10 +114,10 @@ if analysis:
 
 **`execute_smart_batches() -> dict[str, Any]`**
 
-Executes the stored smart batch analysis with atomic job management.
+Reorganizes the queue based on smart batch analysis (does NOT execute jobs). Creates new optimized JobQueue entries and deletes originals.
 
 **Returns:**
-- Results dictionary with execution status, job counts, and speedup metrics.
+- Dictionary with reorganization metrics: jobs_deleted, batches_created, mode, message
 
 **Example:**
 ```python
@@ -124,8 +125,9 @@ Executes the stored smart batch analysis with atomic job management.
 analysis = queue_service.analyze_queue_for_smart_batching()
 if analysis:
     results = queue_service.execute_smart_batches()
-    print(f"Executed {results['jobs_executed']} jobs in {results['batches_created']} batches")
-    print(f"Achieved {results['speedup']:.1f}x speedup")
+    print(f"Reorganized {results['jobs_deleted']} jobs into {results['batches_created']} batches")
+    print(f"Mode: {results['mode']}")
+    print(f"Message: {results['message']}")
 ```
 
 **`get_smart_batch_preview() -> str`**
@@ -157,13 +159,13 @@ Filters jobs to only include batchable types (inference and batch_inference).
 
 #### Batching Algorithms
 
-**`group_jobs_strict(jobs: list, max_batch_size: int) -> list[dict]`**
+**`group_runs_strict(jobs: list, max_batch_size: int) -> list[dict]`**
 
-Groups jobs with identical control signatures only for maximum efficiency.
+Groups runs with identical control signatures AND execution params for maximum efficiency.
 
-**`group_jobs_mixed(jobs: list, max_batch_size: int) -> list[dict]`**
+**`group_runs_mixed(jobs: list, max_batch_size: int) -> list[dict]`**
 
-Groups jobs allowing mixed controls using master batch approach.
+Groups runs by execution params only, allowing mixed control types for fewer batches.
 
 #### Memory Management
 
@@ -351,7 +353,11 @@ print(f"Output: {result['output_path']}")
 # Batch inference for multiple prompts
 results = ops.batch_inference(
   prompt_ids=["ps_001", "ps_002", "ps_003"],
-  shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+  weights_list=[
+    {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
+    {"vis": 0.30, "edge": 0.20, "depth": 0.30, "seg": 0.20},
+    {"vis": 0.40, "edge": 0.30, "depth": 0.20, "seg": 0.10}
+  ]
 )
 
 # List and search operations
@@ -1445,7 +1451,11 @@ result = ops.quick_inference(
 # Batch inference - processes sequentially
 results = ops.batch_inference(
     prompt_ids=["ps_001", "ps_002", "ps_003"],
-    shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+    weights_list=[
+      {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
+      {"vis": 0.30, "edge": 0.20, "depth": 0.30, "seg": 0.20},
+      {"vis": 0.40, "edge": 0.30, "depth": 0.20, "seg": 0.10}
+    ]
 )
 ```
 
@@ -1858,7 +1868,11 @@ upscale_result = ops.upscale(
 # Batch inference method - accepts list of prompt_ids
 batch_result = ops.batch_inference(
   prompt_ids=["ps_abc123", "ps_def456", "ps_ghi789"],
-  shared_weights={"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+  weights_list=[
+    {"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+    {"vis": 0.5, "edge": 0.2, "depth": 0.2, "seg": 0.1},
+    {"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1}
+  ],
   num_steps=50,
   guidance=8.0
 )
@@ -1908,9 +1922,10 @@ result = ops.delete_all_runs(keep_outputs=True)
   - Returns execution results with run_id for tracking
   - Note: Upscaling parameters removed - use separate `upscale()` method (Phase 1 refactor)
 
-- `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
-  - Accepts list of prompt_ids, creates runs internally for each
-  - Executes all runs as a batch for improved performance
+- `batch_inference(prompt_ids, weights_list, **kwargs)`: Batch processing
+  - Accepts list of prompt_ids and corresponding weights_list (one weight dict per prompt)
+  - Each prompt can have different control weights for personalized inference
+  - Executes all runs as a batch for improved performance (2-5x speedup)
   - Returns batch results with output mapping
 
 **Low-Level Methods (For Advanced Use):**

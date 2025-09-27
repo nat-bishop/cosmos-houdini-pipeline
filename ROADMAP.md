@@ -122,14 +122,17 @@
 - [ ] Evaluate security implications of running scripts locally
 - [ ] Consider hybrid approach: local orchestration with containerized GPU operations
 
-### Smart Batching System ✅ COMPLETED (2025-09-25)
-**Completed:** Advanced smart batching overlay optimization for queue system
+### Smart Batching System ✅ COMPLETED (2025-09-26)
+**Completed:** Advanced smart batching with run-level optimization and enhanced APIs
 - [x] **Smart Batching Algorithms**: Complete TDD-implemented system providing 2-5x performance improvements
 - [x] **Two Batching Modes**: Strict (identical controls) and Mixed (master batch) approaches
 - [x] **Conservative Memory Management**: Batch sizing based on control count (8→4→2 jobs) prevents OOM
 - [x] **Non-Invasive Integration**: Zero impact when not used, overlay on existing queue system
 - [x] **Comprehensive Testing**: 48 passing tests with performance benchmarks and edge case validation
 - [x] **Queue Service Integration**: analyze_queue_for_smart_batching(), execute_smart_batches(), get_smart_batch_preview()
+- [x] **Enhanced batch_inference API**: Now accepts weights_list (different weights per prompt) instead of shared_weights
+- [x] **Run-Level Optimization**: Extracts individual runs from jobs and reorganizes into optimal batches
+- [x] **Comprehensive Documentation**: Created docs/SMART_BATCHING.md user guide
 
 **Technical Achievements:**
 - Core smart batching algorithms in `cosmos_workflow/utils/smart_batching.py`

@@ -1,174 +1,283 @@
 """Smart batching utilities for optimizing job queue execution.
 
-Provides algorithms for grouping jobs into efficient batches to reduce
+Provides algorithms for grouping runs into efficient batches to reduce
 GPU processing overhead and improve throughput.
 """
 
+import json
 from typing import TYPE_CHECKING, Any
+
+from cosmos_workflow.utils.logging import logger
 
 if TYPE_CHECKING:
     from cosmos_workflow.database.models import JobQueue
 
 
-def get_control_signature(job_config: dict[str, Any]) -> tuple[str, ...]:
+def get_control_signature(config: dict[str, Any]) -> tuple[str, ...]:
     """Extract sorted tuple of active controls from job config.
 
     Args:
-        job_config: Job configuration dictionary with optional 'weights' field
+        config: Job configuration dictionary with optional 'weights' field
 
     Returns:
         Sorted tuple of control names with weight > 0
     """
-    weights = job_config.get("weights", {})
+    weights = config.get("weights", {})
     active_controls = [control for control, weight in weights.items() if weight > 0]
     return tuple(sorted(active_controls))
 
 
-def group_jobs_strict(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
-    """Group jobs with identical control signatures only.
+def get_execution_signature(config: dict[str, Any]) -> str:
+    """Create hashable signature from execution params (excluding weights).
+
+    All parameters except weights must match for runs to be batchable.
+
+    Args:
+        config: Job configuration dictionary
+
+    Returns:
+        JSON string of execution parameters
+    """
+    # Extract all non-weight params that must match
+    exec_params = {
+        k: v for k, v in config.items()
+        if k not in ["weights", "weights_list"]
+    }
+
+    # Add defaults for consistency
+    exec_params.setdefault("num_steps", 25)
+    exec_params.setdefault("guidance_scale", 5.0)
+    exec_params.setdefault("seed", 1)
+
+    return json.dumps(exec_params, sort_keys=True)
+
+
+def group_runs_strict(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
+    """Group runs with identical control signatures AND execution params.
+
+    Strict mode ensures homogeneous batches for fastest execution.
 
     Args:
         jobs: List of job objects to group
-        max_batch_size: Maximum number of jobs per batch
+        max_batch_size: Maximum number of runs per batch
 
     Returns:
-        List of batch configurations with 'jobs' and 'signature'
+        List of batch configurations
     """
     if not jobs:
         return []
 
-    # Group jobs by signature
-    signature_groups = {}
+    groups = {}
+
     for job in jobs:
-        signature = get_control_signature(job.config)
-        if signature not in signature_groups:
-            signature_groups[signature] = []
-        signature_groups[signature].append(job)
+        # Must match both execution params and control types
+        exec_sig = get_execution_signature(job.config)
+        control_sig = get_control_signature(job.config)
+        group_key = (exec_sig, control_sig)
 
-    # Split groups into batches respecting max_batch_size
-    batches = []
-    for signature, group_jobs in signature_groups.items():
-        for i in range(0, len(group_jobs), max_batch_size):
-            batch_jobs = group_jobs[i : i + max_batch_size]
-            batches.append({"jobs": batch_jobs, "signature": signature})
+        if group_key not in groups:
+            groups[group_key] = []
 
-    return batches
+        # Extract individual runs with their source
+        for prompt_id in job.prompt_ids:
+            groups[group_key].append({
+                "prompt_id": prompt_id,
+                "weights": job.config.get("weights", {}),
+                "source_job_id": job.id,
+                "exec_params": job.config
+            })
+
+        logger.debug("Job %s with %d runs -> strict group %s",
+                    job.id, len(job.prompt_ids), control_sig)
+
+    # Log grouping results
+    logger.info("Strict grouping: %d groups from %d jobs", len(groups), len(jobs))
+    for (_exec_sig, control_sig), runs in groups.items():
+        logger.debug("  Group %s: %d runs", control_sig, len(runs))
+
+    return _create_batches_from_groups(groups, max_batch_size, "strict")
 
 
-def group_jobs_mixed(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
-    """Group jobs allowing mixed controls using master batch approach.
+def group_runs_mixed(jobs: list["JobQueue"], max_batch_size: int) -> list[dict[str, Any]]:
+    """Group runs by execution params only, allowing mixed control types.
 
-    Creates batches that minimize total control overhead by grouping
-    jobs and using the union of all controls as master controls.
+    Mixed mode creates fewer batches but may run slower due to control overhead.
 
     Args:
         jobs: List of job objects to group
-        max_batch_size: Maximum number of jobs per batch
+        max_batch_size: Maximum number of runs per batch
 
     Returns:
-        List of batch configurations with 'jobs' and 'master_controls'
+        List of batch configurations
     """
     if not jobs:
         return []
 
+    groups = {}
+
+    for job in jobs:
+        # Only group by execution params, not control types
+        exec_sig = get_execution_signature(job.config)
+
+        if exec_sig not in groups:
+            groups[exec_sig] = []
+
+        # Extract individual runs
+        for prompt_id in job.prompt_ids:
+            groups[exec_sig].append({
+                "prompt_id": prompt_id,
+                "weights": job.config.get("weights", {}),
+                "source_job_id": job.id,
+                "exec_params": job.config
+            })
+
+        control_sig = get_control_signature(job.config)
+        logger.debug("Job %s with %d runs -> mixed group (controls: %s)",
+                    job.id, len(job.prompt_ids), control_sig)
+
+    # Log grouping results
+    logger.info("Mixed grouping: %d groups from %d jobs", len(groups), len(jobs))
+    for _exec_sig, runs in groups.items():
+        # Count unique control combinations
+        control_sigs = set()
+        for run in runs:
+            control_sigs.add(tuple(sorted(run["weights"].keys())))
+        logger.debug("  Group with %d runs, %d unique control signatures",
+                    len(runs), len(control_sigs))
+
+    return _create_batches_from_groups(groups, max_batch_size, "mixed")
+
+
+def _create_batches_from_groups(
+    groups: dict[Any, list[dict[str, Any]]],
+    max_batch_size: int,
+    mode: str
+) -> list[dict[str, Any]]:
+    """Convert grouped runs into batch configurations.
+
+    Args:
+        groups: Dictionary mapping group keys to lists of runs
+        max_batch_size: Maximum number of runs per batch
+        mode: "strict" or "mixed" for logging
+
+    Returns:
+        List of batch configurations
+    """
     batches = []
-    remaining_jobs = list(jobs)
 
-    while remaining_jobs:
-        # Take up to max_batch_size jobs for this batch
-        batch_jobs = remaining_jobs[:max_batch_size]
-        remaining_jobs = remaining_jobs[max_batch_size:]
+    for group_key, runs in groups.items():
+        # Log group info
+        if isinstance(group_key, tuple) and len(group_key) == 2:
+            _, control_sig = group_key
+            logger.info("%s mode: creating batches for %d runs with controls %s",
+                       mode.capitalize(), len(runs), control_sig)
+        else:
+            logger.info("%s mode: creating batches for %d runs with mixed controls",
+                       mode.capitalize(), len(runs))
 
-        # Calculate master controls (union of all controls in batch)
-        master_controls = set()
-        for job in batch_jobs:
-            signature = get_control_signature(job.config)
-            master_controls.update(signature)
+        # Split into batches respecting max_batch_size
+        for i in range(0, len(runs), max_batch_size):
+            batch_runs = runs[i:i + max_batch_size]
 
-        batches.append({"jobs": batch_jobs, "master_controls": list(master_controls)})
+            # Extract exec params from first run (all same in group)
+            base_config = batch_runs[0]["exec_params"].copy()
+
+            # Replace weights with weights_list
+            base_config.pop("weights", None)
+            base_config["weights_list"] = [r["weights"] for r in batch_runs]
+
+            batches.append({
+                "prompt_ids": [r["prompt_id"] for r in batch_runs],
+                "config": base_config,
+                "source_job_ids": list(set(r["source_job_id"] for r in batch_runs)),
+                "mode": mode
+            })
+
+            # Log batch details
+            control_types = set()
+            for r in batch_runs:
+                control_types.update(r["weights"].keys())
+            logger.debug("  Batch %d: %d runs, %d source jobs, controls: %s",
+                        len(batches), len(batch_runs),
+                        len(set(r["source_job_id"] for r in batch_runs)),
+                        control_types if control_types else "none")
 
     return batches
 
 
 def calculate_batch_efficiency(
-    batches: list[dict[str, Any]], original_jobs: list["JobQueue"]
+    batches: list[dict[str, Any]],
+    original_jobs: list["JobQueue"],
+    mode: str = "strict"
 ) -> dict[str, Any]:
     """Calculate efficiency metrics for batch configuration.
 
     Args:
         batches: List of batch configurations
         original_jobs: Original list of jobs before batching
+        mode: "strict" or "mixed" for overhead calculation
 
     Returns:
         Dictionary with efficiency metrics
     """
-    job_count_before = len(original_jobs)
-    job_count_after = len(batches)
+    # Count total runs (not jobs!)
+    total_runs = sum(len(job.prompt_ids) for job in original_jobs)
+    total_batches = len(batches)
+    original_job_count = len(original_jobs)
 
-    if job_count_after == 0:
-        estimated_speedup = 1.0
-    else:
-        # Basic speedup calculation
-        estimated_speedup = job_count_before / job_count_after
+    if total_batches == 0:
+        return {
+            "total_runs": total_runs,
+            "original_jobs": original_job_count,
+            "total_batches": 0,
+            "speedup": 1.0,
+            "mode": mode
+        }
 
-        # Adjust for control overhead in mixed batches
-        total_control_overhead = 0
+    # Base speedup from batching runs
+    base_speedup = total_runs / total_batches
+
+    # Adjust for mixed mode overhead
+    if mode == "mixed":
+        # Calculate overhead from control diversity
+        total_overhead = 0
         for batch in batches:
-            if "master_controls" in batch:
-                # Mixed mode: penalty for more controls
-                num_controls = len(batch["master_controls"])
-                if num_controls > 2:
-                    # Reduce speedup for many controls
-                    overhead_factor = 1.0 + (num_controls - 2) * 0.1
-                    total_control_overhead += overhead_factor
+            weights_list = batch["config"].get("weights_list", [])
+            unique_controls = set()
+            for weights in weights_list:
+                unique_controls.update(weights.keys())
 
-        if total_control_overhead > 0:
-            # Average the overhead across batches
-            avg_overhead = total_control_overhead / len(batches)
-            estimated_speedup = estimated_speedup / avg_overhead
-            # Ensure speedup is at least 1.5x for mixed mode
-            estimated_speedup = max(1.5, min(estimated_speedup, 2.5))
+            # More diverse controls = more overhead
+            num_controls = len(unique_controls)
+            if num_controls > 2:
+                # Each additional control adds ~10% overhead
+                batch_overhead = 1 + (0.1 * (num_controls - 2))
+                total_overhead += batch_overhead
+            else:
+                total_overhead += 1.0
 
-    # Calculate control reduction
-    original_control_count = sum(len(get_control_signature(job.config)) for job in original_jobs)
+        # Average overhead across batches
+        avg_overhead = total_overhead / max(1, total_batches)
+        adjusted_speedup = base_speedup / avg_overhead
 
-    batch_control_count = 0
-    for batch in batches:
-        if "signature" in batch:
-            # Strict mode: same controls for all jobs
-            batch_control_count += len(batch["signature"])
-        elif "master_controls" in batch:
-            # Mixed mode: master controls
-            batch_control_count += len(batch["master_controls"])
+        logger.info("Mixed mode overhead factor: %.2fx due to control diversity", avg_overhead)
+    else:
+        # Strict mode has minimal overhead
+        adjusted_speedup = base_speedup * 0.95  # Small overhead for batching itself
 
-    control_reduction = max(0, original_control_count - batch_control_count)
+    # Ensure reasonable bounds
+    final_speedup = max(1.0, min(adjusted_speedup, total_runs))
+
+    logger.info("Efficiency: %d runs from %d jobs -> %d batches (%.1fx speedup, %s mode)",
+               total_runs, original_job_count, total_batches, final_speedup, mode)
 
     return {
-        "job_count_before": job_count_before,
-        "job_count_after": job_count_after,
-        "estimated_speedup": estimated_speedup,
-        "control_reduction": control_reduction,
+        "total_runs": total_runs,
+        "original_jobs": original_job_count,
+        "total_batches": total_batches,
+        "speedup": final_speedup,
+        "mode": mode
     }
-
-
-def get_safe_batch_size(num_controls: int, user_max: int = 16) -> int:
-    """Conservative batch sizing based on control count.
-
-    Args:
-        num_controls: Number of active controls
-        user_max: User-specified maximum (default 16)
-
-    Returns:
-        Safe batch size considering memory constraints
-    """
-    if num_controls <= 1:
-        safe_size = 8
-    elif num_controls == 2:
-        safe_size = 4
-    else:  # 3 or more controls
-        safe_size = 2
-
-    return min(safe_size, user_max)
 
 
 def filter_batchable_jobs(jobs: list["JobQueue"]) -> list["JobQueue"]:
@@ -181,4 +290,10 @@ def filter_batchable_jobs(jobs: list["JobQueue"]) -> list["JobQueue"]:
         List of batchable jobs (inference and batch_inference only)
     """
     batchable_types = {"inference", "batch_inference"}
-    return [job for job in jobs if job.job_type in batchable_types]
+    batchable = [job for job in jobs if job.job_type in batchable_types]
+
+    if len(batchable) < len(jobs):
+        excluded = len(jobs) - len(batchable)
+        logger.debug("Filtered out %d non-batchable jobs (enhancement/upscale)", excluded)
+
+    return batchable

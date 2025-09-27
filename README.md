@@ -17,7 +17,7 @@
 
 • **Manages complex workflows** from data creation → AI processing → output retrieval with database tracking
 
-• **Provides enterprise features** like smart batching (2-5x faster), real-time monitoring, and 4K upscaling
+• **Provides enterprise features** like smart batching (2-5x performance gains), real-time monitoring, and 4K upscaling
 
 • **Abstracts infrastructure complexity** behind a clean Python API and Gradio UI
 
@@ -166,7 +166,7 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 ### Infrastructure & Scale
 • **Remote GPU orchestration** - Manages GPUs (H100, H200, ect.) via SSH/Docker with zero downtime
 
-• **2-5x performance gains** - Smart batching overlay optimization reduces GPU overhead, processing 10 videos in 20-30min vs 90min sequential
+• **2-5x performance gains** - Smart batching with run-level optimization and weights_list API, processing 10 videos in 20-30min vs 90min sequential
 
 • **Lazy evaluation monitoring** - Novel pattern solving CLI lifecycle issues (runs don't get stuck as "running")
 

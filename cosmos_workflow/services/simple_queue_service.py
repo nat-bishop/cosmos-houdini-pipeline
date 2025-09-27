@@ -17,6 +17,7 @@ Key improvements over legacy QueueService:
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from cosmos_workflow.database import DatabaseConnection, JobQueue
 from cosmos_workflow.utils.logging import logger
@@ -289,16 +290,30 @@ class SimplifiedQueueService:
         return result
 
     def _execute_batch_inference(self, job: JobQueue) -> dict[str, Any]:
-        """Execute batch inference job."""
+        """Execute batch inference job with support for weights_list."""
         if not job.prompt_ids:
             raise ValueError("No prompt IDs provided")
 
         config = job.config or {}
 
-        # Build kwargs
+        # Handle both new weights_list and legacy shared weights formats
+        if "weights_list" in config:
+            # New format: individual weights per prompt
+            weights_list = config["weights_list"]
+            logger.debug("Executing batch with %d different weight configs", len(weights_list))
+        elif "weights" in config:
+            # Legacy format: same weights for all prompts
+            weights_list = [config["weights"]] * len(job.prompt_ids)
+            logger.debug("Legacy batch: using same weights for %d prompts", len(job.prompt_ids))
+        else:
+            # No weights specified - create empty dicts
+            weights_list = [{}] * len(job.prompt_ids)
+            logger.warning("No weights specified for batch inference job %s", job.id)
+
+        # Build kwargs with weights_list
         kwargs = {
             "prompt_ids": job.prompt_ids,
-            "shared_weights": config.get("weights"),
+            "weights_list": weights_list,
             "num_steps": config.get("num_steps", 25),
             "batch_size": self.batch_size,
         }
@@ -308,7 +323,7 @@ class SimplifiedQueueService:
         if "guidance_scale" in config:
             kwargs["guidance"] = config["guidance_scale"]
 
-        # Add other optional parameters
+        # Add other optional parameters (these must be the same for all prompts)
         optional_params = [
             "seed",
             "fps",
@@ -317,7 +332,7 @@ class SimplifiedQueueService:
             "canny_threshold",
         ]
         for param in optional_params:
-            if param in config:
+            if param in config and param not in ["weights", "weights_list"]:
                 kwargs[param] = config[param]
 
         # Execute batch
@@ -699,10 +714,8 @@ class SimplifiedQueueService:
         from cosmos_workflow.utils.smart_batching import (
             calculate_batch_efficiency,
             filter_batchable_jobs,
-            get_control_signature,
-            get_safe_batch_size,
-            group_jobs_mixed,
-            group_jobs_strict,
+            group_runs_mixed,
+            group_runs_strict,
         )
 
         with self.db_connection.get_session() as session:
@@ -722,47 +735,55 @@ class SimplifiedQueueService:
                 self._analysis_queue_size = 0
                 return None
 
-            # Determine safe batch size based on control complexity
-            max_controls = 0
-            for job in batchable_jobs:
-                signature = get_control_signature(job.config or {})
-                max_controls = max(max_controls, len(signature))
+            # Use user's batch size directly - trust their GPU capacity
+            logger.debug("Using batch size: %d", self.batch_size)
 
-            safe_batch_size = get_safe_batch_size(max_controls, self.batch_size)
-
-            # Group jobs based on mode
+            # Group runs based on mode
             if mix_controls:
-                batches = group_jobs_mixed(batchable_jobs, safe_batch_size)
+                batches = group_runs_mixed(batchable_jobs, self.batch_size)
+                mode = "mixed"
+                mode_desc = "Mixed (allows different controls, may run slower)"
             else:
-                batches = group_jobs_strict(batchable_jobs, safe_batch_size)
+                batches = group_runs_strict(batchable_jobs, self.batch_size)
+                mode = "strict"
+                mode_desc = "Strict (identical controls only, faster execution)"
 
             # Calculate efficiency metrics
-            efficiency = calculate_batch_efficiency(batches, batchable_jobs)
+            efficiency = calculate_batch_efficiency(batches, batchable_jobs, mode)
 
             # Create human-readable preview
+            total_runs = efficiency["total_runs"]
+            total_batches = efficiency["total_batches"]
+            speedup = efficiency["speedup"]
+
             preview_lines = [
-                "⚡ Smart Batching Analysis:",
-                "- {} jobs → {} batches".format(
-                    efficiency["job_count_before"], efficiency["job_count_after"]
+                f"⚡ Smart Batching Analysis ({mode.capitalize()} Mode):",
+                "- {} runs from {} jobs → {} batches".format(
+                    total_runs, efficiency["original_jobs"], total_batches
                 ),
-                "- Estimated speedup: {:.1f}x".format(efficiency["estimated_speedup"]),
-                "- Mode: {}".format(
-                    "Mixed (master controls)" if mix_controls else "Strict (identical controls)"
-                ),
+                f"- Estimated speedup: {speedup:.1f}x",
+                f"- Mode: {mode_desc}",
+                f"- Batch size: {self.batch_size} runs/batch",
             ]
+
+            if mix_controls and total_batches > 0:
+                preview_lines.append("⚠️ Mixed mode may run slower per batch but needs fewer batches")
 
             if batches:
                 preview_lines.append("\nBatch breakdown:")
                 for i, batch in enumerate(batches, 1):
-                    if "signature" in batch:
-                        controls = batch["signature"] if batch["signature"] else "no controls"
-                    else:
-                        if batch["master_controls"]:
-                            controls = "master: {}".format(", ".join(batch["master_controls"]))
-                        else:
-                            controls = "no controls"
+                    num_runs = len(batch["prompt_ids"])
+                    num_source_jobs = len(batch["source_job_ids"])
+
+                    # Get control types from weights_list
+                    control_types = set()
+                    for weights in batch["config"].get("weights_list", []):
+                        control_types.update(weights.keys())
+
+                    controls_desc = ", ".join(sorted(control_types)) if control_types else "no controls"
+
                     preview_lines.append(
-                        "  Batch {}: {} jobs ({})".format(i, len(batch["jobs"]), controls)
+                        f"  Batch {i}: {num_runs} runs from {num_source_jobs} jobs ({controls_desc})"
                     )
 
             preview = "\n".join(preview_lines)
@@ -772,7 +793,11 @@ class SimplifiedQueueService:
                 "batches": batches,
                 "efficiency": efficiency,
                 "preview": preview,
+                "mode": mode,
             }
+
+            logger.info("Smart batch analysis complete: %d batches from %d jobs (%s mode)",
+                       len(batches), len(batchable_jobs), mode)
 
             self._smart_batch_analysis = analysis
             self._analysis_queue_size = len(queued_jobs)
@@ -780,13 +805,17 @@ class SimplifiedQueueService:
             return analysis
 
     def execute_smart_batches(self) -> dict[str, Any]:
-        """Execute the stored smart batch analysis.
+        """Reorganize the queue based on smart batch analysis (does NOT execute jobs).
+
+        This method creates new optimized JobQueue entries and deletes the originals.
+        The queue remains paused and jobs remain in 'queued' status.
 
         Returns:
-            Results dictionary with execution status and metrics
+            Results dictionary with reorganization metrics
         """
         # Check if analysis exists
         if not self._smart_batch_analysis:
+            logger.error("No smart batch analysis available for execution")
             return {"error": "No analysis available. Run analyze_queue_for_smart_batching first."}
 
         # Check if queue has changed (simple size check)
@@ -794,94 +823,66 @@ class SimplifiedQueueService:
             current_queue_size = session.query(JobQueue).filter_by(status="queued").count()
 
             if current_queue_size != self._analysis_queue_size:
+                logger.warning("Queue has changed since analysis: was %d, now %d",
+                             self._analysis_queue_size, current_queue_size)
                 return {"error": "Analysis is stale - queue has changed. Please re-analyze."}
 
-        # Execute batches
+        # Get batches and mode from analysis
         batches = self._smart_batch_analysis["batches"]
-        efficiency = self._smart_batch_analysis["efficiency"]
+        mode = self._smart_batch_analysis.get("mode", "unknown")
 
-        jobs_executed = 0
-        batches_created = 0
-        failures = []
+        logger.info("Starting queue reorganization: %d batches in %s mode", len(batches), mode)
 
-        for batch_config in batches:
-            try:
-                # Collect prompt IDs from all jobs in batch
-                all_prompt_ids = []
-                for job in batch_config["jobs"]:
-                    all_prompt_ids.extend(job.prompt_ids)
+        with self.db_connection.get_session() as session:
+            all_source_job_ids = set()
+            created_job_ids = []
 
-                # Get the control configuration
-                if "signature" in batch_config:
-                    # Strict mode: use first job's weights
-                    weights = batch_config["jobs"][0].config.get("weights", {})
-                else:
-                    # Mixed mode: create master weights
-                    weights = {}
-                    for control in batch_config.get("master_controls", []):
-                        # Set all master controls to a default weight
-                        weights[control] = 0.5
+            # Create new optimized jobs
+            for _i, batch in enumerate(batches):
+                all_source_job_ids.update(batch["source_job_ids"])
 
-                # Mark jobs as running
-                with self.db_connection.get_session() as session:
-                    for job in batch_config["jobs"]:
-                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
-                        if db_job:
-                            db_job.status = "running"
-                            db_job.started_at = datetime.now(timezone.utc)
-                    session.commit()
+                # Generate new job ID
+                job_id = f"job_opt_{uuid4().hex[:8]}"
 
-                # Execute batch inference
-                result = self.cosmos_api.batch_inference(
-                    prompt_ids=all_prompt_ids,
-                    shared_weights=weights,
-                    batch_size=len(batch_config["jobs"]),
+                # Create new JobQueue entry with reorganized runs
+                new_job = JobQueue(
+                    id=job_id,
+                    prompt_ids=batch["prompt_ids"],
+                    job_type="batch_inference",
+                    status="queued",  # Keep as queued!
+                    config=batch["config"],  # Contains weights_list
+                    created_at=datetime.now(timezone.utc),
                 )
+                session.add(new_job)
+                created_job_ids.append(job_id)
 
-                # Mark jobs as completed
-                with self.db_connection.get_session() as session:
-                    for job in batch_config["jobs"]:
-                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
-                        if db_job:
-                            db_job.status = "completed"
-                            db_job.completed_at = datetime.now(timezone.utc)
-                            db_job.result = result
-                            session.delete(db_job)  # Remove from queue
-                    session.commit()
+                logger.info("Created %s batch job %s: %d runs from %d original jobs",
+                          mode, job_id, len(batch["prompt_ids"]),
+                          len(batch["source_job_ids"]))
 
-                jobs_executed += len(batch_config["jobs"])
-                batches_created += 1
+            # Delete original jobs
+            deleted_count = 0
+            for job_id in all_source_job_ids:
+                result = session.query(JobQueue).filter_by(id=job_id).delete()
+                if result:
+                    deleted_count += 1
+                    logger.debug("Deleted original job %s", job_id)
 
-            except Exception as e:
-                logger.error("Failed to execute batch: {}", e)
-                failures.append({"batch": batches_created + 1, "error": str(e)})
+            # Commit all changes atomically
+            session.commit()
 
-                # Mark jobs as failed
-                with self.db_connection.get_session() as session:
-                    for job in batch_config["jobs"]:
-                        db_job = session.query(JobQueue).filter_by(id=job.id).first()
-                        if db_job:
-                            db_job.status = "failed"
-                            db_job.completed_at = datetime.now(timezone.utc)
-                            db_job.result = {"error": str(e)}
-                    session.commit()
+            logger.info("Queue reorganization complete: %d jobs deleted, %d batches created",
+                       deleted_count, len(created_job_ids))
 
-        # Clear analysis after execution
+        # Clear analysis after successful reorganization
         self._smart_batch_analysis = None
         self._analysis_queue_size = 0
 
-        if failures:
-            return {
-                "jobs_executed": jobs_executed,
-                "batches_created": batches_created,
-                "speedup": efficiency["estimated_speedup"],
-                "failures": failures,
-            }
-
         return {
-            "jobs_executed": jobs_executed,
-            "batches_created": batches_created,
-            "speedup": efficiency["estimated_speedup"],
+            "jobs_deleted": len(all_source_job_ids),
+            "batches_created": len(created_job_ids),
+            "mode": mode,
+            "message": f"Queue reorganized successfully. {len(all_source_job_ids)} jobs → {len(created_job_ids)} batches",
         }
 
     def get_smart_batch_preview(self) -> str:

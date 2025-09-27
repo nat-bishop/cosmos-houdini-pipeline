@@ -212,9 +212,11 @@ def inference(
             )
 
             # Use batch_inference for multiple prompts
+            # Create weights_list with same weights for all prompts
+            weights_list = [weights_dict] * len(all_prompts)
             result = ops.batch_inference(
                 prompt_ids=all_prompts,
-                shared_weights=weights_dict,
+                weights_list=weights_list,
                 num_steps=steps,
                 guidance=guidance,
                 seed=seed,

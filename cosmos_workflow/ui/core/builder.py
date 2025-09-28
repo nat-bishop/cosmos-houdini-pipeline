@@ -160,7 +160,7 @@ def wire_all_events(
     wire_header_events(components, api, config)
     wire_inputs_events(components, config, api)
     wire_prompts_events(components, api, simple_queue_service)
-    wire_runs_events(components, api)
+    wire_runs_events(components, api, simple_queue_service)
     wire_jobs_events(components, api, simple_queue_service)
 
     # Wire cross-tab navigation events

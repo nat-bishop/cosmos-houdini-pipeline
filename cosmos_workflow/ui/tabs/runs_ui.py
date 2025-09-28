@@ -178,63 +178,64 @@ def create_runs_tab_ui():
                                 elem_classes=["run-history-table"],
                             )
 
-                        # Delete confirmation dialog
-                        with gr.Column(visible=False, elem_classes=["detail-card"]) as components[
-                            "runs_delete_dialog"
-                        ]:
-                            components["runs_delete_preview"] = gr.Markdown()
-                            components["runs_delete_outputs_checkbox"] = gr.Checkbox(
-                                label="Delete output files",
-                                value=False,
-                                info="Check to permanently delete all output files. Leave unchecked to preserve files.",
-                            )
-                            components["runs_delete_id_hidden"] = gr.Textbox(visible=False)
-                            with gr.Row():
-                                components["runs_confirm_delete_btn"] = gr.Button(
-                                    "⚠️ Confirm Delete",
-                                    variant="stop",
-                                    size="sm",
-                                )
-                                components["runs_cancel_delete_btn"] = gr.Button(
-                                    "Cancel",
-                                    variant="secondary",
-                                    size="sm",
-                                )
+                # Dialogs below both tabs - visible from either tab
+                # Delete confirmation dialog
+                with gr.Column(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_delete_dialog"
+                ]:
+                    components["runs_delete_preview"] = gr.Markdown()
+                    components["runs_delete_outputs_checkbox"] = gr.Checkbox(
+                        label="Delete output files",
+                        value=False,
+                        info="Check to permanently delete all output files. Leave unchecked to preserve files.",
+                    )
+                    components["runs_delete_id_hidden"] = gr.Textbox(visible=False)
+                    with gr.Row():
+                        components["runs_confirm_delete_btn"] = gr.Button(
+                            "⚠️ Confirm Delete",
+                            variant="stop",
+                            size="sm",
+                        )
+                        components["runs_cancel_delete_btn"] = gr.Button(
+                            "Cancel",
+                            variant="secondary",
+                            size="sm",
+                        )
 
-                        # Upscale dialog
-                        with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
-                            "runs_upscale_dialog"
-                        ]:
-                            gr.Markdown("### ⬆️ Upscale Run Configuration")
-                            components["runs_upscale_preview"] = gr.Markdown()
-                            components["runs_upscale_weight"] = gr.Slider(
-                                minimum=0.0,
-                                maximum=1.0,
-                                value=0.5,
-                                step=0.05,
-                                label="Control Weight",
-                                info="Higher values preserve more original detail (0.0-1.0)",
-                            )
-                            components["runs_upscale_prompt_input"] = gr.Textbox(
-                                label="Optional Guiding Prompt",
-                                placeholder="e.g., 'cinematic quality, sharp details'",
-                                lines=2,
-                                info="Leave empty for default upscaling",
-                            )
-                            components["runs_upscale_id_hidden"] = gr.Textbox(visible=False)
-                            with gr.Row():
-                                components["runs_confirm_upscale_btn"] = gr.Button(
-                                    "✅ Start Upscaling",
-                                    variant="primary",
-                                    size="sm",
-                                )
-                                components["runs_cancel_upscale_btn"] = gr.Button(
-                                    "Cancel",
-                                    variant="secondary",
-                                    size="sm",
-                                )
+                # Upscale dialog - now visible from both tabs
+                with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_upscale_dialog"
+                ]:
+                    gr.Markdown("### ⬆️ Upscale Run Configuration")
+                    components["runs_upscale_preview"] = gr.Markdown()
+                    components["runs_upscale_weight"] = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.5,
+                        step=0.05,
+                        label="Control Weight",
+                        info="Higher values preserve more original detail (0.0-1.0)",
+                    )
+                    components["runs_upscale_prompt_input"] = gr.Textbox(
+                        label="Optional Guiding Prompt",
+                        placeholder="e.g., 'cinematic quality, sharp details'",
+                        lines=2,
+                        info="Leave empty for default upscaling",
+                    )
+                    components["runs_upscale_id_hidden"] = gr.Textbox(visible=False)
+                    with gr.Row():
+                        components["runs_confirm_upscale_btn"] = gr.Button(
+                            "✅ Start Upscaling",
+                            variant="primary",
+                            size="sm",
+                        )
+                        components["runs_cancel_upscale_btn"] = gr.Button(
+                            "Cancel",
+                            variant="secondary",
+                            size="sm",
+                        )
 
-                # Run Details below both tabs
+                # Run Details below dialogs
                 with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
                     "runs_details_group"
                 ]:
@@ -341,6 +342,7 @@ def create_runs_tab_ui():
                                             autoplay=True,
                                             loop=True,
                                             height=500,
+                                            show_download_button=True,
                                         )
                                     with gr.Tab("Upscaled Output", visible=False) as components[
                                         "runs_upscaled_tab"
@@ -351,6 +353,7 @@ def create_runs_tab_ui():
                                             autoplay=True,
                                             loop=True,
                                             height=500,
+                                            show_download_button=True,
                                         )
 
                                 # Input Videos
@@ -455,6 +458,7 @@ def create_runs_tab_ui():
                                     show_label=False,
                                     autoplay=True,
                                     loop=True,
+                                    show_download_button=True,
                                     height=500,
                                 )
 

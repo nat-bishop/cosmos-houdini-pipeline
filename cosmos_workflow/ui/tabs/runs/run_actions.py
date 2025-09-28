@@ -227,13 +227,14 @@ This will create a new 4K upscaled version of the output video.
         )
 
 
-def execute_upscale(run_id, control_weight, prompt_text):
-    """Execute upscaling for a run.
+def execute_upscale(run_id, control_weight, prompt_text, queue_service):
+    """Execute upscaling for a run by adding to queue.
 
     Args:
         run_id: The ID of the run to upscale
         control_weight: Control weight for upscaling
         prompt_text: Prompt text for the upscale
+        queue_service: SimplifiedQueueService instance
 
     Returns:
         Tuple of updates for UI components
@@ -242,35 +243,42 @@ def execute_upscale(run_id, control_weight, prompt_text):
         return (
             gr.update(visible=False),
             gr.update(),
-            "❌ No run selected",
         )
 
     try:
-        ops = CosmosAPI()
+        # Add upscale job to queue - following same pattern as enhancement/inference
+        config = {
+            "run_id": run_id,
+            "control_weight": control_weight,
+            "prompt": prompt_text,
+        }
 
-        # Start upscaling
-        result = ops.upscale_run(run_id, control_weight=control_weight, prompt_text=prompt_text)
+        job_id = queue_service.add_job(
+            prompt_ids=[],  # Not needed for upscale jobs
+            job_type="upscale",
+            config=config,
+        )
 
-        if result.get("success"):
-            new_run_id = result.get("run_id", "unknown")
-            return (
-                gr.update(visible=False),  # Hide dialog
-                gr.update(),  # Don't clear selected ID
-                f"✅ Upscaling started! New run: {new_run_id[:16]}...",
-            )
-        else:
-            return (
-                gr.update(visible=False),
-                gr.update(),
-                f"❌ Failed to start upscaling: {result.get('error', 'Unknown error')}",
-            )
+        # Get queue position for feedback
+        position = queue_service.get_position(job_id)
+
+        logger.info("Added upscale job {} to queue at position {}", job_id, position)
+
+        # Show success feedback
+        if position:
+            gr.Info(f"✅ Upscaling queued at position #{position}")
+
+        return (
+            gr.update(visible=False),  # Hide dialog
+            gr.update(),  # Don't clear selected ID
+        )
 
     except Exception as e:
-        logger.error("Error starting upscale: {}", e)
+        logger.error("Error queueing upscale: {}", e)
+        gr.Warning(f"Failed to queue upscaling: {e}")
         return (
             gr.update(visible=False),
             gr.update(),
-            f"❌ Error starting upscale: {e}",
         )
 
 

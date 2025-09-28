@@ -110,12 +110,13 @@ def execute_kill_job():
                                 for run in runs:
                                     if run.get("status") in ["pending", "running", "uploading"]:
                                         api.service.update_run(
-                                            run["id"],
-                                            error_message="Container killed by user"
+                                            run["id"], error_message="Container killed by user"
                                         )
                                         logger.info("Updated run %s to failed status", run["id"])
                             except Exception as e:
-                                logger.error("Failed to update runs for prompt %s: %s", prompt_id, e)
+                                logger.error(
+                                    "Failed to update runs for prompt %s: %s", prompt_id, e
+                                )
 
                     session.commit()
                     logger.info(

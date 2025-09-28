@@ -22,7 +22,7 @@ from cosmos_workflow.ui.tabs.runs import (
 from cosmos_workflow.utils.logging import logger
 
 
-def wire_runs_events(components: dict[str, Any], api: Any) -> None:
+def wire_runs_events(components: dict[str, Any], api: Any, simple_queue_service: Any) -> None:
     """Wire events for the Runs tab.
 
     This handles all runs-related events including filtering, selection,
@@ -31,11 +31,12 @@ def wire_runs_events(components: dict[str, Any], api: Any) -> None:
     Args:
         components: Dictionary of UI components
         api: CosmosAPI instance
+        simple_queue_service: SimplifiedQueueService instance
     """
     wire_runs_filtering_events(components)
     wire_runs_selection_events(components)
     wire_runs_navigation_events(components)
-    wire_runs_action_events(components, api)
+    wire_runs_action_events(components, api, simple_queue_service)
     wire_runs_rating_events(components, api)
 
 
@@ -257,8 +258,21 @@ def wire_runs_navigation_events(components: dict[str, Any]) -> None:
         )
 
 
-def wire_runs_action_events(components: dict[str, Any], api: Any) -> None:
-    """Wire run action events (delete, upscale, etc)."""
+def wire_runs_action_events(
+    components: dict[str, Any], api: Any, simple_queue_service: Any
+) -> None:
+    """Wire run action events (delete, upscale, etc).
+
+    Args:
+        components: Dictionary of UI components
+        api: CosmosAPI instance
+        simple_queue_service: SimplifiedQueueService instance for job queueing
+    """
+    # Bind queue service to execute_upscale handler
+    execute_upscale_bound = functools.partial(
+        execute_upscale,
+        queue_service=simple_queue_service,
+    )
     # Delete operations
     if "runs_delete_selected_btn" in components:
         components["runs_delete_selected_btn"].click(
@@ -328,7 +342,7 @@ def wire_runs_action_events(components: dict[str, Any], api: Any) -> None:
 
     if "runs_confirm_upscale_btn" in components:
         components["runs_confirm_upscale_btn"].click(
-            fn=execute_upscale,
+            fn=execute_upscale_bound,
             inputs=[
                 components.get("runs_upscale_id_hidden"),
                 components.get("runs_upscale_weight"),

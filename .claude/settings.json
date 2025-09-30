@@ -1,9 +1,5 @@
 {
   "includeCoAuthoredBy": false,
-  "statusLine": {
-    "type": "command",
-    "command": "cat | jq -r '.model.display_name'"
-  },
   "permissions": {
     "allow": [
       "WebFetch",

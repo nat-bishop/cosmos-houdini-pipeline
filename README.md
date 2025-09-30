@@ -43,55 +43,39 @@ https://github.com/user-attachments/assets/ca96da3a-ef7a-4625-beda-ebeae7dcfb94
 <tr>
 <td width="50%">
 
-### Operations & Control
-![Operations Interface](docs/images/inference.png)
-*Two-column layout with prompt selection and inference controls*
+### Prompt Details & Management
+![Prompt Details](docs/images/prompt-details.png)
+*Comprehensive prompt library with filtering, search, and batch operations*
 
 </td>
 <td width="50%">
 
-### Run History Management
-![Run History Interface](docs/images/run-history.png)
-*Comprehensive run filtering, search, and batch operations*
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### Enhanced Status Indicators
-![Enhanced Prompts](docs/images/enhanced-status.png)
-*AI enhancement status with visual indicators*
-
-</td>
-<td width="50%">
-
-### Multi-tab Run Details
-![Run Details](docs/images/run-details.png)
-*Professional tabs for General, Parameters, Logs, and Output*
+### Multimodal Inference Controls
+![Multimodal Inputs](docs/images/multimodal-inputs.png)
+*Input video browser with automatic control file detection (depth, edge, segmentation)*
 
 </td>
 </tr>
 <tr>
 <td width="50%">
 
-### Advanced Filtering
-![Advanced Filters](docs/images/advanced-filtering.png)
-*Multi-criteria filtering with date ranges and text search*
+### Inference Parameters
+![Inference Parameters](docs/images/inference.png)
+*Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)*
 
 </td>
 <td width="50%">
 
-### Professional Design System
-![Design System](docs/images/design-system.png)
-*Glassmorphism effects, gradients, and loading animations*
+### Results Gallery
+![Results Gallery](docs/images/results.png)
+*Gallery view with filtering, search, and comprehensive run details*
 
 </td>
 </tr>
 </table>
 
-![Results Gallery](docs/images/results.png)
-*Gallery view showing generated videos with metadata and batch processing status*
+![Job Queue Status](docs/images/job-queue-status.png)
+*Real-time job queue monitoring with GPU status, log streaming, and smart batching optimization*
 
 </div>
 

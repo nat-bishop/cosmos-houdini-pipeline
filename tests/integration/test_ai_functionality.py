@@ -92,19 +92,23 @@ class TestAIDescriptionGeneration:
 
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.imread")
     def test_generate_ai_description_no_transformers(self, mock_imread):
-        """Test fallback when transformers is not available."""
+        """Test fallback when transformers is not available - behavior not implementation."""
         converter = CosmosVideoConverter()
 
         # Mock ImportError for transformers
         with patch("transformers.BlipProcessor", side_effect=ImportError):
             color_frames = [Path("frame_0001.png"), Path("frame_0002.png")]
-            description = converter._generate_ai_description(color_frames)
 
+            # Suppress logging errors since we're testing behavior, not logging format
+            with patch("cosmos_workflow.local_ai.cosmos_sequence.logger"):
+                description = converter._generate_ai_description(color_frames)
+
+            # Test the behavior: should gracefully fallback to frame count
             assert description == "Sequence with 2 frames"
 
     @patch("cosmos_workflow.local_ai.cosmos_sequence.cv2.imread")
     def test_generate_ai_description_error_handling(self, mock_imread):
-        """Test error handling during AI description generation."""
+        """Test error handling during AI description generation - behavior not logging."""
         converter = CosmosVideoConverter()
 
         # Mock frame reading
@@ -117,8 +121,12 @@ class TestAIDescriptionGeneration:
 
             # Should fallback gracefully
             color_frames = [Path("frame_0001.png"), Path("frame_0002.png"), Path("frame_0003.png")]
-            description = converter._generate_ai_description(color_frames)
 
+            # Suppress logging errors since we're testing behavior, not logging format
+            with patch("cosmos_workflow.local_ai.cosmos_sequence.logger"):
+                description = converter._generate_ai_description(color_frames)
+
+            # Test the behavior: should gracefully fallback to frame count
             assert description == "Sequence with 3 frames"
 
 

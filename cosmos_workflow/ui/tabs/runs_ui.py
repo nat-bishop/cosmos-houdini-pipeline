@@ -1,0 +1,570 @@
+#!/usr/bin/env python3
+"""Runs Tab UI for Cosmos Workflow Manager.
+
+This module contains only the UI creation code for the Runs tab.
+Business logic remains in the main app.py file.
+"""
+
+import gradio as gr
+
+from cosmos_workflow.ui.constants import MAX_RESULTS_LIMIT
+
+
+def create_runs_tab_ui():
+    """Create the Runs tab UI components.
+
+    Returns:
+        dict: Dictionary of all UI components for event binding
+    """
+    components = {}
+
+    with gr.Tab("🎬 Runs", id=3) as components["runs_tab"]:
+        gr.Markdown("### Run Management Center")
+        gr.Markdown(
+            "View, filter, and manage all runs with generated outputs and detailed information"
+        )
+
+        with gr.Row():
+            # Left: Filters and Statistics
+            with gr.Column(scale=1):
+                gr.Markdown("#### 🔍 Filter Options")
+
+                # Navigation filter indicator - shows when filtering by prompts
+                components["runs_nav_filter_row"] = gr.Row(visible=False)
+                with components["runs_nav_filter_row"]:
+                    with gr.Column(scale=3):
+                        # Use Markdown to display filter info more clearly
+                        components["runs_prompt_filter"] = gr.Markdown(
+                            value="",  # Will be populated dynamically
+                            elem_classes=["filter-info-box"],
+                        )
+                    with gr.Column(scale=1):
+                        components["clear_nav_filter_btn"] = gr.Button(
+                            "Clear Filter", size="sm", variant="secondary"
+                        )
+
+                with gr.Group(elem_classes=["detail-card"]):
+                    components["runs_status_filter"] = gr.Dropdown(
+                        choices=[
+                            "all",
+                            "completed",
+                            "running",
+                            "pending",
+                            "failed",
+                            "cancelled",
+                        ],
+                        value="all",
+                        label="Status Filter",
+                        info="Filter runs by status",
+                        interactive=True,
+                    )
+
+                    components["runs_date_filter"] = gr.Dropdown(
+                        choices=[
+                            "all",
+                            "today",
+                            "yesterday",
+                            "last_7_days",
+                            "last_30_days",
+                        ],
+                        value="all",
+                        label="Date Range",
+                        info="Filter by creation date",
+                        interactive=True,
+                    )
+
+                    components["runs_type_filter"] = gr.Dropdown(
+                        choices=[
+                            "all",
+                            "transfer",  # inference runs
+                            "enhance",
+                            "upscale",
+                        ],
+                        value="all",
+                        label="Run Type",
+                        info="Filter by run type",
+                        interactive=True,
+                    )
+
+                    components["runs_rating_filter"] = gr.Dropdown(
+                        choices=["all", "5", "4+", "3+", "2+", "1+", "unrated"],
+                        value="all",
+                        label="Rating Filter",
+                        info="Filter by star rating",
+                        interactive=True,
+                    )
+
+                    components["runs_search"] = gr.Textbox(
+                        label="Search",
+                        placeholder="Search by prompt text or ID...",
+                        info="Search in prompt text or run ID",
+                    )
+
+                    components["runs_limit"] = gr.Number(
+                        value=50,
+                        label="Max Results",
+                        minimum=10,
+                        maximum=MAX_RESULTS_LIMIT,
+                        info="Maximum number of runs to display",
+                    )
+
+                    # Add version display filter
+                    components["runs_version_filter"] = gr.Dropdown(
+                        choices=["all", "not upscaled", "upscaled"],
+                        value="all",
+                        label="Video Version Display",
+                        info="Show transfer runs: all, only without upscaling, or only with upscaling",
+                        interactive=True,
+                    )
+
+                gr.Markdown("#### 📊 Statistics")
+                with gr.Group(elem_classes=["detail-card"]):
+                    components["runs_stats"] = gr.Markdown("Loading statistics...")
+
+            # Right: Gallery and Table tabs
+            with gr.Column(scale=3):
+                # Action buttons outside tabs - work with both gallery and table selection
+                with gr.Row():
+                    components["runs_delete_selected_btn"] = gr.Button(
+                        "🗑️ Delete Selected Run",
+                        size="sm",
+                        variant="stop",
+                    )
+                    components["runs_upscale_selected_btn"] = gr.Button(
+                        "⬆️ Upscale Selected Run",
+                        size="sm",
+                        variant="primary",
+                        visible=False,  # Hidden until valid run selected
+                    )
+                    components["runs_selected_info"] = gr.Markdown("No run selected")
+
+                # Hidden component to store selected run ID
+                components["runs_selected_id"] = gr.Textbox(visible=False)
+
+                with gr.Tabs():
+                    # Generated Videos tab
+                    with gr.Tab("Generated Videos"):
+                        components["runs_gallery"] = gr.Gallery(
+                            label="Output Videos",
+                            show_label=False,
+                            elem_id="runs_gallery",
+                            columns=5,  # Changed to 5 columns
+                            rows=3,  # Increased rows for better display
+                            height="auto",  # Auto height to enable scrolling
+                            object_fit="cover",  # Changed to cover to fill the space properly
+                            preview=False,  # Disable preview to avoid duplication
+                            allow_preview=False,  # Disable click to expand
+                            show_download_button=True,
+                            interactive=False,  # Read-only gallery
+                        )
+
+                    # Run Records tab
+                    with gr.Tab("Run Records"):
+                        with gr.Column(
+                            elem_id="runs-table-wrapper", elem_classes=["runs-table-container"]
+                        ):
+                            components["runs_table"] = gr.Dataframe(
+                                headers=[
+                                    "Run ID",
+                                    "Status",
+                                    "Run Type",
+                                    "Duration",
+                                    "Rating",
+                                    "Created",
+                                ],
+                                datatype=["str", "str", "str", "str", "str", "str"],
+                                interactive=False,  # Make non-interactive to prevent editing
+                                elem_id="runs-dataframe",
+                                elem_classes=["run-history-table"],
+                            )
+
+                # Dialogs below both tabs - visible from either tab
+                # Delete confirmation dialog
+                with gr.Column(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_delete_dialog"
+                ]:
+                    components["runs_delete_preview"] = gr.Markdown()
+                    components["runs_delete_outputs_checkbox"] = gr.Checkbox(
+                        label="Delete output files",
+                        value=False,
+                        info="Check to permanently delete all output files. Leave unchecked to preserve files.",
+                    )
+                    components["runs_delete_id_hidden"] = gr.Textbox(visible=False)
+                    with gr.Row():
+                        components["runs_confirm_delete_btn"] = gr.Button(
+                            "⚠️ Confirm Delete",
+                            variant="stop",
+                            size="sm",
+                        )
+                        components["runs_cancel_delete_btn"] = gr.Button(
+                            "Cancel",
+                            variant="secondary",
+                            size="sm",
+                        )
+
+                # Upscale dialog - now visible from both tabs
+                with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_upscale_dialog"
+                ]:
+                    gr.Markdown("### ⬆️ Upscale Run Configuration")
+                    components["runs_upscale_preview"] = gr.Markdown()
+                    components["runs_upscale_weight"] = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.5,
+                        step=0.05,
+                        label="Control Weight",
+                        info="Higher values preserve more original detail (0.0-1.0)",
+                    )
+                    components["runs_upscale_prompt_input"] = gr.Textbox(
+                        label="Optional Guiding Prompt",
+                        placeholder="e.g., 'cinematic quality, sharp details'",
+                        lines=2,
+                        info="Leave empty for default upscaling",
+                    )
+                    components["runs_upscale_id_hidden"] = gr.Textbox(visible=False)
+                    with gr.Row():
+                        components["runs_confirm_upscale_btn"] = gr.Button(
+                            "✅ Start Upscaling",
+                            variant="primary",
+                            size="sm",
+                        )
+                        components["runs_cancel_upscale_btn"] = gr.Button(
+                            "Cancel",
+                            variant="secondary",
+                            size="sm",
+                        )
+
+                # Run Details below dialogs
+                with gr.Group(visible=False, elem_classes=["detail-card"]) as components[
+                    "runs_details_group"
+                ]:
+                    # Header with all controls on a single row
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            gr.Markdown("### 📋 Run Details")
+                        with gr.Column(scale=3):
+                            # All controls in a single row with explicit styling
+                            gr.HTML("""
+                                <div style='display: flex; align-items: center; gap: 4px; flex-wrap: nowrap;'>
+                                    <style>
+                                        .compact-star-btn {
+                                            background: none !important;
+                                            border: none !important;
+                                            padding: 0 !important;
+                                            margin: 0 !important;
+                                            width: 20px !important;
+                                            height: 20px !important;
+                                            min-width: 20px !important;
+                                            max-width: 20px !important;
+                                            cursor: pointer !important;
+                                            font-size: 1.2rem !important;
+                                            line-height: 1 !important;
+                                            color: #888 !important;
+                                            display: inline-block !important;
+                                            box-shadow: none !important;
+                                            flex-shrink: 0 !important;
+                                        }
+                                        .compact-star-btn:hover {
+                                            color: #ffd700 !important;
+                                            transform: scale(1.1) !important;
+                                        }
+                                    </style>
+                                </div>
+                            """)
+                            with gr.Row():
+                                # Star rating buttons with minimal width
+                                components["star_1"] = gr.Button(
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_1",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
+                                )
+                                components["star_2"] = gr.Button(
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_2",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
+                                )
+                                components["star_3"] = gr.Button(
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_3",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
+                                )
+                                components["star_4"] = gr.Button(
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_4",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
+                                )
+                                components["star_5"] = gr.Button(
+                                    "☆",
+                                    size="sm",
+                                    elem_id="star_5",
+                                    elem_classes=["star-btn", "compact-star-btn"],
+                                    min_width=20,
+                                )
+                                # Small spacer
+                                gr.HTML("<div style='width: 10px;'></div>")
+                                # Navigation buttons
+                                components["runs_prev_btn"] = gr.Button(
+                                    "◀ Previous", size="sm", variant="secondary"
+                                )
+                                components["runs_next_btn"] = gr.Button(
+                                    "Next ▶", size="sm", variant="secondary"
+                                )
+
+                    # Hidden component to store actual rating value
+                    components["runs_info_rating"] = gr.Number(visible=False, value=0, precision=0)
+
+                    # State to track current gallery selection index
+                    components["runs_selected_index"] = gr.State(0)
+
+                    with gr.Tabs():
+                        # Main Tab - Dynamic content based on model type
+                        with gr.Tab("Main"):
+                            # Transfer/Default content (visible by default)
+                            with gr.Column(visible=True) as components[
+                                "runs_main_content_transfer"
+                            ]:
+                                # Generated Output with tabs for Original/Upscaled
+                                gr.Markdown("#### Generated Output")
+                                with gr.Tabs() as components["runs_output_tabs"]:
+                                    with gr.Tab("Original Output"):
+                                        components["runs_output_video"] = gr.Video(
+                                            label="Output Video",
+                                            show_label=False,
+                                            autoplay=True,
+                                            loop=True,
+                                            height=500,
+                                            show_download_button=True,
+                                        )
+                                    with gr.Tab("Upscaled Output", visible=False) as components[
+                                        "runs_upscaled_tab"
+                                    ]:
+                                        components["runs_output_video_upscaled"] = gr.Video(
+                                            label="Upscaled Output Video",
+                                            show_label=False,
+                                            autoplay=True,
+                                            loop=True,
+                                            height=500,
+                                            show_download_button=True,
+                                        )
+
+                                # Input Videos
+                                gr.Markdown("#### Input Videos")
+
+                                # Create individual video components for better control
+                                with gr.Row(equal_height=True):
+                                    # Create 4 video slots (max possible: color, edge, depth, seg)
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_1"] = gr.Video(
+                                            label="Video 1",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_2"] = gr.Video(
+                                            label="Video 2",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_3"] = gr.Video(
+                                            label="Video 3",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+                                    with gr.Column(scale=1, min_width=200):
+                                        components["runs_input_video_4"] = gr.Video(
+                                            label="Video 4",
+                                            visible=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            show_download_button=False,
+                                            interactive=False,
+                                            container=True,
+                                        )
+
+                                # Full Prompt
+                                gr.Markdown("#### Full Prompt")
+                                components["runs_prompt_text"] = gr.Textbox(
+                                    label="Prompt Text",
+                                    show_label=False,
+                                    lines=4,
+                                    max_lines=10,
+                                    interactive=False,
+                                )
+
+                            # Enhancement content (hidden by default)
+                            with gr.Column(visible=False) as components[
+                                "runs_main_content_enhance"
+                            ]:
+                                gr.Markdown("#### Prompt Enhancement Results")
+
+                                # Side-by-side prompts for comparison
+                                with gr.Row():
+                                    with gr.Column():
+                                        gr.Markdown("**Original Prompt**")
+                                        components["runs_original_prompt_enhance"] = gr.Textbox(
+                                            label="Original",
+                                            show_label=False,
+                                            lines=8,
+                                            max_lines=15,
+                                            interactive=False,
+                                        )
+                                    with gr.Column():
+                                        gr.Markdown("**Enhanced Prompt**")
+                                        components["runs_enhanced_prompt_enhance"] = gr.Textbox(
+                                            label="Enhanced",
+                                            show_label=False,
+                                            lines=8,
+                                            max_lines=15,
+                                            interactive=False,
+                                        )
+
+                                # Enhancement details
+                                gr.Markdown("#### Enhancement Details")
+                                components["runs_enhance_stats"] = gr.Markdown(
+                                    "Loading enhancement details...",
+                                    elem_classes=["detail-card"],
+                                )
+
+                            # Upscale content (hidden by default)
+                            with gr.Column(visible=False) as components[
+                                "runs_main_content_upscale"
+                            ]:
+                                # Upscaled Output
+                                gr.Markdown("#### Upscaled Output")
+                                components["runs_output_video_upscale"] = gr.Video(
+                                    label="Upscaled Video",
+                                    show_label=False,
+                                    autoplay=True,
+                                    loop=True,
+                                    show_download_button=True,
+                                    height=500,
+                                )
+
+                                # Original vs Upscaled comparison
+                                with gr.Row():
+                                    with gr.Column():
+                                        gr.Markdown("**Original Video**")
+                                        components["runs_original_video_upscale"] = gr.Video(
+                                            label="Original",
+                                            show_label=False,
+                                            autoplay=False,
+                                            loop=True,
+                                            height=250,
+                                        )
+                                    with gr.Column():
+                                        gr.Markdown("**Upscale Statistics**")
+                                        components["runs_upscale_stats"] = gr.Markdown(
+                                            "Loading upscale details...",
+                                            elem_classes=["detail-card"],
+                                        )
+
+                                # Prompt used for upscaling (if any)
+                                gr.Markdown("#### Upscaling Prompt")
+                                components["runs_upscale_prompt"] = gr.Textbox(
+                                    label="Prompt",
+                                    show_label=False,
+                                    lines=3,
+                                    max_lines=6,
+                                    interactive=False,
+                                    placeholder="No prompt used for this upscale",
+                                )
+
+                            # Hidden components for compatibility
+                            components["runs_detail_id"] = gr.Textbox(visible=False)
+                            components["runs_detail_status"] = gr.Textbox(visible=False)
+
+                        # Info Tab
+                        with gr.Tab("Info"):
+                            with gr.Row():
+                                components["runs_info_id"] = gr.Textbox(
+                                    label="Run ID",
+                                    interactive=False,
+                                )
+                                components["runs_info_prompt_id"] = gr.Textbox(
+                                    label="Prompt ID",
+                                    interactive=False,
+                                )
+
+                            with gr.Row():
+                                components["runs_info_status"] = gr.Textbox(
+                                    label="Status",
+                                    interactive=False,
+                                )
+                                components["runs_info_duration"] = gr.Textbox(
+                                    label="Duration",
+                                    interactive=False,
+                                )
+                                components["runs_info_type"] = gr.Textbox(
+                                    label="Run Type",
+                                    interactive=False,
+                                )
+
+                            with gr.Row():
+                                components["runs_info_created"] = gr.Textbox(
+                                    label="Created",
+                                    interactive=False,
+                                )
+                                components["runs_info_completed"] = gr.Textbox(
+                                    label="Completed",
+                                    interactive=False,
+                                )
+
+                            # Video Paths
+                            gr.Markdown("#### Video Paths")
+                            components["runs_info_output_path"] = gr.Textbox(
+                                label="Output Video",
+                                interactive=False,
+                            )
+                            components["runs_info_input_paths"] = gr.Textbox(
+                                label="Input Videos",
+                                lines=4,
+                                interactive=False,
+                            )
+
+                        # Parameters Tab
+                        with gr.Tab("Parameters"):
+                            gr.Markdown("#### Execution Configuration")
+                            components["runs_params_json"] = gr.JSON(
+                                label="Inference Parameters",
+                                show_label=False,
+                            )
+
+                        # Logs Tab
+                        with gr.Tab("Logs"):
+                            components["runs_log_path"] = gr.Textbox(
+                                label="Log File Path",
+                                interactive=False,
+                            )
+                            components["runs_log_output"] = gr.Code(
+                                label="Log Output (Last 15 Lines)",
+                                language="shell",
+                                lines=15,
+                                interactive=False,
+                            )
+                            with gr.Row():
+                                components["runs_load_logs_btn"] = gr.Button("📄 Load Full Logs")
+                                gr.Button("📋 Copy Logs")
+
+    return components

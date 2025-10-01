@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.connection.ssh_manager import SSHManager
 from cosmos_workflow.execution.command_builder import DockerCommandBuilder, RemoteCommandExecutor
 from cosmos_workflow.utils.logging import get_run_logger, logger
@@ -16,11 +17,93 @@ from cosmos_workflow.utils.workflow_utils import get_log_path
 class DockerExecutor:
     """Executes Docker commands on remote instances using bash scripts."""
 
-    def __init__(self, ssh_manager: SSHManager, remote_dir: str, docker_image: str):
+    def __init__(
+        self,
+        ssh_manager: SSHManager,
+        remote_dir: str,
+        docker_image: str,
+        config_manager: ConfigManager | None = None,
+    ):
         self.ssh_manager = ssh_manager
         self.remote_dir = remote_dir
         self.docker_image = docker_image
         self.remote_executor = RemoteCommandExecutor(ssh_manager)
+        self.config_manager = config_manager
+
+        # Get timeout from config or use default
+        self.docker_timeout = 3600  # Default 1 hour
+        if config_manager:
+            try:
+                config_data = config_manager.get_config()
+                self.docker_timeout = config_data.get("timeouts", {}).get("docker_execution", 3600)
+                logger.info("Using docker timeout from config: {} seconds", self.docker_timeout)
+            except Exception:
+                logger.debug("Using default docker timeout: {} seconds", self.docker_timeout)
+
+    def _create_fallback_log(
+        self,
+        run_id: str,
+        error_message: str,
+        stderr: str = "",
+        exit_code: int | None = None,
+        is_batch: bool = False,
+    ) -> None:
+        """Create a fallback log file when Docker fails to start.
+
+        This ensures that even when Docker fails with exit code 125 or other startup
+        issues, there's still a log file with error information for debugging.
+
+        Args:
+            run_id: The run ID for this operation (or batch name for batch runs)
+            error_message: Error message to include in the log
+            stderr: Standard error output from Docker command
+            exit_code: Exit code from Docker command
+            is_batch: Whether this is for a batch run (changes directory structure)
+        """
+        try:
+            # Create remote log directory and file using correct format
+            if is_batch:
+                # For batch, use batch directory structure
+                remote_log_dir = f"{self.remote_dir}/outputs/{run_id}"
+                remote_log_path = f"{remote_log_dir}/batch_run.log"
+            else:
+                # For single runs, use run directory structure
+                remote_log_dir = f"{self.remote_dir}/outputs/run_{run_id}/logs"
+                remote_log_path = f"{remote_log_dir}/{run_id}.log"
+
+            # Ensure log directory exists
+            self.remote_executor.create_directory(remote_log_dir)
+
+            # Build error log content
+            from datetime import datetime, timezone
+
+            error_log = "[ERROR] Docker failed to start\n"
+            error_log += f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n"
+            if exit_code is not None:
+                error_log += f"Exit Code: {exit_code}\n"
+            error_log += f"Error: {error_message}\n"
+            if stderr:
+                error_log += f"\n=== Docker stderr ===\n{stderr}\n"
+
+            # Write the error log to remote using echo with sudo tee to handle permissions
+            # This approach creates the file with proper permissions even if the directory has restrictions
+            escaped_log = error_log.replace("'", "'\\''")  # Escape single quotes
+            write_cmd = f"echo '{escaped_log}' | tee '{remote_log_path}' > /dev/null"
+            exit_code, _, write_stderr = self.ssh_manager.execute_command(write_cmd, timeout=10)
+
+            if exit_code == 0:
+                logger.info("Created fallback log at: {}", remote_log_path)
+            else:
+                # If tee fails, try creating file with touch first then writing
+                logger.warning("Failed to write log with tee, trying touch and write method")
+                # First create the file with touch, then write to it
+                touch_cmd = (
+                    f"touch '{remote_log_path}' && echo '{escaped_log}' > '{remote_log_path}'"
+                )
+                self.ssh_manager.execute_command(touch_cmd, timeout=10)
+                logger.info("Created fallback log at: {}", remote_log_path)
+        except Exception as e:
+            logger.error("Failed to create fallback log: {}", e)
 
     def run_inference(
         self,
@@ -28,22 +111,25 @@ class DockerExecutor:
         run_id: str,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        guidance: float = 5.0,
+        seed: int = 1,
+        stream_output: bool = False,
     ) -> dict:
-        """Run Cosmos-Transfer1 inference on remote instance.
+        """Run Cosmos-Transfer1 inference on remote instance synchronously.
 
-        Starts inference as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes inference and waits for completion. Returns when the Docker
+        container finishes with either success or failure status.
 
         Args:
             prompt_file: Name of prompt file (without path).
             run_id: Run ID for tracking (REQUIRED).
             num_gpu: Number of GPUs to use.
             cuda_devices: CUDA device IDs to use.
+            stream_output: Whether to stream output to console in real-time.
 
         Returns:
-            Dict containing status ('started'), log_path to local log file,
-            and prompt_name for the executed inference.
+            Dict containing status ('completed' or 'failed'), exit_code,
+            log_path to local log file, and prompt_name.
 
         Raises:
             Exception: If inference launch fails.
@@ -66,26 +152,45 @@ class DockerExecutor:
         try:
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: {}", remote_log_path)
+            logger.info("Remote log path: {}", remote_log_path)
 
             # Execute inference using bash script
-            run_logger.info("Starting inference on GPU. This may take several minutes...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching inference in background...")
+            logger.info("Starting inference on GPU. This may take several minutes...")
+            logger.info("Use 'cosmos status --stream' to monitor progress")
+            logger.info("Launching inference in background...")
 
-            self._run_inference_script(prompt_name, run_id, num_gpu, cuda_devices)
+            # Run inference synchronously and get exit code
+            exit_code = self._run_inference_script(
+                prompt_name,
+                run_id,
+                num_gpu,
+                cuda_devices,
+                guidance,
+                seed,
+                stream_output=stream_output,
+                run_logger=run_logger,
+            )
 
-            run_logger.info("Inference started successfully for {}", prompt_name)
-            run_logger.info("The process is now running in the background on the GPU")
-
-            return {
-                "status": "started",  # Changed from "success" to "started"
-                "log_path": str(local_log_path),
-                "prompt_name": prompt_name,
-            }
+            if exit_code == 0:
+                logger.info("Inference completed successfully for {}", prompt_name)
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path),
+                    "prompt_name": prompt_name,
+                }
+            else:
+                logger.error("Inference failed with exit code {}", exit_code)
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Inference failed with exit code {exit_code}",
+                    "log_path": str(local_log_path),
+                    "prompt_name": prompt_name,
+                }
 
         except Exception as e:
-            run_logger.error("Inference failed for {}: {}", prompt_name, e)
+            logger.error("Inference failed for {}: {}", prompt_name, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_upscaling(
@@ -96,12 +201,12 @@ class DockerExecutor:
         prompt: str | None = None,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        stream_output: bool = False,
     ) -> dict:
-        """Run 4K upscaling on remote instance.
+        """Run 4K upscaling on remote instance synchronously.
 
-        Starts upscaling as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes upscaling and waits for completion. Returns when the Docker
+        container finishes with either success or failure status.
 
         Args:
             video_path: Remote path to the video file to upscale.
@@ -110,9 +215,11 @@ class DockerExecutor:
             prompt: Optional prompt to guide the upscaling process.
             num_gpu: Number of GPUs to use.
             cuda_devices: CUDA device IDs to use.
+            stream_output: Whether to stream output to console in real-time.
 
         Returns:
-            Dict containing status ('started') and log_path to local log file.
+            Dict containing status ('completed' or 'failed'), exit_code,
+            and log_path to local log file.
 
         Raises:
             FileNotFoundError: If input video for upscaling is not found.
@@ -125,7 +232,7 @@ class DockerExecutor:
         run_logger = get_run_logger(run_id, f"upscale_{video_name}")
         run_logger.info("Running upscaling for video {} with weight {}", video_path, control_weight)
         if prompt:
-            run_logger.info("Using prompt: {}", prompt[:100])
+            logger.info("Using prompt: {}", prompt[:100])
 
         # Setup local log path
         local_log_path = get_log_path("upscaling", f"run_{run_id}", run_id)
@@ -161,26 +268,44 @@ class DockerExecutor:
 
             # Log path for reference
             remote_log_path = f"{self.remote_dir}/outputs/run_{run_id}/run.log"
-            run_logger.info("Remote log path: {}", remote_log_path)
+            logger.info("Remote log path: {}", remote_log_path)
 
             # Execute upscaling using bash script
-            run_logger.info("Starting upscaling on GPU. This may take several minutes...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching upscaling in background...")
+            logger.info("Starting upscaling on GPU. This may take several minutes...")
+            logger.info("Use 'cosmos status --stream' to monitor progress")
+            logger.info("Launching upscaling in background...")
 
-            self._run_upscaling_script(video_path, run_id, control_weight, num_gpu, cuda_devices)
+            # Run upscaling synchronously and get exit code
+            exit_code = self._run_upscaling_script(
+                video_path,
+                run_id,
+                control_weight,
+                num_gpu,
+                cuda_devices,
+                stream_output=stream_output,
+                run_logger=run_logger,
+            )
 
-            run_logger.info("Upscaling started successfully for video {}", video_name)
-            run_logger.info("The process is now running in the background on the GPU")
-
-            return {
-                "status": "started",  # Changed from "success" to "started"
-                "log_path": str(local_log_path),
-                "video_path": video_path,
-            }
+            if exit_code == 0:
+                logger.info("Upscaling completed successfully for video {}", video_name)
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path),
+                    "video_path": video_path,
+                }
+            else:
+                logger.error("Upscaling failed with exit code {}", exit_code)
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Upscaling failed with exit code {exit_code}",
+                    "log_path": str(local_log_path),
+                    "video_path": video_path,
+                }
 
         except Exception as e:
-            run_logger.error("Upscaling failed for video {}: {}", video_path, e)
+            logger.error("Upscaling failed for video {}: {}", video_path, e)
             return {"status": "failed", "error": str(e), "log_path": str(local_log_path)}
 
     def run_prompt_enhancement(
@@ -190,11 +315,10 @@ class DockerExecutor:
         offload: bool = True,
         checkpoint_dir: str = "/workspace/checkpoints",
     ) -> dict:
-        """Run prompt enhancement using Pixtral model on GPU.
+        """Run prompt enhancement using Pixtral model on GPU synchronously.
 
-        Starts enhancement as a background process on the GPU. Returns immediately
-        with 'started' status. Use 'cosmos status --stream' or Docker container
-        logs to monitor progress.
+        Executes enhancement and waits for completion. Streams output to console
+        for real-time progress monitoring.
 
         Args:
             batch_filename: Name of batch JSON file in inputs directory
@@ -203,7 +327,7 @@ class DockerExecutor:
             checkpoint_dir: Directory containing model checkpoints
 
         Returns:
-            Dict containing status ('started') and log_path to local log file.
+            Dict containing status ('completed' or 'failed'), exit_code, and log_path.
 
         Raises:
             FileNotFoundError: If script or batch file not found.
@@ -281,29 +405,45 @@ class DockerExecutor:
 
             # Build the docker command
             command = builder.build()
+            logger.debug("Executing Docker command for enhancement: %s", command)
 
-            # Run in background like inference does
-            background_command = f"nohup {command} > /dev/null 2>&1 &"
+            # Run synchronously (blocking)
+            logger.info("Starting prompt enhancement on GPU...")
 
-            # Execute in background - returns immediately
-            run_logger.info("Starting prompt enhancement on GPU...")
-            run_logger.info("Use 'cosmos status --stream' to monitor progress")
-            run_logger.info("Launching enhancement in background...")
+            # Execute and wait for completion
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                command,
+                timeout=min(1800, self.docker_timeout // 2),  # Half of docker timeout or 30 min
+                stream_output=True,  # Stream output for CLI
+            )
 
-            # This returns immediately since we're running in background
-            self.ssh_manager.execute_command(background_command, timeout=5)
+            logger.info("Prompt enhancement completed with exit code %d", exit_code)
 
-            run_logger.info("Prompt enhancement started successfully for batch {}", batch_filename)
-            run_logger.info("The process is now running in the background on the GPU")
-
-            return {
-                "status": "started",  # Changed from "success" to "started" for consistency
-                "log_path": str(local_log_path) if local_log_path else None,
-                "batch_filename": batch_filename,
-            }
+            if exit_code == 0:
+                return {
+                    "status": "completed",
+                    "exit_code": exit_code,
+                    "log_path": str(local_log_path) if local_log_path else None,
+                    "batch_filename": batch_filename,
+                }
+            else:
+                # Create fallback log for Docker failures, especially exit code 125
+                if exit_code == 125 and run_id:
+                    self._create_fallback_log(
+                        run_id=run_id,
+                        error_message=f"Docker failed to start container for enhancement {batch_filename}",
+                        stderr=stderr if stderr else "",
+                        exit_code=exit_code,
+                    )
+                return {
+                    "status": "failed",
+                    "exit_code": exit_code,
+                    "error": f"Enhancement failed with exit code {exit_code}",
+                    "log_path": str(local_log_path) if local_log_path else None,
+                }
 
         except Exception as e:
-            run_logger.error("Prompt enhancement launch failed: {}", e)
+            logger.error("Prompt enhancement launch failed: {}", e)
             return {
                 "status": "failed",
                 "error": str(e),
@@ -311,9 +451,32 @@ class DockerExecutor:
             }
 
     def _run_inference_script(
-        self, prompt_name: str, run_id: str, num_gpu: int, cuda_devices: str
-    ) -> None:
-        """Run inference using the bash script in background."""
+        self,
+        prompt_name: str,
+        run_id: str,
+        num_gpu: int,
+        cuda_devices: str,
+        guidance: float = 5.0,
+        seed: int = 1,
+        stream_output: bool = False,
+        run_logger=None,
+    ) -> int:
+        """Run inference using the bash script synchronously.
+
+        Args:
+            prompt_name: Name of the prompt
+            run_id: Run ID for tracking
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs
+            stream_output: Whether to stream output
+            run_logger: Optional logger instance for run-specific logging
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
+        # Use provided logger or fall back to global logger
+        if run_logger is None:
+            run_logger = logger
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -326,16 +489,40 @@ class DockerExecutor:
         builder.with_name(container_name)
 
         builder.set_command(
-            f'bash -lc "/workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices}"'
+            f'bash -lc "bash /workspace/bashscripts/inference.sh {run_id} {num_gpu} {cuda_devices} {prompt_name} {guidance} {seed}"'
         )
 
-        # Run the command in background by appending & and using nohup
+        # Run synchronously (blocking)
         command = builder.build()
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
+        logger.debug("Executing Docker command for inference: %s", command)
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Inference started in background")
+        # Execute and wait for completion
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=self.docker_timeout,  # Use configured timeout
+            stream_output=stream_output,
+        )
+
+        # Log Docker startup failures to unified log
+        if exit_code != 0:
+            logger.error("Docker container failed with exit code {}", exit_code)
+            logger.error("Command: {}", command)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+            if stdout and not stream_output:  # Don't duplicate if already streamed
+                logger.info("STDOUT: {}", stdout)
+
+            # Create fallback log for Docker failures, especially exit code 125
+            if exit_code == 125:
+                self._create_fallback_log(
+                    run_id=run_id,
+                    error_message=f"Docker failed to start container for inference {prompt_name}",
+                    stderr=stderr,
+                    exit_code=exit_code,
+                )
+
+        logger.info("Inference completed with exit code %d", exit_code)
+        return exit_code
 
     def _run_upscaling_script(
         self,
@@ -344,8 +531,26 @@ class DockerExecutor:
         control_weight: float,
         num_gpu: int,
         cuda_devices: str,
-    ) -> None:
-        """Run upscaling using the bash script in background."""
+        stream_output: bool = False,
+        run_logger=None,
+    ) -> int:
+        """Run upscaling using the bash script synchronously.
+
+        Args:
+            video_path: Path to video file
+            run_id: Run ID for tracking
+            control_weight: Control weight for upscaling
+            num_gpu: Number of GPUs to use
+            cuda_devices: CUDA device IDs
+            stream_output: Whether to stream output
+            run_logger: Optional logger instance for run-specific logging
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
+        # Use provided logger or fall back to global logger
+        if run_logger is None:
+            run_logger = logger
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -368,13 +573,37 @@ class DockerExecutor:
             f'bash -lc "/workspace/bashscripts/upscale.sh {run_id} {control_weight} {num_gpu} {cuda_devices} {parent_run_id}"'
         )
 
-        # Run the command in background
+        # Run synchronously (blocking)
         command = builder.build()
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
+        logger.debug("Executing Docker command for upscaling: %s", command)
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Upscaling started in background")
+        # Execute and wait for completion
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=self.docker_timeout,  # Use configured timeout
+            stream_output=stream_output,
+        )
+
+        # Log Docker startup failures to unified log
+        if exit_code != 0:
+            logger.error("Docker container failed with exit code {}", exit_code)
+            logger.error("Command: {}", command)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+            if stdout and not stream_output:  # Don't duplicate if already streamed
+                logger.info("STDOUT: {}", stdout)
+
+            # Create fallback log for Docker failures, especially exit code 125
+            if exit_code == 125:
+                self._create_fallback_log(
+                    run_id=run_id,
+                    error_message=f"Docker failed to start container for upscaling {video_path}",
+                    stderr=stderr,
+                    exit_code=exit_code,
+                )
+
+        logger.info("Upscaling completed with exit code %d", exit_code)
+        return exit_code
 
     def _create_upscaler_spec(self, prompt_name: str, control_weight: float) -> None:
         """Create upscaler specification file on remote."""
@@ -475,7 +704,7 @@ class DockerExecutor:
                     f"using most recent: {container['name']}"
                 )
                 logger.warning(
-                    "Multiple cosmos containers found: %d. Using %s",
+                    "Multiple cosmos containers found: {}. Using {}",
                     len(containers),
                     container["name"],
                 )
@@ -493,14 +722,25 @@ class DockerExecutor:
             Dict with GPU info if available:
                 - name: GPU model name
                 - memory_total: Total GPU memory
+                - memory_used: Used GPU memory
+                - memory_free: Free GPU memory
+                - memory_percentage: Actual memory usage percentage
+                - gpu_utilization: GPU compute utilization percentage
+                - temperature: Current GPU temperature
+                - power_draw: Current power draw
+                - power_limit: Power limit
+                - clock_current: Current GPU clock speed
+                - clock_max: Maximum GPU clock speed
+                - driver_version: NVIDIA driver version
                 - cuda_version: CUDA version
             None if GPU not available or nvidia-smi fails
         """
         try:
-            # Query GPU info using nvidia-smi
+            # Query GPU info using nvidia-smi - expanded to include temp, power, clocks
             cmd = (
                 "nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free,"
-                "utilization.gpu,utilization.memory,driver_version "
+                "utilization.gpu,temperature.gpu,power.draw,power.limit,"
+                "clocks.current.graphics,clocks.max.graphics,driver_version "
                 "--format=csv,noheader,nounits"
             )
             output = self.ssh_manager.execute_command_success(cmd, stream_output=False)
@@ -508,17 +748,30 @@ class DockerExecutor:
             if not output or not output.strip():
                 return None
 
-            # Parse CSV output (e.g., "Tesla T4, 15360, 469, 14891, 0, 3, 525.60.13")
+            # Parse CSV output - now 11 fields instead of 7
             parts = [p.strip() for p in output.strip().split(",")]
-            if len(parts) >= 7:
+            if len(parts) >= 11:
+                # Calculate actual memory percentage
+                try:
+                    mem_used_mb = float(parts[2])
+                    mem_total_mb = float(parts[1])
+                    memory_percentage = round((mem_used_mb / mem_total_mb) * 100, 1)
+                except (ValueError, ZeroDivisionError):
+                    memory_percentage = 0.0
+
                 gpu_info = {
                     "name": parts[0],
                     "memory_total": f"{parts[1]} MB",
                     "memory_used": f"{parts[2]} MB",
                     "memory_free": f"{parts[3]} MB",
+                    "memory_percentage": f"{memory_percentage}%",  # Actual capacity percentage
                     "gpu_utilization": f"{parts[4]}%",
-                    "memory_utilization": f"{parts[5]}%",
-                    "driver_version": parts[6],
+                    "temperature": f"{parts[5]}°C" if parts[5] != "[N/A]" else "N/A",
+                    "power_draw": f"{parts[6]} W" if parts[6] != "[N/A]" else "N/A",
+                    "power_limit": f"{parts[7]} W" if parts[7] != "[N/A]" else "N/A",
+                    "clock_current": f"{parts[8]} MHz" if parts[8] != "[N/A]" else "N/A",
+                    "clock_max": f"{parts[9]} MHz" if parts[9] != "[N/A]" else "N/A",
+                    "driver_version": parts[10],
                 }
 
                 # Try to get CUDA version
@@ -572,7 +825,17 @@ class DockerExecutor:
 
             # Kill all containers
             kill_cmd = DockerCommandBuilder.build_kill_command(container_ids)
-            self.ssh_manager.execute_command_success(kill_cmd, stream_output=False)
+
+            # Use execute_command instead of execute_command_success because docker kill
+            # returns exit code 137 (SIGKILL) which is expected behavior, not an error
+            exit_code, stdout, stderr = self.ssh_manager.execute_command(
+                kill_cmd, stream_output=False
+            )
+
+            # Exit code 137 means the container was killed with SIGKILL (expected)
+            # Exit code 0 means the kill command succeeded normally
+            if exit_code not in [0, 137]:
+                raise RuntimeError(f"Failed to kill containers: {stderr}")
 
             logger.info("Killed {} containers: {}", len(container_ids), container_ids)
 
@@ -601,14 +864,20 @@ class DockerExecutor:
         self,
         batch_name: str,
         batch_jsonl_file: str,
+        base_controlnet_spec: str,
+        batch_size: int = 4,
         num_gpu: int = 1,
         cuda_devices: str = "0",
+        guidance: float = 5.0,
+        seed: int = 1,
     ) -> dict[str, Any]:
         """Run batch inference for multiple prompts/videos.
 
         Args:
             batch_name: Name for the batch output directory
             batch_jsonl_file: Name of JSONL file with batch data (in inputs/batches/)
+            base_controlnet_spec: Name of base controlnet spec file (in inputs/batches/)
+            batch_size: Number of videos to process simultaneously on GPU
             num_gpu: Number of GPUs to use
             cuda_devices: CUDA device IDs to use
 
@@ -617,46 +886,107 @@ class DockerExecutor:
         """
         logger.info("Running batch inference {} with {} GPU(s)", batch_name, num_gpu)
 
-        # Setup logging paths
-        remote_log_path = f"{self.remote_dir}/logs/batch/{batch_name}.log"
-        # Ensure remote log directory exists
-        self.remote_executor.create_directory(f"{self.remote_dir}/logs/batch")
-
         # Check if batch file exists
         batch_path = f"{self.remote_dir}/inputs/batches/{batch_jsonl_file}"
         if not self.remote_executor.file_exists(batch_path):
             raise FileNotFoundError(f"Batch file not found: {batch_path}")
 
-        # Create output directory
-        remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
-        self.remote_executor.create_directory(remote_output_dir)
+        # Check if base controlnet spec exists
+        spec_path = f"{self.remote_dir}/inputs/batches/{base_controlnet_spec}"
+        if not self.remote_executor.file_exists(spec_path):
+            raise FileNotFoundError(f"Base controlnet spec not found: {spec_path}")
 
-        # Execute batch inference using bash script
+        # Don't create output directory here - let the batch_inference.sh script handle it
+        # to avoid permission conflicts between SSH user and Docker container user
+
+        # Execute batch inference using bash script (blocking)
         logger.info("Starting batch inference on GPU. This may take a while...")
-        logger.info("Use 'cosmos status --stream' to monitor progress")
-        logger.info("Launching batch inference in background...")
-        self._run_batch_inference_script(
-            batch_name, batch_jsonl_file, num_gpu, cuda_devices, remote_log_path
+        logger.info("Running batch inference synchronously...")
+
+        # Run without the remote_log_path - the script itself handles logging
+        exit_code = self._run_batch_inference_script(
+            batch_name,
+            batch_jsonl_file,
+            base_controlnet_spec,
+            batch_size,
+            num_gpu,
+            cuda_devices,
+            guidance,
+            seed,
         )
 
-        logger.info("Batch inference started successfully for {}", batch_name)
-        logger.info("The process is now running in the background on the GPU")
+        # Handle exit codes like single inference
+        if exit_code != 0:
+            logger.error("Batch inference failed with exit code {}", exit_code)
+            # Create fallback log for failures
+            self._create_fallback_log(
+                run_id=batch_name,
+                error_message=f"Batch inference {batch_name} failed with exit code {exit_code}",
+                stderr="Check batch_run.log for details",
+                exit_code=exit_code,
+                is_batch=True,
+            )
 
-        return {
-            "batch_name": batch_name,
-            "output_dir": remote_output_dir,
-            "status": "started",
-        }
+            # Exit code 137 means container was killed (SIGKILL)
+            # This typically happens when user kills the job or system OOM
+            if exit_code == 137:
+                logger.error("Container was killed (exit code 137) - likely user-initiated or OOM")
+                return {
+                    "batch_name": batch_name,
+                    "output_dir": f"{self.remote_dir}/outputs/{batch_name}",
+                    "status": "failed",
+                    "error": "Container killed (exit code 137)",
+                    "exit_code": exit_code,
+                }
+
+            # For other non-zero exit codes, also return failed status
+            return {
+                "batch_name": batch_name,
+                "output_dir": f"{self.remote_dir}/outputs/{batch_name}",
+                "status": "failed",
+                "error": f"Batch inference failed with exit code {exit_code}",
+                "exit_code": exit_code,
+            }
+
+        # Only check for output files if exit code was 0
+        # Get output files after successful completion
+        remote_output_dir = f"{self.remote_dir}/outputs/{batch_name}"
+        output_files = self._get_batch_output_files(batch_name)
+
+        if output_files:
+            logger.info("Batch inference completed successfully for {}", batch_name)
+            logger.info("Generated {} output files", len(output_files))
+            return {
+                "batch_name": batch_name,
+                "output_dir": remote_output_dir,
+                "status": "completed",
+                "output_files": output_files,
+            }
+        else:
+            logger.error("Batch inference completed but no output files found")
+            return {
+                "batch_name": batch_name,
+                "output_dir": remote_output_dir,
+                "status": "failed",
+                "error": "No output files generated",
+            }
 
     def _run_batch_inference_script(
         self,
         batch_name: str,
         batch_jsonl_file: str,
+        base_controlnet_spec: str,
+        batch_size: int,
         num_gpu: int,
         cuda_devices: str,
-        remote_log_path: str | None = None,
-    ) -> None:
-        """Run batch inference using the bash script in background."""
+        guidance: float,
+        seed: int,
+    ) -> int:
+        """Run batch inference using the bash script synchronously.
+
+        Returns:
+            Exit code from the docker container (0 for success, non-zero for failure)
+        """
         builder = DockerCommandBuilder(self.docker_image)
         builder.with_gpu()
         builder.add_option("--ipc=host")
@@ -664,35 +994,54 @@ class DockerExecutor:
         builder.add_volume(self.remote_dir, "/workspace")
         builder.add_volume("$HOME/.cache/huggingface", "/root/.cache/huggingface")
 
-        # Build command with optional logging
-        cmd = f"/workspace/scripts/batch_inference.sh {batch_name} {batch_jsonl_file} {num_gpu} {cuda_devices}"
-        if remote_log_path:
-            cmd = f'({cmd}) 2>&1 | tee {remote_log_path}; echo "[COSMOS_COMPLETE]" >> {remote_log_path}'
-
+        # Build command - the script itself handles logging to outputs/{batch_name}/batch_run.log
+        # Use bash explicitly to avoid shebang line ending issues
+        cmd = f"bash /workspace/bashscripts/batch_inference.sh {batch_name} {batch_jsonl_file} {base_controlnet_spec} {num_gpu} {cuda_devices} {batch_size} {guidance} {seed}"
         builder.set_command(f'bash -lc "{cmd}"')
 
         # Add container name for tracking
         container_name = f"cosmos_batch_{batch_name[:8]}"
         builder.with_name(container_name)
 
-        # Run the command in background
+        # Run the command synchronously (blocking, same as single inference)
         command = builder.build()
-        background_command = f"nohup {command} > /dev/null 2>&1 &"
+        logger.debug("Executing Docker command for batch inference: %s", command)
 
-        # This returns immediately since we're running in background
-        self.ssh_manager.execute_command(background_command, timeout=5)
-        logger.info("Batch inference started in background")
+        # Execute and wait for completion (blocking)
+        exit_code, stdout, stderr = self.ssh_manager.execute_command(
+            command,
+            timeout=3600,  # 1 hour timeout for batch inference
+            stream_output=False,  # Could be made configurable
+        )
+
+        if exit_code != 0:
+            logger.error("Batch inference failed with exit code {}", exit_code)
+            if stderr:
+                logger.error("STDERR: {}", stderr)
+        else:
+            logger.info("Batch inference completed successfully")
+
+        return exit_code
 
     def _get_batch_output_files(self, batch_name: str) -> list[str]:
-        """Get list of output files from batch inference."""
+        """Get list of output files from batch inference.
+
+        Batch outputs are structured as:
+        - outputs/{batch_name}/video_0/output.mp4
+        - outputs/{batch_name}/video_0/edge_input_control_0.mp4
+        - outputs/{batch_name}/video_1/output.mp4
+        - etc.
+        """
         output_dir = f"{self.remote_dir}/outputs/{batch_name}"
         try:
-            # List all mp4 files in the output directory
+            # List all mp4 files recursively in video_X subdirectories
+            # Find all .mp4 files in any subdirectory
             result = self.ssh_manager.execute_command_success(
-                f"ls -1 {output_dir}/*.mp4 2>/dev/null || true", stream_output=False
+                f"find {output_dir} -type f -name '*.mp4' 2>/dev/null || true", stream_output=False
             )
             if result:
                 files = result.strip().split("\n")
+                # Filter out empty strings and return full paths
                 return [f for f in files if f]
             return []
         except Exception as e:

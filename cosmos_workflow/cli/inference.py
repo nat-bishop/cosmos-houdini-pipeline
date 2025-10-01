@@ -34,7 +34,7 @@ from .helpers import (
     help="Control weights: VIS EDGE DEPTH SEG (default: 0.25 0.25 0.25 0.25)",
 )
 @click.option("--steps", default=35, help="Number of inference steps (default: 35)")
-@click.option("--guidance", default=7.0, help="Guidance scale (CFG) (default: 7.0)")
+@click.option("--guidance", default=5.0, help="Guidance scale (CFG) (default: 5.0)")
 @click.option("--seed", default=1, help="Random seed for reproducibility (default: 1)")
 @click.option("--fps", default=24, help="Output video FPS (default: 24)")
 @click.option("--sigma-max", default=70.0, help="Maximum noise level (default: 70.0)")
@@ -125,15 +125,13 @@ def inference(
                 "Prompt ID": format_id(prompt["id"]),
                 "Prompt text": format_prompt_text(prompt["prompt_text"]),
                 "Input video": prompt["inputs"].get("video", "N/A"),
-                "Model type": prompt["model_type"],
                 "Weights": format_weights(weights_dict),
                 "Steps": str(steps),
                 "Would create": "Run specification internally",
                 "Would upload": "Prompt data and video files to remote GPU",
+                "Would execute": "Inference",
+                "Would download": "Generated video results",
             }
-
-            dry_run_data["Would execute"] = "Inference"
-            dry_run_data["Would download"] = "Generated video results"
         else:
             # Batch dry run
             dry_run_data = {
@@ -189,14 +187,14 @@ def inference(
         results_data = {
             "Prompt ID": format_id(all_prompts[0]),
             "Run ID": format_id(result["run_id"]),
-            "Status": "Started in background",
+            "Status": "Completed",
         }
 
-        display_success("Inference started successfully!", results_data)
+        # Add output path if available
+        if "output_path" in result:
+            results_data["Output"] = result["output_path"]
 
-        # Show monitoring instructions
-        console.print("\n[cyan]Monitor progress with:[/cyan]")
-        console.print("  cosmos status --stream")
+        display_success("Inference completed successfully!", results_data)
 
     else:
         # Batch inference for multiple prompts
@@ -214,9 +212,11 @@ def inference(
             )
 
             # Use batch_inference for multiple prompts
+            # Create weights_list with same weights for all prompts
+            weights_list = [weights_dict] * len(all_prompts)
             result = ops.batch_inference(
                 prompt_ids=all_prompts,
-                shared_weights=weights_dict,
+                weights_list=weights_list,
                 num_steps=steps,
                 guidance=guidance,
                 seed=seed,

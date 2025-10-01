@@ -46,6 +46,8 @@ def api(repository):
             # Mock successful enhancement
             api.orchestrator.execute_enhancement_run = lambda r, p: {
                 "enhanced_text": "Enhanced: " + p.get("prompt_text", ""),
+                "enhanced_prompt_id": f"ps_enhanced_{p['id'][-8:]}",
+                "original_prompt_id": p["id"],
                 "status": "completed",
             }
             yield api
@@ -60,7 +62,6 @@ class TestCriticalDeletionSafety:
         If this test fails, users might delete running GPU jobs.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -99,7 +100,6 @@ class TestCriticalDeletionSafety:
         If preview is wrong, users make incorrect decisions about data loss.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -135,7 +135,6 @@ class TestCriticalDeletionSafety:
 
         # No other runs should be affected
         other_prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Other",
             inputs={},
             parameters={},
@@ -153,7 +152,6 @@ class TestCriticalDeletionSafety:
         Enhancement runs are metadata operations, not real GPU work.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -163,7 +161,7 @@ class TestCriticalDeletionSafety:
         for _i in range(5):
             repository.create_run(
                 prompt_id=prompt["id"],
-                model_type="enhance",  # Not inference
+                model_type="enhance",
                 execution_config={},
             )
 
@@ -182,7 +180,6 @@ class TestCriticalDeletionSafety:
         Unclear errors lead to data loss from confused users.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -214,7 +211,6 @@ class TestCriticalDeletionSafety:
         Partial deletion could leave orphaned data.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -267,7 +263,6 @@ class TestDeletionBoundaryConditions:
     def test_empty_prompt_doesnt_require_force(self, api, repository):
         """Empty prompts (no runs) shouldn't trigger safety checks."""
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},
@@ -286,7 +281,6 @@ class TestDeletionBoundaryConditions:
         """Test enhancing an already-enhanced prompt."""
         # Create and enhance a prompt
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Original",
             inputs={},
             parameters={},
@@ -314,7 +308,6 @@ class TestDeletionBoundaryConditions:
         This simulates race conditions in a multi-user environment.
         """
         prompt = repository.create_prompt(
-            model_type="transfer",
             prompt_text="Test",
             inputs={},
             parameters={},

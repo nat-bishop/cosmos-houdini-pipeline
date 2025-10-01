@@ -70,7 +70,7 @@ def to_cosmos_inference_json(
         "input_video_path": convert_video_path(inputs.get("video", "")),
         # Additional parameters
         "num_steps": execution_config.get("num_steps", 35),
-        "guidance": execution_config.get("guidance", 7.0),
+        "guidance": execution_config.get("guidance", 5.0),
         "sigma_max": execution_config.get("sigma_max", 70.0),
         "seed": execution_config.get("seed", 42),
         "fps": execution_config.get("fps", 8),
@@ -194,6 +194,72 @@ def to_cosmos_batch_json(prompts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return batch_data
 
 
+def create_batch_base_controlnet_spec(
+    runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> dict[str, Any]:
+    """Create a base controlnet spec for batch inference.
+
+    The base spec includes all control types used by ANY prompt in the batch,
+    with default weights. Individual prompts can override these in the batch JSONL.
+
+    Args:
+        runs_and_prompts: List of (run_dict, prompt_dict) tuples
+
+    Returns:
+        Base controlnet spec with all control types found in the batch.
+        Never includes input_control paths as those are handled per-prompt.
+    """
+    # Start with minimal spec
+    base_spec = {
+        "prompt": "",
+        "input_video_path": "",
+    }
+
+    # Empty batch returns minimal spec
+    if not runs_and_prompts:
+        return base_spec
+
+    # Find first video path for input_video_path (required by NVIDIA)
+    for run_dict, prompt_dict in runs_and_prompts:
+        inputs = prompt_dict.get("inputs", {})
+        video_path = inputs.get("video", "")
+        if video_path:
+            # Use run-specific path to match upload location
+            run_id = run_dict.get("id", "")
+            base_spec["input_video_path"] = f"runs/{run_id}/inputs/videos/{Path(video_path).name}"
+            break
+
+    # Valid control types that NVIDIA supports
+    VALID_CONTROLS = {"vis", "edge", "depth", "seg"}
+
+    # Track which controls we've seen and their first weights
+    control_weights = {}
+
+    # Scan all prompts to collect unique control types
+    for run_dict, _prompt_dict in runs_and_prompts:
+        execution_config = run_dict.get("execution_config", {})
+        weights = execution_config.get("weights", {})
+
+        for control_type, weight in weights.items():
+            # Skip invalid control types
+            if control_type not in VALID_CONTROLS:
+                continue
+
+            # Skip zero or None weights
+            if weight is None or weight == 0 or weight == 0.0:
+                continue
+
+            # Use first encountered weight for each control type
+            if control_type not in control_weights:
+                control_weights[control_type] = weight
+
+    # Add all found controls to base spec (without input_control paths)
+    for control_type, weight in control_weights.items():
+        base_spec[control_type] = {"control_weight": weight}
+
+    return base_spec
+
+
 def to_cosmos_batch_inference_jsonl(
     runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
 ) -> list[dict[str, Any]]:
@@ -213,13 +279,14 @@ def to_cosmos_batch_inference_jsonl(
 
     for run_dict, prompt_dict in runs_and_prompts:
         # Get basic fields
+        run_id = run_dict["id"]
         inputs = prompt_dict.get("inputs", {})
         visual_input = inputs.get("video", "")
 
-        # Flatten video path to match actual upload location
+        # Use run-specific paths to match actual upload location
         if visual_input:
-            # Extract just the filename and put in inputs/videos/
-            visual_input = f"inputs/videos/{Path(visual_input).name}"
+            # Use run-specific path instead of generic inputs/videos/
+            visual_input = f"runs/{run_id}/inputs/videos/{Path(visual_input).name}"
 
         # Build the JSONL line
         line = {
@@ -233,43 +300,59 @@ def to_cosmos_batch_inference_jsonl(
 
         control_overrides = {}
 
-        # Handle segmentation control
-        seg_weight = weights.get("seg", 0.25)
-        if seg_weight > 0:
-            seg_input = inputs.get("seg", "")
-            if seg_input:
-                # Use provided segmentation video (flattened path)
-                control_overrides["seg"] = {
-                    "input_control": f"inputs/videos/{Path(seg_input).name}",
-                    "control_weight": seg_weight,
-                }
-            else:
-                # Auto-generate segmentation (null means auto-generate)
-                control_overrides["seg"] = {"input_control": None, "control_weight": seg_weight}
+        # Handle segmentation control - only include if specified in weights
+        if "seg" in weights:
+            seg_weight = weights["seg"]
+            if seg_weight > 0:
+                seg_input = inputs.get("seg", "")
+                if seg_input:
+                    # Use provided segmentation video (run-specific path)
+                    control_overrides["seg"] = {
+                        "input_control": f"runs/{run_id}/inputs/videos/{Path(seg_input).name}",
+                        "control_weight": seg_weight,
+                    }
+                else:
+                    # Auto-generate segmentation (null means auto-generate)
+                    control_overrides["seg"] = {"input_control": None, "control_weight": seg_weight}
 
-        # Handle depth control
-        depth_weight = weights.get("depth", 0.25)
-        if depth_weight > 0:
-            depth_input = inputs.get("depth", "")
-            if depth_input:
-                # Use provided depth video (flattened path)
-                control_overrides["depth"] = {
-                    "input_control": f"inputs/videos/{Path(depth_input).name}",
-                    "control_weight": depth_weight,
-                }
-            else:
-                # Auto-generate depth (null means auto-generate)
-                control_overrides["depth"] = {"input_control": None, "control_weight": depth_weight}
+        # Handle depth control - only include if specified in weights
+        if "depth" in weights:
+            depth_weight = weights["depth"]
+            if depth_weight > 0:
+                depth_input = inputs.get("depth", "")
+                if depth_input:
+                    # Use provided depth video (run-specific path)
+                    control_overrides["depth"] = {
+                        "input_control": f"runs/{run_id}/inputs/videos/{Path(depth_input).name}",
+                        "control_weight": depth_weight,
+                    }
+                else:
+                    # Auto-generate depth (null means auto-generate)
+                    control_overrides["depth"] = {
+                        "input_control": None,
+                        "control_weight": depth_weight,
+                    }
 
-        # Handle visual (vis) control - always auto-generated
-        vis_weight = weights.get("vis", 0.25)
-        if vis_weight > 0:
-            control_overrides["vis"] = {"control_weight": vis_weight}
+        # Handle visual (vis) control - only include if specified in weights
+        if "vis" in weights:
+            vis_weight = weights["vis"]
+            if vis_weight > 0:
+                control_overrides["vis"] = {"control_weight": vis_weight}
 
-        # Handle edge control - always auto-generated
-        edge_weight = weights.get("edge", 0.25)
-        if edge_weight > 0:
-            control_overrides["edge"] = {"control_weight": edge_weight}
+        # Handle edge control - only include if specified in weights
+        if "edge" in weights:
+            edge_weight = weights["edge"]
+            if edge_weight > 0:
+                edge_input = inputs.get("edge", "")
+                if edge_input:
+                    # Use provided edge video (run-specific path)
+                    control_overrides["edge"] = {
+                        "input_control": f"runs/{run_id}/inputs/videos/{Path(edge_input).name}",
+                        "control_weight": edge_weight,
+                    }
+                else:
+                    # Auto-generate edge
+                    control_overrides["edge"] = {"control_weight": edge_weight}
 
         # Only add control_overrides if there are any
         if control_overrides:

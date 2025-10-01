@@ -59,7 +59,7 @@ class TestGPUExecutorUpscaling:
 
         def mock_run_upscaling(video_path, run_id, control_weight, prompt=None, **kwargs):
             return {
-                "status": "started",
+                "status": "completed",
                 "log_path": f"outputs/run_{run_id}/logs/upscaling.log",
                 "video_path": video_path,
             }
@@ -142,7 +142,10 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
-                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
+                            # GPU executor expects synchronous completion with "completed" or "failed"
+                            mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
                             mock_remote.file_exists = Mock(return_value=True)
 
@@ -157,7 +160,7 @@ class TestGPUExecutorUpscaling:
 
                             # Assert
                             mock_mkdir.assert_called()
-                            assert result["status"] == "started"
+                            assert result["status"] == "completed"
                             assert "run_id" in result
                             assert result["run_id"] == "rs_upscale456"
 
@@ -175,7 +178,10 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
-                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
+                            # GPU executor expects synchronous completion with "completed" or "failed"
+                            mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
                             mock_remote.file_exists = Mock(return_value=True)
 
@@ -210,7 +216,10 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
-                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
+                            # GPU executor expects synchronous completion with "completed" or "failed"
+                            mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
                             mock_remote.file_exists = Mock(
                                 return_value=False
@@ -226,7 +235,7 @@ class TestGPUExecutorUpscaling:
 
                             # Assert - check video was uploaded
                             mock_ft.upload_file.assert_called()
-                            assert result["status"] == "started"
+                            assert result["status"] == "completed"
                             assert "run_id" in result
 
     def test_execute_upscaling_run_handles_docker_failure(
@@ -269,8 +278,10 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
                             mock_docker.run_upscaling.return_value = {
-                                "status": "started",
+                                "status": "completed",
                                 "duration_seconds": 180,
                             }
                             mock_remote.execute_command = Mock()
@@ -286,7 +297,7 @@ class TestGPUExecutorUpscaling:
                             # Assert - check result structure
                             assert "status" in result
                             assert "run_id" in result
-                            assert result["status"] == "started"
+                            assert result["status"] == "completed"
                             assert "log_path" in result
 
     def test_execute_upscaling_run_initializes_services(
@@ -303,7 +314,10 @@ class TestGPUExecutorUpscaling:
                             # Setup mocks
                             mock_ssh.__enter__ = Mock(return_value=mock_ssh)
                             mock_ssh.__exit__ = Mock(return_value=None)
-                            mock_docker.run_upscaling.return_value = {"status": "started"}
+                            # Mock ssh_manager.execute_command to return 3-tuple
+                            mock_ssh.execute_command = Mock(return_value=(0, "", ""))
+                            # GPU executor expects synchronous completion with "completed" or "failed"
+                            mock_docker.run_upscaling.return_value = {"status": "completed"}
                             mock_remote.execute_command = Mock()
                             mock_remote.file_exists = Mock(return_value=True)
 

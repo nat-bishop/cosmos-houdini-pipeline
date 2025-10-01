@@ -1,5 +1,211 @@
 # API Reference
 
+## Recent Updates (2025-01-19)
+
+### Batch Inference Improvements
+
+The batch inference system has been significantly enhanced with several critical fixes:
+
+#### Fixed Issues
+- **Script Compatibility**: Resolved CRLF/LF line ending issues on Windows that caused "No such file or directory" errors
+- **Parameter Requirements**: Added required `--controlnet_specs` parameter with base specification for NVIDIA batch inference
+- **Output Structure**: Fixed batch output handling to properly process video_X subdirectory structure
+- **File Naming**: Updated control file handling to support _0 suffix naming convention from batch operations
+- **Logging**: Corrected log path handling to use shared batch logs instead of individual run logs
+
+#### Technical Implementation
+```
+# Batch inference now properly handles output structure
+outputs/batch_xxx/
+├── video_0/
+│   ├── output.mp4          # Main output video
+│   ├── depth_input_control_0.mp4   # Generated depth control
+│   ├── edge_input_control_0.mp4    # Generated edge control
+│   └── seg_input_control_0.mp4     # Generated segmentation control
+├── video_1/
+│   └── ...
+└── execution.log           # Shared batch log
+```
+
+### Enhancement System Fixes
+
+The prompt enhancement system has been stabilized with these critical fixes:
+
+#### Threading and Connection Issues
+- **Removed Thread-Local Storage**: Eliminated incorrect thread-local implementation in legacy QueueService that caused SSH connection failures
+- **Connection Stability**: Enhanced SSH connection management for long-running enhancement operations
+- **Message Filtering**: Fixed legacy queue service spamming "GPU busy" messages during operations
+
+#### Duplicate Creation Prevention
+```python
+# Fixed duplicate prompt creation in enhancement workflow
+def enhance_prompt(self, prompt_id, create_new=True, force_overwrite=False):
+    # Now properly handles status validation
+    if status not in ["started", "completed"]:
+        raise ValueError(f"Unexpected enhancement status: {status}")
+    # Prevents duplicate prompt creation
+    if create_new and not force_overwrite:
+        # Validates before creation
+```
+
+#### Error Handling Improvements
+- **Status Validation**: Now only accepts "started" or "completed" status from execute_enhancement_run
+- **Fast Failure**: Fails immediately on unexpected status instead of attempting recovery
+- **Legacy Code Removal**: Cleaned up deprecated code paths that caused inconsistent behavior
+
+### UI Filter Enhancement
+
+Added new "Run Status" filter in Prompts tab for improved workflow management:
+
+#### Filter Options
+- **All**: Shows all prompts regardless of run status
+- **No Runs**: Shows only prompts that haven't been used for inference yet
+- **Has Runs**: Shows only prompts that have associated inference runs
+
+#### Implementation Details
+```python
+# Filter logic for run status
+def filter_prompts_by_run_status(prompts, run_status_filter):
+    if run_status_filter == "No Runs":
+        return [p for p in prompts if not p.get("run_count", 0)]
+    elif run_status_filter == "Has Runs":
+        return [p for p in prompts if p.get("run_count", 0) > 0]
+    else:  # "All"
+        return prompts
+```
+
+## Smart Batching System (2025-09-26) - COMPLETED
+
+### Overview
+
+The Smart Batching system provides **2-5x performance improvements** through intelligent run-level optimization and queue reorganization. The complete implementation features enhanced APIs, run-level batching, and individual control weights per prompt.
+
+### Key Features
+
+- **Run-Level Optimization**: Extracts individual runs from jobs and reorganizes into optimal batches
+- **Enhanced batch_inference API**: Now accepts weights_list (different weights per prompt) instead of shared_weights
+- **Two Batching Modes**: Strict (identical controls, fastest) and Mixed (different controls, fewer batches)
+- **Queue Reorganization Only**: execute_smart_batches() creates optimized JobQueue entries without executing jobs
+- **Conservative Memory Management**: Safe batch sizing with GPU memory considerations
+- **Database-First Design**: Atomic job management with queue state validation
+
+### Smart Batching API Methods
+
+#### SimplifiedQueueService Smart Batching Methods
+
+**`analyze_queue_for_smart_batching(mix_controls: bool = False) -> dict[str, Any] | None`**
+
+Analyzes queued jobs for batching opportunities.
+
+**Parameters:**
+- `mix_controls`: If True, use mixed mode (master batch approach). If False, use strict mode (identical controls only).
+
+**Returns:**
+- Analysis dictionary with batches and efficiency metrics, or None if no batchable jobs found.
+
+**Example:**
+```python
+queue_service = SimplifiedQueueService()
+analysis = queue_service.analyze_queue_for_smart_batching(mix_controls=False)
+if analysis:
+    print(f"Estimated speedup: {analysis['efficiency']['estimated_speedup']:.1f}x")
+    print(f"Jobs: {analysis['efficiency']['job_count_before']} → {analysis['efficiency']['job_count_after']} batches")
+```
+
+**`execute_smart_batches() -> dict[str, Any]`**
+
+Reorganizes the queue based on smart batch analysis (does NOT execute jobs). Creates new optimized JobQueue entries and deletes originals.
+
+**Returns:**
+- Dictionary with reorganization metrics: jobs_deleted, batches_created, mode, message
+
+**Example:**
+```python
+# Must analyze first, then execute
+analysis = queue_service.analyze_queue_for_smart_batching()
+if analysis:
+    results = queue_service.execute_smart_batches()
+    print(f"Reorganized {results['jobs_deleted']} jobs into {results['batches_created']} batches")
+    print(f"Mode: {results['mode']}")
+    print(f"Message: {results['message']}")
+```
+
+**`get_smart_batch_preview() -> str`**
+
+Returns human-readable preview of stored analysis.
+
+**Returns:**
+- Preview string showing batch breakdown and efficiency metrics, or empty string if no analysis.
+
+**Example:**
+```python
+preview = queue_service.get_smart_batch_preview()
+print(preview)  # Shows batch breakdown and estimated performance gains
+```
+
+### Core Smart Batching Algorithms
+
+Located in `cosmos_workflow/utils/smart_batching.py`, these functions provide the core batching logic:
+
+#### Control Signature Functions
+
+**`get_control_signature(job_config: dict) -> tuple[str, ...]`**
+
+Extracts sorted tuple of active controls from job configuration.
+
+**`filter_batchable_jobs(jobs: list) -> list`**
+
+Filters jobs to only include batchable types (inference and batch_inference).
+
+#### Batching Algorithms
+
+**`group_runs_strict(jobs: list, max_batch_size: int) -> list[dict]`**
+
+Groups runs with identical control signatures AND execution params for maximum efficiency.
+
+**`group_runs_mixed(jobs: list, max_batch_size: int) -> list[dict]`**
+
+Groups runs by execution params only, allowing mixed control types for fewer batches.
+
+#### Memory Management
+
+**`get_safe_batch_size(num_controls: int, user_max: int = 16) -> int`**
+
+Conservative batch sizing based on control count:
+- 1 control: max 8 jobs per batch
+- 2 controls: max 4 jobs per batch
+- 3+ controls: max 2 jobs per batch
+
+#### Analysis Functions
+
+**`calculate_batch_efficiency(batches: list[dict], original_jobs: list) -> dict`**
+
+Calculates comprehensive efficiency metrics including estimated speedup and control reduction.
+
+### Usage Workflow
+
+1. **Pause Queue**: Queue must be paused before analysis to ensure consistent state
+2. **Analyze**: Call `analyze_queue_for_smart_batching()` to examine current jobs
+3. **Preview**: Use `get_smart_batch_preview()` to review the proposed batching
+4. **Execute**: Call `execute_smart_batches()` to run the optimized batches
+5. **Resume**: Unpause queue to continue normal processing
+
+### Performance Characteristics
+
+- **Strict Mode**: Best for queues with many identical jobs (same control weights)
+- **Mixed Mode**: Optimal for diverse jobs with different control combinations
+- **Memory Safety**: Conservative batch sizes prevent GPU OOM based on control complexity
+- **Efficiency Gains**: Typical 2-5x speedup through reduced model loading and GPU initialization overhead
+
+### Test Coverage
+
+The smart batching system includes comprehensive test coverage:
+- **48 total tests** across unit and integration test suites
+- **Core algorithm tests**: Control signature extraction, job grouping, efficiency calculations
+- **Service integration tests**: Queue analysis, batch execution, error handling
+- **Performance benchmarks**: Validates speedup claims in controlled scenarios
+- **Memory safety tests**: Ensures conservative batch sizing prevents OOM errors
+
 Complete API documentation for the Cosmos Workflow System.
 
 ## Table of Contents
@@ -147,7 +353,11 @@ print(f"Output: {result['output_path']}")
 # Batch inference for multiple prompts
 results = ops.batch_inference(
   prompt_ids=["ps_001", "ps_002", "ps_003"],
-  shared_weights={"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25}
+  weights_list=[
+    {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
+    {"vis": 0.30, "edge": 0.20, "depth": 0.30, "seg": 0.20},
+    {"vis": 0.40, "edge": 0.30, "depth": 0.20, "seg": 0.10}
+  ]
 )
 
 # List and search operations
@@ -261,9 +471,9 @@ kill_cmd = DockerCommandBuilder.build_kill_command(["container1", "container2"])
 - `cosmos show ps_xxxxx [--json]` - Detailed prompt view with run history
 
 #### GPU Execution
-- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally, non-blocking)
-- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run, non-blocking)
-- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt, non-blocking)
+- `cosmos inference ps_xxxxx [ps_xxx2 ...]` - Execute inference on prompts (creates runs internally, blocks until complete)
+- `cosmos upscale rs_xxxxx [--weight 0.5]` - Upscale completed inference run to 4K (creates separate run, blocks until complete)
+- `cosmos prompt-enhance ps_xxxxx [--resolution 480]` - AI prompt enhancement (creates new prompt, blocks until complete)
 - `cosmos prepare input_dir [--name scene]` - Prepare video sequences for inference
 - `cosmos status [--stream]` - Check GPU status or stream container logs
 - `cosmos kill [--force]` - Kill all running Cosmos containers on GPU instance
@@ -707,7 +917,7 @@ cosmos verify --fix   # Fix integrity issues automatically
 ```
 
 ### ui
-Launch the advanced Gradio web interface with Operations tab and enhanced controls.
+Launch the advanced Gradio web interface with comprehensive run management and enhanced controls.
 
 ```bash
 cosmos ui [OPTIONS]
@@ -715,6 +925,12 @@ cosmos ui [OPTIONS]
 
 **Features:**
 - **Operations Tab**: Two-column layout with prompt selection and inference controls
+- **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
+- **Enhanced Status Indicators**: Visual indicators for AI-enhanced prompts with enhanced status checkbox
+- **Multi-tab Run Details**: General, Parameters, Logs, and Output tabs for comprehensive run information
+- **Advanced Filtering**: Multi-criteria filtering by status, date range, and text search capabilities
+- **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
+- **Professional Design System**: Gradient animations, glassmorphism effects, and loading skeleton animations
 - **Inference Controls**: Adjustable weights for visual, edge, depth, segmentation (0.0-1.0)
 - **AI Enhancement**: Pixtral model integration for prompt enhancement
 - **Theme System**: Automatic dark/light mode with system preference detection
@@ -732,10 +948,23 @@ cosmos ui --share            # Create public share link
 ```
 
 **Interface Tabs:**
-- **Operations**: New two-column interface for prompt selection and inference execution
-- **Gallery**: Visual browsing of generated videos with metadata
-- **Logs**: Real-time log streaming with advanced filtering and theme support
-- **Status**: GPU monitoring and container management
+- **Inputs**: Input video browser with create prompt functionality and multimodal preview
+- **Prompts**: Unified prompt management and operations with enhanced status indicators
+- **Outputs**: Generated video gallery with comprehensive metadata and download capabilities
+- **Run History**: Advanced run filtering, search, statistics, and batch management system
+- **Active Jobs**: Real-time container monitoring with auto-refresh and log streaming interface
+
+**Run History Features:**
+- **Filtering System**: Filter by status (all/completed/running/pending/failed/cancelled), date range (all/today/yesterday/last 7 days/last 30 days)
+- **Text Search**: Real-time search across prompt text and run IDs with instant results
+- **Statistics Panel**: Total runs, status breakdown, and success rate calculations
+- **Batch Operations**: Select All/Clear Selection with batch delete functionality
+- **Run Details Tabs**:
+  - **General**: Run ID, status, duration, prompt information, created/completed timestamps
+  - **Parameters**: Control weights (JSON), inference parameters (JSON)
+  - **Logs**: Log file path, full log content viewer with copy button
+  - **Output**: Generated video preview, output path, download/delete buttons
+- **Professional UI**: Card layouts with glassmorphism effects, hover animations, and loading states
 
 ### upscale
 Upscale video to 4K resolution using AI enhancement (Phase 1 Refactor - Video-Agnostic).
@@ -806,6 +1035,137 @@ cosmos show run rs_upscale_xyz789
 - Control weight range: 0.0-1.0 (validates before execution)
 - GPU cluster must have sufficient memory for 4K upscaling operations
 - Separate Docker container execution independent of inference processes
+
+### SimplifiedQueueService - Streamlined Job Queue System
+
+The SimplifiedQueueService provides comprehensive job queue management for the Gradio UI, implementing a simplified, reliable queuing system that wraps CosmosAPI using database-level concurrency control instead of application locks.
+
+**Architecture:** The queue system is EXCLUSIVELY for the Gradio UI. The CLI continues to use direct CosmosAPI calls without queuing, maintaining separate execution paths for different interfaces.
+
+**Key Improvements Over Legacy QueueService:**
+- **No Threading Complexity**: Eliminates background threads and application-level locks
+- **Database-First Concurrency**: Uses `SELECT ... FOR UPDATE SKIP LOCKED` for atomic job claiming
+- **Single Warm Container**: Maintains one container preventing accumulation issues
+- **Timer-Based Processing**: Uses Gradio Timer component for 2-second intervals
+- **Linear Execution**: Simple, predictable execution flow
+- **Fresh Database Sessions**: Prevents stale data through session management
+
+**Key Features:**
+- **Thread-Safe Design**: Uses `_job_processing_lock` to prevent race conditions when claiming jobs
+- **GPU Conflict Prevention**: Checks actual running Docker containers before processing new jobs
+- **SQLite Persistence**: Queue state survives UI restarts and maintains complete job history
+- **FIFO Processing**: First-in, first-out job processing with position tracking
+- **Background Processing**: Automatic job execution without blocking UI interaction
+- **Single Container Paradigm**: Only one job runs at a time due to GPU limitations
+- **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed/cancelled jobs (keeps last 50)
+- **Enhanced Job Control**: Cancel selected jobs from queue table and kill active jobs with database updates
+- **Auto-Refresh**: 5-second timer for real-time queue status updates
+- **Graceful Shutdown**: Marks running jobs as cancelled when app closes to maintain state consistency
+
+#### Core Features
+
+```python
+from cosmos_workflow.services.simple_queue_service import SimplifiedQueueService
+from cosmos_workflow.api import CosmosAPI
+from cosmos_workflow.database import DatabaseConnection
+
+# Initialize simplified queue service
+cosmos_api = CosmosAPI()
+db_connection = DatabaseConnection()
+queue_service = SimplifiedQueueService(cosmos_api=cosmos_api, db_connection=db_connection)
+
+# Add job to queue
+job_id = queue_service.add_job(
+    prompt_ids=["ps_abc123"],
+    job_type="inference",
+    config={
+        "weights": {"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
+        "num_steps": 25,
+        "guidance_scale": 4.0
+    },
+    priority=50
+)
+
+# Check queue status
+status = queue_service.get_queue_status()
+print(f"Total queued: {status['total_queued']}")
+
+# Get job position
+position = queue_service.get_position(job_id)
+print(f"Position in queue: {position}")
+
+# Process next job (timer-based processing handles this automatically)
+result = queue_service.process_next_job()
+```
+
+#### Supported Job Types
+
+**1. Single Inference (`job_type="inference"`):**
+- Executes single prompt inference with configurable parameters
+- Supports all control weights (visual, edge, depth, segmentation)
+- Configuration includes num_steps, guidance_scale, seed, fps, etc.
+
+**2. Batch Inference (`job_type="batch_inference"`):**
+- Processes multiple prompts together for efficiency (40% faster)
+- Shared weights configuration applied to all prompts in batch
+- Automatic output splitting into individual run directories
+
+**3. AI Enhancement (`job_type="enhancement"`):**
+- Uses Pixtral model for intelligent prompt enhancement
+- Supports create_new and force_overwrite modes
+- Configuration includes enhancement model selection
+
+**4. Video Upscaling (`job_type="upscale"`):**
+- 4K upscaling of any video source (not just inference outputs)
+- Supports optional prompt guidance for AI-directed enhancement
+- Configuration includes video_source, control_weight, and optional prompt
+
+#### Queue Management
+
+```python
+# Processing is handled automatically by Gradio Timer component
+# No need to start/stop background processors
+
+# Cancel a queued job (only works for "queued" status)
+cancelled = queue_service.cancel_job(job_id)
+
+# Completed jobs are automatically cleaned up
+# No manual cleanup needed
+
+# Get estimated wait time
+wait_time = queue_service.get_estimated_wait_time(job_id)
+
+# Set batch size for GPU processing
+queue_service.set_batch_size(4)
+
+# Ensure container is ready for processing
+container_id = queue_service.ensure_container()
+```
+
+#### Database Integration
+
+The SimplifiedQueueService uses the JobQueue model for persistence with enhanced concurrency control:
+
+```python
+# JobQueue model fields:
+# - id: Unique job identifier (job_xxxxx format)
+# - prompt_ids: JSON list of prompt IDs to process
+# - job_type: Type of operation (inference, batch_inference, enhancement)
+# - status: Current status (queued, running, completed, failed, cancelled)
+# - config: JSON configuration parameters
+# - created_at, started_at, completed_at: Timestamps
+# - result: JSON results after completion
+# - priority: Integer priority (higher = more important)
+```
+
+#### Key Design Principles
+
+- **UI-Only**: Queue system designed specifically for Gradio UI experience
+- **FIFO Processing**: Jobs processed in creation order (first in, first out)
+- **Synchronous Execution**: Maintains existing synchronous execution model
+- **Wrapper Pattern**: Wraps existing CosmosAPI methods without changing their behavior
+- **Background Processing**: Automatic job execution via background thread
+- **Status Persistence**: Queue state persisted in SQLite database
 
 ## Log Visualization
 
@@ -989,205 +1349,177 @@ with gr.Tab("Generate"):
     gr.Timer(fn=update_logs, outputs=[log_display], active=True)
 ```
 
-## StatusChecker - Lazy Container Monitoring
+## Synchronous Execution Model
 
-The StatusChecker provides reliable container status monitoring using a lazy evaluation approach that eliminates the problems with background threads dying when CLI commands exit.
+The Cosmos Workflow System now uses a fully synchronous execution model that eliminates the complexity of background monitoring and provides immediate, reliable operation completion.
 
 ### Overview
 
-The StatusChecker replaces the previous async background monitoring system with a lazy evaluation pattern:
+The synchronous execution model provides:
 
-- **Lazy Evaluation**: Status checks occur only when users query run data via get_run() or list_runs()
-- **Container Exit Markers**: Reads [COSMOS_COMPLETE] markers from container logs to determine final status
-- **Automatic Downloads**: Downloads output files when containers complete successfully
-- **Model Support**: Handles all supported model types (inference, enhancement, upscaling) appropriately
+- **Blocking Operations**: All GPU operations block until completion, returning final status
+- **Direct Exit Code Handling**: Container exit codes processed immediately
+- **Immediate Output Downloads**: Outputs downloaded synchronously after container completion
+- **Real-time Status Updates**: Database status updated during execution, not after
 
 ### Key Features
 
-**Lazy Sync Integration**
+**Synchronous API Usage**
 ```python
 from cosmos_workflow.api import CosmosAPI
 
-# StatusChecker is automatically initialized and used transparently
+# All operations block until complete
 ops = CosmosAPI()
 
-# These operations trigger lazy sync for "running" containers
-run_data = ops.get_run("rs_abc123")  # StatusChecker automatically checks container
-runs = ops.list_runs()  # StatusChecker syncs all running containers
+# This blocks until inference is finished
+result = ops.quick_inference("ps_abc123")
+if result["status"] == "completed":
+    print(f"Output ready: {result['output_path']}")
+else:
+    print(f"Failed: {result.get('error', 'Unknown error')}")
 ```
 
-**Exit Marker Detection**
+**Direct Container Execution**
 ```python
-from cosmos_workflow.execution.status_checker import StatusChecker
-
-# StatusChecker reads completion markers from container logs
-# Shell scripts write markers like: [COSMOS_COMPLETE] exit_code=0
-checker = StatusChecker(ssh_manager, config_manager, file_transfer)
-
-# Parse completion markers
-exit_code = checker.parse_completion_marker(log_content)
-# Returns: 0 for success, 1+ for failure, None if not complete
+# Docker containers run without -d flag, naturally blocking
+# Exit codes handled immediately:
+# 0 = success → status="completed", outputs downloaded
+# non-zero = failure → status="failed", error logged
 ```
 
-**Automatic Output Downloads**
-```python
-# When containers complete, StatusChecker automatically downloads outputs:
-# - inference: output.mp4 → outputs/run_rs_abc123/outputs/output.mp4
-# - enhancement: batch_results.json with enhanced text
-# - upscaling: output_4k.mp4 for upscaled videos
-
-outputs = checker.download_outputs(run_data)
-# Returns: {"output_path": "/path/to/file", "completed_at": "2024-01-01T12:00:00Z"}
+**Configuration-driven Timeouts**
+```toml
+# config.toml
+[execution]
+docker_execution = 3600  # 1 hour timeout for inference/upscaling
+enhancement_timeout = 1800  # 30 minutes for AI enhancement
 ```
 
 ### Architecture Benefits
 
-**Solves CLI Exit Problem**
-- Previous background monitoring threads would die when CLI commands exited
-- Lazy evaluation only activates when users actually query run status
-- No background thread lifecycle management required
-- More reliable than async approaches that depend on process lifetime
+**Eliminates Background Complexity**
+- No background threads that die with CLI exit
+- No container status polling or monitoring
+- No lazy evaluation or completion detection
+- No race conditions between monitoring and database updates
 
-**Container Exit Detection**
-```bash
-# Shell scripts (inference.sh, upscale.sh, batch_inference.sh) write completion markers:
-echo "[COSMOS_COMPLETE] exit_code=${EXIT_CODE}" >> "${OUTPUT_DIR}/run.log"
+**Immediate Feedback**
+```python
+# Before (async): Operations returned "started" status
+result = ops.quick_inference("ps_abc123")
+# Returns: {"status": "started", "run_id": "rs_xyz"}
+
+# Now (sync): Operations return final completion status
+result = ops.quick_inference("ps_abc123")
+# Returns: {"status": "completed", "output_path": "/outputs/...", "duration": 245.6}
 ```
 
-**Integration Points**
-- StatusChecker initialized in DataRepository for automatic lazy sync
-- CosmosAPI automatically initializes StatusChecker when dependencies available
-- No changes required to CLI commands or user-facing APIs
-- Maintains facade pattern integrity while adding monitoring capabilities
-
-### Methods
-
+**Single Container Paradigm**
 ```python
-class StatusChecker:
-    def parse_completion_marker(self, log_content: str) -> Optional[int]:
-        """Parse [COSMOS_COMPLETE] marker from log content.
-
-        Args:
-            log_content: Container log file content
-
-        Returns:
-            Exit code if found, None if container still running
-        """
-
-    def check_container_status(self, container_name: str) -> Dict[str, Any]:
-        """Check Docker container status via docker inspect.
-
-        Args:
-            container_name: Name of container (e.g., cosmos_transfer_abc12345)
-
-        Returns:
-            Dict with running status and exit code
-        """
-
-    def check_run_completion(self, run_id: str) -> Optional[int]:
-        """Check if run completed by reading log file for completion marker.
-
-        Args:
-            run_id: Run ID to check
-
-        Returns:
-            Exit code if completed, None if still running
-        """
-
-    def download_outputs(self, run_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Download output files for completed run.
-
-        Args:
-            run_data: Run data with id and model_type
-
-        Returns:
-            Dict with output paths and completion timestamp
-        """
-
-    def sync_run_status(self, run_data: Dict[str, Any], data_service: Any) -> Dict[str, Any]:
-        """Sync status of running container and download outputs if complete.
-
-        This is the main method called by DataRepository for lazy sync.
-
-        Args:
-            run_data: Dictionary with run information
-            data_service: DataRepository service for updating status
-
-        Returns:
-            Updated run data dictionary
-        """
+# System enforces single container operations for reliable resource management
+# Active Jobs tab provides real-time monitoring of single running container
+# Auto-refresh and status monitoring ensure reliable operation tracking
+ops = CosmosAPI()
+status = ops.check_status()  # Comprehensive system status
+containers = ops.get_active_containers()  # Running container info
 ```
 
 ### Usage Examples
 
-**Transparent Integration**
+**CLI Operations**
+```bash
+# All CLI commands now block until completion
+cosmos inference ps_abc123  # Waits for inference to finish
+# Output: "✅ Inference completed for ps_abc123"
+#         "📁 Output: outputs/run_rs_xyz789/output.mp4"
+
+cosmos prompt-enhance ps_abc123  # Waits for enhancement
+# Output: "✅ Enhanced prompt created: ps_def456"
+```
+
+**API Integration**
 ```python
-# StatusChecker works transparently through existing APIs
 ops = CosmosAPI()
 
-# Start inference
-result = ops.quick_inference("ps_abc123")
-run_id = result["run_id"]  # e.g., "rs_xyz789"
+# Single inference - blocks until done
+result = ops.quick_inference(
+    prompt_id="ps_abc123",
+    weights={"vis": 0.3, "edge": 0.3, "depth": 0.2, "seg": 0.2},
+    stream_output=True  # Show real-time progress in CLI
+)
 
-# Later: Check status (triggers lazy sync if container completed)
-run_data = ops.get_run(run_id)
-if run_data["status"] == "completed":
-    print(f"Output: {run_data['outputs']['output_path']}")
+# Batch inference - processes sequentially
+results = ops.batch_inference(
+    prompt_ids=["ps_001", "ps_002", "ps_003"],
+    weights_list=[
+      {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
+      {"vis": 0.30, "edge": 0.20, "depth": 0.30, "seg": 0.20},
+      {"vis": 0.40, "edge": 0.30, "depth": 0.20, "seg": 0.10}
+    ]
+)
 ```
 
-**Manual StatusChecker Usage (Advanced)**
+**Gradio UI Integration**
 ```python
-from cosmos_workflow.execution.status_checker import StatusChecker
-from cosmos_workflow.connection import SSHManager
-from cosmos_workflow.config import ConfigManager
-from cosmos_workflow.transfer import FileTransferService
+# UI operations use gr.Progress() for real-time feedback
+def run_inference_on_selected(dataframe_data, weights, progress=None):
+    if progress is None:
+        progress = gr.Progress()
 
-# Initialize components (normally done automatically)
-ssh_manager = SSHManager(ssh_options)
-config_manager = ConfigManager()
-file_transfer = FileTransferService(ssh_manager, remote_dir)
+    progress(0.1, desc="Initializing inference...")
 
-# Create StatusChecker
-checker = StatusChecker(ssh_manager, config_manager, file_transfer)
+    result = ops.quick_inference(
+        prompt_id=selected_ids[0],
+        weights=weights,
+        stream_output=False,  # Clean UI without console output
+        # ... other parameters
+    )
 
-# Check specific run
-run_data = {"id": "rs_abc123", "model_type": "inference", "status": "running"}
-data_service = DataRepository()
+    progress(1.0, desc="Inference complete!")
 
-# Sync status (downloads outputs if complete)
-updated_run = checker.sync_run_status(run_data, data_service)
-print(f"Status: {updated_run['status']}")
+    if result.get("status") == "completed":
+        return f"✅ Inference completed", "Idle"
+    else:
+        return f"❌ Failed: {result.get('error')}", "Idle"
 ```
 
-### Design Philosophy
+### Error Handling
 
-**Lazy Evaluation vs Background Monitoring**
+**Immediate Error Detection**
+- Container failures detected through exit codes
+- Network issues cause immediate operation failure
+- No timeout-based error detection needed
+- Cleaner error propagation through execution stack
 
-Previous Approach (Background Threads):
-- Launched background threads to monitor containers
-- Threads would die when CLI commands exited
-- Complex lifecycle management and error handling
-- Race conditions between threads and database updates
+**Timeout Management**
+```python
+# Timeouts configured per operation type
+TIMEOUTS = {
+    "inference": config.get("execution", {}).get("docker_execution", 3600),
+    "upscaling": config.get("execution", {}).get("docker_execution", 3600),
+    "enhancement": config.get("execution", {}).get("enhancement_timeout", 1800)
+}
+```
 
-Current Approach (Lazy Evaluation):
-- Check status only when users query run data
-- No background processes to manage
-- More predictable and reliable
-- Eliminates CLI exit dependencies
+### Migration Benefits
 
-**When Status Checks Occur**
+**Simplified Codebase**
+- Removed StatusChecker class and all monitoring infrastructure
+- Eliminated background thread management
+- No more container lifecycle complexity
+- Direct execution flow from start to completion
 
-StatusChecker activates during:
-- `CosmosAPI.get_run(run_id)` - Single run queries
-- `CosmosAPI.list_runs()` - Bulk run queries
-- Any DataRepository method that returns run data
+**Improved Reliability**
+- No more orphaned "running" runs
+- Database always reflects actual operation state
+- No CLI exit dependencies
+- Predictable execution behavior
 
-StatusChecker does NOT activate during:
-- Run creation or initial execution
-- Background processes (there are none)
-- Periodic polling or scheduled checks
-
-This lazy approach ensures monitoring happens exactly when needed without unnecessary overhead or reliability issues.
+**Better User Experience**
+- Immediate completion feedback
+- Real-time progress in UI with container status monitoring
+- Clear success/failure indication
+- No more "check status later" workflows
 
 ## Core Modules
 
@@ -1363,6 +1695,14 @@ Manages secure database connections with automatic session handling.
 - JSON storage for execution configuration and outputs
 - Automatic timestamp management for audit trail
 
+**JobQueue Model:**
+- Queue management for Gradio UI job processing (CLI uses direct CosmosAPI calls)
+- Supports four job types: inference, batch_inference, enhancement, upscale
+- FIFO processing order with priority support for future enhancement
+- Complete status tracking: queued → running → completed/failed/cancelled
+- SQLite persistence ensures queue survives UI restarts and maintains job history
+- Thread-safe design with atomic job claiming to prevent race conditions
+
 
 #### Helper Functions
 
@@ -1437,7 +1777,7 @@ run_data = service.create_run(
     "output_dir": "/outputs/run_001"
   },
   metadata={"user": "NAT", "priority": "high"},
-  initial_status="pending"  # or "queued", "running", etc.
+  initial_status="pending"  # or "running", "completed", "failed", etc.
 )
 # Returns: {"id": "rs_wxyz5678", "prompt_id": "ps_abcd1234", ...}
 
@@ -1481,7 +1821,7 @@ run = service.get_run("rs_wxyz5678")
 - Dictionary returns optimized for CLI display (not raw ORM objects)
 - Support for flexible JSON fields enabling future model extensibility
 - Deterministic prompt ID generation, UUID-based run ID generation
-- Configurable initial status for runs enabling queue management
+- Configurable initial status for runs enabling lifecycle management
 - Parameterized logging throughout for debugging and audit trails
 
 **Error Handling:**
@@ -1507,7 +1847,7 @@ result = ops.quick_inference(
   prompt_id="ps_abc123",
   weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1},
   num_steps=35,
-  guidance=7.0
+  guidance=5.0
 )
 # Returns: {"run_id": "rs_xyz789", "output_path": "/outputs/result.mp4", "status": "success"}
 
@@ -1528,7 +1868,11 @@ upscale_result = ops.upscale(
 # Batch inference method - accepts list of prompt_ids
 batch_result = ops.batch_inference(
   prompt_ids=["ps_abc123", "ps_def456", "ps_ghi789"],
-  shared_weights={"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+  weights_list=[
+    {"vis": 0.4, "edge": 0.3, "depth": 0.2, "seg": 0.1},
+    {"vis": 0.5, "edge": 0.2, "depth": 0.2, "seg": 0.1},
+    {"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1}
+  ],
   num_steps=50,
   guidance=8.0
 )
@@ -1578,9 +1922,10 @@ result = ops.delete_all_runs(keep_outputs=True)
   - Returns execution results with run_id for tracking
   - Note: Upscaling parameters removed - use separate `upscale()` method (Phase 1 refactor)
 
-- `batch_inference(prompt_ids, shared_weights=None, **kwargs)`: Batch processing
-  - Accepts list of prompt_ids, creates runs internally for each
-  - Executes all runs as a batch for improved performance
+- `batch_inference(prompt_ids, weights_list, **kwargs)`: Batch processing
+  - Accepts list of prompt_ids and corresponding weights_list (one weight dict per prompt)
+  - Each prompt can have different control weights for personalized inference
+  - Executes all runs as a batch for improved performance (2-5x speedup)
   - Returns batch results with output mapping
 
 **Low-Level Methods (For Advanced Use):**
@@ -1928,6 +2273,7 @@ class Run(Base):
     execution_config = Column(JSON, nullable=False)           # Runtime configuration
     outputs = Column(JSON, nullable=False)                    # Execution results
     run_metadata = Column(JSON, nullable=False)               # Additional metadata
+    rating = Column(Integer, nullable=True)                   # User rating (1-5 stars)
 ```
 
 **Status Lifecycle:**
@@ -1937,6 +2283,57 @@ class Run(Base):
 - `downloading`: Retrieving results
 - `completed`: Successfully finished
 - `failed`: Error occurred
+
+**Rating System:**
+- `rating`: Optional integer field (1-5 stars) for user quality assessment
+- Only available for completed runs to ensure meaningful feedback
+- Ratings persist in database and are included in run exports for analytics
+- Displayed in UI tables and run details for quick visual assessment
+- Supports quality tracking and improvement of inference parameters
+
+### JobQueue Model
+Queue management for Gradio UI job processing (UI-only, CLI uses direct CosmosAPI calls).
+
+```python
+class JobQueue(Base):
+    id = Column(String, primary_key=True)                    # job_xxxxx format
+    prompt_ids = Column(JSON, nullable=False)                # List of prompt IDs to process
+    job_type = Column(String, nullable=False)                # inference, batch_inference, enhancement
+    status = Column(String, nullable=False)                  # queued→running→completed/failed/cancelled
+    config = Column(JSON, nullable=False)                    # Job-specific configuration
+    created_at = Column(DateTime(timezone=True))
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    result = Column(JSON, nullable=True)                     # Results/outputs after completion
+    priority = Column(Integer, default=50, nullable=True)    # Priority for future use
+```
+
+**Queue Status Lifecycle:**
+- `queued`: Job added to queue, awaiting processing
+- `running`: Job currently being executed
+- `completed`: Job finished successfully
+- `failed`: Job execution failed
+- `cancelled`: Job cancelled by user
+
+**Supported Job Types:**
+- `inference`: Single prompt inference using CosmosAPI.quick_inference()
+- `batch_inference`: Multiple prompt batch processing using CosmosAPI.batch_inference()
+- `enhancement`: Prompt enhancement using CosmosAPI.enhance_prompt()
+
+**Usage Pattern:**
+```python
+# Example job configuration for inference
+config = {
+    "weights": [0.3, 0.4, 0.2, 0.1],
+    "num_steps": 25,
+    "guidance_scale": 4.0,
+    "seed": 42
+}
+
+# Queue processing uses FIFO order
+# Background processor executes jobs automatically
+# Results stored in result field as JSON
+```
 
 ### Database Connection
 
@@ -2107,7 +2504,7 @@ Video upscaling with parent run context:
 | `weights.depth` | Float | Depth estimation weight (0.0-1.0) | inference | Yes |
 | `weights.seg` | Float | Segmentation weight (0.0-1.0) | inference | Yes |
 | `num_steps` | Integer | Number of inference steps (1-100) | inference | No (default: 35) |
-| `guidance` | Float | Guidance scale (1.0-20.0) | inference | No (default: 7.0) |
+| `guidance` | Float | Guidance scale (1.0-20.0) | inference | No (default: 5.0) |
 | `model` | String | AI model name ("pixtral", "claude") | enhancement | Yes |
 | `offload` | Boolean | Enable memory efficient mode | enhancement | No (default: false) |
 | `batch_size` | Integer | Processing batch size | enhancement | No (default: 1) |
@@ -2196,9 +2593,9 @@ print(local_config.prompts_dir) # Path("inputs/prompts")
 ### Configuration File (cosmos_workflow/config/config.toml)
 ```toml
 [remote]
-host = "192.222.52.92"
+host = "209.20.156.243"  # Remote GPU instance IP
 user = "ubuntu"
-ssh_key = "~/.ssh/key.pem"
+ssh_key = "~/.ssh/LambdaSSHkey.pem"
 port = 22
 
 [paths]
@@ -2211,15 +2608,26 @@ local_notes_dir = "./notes"
 
 [docker]
 image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
-shm_size = "8g"
-ipc_mode = "host"
 
-[execution]
-default_num_steps = 35
-default_guidance_scale = 8.0
-default_upscale_weight = 0.5
-offload_models = true
-offload_vae = true
+[generation]
+# Default negative prompt for video generation quality control
+negative_prompt = """
+The video captures a game playing, with bad crappy graphics and \
+cartoonish frames. It represents a recording of old outdated games. \
+The lighting looks very fake. The textures are very raw and basic. \
+The geometries are very primitive. The images are very pixelated and \
+of poor CG quality. There are many subtitles in the footage. \
+Overall, the video is unrealistic at all.\
+"""
+
+[timeouts]
+docker_execution = 3600  # 1 hour timeout for inference/upscaling operations
+stream_logs = 86400      # 24 hours for log streaming operations
+
+[ui]
+port = 7860             # Default Gradio port
+host = "0.0.0.0"        # Bind to all interfaces for SSH tunnel access
+share = false           # Don't create public Gradio share links
 ```
 
 ## Utilities

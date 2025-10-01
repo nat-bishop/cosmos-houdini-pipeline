@@ -2,14 +2,14 @@
 
 # ===== Remote instance =====
 [remote]
-user = "ubuntu"
-host = "209.20.156.243"  # <-- change this when the IP changes
+user = "nbishop"
+host = "192.168.1.26"  # <-- updated for local Ubuntu server
 port = 22
 ssh_key = "~/.ssh/LambdaSSHkey.pem"
 
 # ===== Project paths =====
 [paths]
-remote_dir = "/home/ubuntu/NatsFS/cosmos-transfer1"
+remote_dir = "/home/nbishop/NatsFS/cosmos-transfer1"
 local_prompts_dir = "./inputs/prompts"
 local_runs_dir = "./inputs/runs"
 local_videos_dir = "./inputs/videos"
@@ -18,7 +18,7 @@ local_notes_dir = "./notes"
 
 # ===== Docker image on remote =====
 [docker]
-image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
+image = "nvcr.io/nbishop/cosmos-transfer1:latest"
 
 # ===== Video Generation Defaults =====
 [generation]
@@ -42,6 +42,10 @@ stream_logs = 86400  # 24 hours for log streaming
 port = 7860  # Default Gradio port
 host = "0.0.0.0"  # Bind to all interfaces for SSH tunnel access
 share = false  # Don't create public Gradio share links
+refresh_interval = 5  # Auto-refresh interval in seconds (2-30)
+cleanup_containers_on_exit = true  # Kill running containers when UI exits
+auto_reload = false  # Enable auto-reload when files change (development mode)
+watch_dirs = ["cosmos_workflow"]  # Directories to watch for changes when auto_reload is true
 
 # ===== Environment variable overrides =====
 # These can be set via environment variables to override the defaults above

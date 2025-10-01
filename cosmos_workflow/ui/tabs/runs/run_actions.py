@@ -1,0 +1,291 @@
+"""Run action handlers for delete, upscale, transfer, and logging.
+
+This module handles user-initiated actions on runs like deletion,
+upscaling, transferring, and viewing logs.
+"""
+
+from pathlib import Path
+
+import gradio as gr
+
+from cosmos_workflow.api.cosmos_api import CosmosAPI
+from cosmos_workflow.utils.logging import logger
+
+
+def load_run_logs(log_path):
+    """Load and display run logs.
+
+    Args:
+        log_path: Path to the log file
+
+    Returns:
+        Log content or error message
+    """
+    if not log_path:
+        return "No log file available"
+
+    log_file = Path(log_path)
+    if not log_file.exists():
+        return f"Log file not found: {log_path}"
+
+    try:
+        # Read last 100 lines
+        with open(log_file, encoding="utf-8") as f:
+            lines = f.readlines()
+            return "".join(lines[-100:])
+    except Exception as e:
+        logger.error("Error reading log file: {}", e)
+        return f"Error reading log file: {e}"
+
+
+def preview_delete_run(selected_run_id):
+    """Preview run deletion - show what will be deleted.
+
+    Args:
+        selected_run_id: The ID of the run to delete
+
+    Returns:
+        Tuple of updates for delete dialog components
+    """
+    if not selected_run_id:
+        return (
+            gr.update(visible=False),
+            gr.update(),
+            gr.update(),
+            None,
+        )
+
+    try:
+        ops = CosmosAPI()
+        run = ops.get_run(selected_run_id)
+
+        if not run:
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(),
+                None,
+            )
+
+        # Build preview text
+        preview = f"""### Delete Run: {selected_run_id[:16]}...
+
+**Status**: {run.get("status", "unknown")}
+**Model Type**: {run.get("model_type", "unknown")}
+**Created**: {run.get("created_at", "")[:19]}
+
+This will permanently delete the run from the database.
+"""
+
+        # Check for output files
+        outputs = run.get("outputs", {})
+        if isinstance(outputs, dict):
+            if "output_path" in outputs:
+                output_path = Path(outputs["output_path"])
+                if output_path.exists():
+                    preview += f"\n**Output Video**: {output_path.name}"
+            elif "files" in outputs:
+                files = outputs["files"]
+                if files:
+                    preview += f"\n**Output Files**: {len(files)} files"
+
+        return (
+            gr.update(visible=True),  # Show dialog
+            gr.update(value=preview),  # Preview text
+            gr.update(value=False),  # Reset checkbox to unchecked
+            selected_run_id,  # Pass the run ID to the hidden field
+        )
+
+    except Exception as e:
+        logger.error("Error preparing delete preview: {}", e)
+        return (
+            gr.update(visible=False),
+            gr.update(),
+            gr.update(),
+            None,
+        )
+
+
+def confirm_delete_run(run_id, delete_outputs):
+    """Execute run deletion after confirmation.
+
+    Args:
+        run_id: The ID of the run to delete
+        delete_outputs: Whether to also delete output files
+
+    Returns:
+        Tuple of updates for UI components
+    """
+    if not run_id:
+        return (
+            gr.update(visible=False),
+            gr.update(),
+            "❌ No run selected",
+        )
+
+    try:
+        ops = CosmosAPI()
+        # CosmosAPI expects keep_outputs, which is opposite of delete_outputs
+        keep_outputs = not delete_outputs
+        result = ops.delete_run(run_id, keep_outputs=keep_outputs)
+
+        if result.get("success"):
+            return (
+                gr.update(visible=False),  # Hide dialog
+                gr.update(value=""),  # Clear selected ID
+                f"✅ Successfully deleted run {run_id[:16]}...",
+            )
+        else:
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                f"❌ Failed to delete run: {result.get('error', 'Unknown error')}",
+            )
+
+    except Exception as e:
+        logger.error("Error deleting run: {}", e)
+        return (
+            gr.update(visible=False),
+            gr.update(),
+            f"❌ Error deleting run: {e}",
+        )
+
+
+def cancel_delete_run():
+    """Cancel run deletion - hide dialog.
+
+    Returns:
+        Update to hide the delete dialog
+    """
+    return gr.update(visible=False)
+
+
+def show_upscale_dialog(run_id):
+    """Show upscale dialog with preview.
+
+    Args:
+        run_id: The ID of the run to upscale
+
+    Returns:
+        Tuple of updates for upscale dialog components
+    """
+    if not run_id:
+        return (
+            gr.update(visible=False),  # Hide dialog
+            gr.update(),  # Preview text
+            gr.update(),  # Hidden ID
+        )
+
+    try:
+        ops = CosmosAPI()
+        run = ops.get_run(run_id)
+
+        if not run:
+            return (
+                gr.update(visible=False),
+                gr.update(),
+                gr.update(),
+            )
+
+        # Check if already upscaled
+        upscaled_run = ops.get_upscaled_run(run_id)
+        if upscaled_run:
+            status_text = f"""⚠️ **This run has already been upscaled!**
+
+Upscaled Run ID: {upscaled_run.get("id", "unknown")[:16]}...
+Status: {upscaled_run.get("status", "unknown")}
+
+Proceeding will create a new upscale job."""
+        else:
+            status_text = "✅ Ready to upscale to 4K (2048x1152)"
+
+        # Build preview
+        preview = f"""### Upscale Run: {run_id[:16]}...
+
+**Model Type**: {run.get("model_type", "unknown")}
+**Status**: {run.get("status", "unknown")}
+**Created**: {run.get("created_at", "")[:19]}
+
+{status_text}
+
+This will create a new 4K upscaled version of the output video.
+"""
+
+        # Return only the expected 3 values
+        return (
+            gr.update(visible=True),  # Show dialog
+            gr.update(value=preview),  # Preview text
+            run_id,  # Hidden run ID for the confirmation handler
+        )
+
+    except Exception as e:
+        logger.error("Error preparing upscale dialog: {}", e)
+        return (
+            gr.update(visible=False),
+            gr.update(),
+            gr.update(),
+        )
+
+
+def execute_upscale(run_id, control_weight, prompt_text, queue_service):
+    """Execute upscaling for a run by adding to queue.
+
+    Args:
+        run_id: The ID of the run to upscale
+        control_weight: Control weight for upscaling
+        prompt_text: Prompt text for the upscale
+        queue_service: SimplifiedQueueService instance
+
+    Returns:
+        Tuple of updates for UI components
+    """
+    if not run_id:
+        return (
+            gr.update(visible=False),
+            gr.update(),
+        )
+
+    try:
+        # Add upscale job to queue - following same pattern as enhancement/inference
+        config = {
+            "run_id": run_id,
+            "control_weight": control_weight,
+            "prompt": prompt_text,
+        }
+
+        job_id = queue_service.add_job(
+            prompt_ids=[],  # Not needed for upscale jobs
+            job_type="upscale",
+            config=config,
+        )
+
+        # Get queue position for feedback
+        position = queue_service.get_position(job_id)
+
+        logger.info("Added upscale job {} to queue at position {}", job_id, position)
+
+        # Show success feedback
+        if position:
+            gr.Info(f"✅ Upscaling queued at position #{position}")
+
+        return (
+            gr.update(visible=False),  # Hide dialog
+            gr.update(),  # Don't clear selected ID
+        )
+
+    except Exception as e:
+        logger.error("Error queueing upscale: {}", e)
+        gr.Warning(f"Failed to queue upscaling: {e}")
+        return (
+            gr.update(visible=False),
+            gr.update(),
+        )
+
+
+def cancel_upscale():
+    """Cancel upscaling - hide dialog.
+
+    Returns:
+        Update to hide the upscale dialog
+    """
+    return gr.update(visible=False)

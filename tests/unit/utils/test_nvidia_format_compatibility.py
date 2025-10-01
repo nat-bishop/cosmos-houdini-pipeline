@@ -30,7 +30,7 @@ def test_inference_format_matches_nvidia_requirements():
         "execution_config": {
             "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
             "num_steps": 35,
-            "guidance": 7.0,
+            "guidance": 5.0,
             "seed": 42,
             "fps": 8,
         },
@@ -78,7 +78,7 @@ def test_inference_format_matches_nvidia_requirements():
 
     # Verify additional parameters
     assert result["num_steps"] == 35
-    assert result["guidance"] == 7.0
+    assert result["guidance"] == 5.0
     assert result["seed"] == 42
     assert result["fps"] == 8
 
@@ -160,6 +160,6 @@ def test_handles_missing_fields_gracefully():
 
     # Other defaults
     assert result["num_steps"] == 35
-    assert result["guidance"] == 7.0
+    assert result["guidance"] == 5.0
     assert result["seed"] == 42
     assert result["fps"] == 8

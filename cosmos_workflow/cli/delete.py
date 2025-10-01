@@ -142,8 +142,6 @@ def delete_prompt(
 
     panel_text = f"[bold]Prompt:[/bold] {prompt_info['id']}\n"
     panel_text += f"[bold]Text:[/bold] {prompt_text}"
-    if "model_type" in prompt_info:
-        panel_text += f"\n[bold]Type:[/bold] {prompt_info['model_type']}"
 
     console.print(Panel(panel_text, title="Prompt to Delete", border_style="yellow"))
 

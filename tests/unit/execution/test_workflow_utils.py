@@ -84,12 +84,12 @@ class TestUtilityFunctions:
         """Test get_log_path creates correct log paths."""
         # Mock ensure_directory to use tmp_path
         with patch("cosmos_workflow.utils.workflow_utils.ensure_directory") as mock_ensure:
-            mock_ensure.return_value = tmp_path / "outputs/test_id/inference_logs"
+            mock_ensure.return_value = tmp_path / "outputs/run_run_123/logs"
 
-            # Test with run_id
+            # Test with run_id - should return unified log path
             log_path = get_log_path("inference", "test_id", "run_123")
-            assert log_path.name == "inference_run_123.log"
-            assert "inference_logs" in str(log_path)
+            assert log_path.name == "run_123.log"
+            assert "logs" in str(log_path)
 
             # Test without run_id (should use timestamp)
             log_path2 = get_log_path("batch", "batch_test", None)

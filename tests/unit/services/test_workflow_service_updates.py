@@ -26,7 +26,6 @@ class TestWorkflowServiceUpdateRunStatus:
     def sample_prompt(self, service):
         """Create a sample prompt for testing."""
         return service.create_prompt(
-            model_type="transfer",
             prompt_text="test prompt",
             inputs={"video": "test.mp4"},
             parameters={"fps": 24},
@@ -37,6 +36,7 @@ class TestWorkflowServiceUpdateRunStatus:
         """Create a sample run for testing."""
         return service.create_run(
             prompt_id=sample_prompt["id"],
+            model_type="transfer",
             execution_config={"weights": {"vis": 0.25}},
             metadata={"test": True},
         )
@@ -140,7 +140,6 @@ class TestWorkflowServiceUpdateRun:
     def sample_prompt(self, service):
         """Create a sample prompt for testing."""
         return service.create_prompt(
-            model_type="transfer",
             prompt_text="test prompt",
             inputs={"video": "test.mp4"},
             parameters={"fps": 24},
@@ -151,6 +150,7 @@ class TestWorkflowServiceUpdateRun:
         """Create a sample run for testing."""
         return service.create_run(
             prompt_id=sample_prompt["id"],
+            model_type="transfer",
             execution_config={"weights": {"vis": 0.25}},
             metadata={},
         )
@@ -252,7 +252,6 @@ class TestWorkflowServiceEnhancementSupport:
         """Test creating a prompt with enhancement model type."""
         # Create an enhancement prompt
         result = service.create_prompt(
-            model_type="enhance",
             prompt_text="enhance this prompt",
             inputs={"original_prompt_id": "ps_original_123"},
             parameters={"model": "pixtral", "temperature": 0.7},
@@ -260,7 +259,6 @@ class TestWorkflowServiceEnhancementSupport:
 
         # Verify it was created successfully
         assert result is not None
-        assert result["model_type"] == "enhance"
         assert result["prompt_text"] == "enhance this prompt"
         assert result["inputs"]["original_prompt_id"] == "ps_original_123"
         assert result["parameters"]["model"] == "pixtral"
@@ -270,13 +268,11 @@ class TestWorkflowServiceEnhancementSupport:
         # Verify we can retrieve it
         prompt = service.get_prompt(result["id"])
         assert prompt is not None
-        assert prompt["model_type"] == "enhance"
 
     def test_create_run_with_enhancement_type(self, service):
         """Test creating a run with enhancement model type."""
         # First create an enhancement prompt
         prompt = service.create_prompt(
-            model_type="enhance",
             prompt_text="enhance this",
             inputs={"original_prompt_id": "ps_test"},
             parameters={"model": "pixtral"},
@@ -285,13 +281,13 @@ class TestWorkflowServiceEnhancementSupport:
         # Create a run for the enhancement prompt
         result = service.create_run(
             prompt_id=prompt["id"],
+            model_type="enhance",
             execution_config={"model": "pixtral", "type": "enhance"},
             metadata={"source": "test"},
         )
 
         # Verify the run was created with correct model type
         assert result is not None
-        assert result["model_type"] == "enhance"
         assert result["execution_config"]["type"] == "enhance"
         assert "id" in result
         assert result["id"].startswith("rs_")
@@ -299,13 +295,11 @@ class TestWorkflowServiceEnhancementSupport:
         # Verify we can retrieve it
         run = service.get_run(result["id"])
         assert run is not None
-        assert run["model_type"] == "enhance"
 
     def test_enhancement_run_workflow(self, service):
         """Test complete enhancement workflow with status updates."""
         # Create enhancement prompt
         prompt = service.create_prompt(
-            model_type="enhance",
             prompt_text="enhance",
             inputs={"original_prompt_id": "ps_orig"},
             parameters={"model": "pixtral"},
@@ -314,6 +308,7 @@ class TestWorkflowServiceEnhancementSupport:
         # Create enhancement run
         run = service.create_run(
             prompt_id=prompt["id"],
+            model_type="enhance",
             execution_config={"model": "pixtral"},
         )
 

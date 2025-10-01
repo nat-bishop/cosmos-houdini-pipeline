@@ -1,52 +1,6 @@
 # ROADMAP - Cosmos Workflow System
 
-## ✅ Recently Completed (2025-09-10)
-
-### Fixed: Enhancement Runs Not Creating/Updating Prompts
-- **Issue:** When `cosmos prompt-enhance` completed in background, enhanced prompts were not created or updated
-- **Root Cause:** StatusChecker only downloaded outputs but didn't finalize prompt creation
-- **Solution:** Added prompt creation/update logic to StatusChecker when enhancement runs complete
-- **Files Changed:**
-  - `cosmos_workflow/execution/status_checker.py` - Added enhancement finalization
-  - `cosmos_workflow/cli/enhance.py` - Added proper preview and confirmation for --overwrite
-
-### Fixed: Overwrite Mode Missing Proper Warnings
-- **Issue:** `--overwrite` flag didn't show what would be deleted or require confirmation
-- **Solution:** Now shows preview of affected runs, storage impact, and requires user confirmation
-- **Benefit:** Safer operation with clear visibility of destructive actions
-
-### Fixed: Status Command Showing "Missing!" Container
-- **Issue:** Completed runs stayed as "running" in database, causing phantom container warnings
-- **Root Cause:** Same as enhancement issue - runs not properly finalized
-- **Solution:** Fixed by proper run finalization in StatusChecker
-
-### Fixed: Status Command Requiring Two Runs
-- **Issue:** First `cosmos status` showed completed runs as "running" with missing container
-- **Root Cause:** `list_runs(status="running")` returned runs that were synced to "completed" during the query
-- **Solution:** Filter out runs that no longer match the status filter after sync
-- **Files Changed:** `cosmos_workflow/services/data_repository.py` - Added post-sync filtering
-
 ## 🔥 Priority 1: Critical Fixes
-
-### Database Schema Review: Model Type in Prompts
-**Issue:** The `model_type` field in the Prompts table may not make architectural sense
-
-**Current Problems:**
-- Almost all prompts use `model_type="transfer"` as default, suggesting the field is not meaningful
-- Model type seems more relevant to execution (Runs) than to the prompt itself
-- Prompts are just text + inputs/parameters - they don't inherently belong to a specific AI model
-- The same prompt could theoretically be used with different model types
-
-**Investigation Tasks:**
-- [ ] Analyze if `model_type` provides any actual value in the Prompts table
-- [ ] Consider whether this field should be removed entirely
-- [ ] If needed, evaluate moving model type specification to Run creation time only
-- [ ] Review impact on existing queries and CLI commands that filter by model_type
-
-**Enhancement Tracking Complexity:**
-- [ ] Document that there are no direct "enhanced" fields in Prompts table
-- [ ] Current enhancement relationships stored in Run.outputs JSON creates complex queries
-- [ ] Consider simpler approaches: direct foreign keys or dedicated enhancement fields
 
 ### Complete Abstraction Layer Migration
 **Issue:** Multiple files bypass abstraction layers, calling SSH/Docker commands directly instead of using RemoteCommandExecutor/DockerCommandBuilder
@@ -101,7 +55,50 @@
 - [ ] Add proper cleanup on exit
 - [ ] Implement thread tracking
 
-## 🚀 Priority 2: Performance & Reliability
+## 🚀 Priority 2: Architecture Refactoring
+
+### Operation-Centric Architecture Migration
+**Issue:** Adding a single database field requires changes to 5-8 files due to excessive coupling between layers. God objects (GPUExecutor: 1437 lines, DataRepository: 1462 lines) handle too many responsibilities.
+
+**Goal:** Reduce coupling so changes affect only 2 files: the operation and its test. Each operation owns its complete workflow.
+
+**Implementation:** See [docs/ARCHITECTURE_REFACTOR.md](docs/ARCHITECTURE_REFACTOR.md) for detailed 8-phase migration plan.
+
+**Phase 1 - Create Operation Framework:**
+- [ ] Create cosmos_workflow/operations/ directory
+- [ ] Implement BaseOperation class with enforced patterns
+- [ ] Create InferenceOperation as proof of concept
+- [ ] Update CosmosAPI.quick_inference() to use InferenceOperation
+- [ ] Verify tests pass with new operation
+
+**Phase 2 - Migrate Remaining Operations:**
+- [ ] Create EnhanceOperation (prompt enhancement)
+- [ ] Create UpscaleOperation (video upscaling)
+- [ ] Create BatchOperation (handles N runs → 1 Docker)
+- [ ] Update CosmosAPI to use all operations
+
+**Phase 3 - Remove Pass-Through Layer:**
+- [ ] Delete DataRepository (1462 lines of pass-through)
+- [ ] Move database logic directly into operations
+- [ ] Update all references
+
+**Phase 4 - Simplify CosmosAPI:**
+- [ ] Reduce to thin routing layer (~300 lines)
+- [ ] Remove business logic (moved to operations)
+- [ ] Keep only request routing and response formatting
+
+**Phase 5 - Split GPUExecutor:**
+- [ ] Move Docker operations to remote/ directory
+- [ ] Move SSH operations to remote/ directory
+- [ ] Delete GPUExecutor (functionality absorbed)
+
+**Benefits:**
+- Adding a field: Change operation + test only (2 files vs 5-8)
+- Clear ownership: Each operation owns its workflow
+- Testable: Mock at operation boundaries
+- Maintainable: ~300-500 lines per operation vs 1400+ line god objects
+
+## 🚀 Priority 3: Performance & Reliability
 
 ### Simplify Container Status Monitoring
 **Consideration:** Running inference.sh/prompt-enhance.sh/etc. scripts from the local machine instead of inside Docker containers could simplify the status checking system
@@ -125,11 +122,31 @@
 - [ ] Evaluate security implications of running scripts locally
 - [ ] Consider hybrid approach: local orchestration with containerized GPU operations
 
-### Batch Processing Implementation
-- [ ] Create `cosmos batch` command
-- [ ] Implement queue management in DataRepository
-- [ ] Add progress tracking for batch jobs
-- [ ] Support resuming interrupted batches
+### Smart Batching System ✅ COMPLETED (2025-09-26)
+**Completed:** Advanced smart batching with run-level optimization and enhanced APIs
+- [x] **Smart Batching Algorithms**: Complete TDD-implemented system providing 2-5x performance improvements
+- [x] **Two Batching Modes**: Strict (identical controls) and Mixed (master batch) approaches
+- [x] **Conservative Memory Management**: Batch sizing based on control count (8→4→2 jobs) prevents OOM
+- [x] **Non-Invasive Integration**: Zero impact when not used, overlay on existing queue system
+- [x] **Comprehensive Testing**: 48 passing tests with performance benchmarks and edge case validation
+- [x] **Queue Service Integration**: analyze_queue_for_smart_batching(), execute_smart_batches(), get_smart_batch_preview()
+- [x] **Enhanced batch_inference API**: Now accepts weights_list (different weights per prompt) instead of shared_weights
+- [x] **Run-Level Optimization**: Extracts individual runs from jobs and reorganizes into optimal batches
+- [x] **Comprehensive Documentation**: Created docs/SMART_BATCHING.md user guide
+
+**Technical Achievements:**
+- Core smart batching algorithms in `cosmos_workflow/utils/smart_batching.py`
+- Enhanced SimplifiedQueueService with three new smart batching methods
+- Intelligent job filtering to only batch compatible job types (inference, batch_inference)
+- Efficiency calculations with estimated speedup metrics and control reduction analysis
+- Memory safety through conservative batch sizing based on control complexity
+- Analysis workflow with preview, validation, and atomic execution
+
+### Batch Processing Implementation ✅ COMPLETED (Enhanced with Smart Batching)
+- [x] **Smart Batch Commands**: Integrated into queue system with analysis and execution workflow
+- [x] **Advanced Batch Job Management**: Database-backed queue with smart batching overlay
+- [x] **Performance Optimization**: 2-5x speedup through intelligent job grouping and batching
+- [x] **Comprehensive Progress Tracking**: Full batch lifecycle with efficiency metrics
 
 ### Container Lifecycle Management
 - [ ] Add container ID to Run model in database
@@ -144,40 +161,7 @@
 - [ ] Configure environment variables and secrets
 - [ ] Add health check verification
 
-### Video Metadata Extraction for Gradio UI
-**Issue:** Gradio UI displays hardcoded placeholder values for video resolution and duration instead of actual metadata
-
-**Current Problems:**
-- UI shows static "1920x1080" resolution for all videos (line 114 in app.py)
-- Duration shows placeholder "120 frames (5.0 seconds @ 24fps)" (line 116 in app.py)
-- No validation that multimodal videos (color, depth, segmentation) have matching properties
-- CosmosSequenceValidator only works with PNG sequences, not video files
-
-**Implementation Tasks:**
-- [ ] Create `cosmos_workflow/utils/video_metadata.py` for video analysis
-  - Implement `extract_video_resolution(video_path)` using cv2.VideoCapture
-  - Implement `extract_video_duration(video_path)` for duration in seconds
-  - Implement `extract_video_frame_count(video_path)` for total frames
-  - Implement `extract_video_fps(video_path)` for frame rate
-  - Implement `get_video_metadata(video_path)` combining all metadata
-- [ ] Create `cosmos_workflow/utils/multimodal_validator.py` for consistency checks
-  - Implement `validate_video_consistency(video_dir)` to check all videos have same length
-  - Implement `validate_matching_properties(video_paths)` for resolution/fps matching
-  - Report mismatches between color, depth, and segmentation videos
-- [ ] Update Gradio UI to use real metadata
-  - Replace TODO comments in `on_input_select()` function
-  - Handle edge cases (missing files, corrupted videos)
-- [ ] Add comprehensive tests
-  - Unit tests for metadata extraction
-  - Integration tests for multimodal validation
-  - Test error handling for invalid videos
-
-**Technical Approach:**
-- Leverage existing OpenCV (cv2) dependency already in project
-- Place in utils/ as these are general-purpose utilities for remote GPU workflows
-- Follow project patterns: parameterized logging, type hints, Google docstrings
-
-## 🛠️ Priority 3: Code Quality
+## 🛠️ Priority 4: Code Quality
 
 ### Reduce Method Complexity
 - [ ] Refactor `enhance_prompt` (136 lines) into smaller methods
@@ -200,6 +184,34 @@
 - [ ] Update all import statements and references
 - [ ] Ensure tests continue to work after directory changes
 - [ ] Update documentation to reflect new structure
+
+### Gradio UI Refactoring ✅ COMPLETED (2025-01-25)
+**Goal:** Reduce monolithic app.py file (originally 3,200+ lines) to improve maintainability - **ACHIEVED**
+
+**Completed Improvements:**
+- [x] **Major UI Architecture Refactoring**: Reduced app.py from 3,255 to 152 lines (95.5% reduction)
+- [x] **Cross-Tab Navigation System**: Complete navigation between all tabs with intelligent filtering
+  - [x] Navigate from Inputs tab to Runs tab filtering by input directory
+  - [x] Navigate from Inputs tab to Prompts tab with automatic search filtering
+  - [x] Navigate from Prompts tab to Runs tab with selected prompts filtering
+  - [x] Persistent filter state with clear visual indicators
+- [x] **Enhanced Prompts Tab Management**: Advanced filtering, selection tracking, and batch operations
+- [x] **Modular Architecture**: Created 25+ focused modules with clear separation of concerns
+- [x] **Code Elimination**: Removed 2,852 lines of legacy backward compatibility functions
+- [x] **Extract inline event handlers to separate modules**: Created specialized wiring modules
+- [x] **Move event bindings closer to their respective tab definitions**: Organized by tab responsibility
+- [x] **Unified filter system**: Consistent filtering patterns across all tabs
+- [x] **State management**: Enhanced cross-tab communication and navigation state
+
+**Technical Achievements:**
+- **app.py**: 3,255 → 152 lines (95.5% reduction)
+- **Total lines eliminated**: 4,100+ lines including legacy code removal
+- **Code duplication**: 30% → <2%
+- **Average file size**: 1,000+ → ~150 lines
+- **Monolithic files eliminated**: All major monoliths broken down into focused modules
+
+### Progress Indicators for GPU Jobs
+- [ ] Add progress bars for GPU jobs to the Gradio app
 
 ### Standardize Error Handling
 - [ ] Create base exception classes in `cosmos_workflow/exceptions.py`
@@ -241,7 +253,26 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 - [ ] Validate wrapper usage
 - [ ] Add to CI pipeline
 
-## 📚 Priority 4: Documentation & Tooling
+## 📚 Priority 5: Future Enhancements
+
+#### Proper Cancellation Status Propagation
+**Issue:** When killing containers with SIGKILL, the system shows a RuntimeError for exit code 137 in console logs (but functionality works correctly)
+
+**Current Behavior:**
+- Docker kill returns exit code 137 (SIGKILL) which is expected behavior
+- System treats this as an error and logs RuntimeError, but continues functioning
+- Jobs are correctly marked as cancelled in database
+
+**Future Implementation Tasks:**
+- [ ] Add "cancelled" as distinct status from "failed" throughout execution chain
+- [ ] Handle SIGKILL (137) vs SIGTERM (143) exit codes differently
+- [ ] Prevent race conditions between kill operations and job processing
+- [ ] Update gpu_executor.py to handle cancelled status without raising exceptions
+- [ ] Propagate cancellation status through CosmosAPI to UI layer
+
+**Note:** Currently addressed with minimal fix that accepts exit code 137 as valid. Full implementation would require architectural changes across multiple layers.
+
+## 📚 Priority 6: Documentation & Tooling
 
 ### User Documentation
 - [ ] Create step-by-step setup guide
@@ -263,4 +294,25 @@ mock_remote_executor.create_directory.assert_called_with("/dir")
 
 ---
 
-*Last Updated: 2025-01-08*
+## ✅ Completed Features
+
+### Queue Service Simplification (2025-09-20)
+**Completed:** Migrated from complex threaded QueueService to simplified database-backed queue
+
+**Improvements:**
+- Reduced code from 682 lines to 400 lines (40% reduction)
+- Eliminated all race conditions by using database transactions
+- Removed threading complexity - now uses Gradio timer for processing
+- Implemented single warm container strategy to prevent accumulation
+- Fixed logging format bugs (loguru compatibility)
+- Maintained backward compatibility with existing UI
+
+**Technical Details:**
+- Used `with_for_update(skip_locked=True)` for atomic job claiming
+- Replaced background thread with Gradio Timer component (2-second interval)
+- Fresh database sessions prevent stale data issues
+- See `docs/queue_simplification_migration.md` for full details
+
+---
+
+*Last Updated: 2025-09-20*

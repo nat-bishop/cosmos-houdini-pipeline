@@ -73,7 +73,11 @@ class TestQuickInferenceRefactored:
         mock_service.create_run.return_value = mock_run
 
         # Setup mock execution result
-        mock_result = {"output_path": "/outputs/result.mp4", "duration_seconds": 120}
+        mock_result = {
+            "output_path": "/outputs/result.mp4",
+            "duration_seconds": 120,
+            "status": "completed",
+        }
         mock_orchestrator.execute_run.return_value = mock_result
 
         # Call quick_inference with prompt_id directly (no run_id needed)
@@ -85,13 +89,14 @@ class TestQuickInferenceRefactored:
             execution_config={
                 "weights": {"vis": 0.25, "edge": 0.25, "depth": 0.25, "seg": 0.25},
                 "num_steps": 35,
-                "guidance": 7.0,
+                "guidance": 5.0,
                 "seed": 1,
                 "sigma_max": 70.0,
                 "blur_strength": "medium",
                 "canny_threshold": "medium",
                 "fps": 24,
             },
+            model_type="transfer",
         )
 
         # Verify it executes the run
@@ -101,7 +106,7 @@ class TestQuickInferenceRefactored:
         assert "run_id" in result
         assert result["run_id"] == "rs_auto123"
         assert result["output_path"] == "/outputs/result.mp4"
-        assert result["status"] == "success"
+        assert result["status"] == "completed"
 
     def test_quick_inference_with_custom_weights(self, ops, mock_service, mock_orchestrator):
         """Test quick_inference with custom weights."""
@@ -231,9 +236,10 @@ class TestBatchInferenceRefactored:
         }
         mock_orchestrator.execute_batch_runs.return_value = mock_batch_result
 
-        # Call batch_inference with list of prompt_ids
+        # Call batch_inference with list of prompt_ids and weights_list
         prompt_ids = ["ps_test1", "ps_test2", "ps_test3"]
-        result = ops.batch_inference(prompt_ids)
+        weights_list = [{"edge": 0.5}, {"edge": 0.5}, {"edge": 0.5}]  # Same weights for simplicity
+        result = ops.batch_inference(prompt_ids, weights_list)
 
         # Verify it creates runs for all prompts
         assert mock_service.create_run.call_count == 3
@@ -243,19 +249,16 @@ class TestBatchInferenceRefactored:
         batch_call_args = mock_orchestrator.execute_batch_runs.call_args[0][0]
         assert len(batch_call_args) == 3
 
-        # Verify run statuses are updated
-        assert mock_service.update_run_status.call_count == 3
-        mock_service.update_run_status.assert_any_call("rs_auto1", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto2", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto3", "completed")
+        # Note: Run statuses are now updated internally by execute_batch_runs,
+        # not by the API layer
 
         # Verify result structure
         assert "output_mapping" in result
         assert len(result["output_mapping"]) == 3
         assert result["successful"] == 3
 
-    def test_batch_inference_with_shared_weights(self, ops, mock_service, mock_orchestrator):
-        """Test batch_inference with shared weights for all prompts."""
+    def test_batch_inference_with_different_weights(self, ops, mock_service, mock_orchestrator):
+        """Test batch_inference with different weights per prompt."""
         mock_prompts = [
             {"id": "ps_test1", "prompt_text": "Test1", "inputs": {}, "parameters": {}},
             {"id": "ps_test2", "prompt_text": "Test2", "inputs": {}, "parameters": {}},
@@ -272,13 +275,23 @@ class TestBatchInferenceRefactored:
             "output_mapping": {"rs_auto1": "out1.mp4", "rs_auto2": "out2.mp4"}
         }
 
-        shared_weights = {"vis": 0.5, "edge": 0.2, "depth": 0.2, "seg": 0.1}
+        # Different weights for each prompt
+        weights_list = [
+            {"vis": 0.5, "edge": 0.2},
+            {"depth": 0.3, "seg": 0.4},
+        ]
 
-        ops.batch_inference(["ps_test1", "ps_test2"], shared_weights=shared_weights)
+        ops.batch_inference(["ps_test1", "ps_test2"], weights_list=weights_list)
 
-        # Verify shared weights are used for all runs
-        for call_args in mock_service.create_run.call_args_list:
-            assert call_args[1]["execution_config"]["weights"] == shared_weights
+        # Verify different weights are used for each run
+        assert (
+            mock_service.create_run.call_args_list[0][1]["execution_config"]["weights"]
+            == weights_list[0]
+        )
+        assert (
+            mock_service.create_run.call_args_list[1][1]["execution_config"]["weights"]
+            == weights_list[1]
+        )
 
     def test_batch_inference_skips_missing_prompts(self, ops, mock_service, mock_orchestrator):
         """Test batch_inference gracefully handles missing prompts."""
@@ -295,7 +308,9 @@ class TestBatchInferenceRefactored:
         }
 
         # Try to process 3 prompts, but only 1 exists
-        ops.batch_inference(["ps_missing1", "ps_test2", "ps_missing3"])
+        # Need weights_list for all three even though some will be skipped
+        weights_list = [{"edge": 0.5}, {"edge": 0.5}, {"edge": 0.5}]
+        ops.batch_inference(["ps_missing1", "ps_test2", "ps_missing3"], weights_list)
 
         # Verify only 1 run was created (for the existing prompt)
         assert mock_service.create_run.call_count == 1
@@ -325,11 +340,13 @@ class TestBatchInferenceRefactored:
             "failed": 1,
         }
 
-        ops.batch_inference(["ps_test1", "ps_test2"])
+        weights_list = [{"edge": 0.5}, {"edge": 0.5}]
+        result = ops.batch_inference(["ps_test1", "ps_test2"], weights_list)
 
-        # Verify status updates
-        mock_service.update_run_status.assert_any_call("rs_auto1", "completed")
-        mock_service.update_run_status.assert_any_call("rs_auto2", "failed")
+        # Note: Status updates are now handled internally by execute_batch_runs
+        # Verify result structure shows correct success/failure counts
+        assert result["successful"] == 1
+        assert result["failed"] == 1
 
     def test_batch_inference_with_additional_params(self, ops, mock_service, mock_orchestrator):
         """Test batch_inference with additional execution parameters."""
@@ -340,7 +357,7 @@ class TestBatchInferenceRefactored:
             "output_mapping": {"rs_auto1": "out.mp4"}
         }
 
-        ops.batch_inference(["ps_test1"], num_steps=50, guidance=8.5, seed=42)
+        ops.batch_inference(["ps_test1"], [{"edge": 0.5}], num_steps=50, guidance=8.5, seed=42)
 
         # Verify additional params are passed to run creation
         call_args = mock_service.create_run.call_args
@@ -350,7 +367,7 @@ class TestBatchInferenceRefactored:
 
     def test_batch_inference_empty_list(self, ops, mock_orchestrator):
         """Test batch_inference with empty prompt list."""
-        ops.batch_inference([])
+        ops.batch_inference([], [])
 
         # Should handle gracefully
         mock_orchestrator.execute_batch_runs.assert_called_once_with([])

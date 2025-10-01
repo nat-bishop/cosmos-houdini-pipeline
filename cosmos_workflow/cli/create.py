@@ -62,7 +62,6 @@ def create_prompt(ctx, prompt_text, video_dir, name, negative):
     results_data = {
         "ID": format_id(prompt["id"]),
         "Name": prompt_name,
-        "Model Type": prompt["model_type"],
         "Video Dir": str(video_dir),
     }
 

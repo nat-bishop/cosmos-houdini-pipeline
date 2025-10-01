@@ -60,7 +60,10 @@ class GPUExecutor:
         self.file_transfer = FileTransferService(self.ssh_manager, remote_config.remote_dir)
         self.remote_executor = RemoteCommandExecutor(self.ssh_manager)
         self.docker_executor = DockerExecutor(
-            self.ssh_manager, remote_config.remote_dir, remote_config.docker_image
+            self.ssh_manager,
+            remote_config.remote_dir,
+            remote_config.docker_image,
+            config_manager=self.config_manager,
         )
 
         self._services_initialized = True
@@ -68,9 +71,9 @@ class GPUExecutor:
     # ========== Format Conversion Helpers ==========
 
     # ========== Container Monitoring (REMOVED) ==========
-    # Background monitoring has been replaced by lazy sync via StatusChecker
-    # StatusChecker checks container status and downloads outputs when get_run() is called
-    # All monitoring functions have been removed in favor of lazy evaluation
+    # Background monitoring has been replaced by synchronous execution
+    # All operations now block until completion and return results immediately
+    # No polling or status checking is needed
 
     # ========== Single Run Execution ==========
 
@@ -177,15 +180,28 @@ class GPUExecutor:
                 if self._thread_safe_download(remote_output, local_output):
                     logger.info("Downloaded output file for run {}", run_id)
 
+                    # Generate thumbnail for the output
+                    thumbnail_path = None
+                    if local_output.exists():
+                        try:
+                            from cosmos_workflow.ui.utils import video as video_utils
+
+                            thumbnail_path = video_utils.generate_thumbnail_fast(str(local_output))
+                            if thumbnail_path:
+                                logger.info("Generated thumbnail: {}", thumbnail_path)
+                        except Exception as e:
+                            logger.warning("Error generating thumbnail: {}", e)
+
                     # Update database with success
                     if self.service:
-                        self.service.update_run(
-                            run_id,
-                            outputs={
-                                "output_path": str(local_output),
-                                "completed_at": datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
+                        outputs_data = {
+                            "output_path": str(local_output),
+                            "completed_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        if thumbnail_path:
+                            outputs_data["thumbnail_path"] = str(thumbnail_path)
+
+                        self.service.update_run(run_id, outputs=outputs_data)
                         self.service.update_run_status(run_id, "completed")
                     logger.info("Inference run {} completed successfully", run_id)
                 else:
@@ -304,15 +320,30 @@ class GPUExecutor:
             if self._thread_safe_download(remote_output, local_output):
                 logger.info("Downloaded 4K output file for run {}", run_id)
 
+                # Generate thumbnail for the output
+                thumbnail_path = None
+                if local_output.exists():
+                    try:
+                        from cosmos_workflow.ui.utils import video as video_utils
+
+                        thumbnail_path = video_utils.generate_thumbnail_fast(
+                            str(local_output), store_with_video=True
+                        )
+                        if thumbnail_path:
+                            logger.info("Generated thumbnail: {}", thumbnail_path)
+                    except Exception as e:
+                        logger.warning("Error generating thumbnail: {}", e)
+
                 # Update database with success
                 if self.service:
-                    self.service.update_run(
-                        run_id,
-                        outputs={
-                            "output_path": str(local_output),
-                            "completed_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
+                    outputs_data = {
+                        "output_path": str(local_output),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if thumbnail_path:
+                        outputs_data["thumbnail_path"] = str(thumbnail_path)
+
+                    self.service.update_run(run_id, outputs=outputs_data)
                     self.service.update_run_status(run_id, "completed")
                 logger.info("Upscaling run {} completed successfully", run_id)
             else:
@@ -336,15 +367,17 @@ class GPUExecutor:
         self,
         run: dict[str, Any],
         prompt: dict[str, Any],
+        stream_output: bool = False,
     ) -> dict[str, Any]:
-        """Execute a single run on the GPU.
+        """Execute a single run on the GPU synchronously.
 
         Args:
             run: Run dictionary containing id, execution_config, etc.
             prompt: Prompt dictionary containing prompt_text, inputs, etc.
 
         Returns:
-            Dictionary containing execution results with output_path, duration, etc.
+            Dictionary containing execution results with status='completed',
+            output_path, and other metadata. The run blocks until completion.
 
         Raises:
             RuntimeError: If GPU execution fails
@@ -411,45 +444,72 @@ class GPUExecutor:
                 upscale_script = scripts_dir / "upscale.sh"
                 if upscale_script.exists():
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
+                    # Set execute permissions on the script
+                    remote_script_path = f"{remote_scripts_dir}/upscale.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on upscale.sh: {}", stderr
+                        )
 
-                # Run inference
+                # Get guidance and seed from execution_config
+                execution_config = run.get("execution_config", {})
+                guidance = execution_config.get("guidance", 5.0)
+                seed = execution_config.get("seed", 1)
+
+                # Run inference synchronously with streaming output
                 # Create a prompt file path for DockerExecutor (it expects Path)
                 prompt_file = Path(f"{run_id}.json")  # Just a name, not used inside
                 inference_result = self.docker_executor.run_inference(
                     prompt_file=prompt_file,
                     run_id=run_id,
+                    guidance=guidance,
+                    seed=seed,
+                    stream_output=stream_output,  # Use parameter to control streaming
                 )
 
+                # Check the result status
                 if inference_result["status"] == "failed":
-                    raise RuntimeError(
-                        f"Inference failed: {inference_result.get('error', 'Unknown error')}"
+                    error_msg = inference_result.get(
+                        "error",
+                        f"Inference failed with exit code {inference_result.get('exit_code', 'unknown')}",
                     )
+                    raise RuntimeError(error_msg)
 
-                elif inference_result["status"] == "started":
-                    # Container started successfully
-                    container_name = f"cosmos_transfer_{run_id[:8]}"
-                    # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
-                    # StatusChecker will check container status and download outputs when get_run() is called
-                    logger.info("Container {} started for run {}", container_name, run_id)
+                elif inference_result["status"] == "completed":
+                    # Inference completed successfully, download outputs immediately
+                    logger.info("Inference completed for run {}, downloading outputs...", run_id)
 
-                    # Return immediately with partial results
-                    return {
-                        "status": "started",
-                        "message": "Inference started in background",
-                        "run_id": run_id,
-                        "log_path": str(run_dir / "logs" / "inference.log"),
-                    }
+                    try:
+                        output_path, thumbnail_path = self._download_outputs(
+                            run_id, run_dir, upscaled=False
+                        )
 
-                # Should not reach here with current implementation, but handle legacy behavior
-                # Download outputs
-                output_path = self._download_outputs(run_id, run_dir, upscaled=False)
+                        # Return completed status with output path and thumbnail
+                        result = {
+                            "status": "completed",
+                            "output_path": str(output_path),
+                            "message": "Inference completed successfully",
+                            "run_id": run_id,
+                            "log_path": str(run_dir / "logs" / "inference.log"),
+                        }
+                        if thumbnail_path:
+                            result["thumbnail_path"] = str(thumbnail_path)
+                        return result
+                    except Exception as download_error:
+                        logger.error(
+                            "Failed to download outputs for run {}: {}", run_id, download_error
+                        )
+                        raise RuntimeError(
+                            f"Inference completed but output download failed: {download_error}"
+                        ) from download_error
 
-                return {
-                    "output_path": str(output_path),
-                    "duration_seconds": inference_result.get("duration_seconds", 0),
-                    "remote_output": inference_result.get("remote_output"),
-                    "log_path": str(run_dir / "logs" / "inference.log"),
-                }
+                else:
+                    # Unexpected status
+                    raise RuntimeError(
+                        f"Unexpected inference status: {inference_result.get('status')}"
+                    )
 
         except Exception as e:
             logger.error("GPU execution failed for run {}: {}", run_id, e)
@@ -481,11 +541,12 @@ class GPUExecutor:
         remote_output_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
 
         # Determine output filename based on operation type
+        # Note: Upscaling now saves as output.mp4, not output_4k.mp4
+        remote_file = f"{remote_output_dir}/output.mp4"
         if upscaled:
-            remote_file = f"{remote_output_dir}/output_4k.mp4"
+            # Download as output_4k.mp4 locally for clarity, but remote file is output.mp4
             local_file = outputs_dir / "output_4k.mp4"
         else:
-            remote_file = f"{remote_output_dir}/output.mp4"
             local_file = outputs_dir / "output.mp4"
 
         # Download the output file
@@ -494,25 +555,81 @@ class GPUExecutor:
             logger.info("Downloaded output to {}", local_file)
         except Exception as e:
             logger.error("Failed to download output: {}", e)
+            # Re-raise the exception so the failure is properly reported
+            raise RuntimeError(f"Failed to download output file: {e}") from e
+
+        # Download any auto-generated control files (if they exist)
+        # These are created by the NVIDIA model when not provided in the spec
+        control_types = ["edge", "depth", "seg", "vis"]
+        for control_type in control_types:
+            # The NVIDIA model generates files as {control_type}_input_control_0.mp4
+            remote_control_file = f"{remote_output_dir}/{control_type}_input_control_0.mp4"
+            local_control_file = outputs_dir / f"{control_type}_input_control.mp4"
+
+            try:
+                self.file_transfer.download_file(remote_control_file, str(local_control_file))
+                logger.info(
+                    "Downloaded auto-generated {} control to {}", control_type, local_control_file
+                )
+            except FileNotFoundError:
+                # This is expected - not all runs generate all control types
+                logger.debug(
+                    "No auto-generated {} control found (expected if provided in spec)",
+                    control_type,
+                )
+            except Exception as e:
+                # Log but don't fail - control files are supplementary
+                logger.warning("Failed to download {} control file: {}", control_type, e)
 
         # Also download the log file
         remote_log = f"{remote_output_dir}/run.log"
-        local_log = logs_dir / "remote_run.log"
+        docker_log_path = outputs_dir / "run.log"  # Keep in outputs as backup
         try:
-            self.file_transfer.download_file(remote_log, str(local_log))
-            logger.info("Downloaded remote log to {}", local_log)
+            self.file_transfer.download_file(remote_log, str(docker_log_path))
+            logger.info("Downloaded Docker log to {}", docker_log_path)
+
+            # Append to unified log
+            unified_log = logs_dir / f"{run_id}.log"
+            if docker_log_path.exists() and unified_log.exists():
+                with open(unified_log, "a") as unified:
+                    unified.write("\n" + "=" * 60 + "\n")
+                    unified.write("=== DOCKER EXECUTION LOGS ===\n")
+                    unified.write("=" * 60 + "\n\n")
+                    with open(docker_log_path) as docker:
+                        unified.write(docker.read())
+                logger.info("Appended Docker logs to unified log")
         except FileNotFoundError:
             logger.warning("Remote log not found: {}", remote_log)
         except Exception as e:
-            logger.error("Failed to download log: {}", e)
+            logger.error("Failed to download/append log: {}", e)
 
-        return local_file
+        # Generate thumbnail for the output video
+        # This happens once when the output is downloaded, not on every view
+        thumbnail_path = None
+        if local_file.exists():
+            try:
+                from cosmos_workflow.ui.utils import video as video_utils
+
+                # Generate thumbnail in the same directory as the output
+                thumbnail_path = video_utils.generate_thumbnail_fast(str(local_file))
+                if thumbnail_path:
+                    logger.info("Generated thumbnail for output: {}", thumbnail_path)
+                else:
+                    logger.warning("Failed to generate thumbnail for output: {}", local_file)
+            except Exception as e:
+                # Don't fail the download if thumbnail generation fails
+                logger.warning("Error generating thumbnail: {}", e)
+
+        # Return both the output file and thumbnail path
+        return local_file, thumbnail_path
 
     # ========== Batch Execution ==========
 
     def execute_batch_runs(
         self,
         runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
+        batch_name: str | None = None,
+        batch_size: int = 4,
     ) -> dict[str, Any]:
         """Execute multiple runs as a batch on the GPU.
 
@@ -521,6 +638,8 @@ class GPUExecutor:
 
         Args:
             runs_and_prompts: List of (run_dict, prompt_dict) tuples
+            batch_name: Optional custom batch name (auto-generated if not provided)
+            batch_size: Number of videos to process simultaneously on GPU (default: 4)
 
         Returns:
             Dictionary containing batch results with status and output_mapping
@@ -541,66 +660,256 @@ class GPUExecutor:
 
         logger.info("Executing batch of {} runs on GPU", len(runs_and_prompts))
 
-        # Generate batch name from first run ID
-        batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
+        # Use provided batch name or generate one
+        if not batch_name:
+            batch_name = f"batch_{runs_and_prompts[0][0]['id'][:8]}_{len(runs_and_prompts)}"
+
         batch_dir = Path("outputs") / batch_name
         batch_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Using batch name: {}", batch_name)
 
-        # Prepare batch data using the helper method
-        batch_data = []
-        for run_dict, prompt_dict in runs_and_prompts:
-            # For batch, each item needs the spec format from nvidia_format
-            spec = nvidia_format.to_cosmos_inference_json(prompt_dict, run_dict)
-            # Add the run ID for batch tracking
-            spec["name"] = run_dict["id"]
-            batch_data.append(spec)
+        # Prepare batch data using the JSONL format for batch inference
+        # Use the batch-specific format with control_overrides structure
+        batch_lines = nvidia_format.to_cosmos_batch_inference_jsonl(runs_and_prompts)
 
-        # Create batch file
-        batch_file = batch_dir / "batch.json"
-        self.json_handler.write_json(batch_data, batch_file)
+        # Create batch JSONL file (not JSON array)
+        batch_file = batch_dir / "batch.jsonl"
+        nvidia_format.write_batch_jsonl(batch_lines, batch_file)
+
+        # Create base controlnet spec for the batch
+        base_controlnet_spec = nvidia_format.create_batch_base_controlnet_spec(runs_and_prompts)
+        base_spec_file = batch_dir / "base_controlnet_spec.json"
+        nvidia_format.write_cosmos_json(base_controlnet_spec, base_spec_file)
+        logger.info(
+            "Created base controlnet spec with controls: {}", list(base_controlnet_spec.keys())
+        )
 
         # Execute batch on GPU
         try:
             with self.ssh_manager:
                 # Upload batch file and videos
                 remote_config = self.config_manager.get_remote_config()
-                remote_batch_dir = f"{remote_config.remote_dir}/batches/{batch_name}"
 
-                self.file_transfer.upload_file(batch_file, f"{remote_batch_dir}/inputs")
+                # Upload batch_inference.sh script to bashscripts/ like inference.sh
+                scripts_dir = Path(__file__).parent.parent.parent / "scripts"
+                remote_scripts_dir = f"{remote_config.remote_dir}/bashscripts"
 
-                # Upload any videos
-                for _, prompt_dict in runs_and_prompts:
-                    video_path = prompt_dict.get("inputs", {}).get("video")
-                    if video_path and Path(video_path).exists():
-                        self.file_transfer.upload_file(
-                            Path(video_path), f"{remote_batch_dir}/inputs/videos"
+                batch_script = scripts_dir / "batch_inference.sh"
+                if batch_script.exists():
+                    logger.info("Uploading batch_inference.sh script to remote bashscripts")
+                    self.file_transfer.upload_file(batch_script, remote_scripts_dir)
+                    # Set execute permissions on the script after upload
+                    remote_script_path = f"{remote_scripts_dir}/batch_inference.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on batch_inference.sh: {}", stderr
                         )
+                    else:
+                        logger.debug("Set execute permissions on batch_inference.sh")
+                else:
+                    logger.warning("batch_inference.sh script not found at {}", batch_script)
+
+                # Upload batch file to inputs/batches/ as expected by batch_inference.sh
+                remote_batch_location = f"{remote_config.remote_dir}/inputs/batches"
+                self.file_transfer.upload_file(batch_file, remote_batch_location)
+
+                # Upload base controlnet spec to inputs/batches/
+                self.file_transfer.upload_file(base_spec_file, remote_batch_location)
+                logger.info("Uploaded base controlnet spec to remote")
+
+                # Upload any videos to run-specific paths as expected by JSONL format
+                for run_dict, prompt_dict in runs_and_prompts:
+                    run_id = run_dict["id"]
+                    inputs = prompt_dict.get("inputs", {})
+
+                    # Upload ALL input files (video, seg, depth, edge, etc.)
+                    for input_type, input_path in inputs.items():
+                        if input_path and Path(input_path).exists():
+                            # Upload to runs/{run_id}/inputs/videos/ as referenced in JSONL
+                            remote_video_dir = (
+                                f"{remote_config.remote_dir}/runs/{run_id}/inputs/videos"
+                            )
+                            logger.info(
+                                "Uploading {} for run {}: {}", input_type, run_id, input_path
+                            )
+                            self.file_transfer.upload_file(Path(input_path), remote_video_dir)
+
+                # Get guidance and seed from first run's execution_config (all runs in batch share the same config)
+                first_run = runs_and_prompts[0][0]
+                execution_config = first_run.get("execution_config", {})
+                guidance = execution_config.get("guidance", 5.0)
+                seed = execution_config.get("seed", 1)
 
                 # Run batch inference
                 batch_result = self.docker_executor.run_batch_inference(
                     batch_name=batch_name,
                     batch_jsonl_file=batch_file.name,
+                    base_controlnet_spec=base_spec_file.name,
+                    batch_size=batch_size,
+                    guidance=guidance,
+                    seed=seed,
                 )
 
                 if batch_result["status"] == "failed":
+                    # Try to download the fallback log for debugging
+                    remote_log_path = (
+                        f"{remote_config.remote_dir}/outputs/{batch_name}/batch_run.log"
+                    )
+                    local_log_path = batch_dir / "batch_run.log"
+                    try:
+                        logger.info("Attempting to download fallback log from {}", remote_log_path)
+                        self.file_transfer.download_file(remote_log_path, local_log_path)
+                        logger.info("Downloaded fallback log to {}", local_log_path)
+                    except Exception as e:
+                        logger.warning("Could not download fallback log: {}", e)
+
                     raise RuntimeError(f"Batch execution failed: {batch_result.get('error')}")
 
-                # Split outputs to individual run directories
-                output_mapping = self._split_batch_outputs(runs_and_prompts, batch_result)
+                # Batch now runs synchronously, so should have completed status
+                if batch_result.get("status") != "completed":
+                    raise RuntimeError(f"Unexpected batch status: {batch_result.get('status')}")
 
-                # Download outputs for each run
-                for run_dict, _ in runs_and_prompts:
+                # Download all batch outputs to batch directory (simpler approach)
+                logger.info("Downloading batch outputs to local batch directory")
+
+                # Ensure batch output directory exists locally
+                outputs_dir = batch_dir / "outputs"
+                outputs_dir.mkdir(exist_ok=True)
+                logger.debug("Created batch output directory: {}", outputs_dir)
+
+                # Download all output files to batch directory preserving subdirectory structure
+                remote_output_dir = batch_result.get(
+                    "output_dir", f"{remote_config.remote_dir}/outputs/{batch_name}"
+                )
+                output_files = batch_result.get("output_files", [])
+                logger.info(
+                    "Downloading {} output files from {}", len(output_files), remote_output_dir
+                )
+                logger.info(
+                    "Batch {} output structure: {} files in {}",
+                    batch_name,
+                    len(output_files),
+                    batch_dir,
+                )
+
+                # Group files by video_X directory
+                from collections import defaultdict
+
+                video_files = defaultdict(list)
+
+                for remote_file in output_files:
+                    # Extract video_X directory from path like /workspace/outputs/batch_xxx/video_0/output.mp4
+                    path_parts = Path(remote_file).parts
+                    # Find the video_X directory
+                    video_dir = None
+                    for part in path_parts:
+                        if part.startswith("video_"):
+                            video_dir = part
+                            break
+
+                    if video_dir:
+                        video_files[video_dir].append(remote_file)
+                    else:
+                        # Fallback for files directly in batch directory
+                        video_files[""].append(remote_file)
+
+                # Download files preserving video_X structure
+                for video_dir, files in sorted(video_files.items()):
+                    if video_dir:
+                        # Create video_X subdirectory
+                        video_output_dir = outputs_dir / video_dir
+                        video_output_dir.mkdir(exist_ok=True)
+                    else:
+                        video_output_dir = outputs_dir
+
+                    for remote_file in files:
+                        filename = Path(remote_file).name
+                        local_file = video_output_dir / filename
+
+                        try:
+                            self.file_transfer.download_file(remote_file, str(local_file))
+                            if local_file.exists():
+                                file_size = local_file.stat().st_size
+                                logger.info(
+                                    "Downloaded {} to {} (size: {} bytes)",
+                                    filename,
+                                    local_file,
+                                    file_size,
+                                )
+                            else:
+                                logger.warning(
+                                    "Download completed but file not found: {}", local_file
+                                )
+                        except Exception as e:
+                            logger.error("Failed to download {}: {}", filename, e)
+
+                # Download the batch log file
+                remote_log = f"{remote_output_dir}/batch_run.log"
+                local_log = batch_dir / "batch_run.log"
+                try:
+                    self.file_transfer.download_file(remote_log, str(local_log))
+                    logger.info("Downloaded batch log to {}", local_log)
+                except Exception as e:
+                    logger.warning("Could not download batch log: {}", e)
+
+                # Update database for each run to point to files in batch directory
+                logger.info(
+                    "Updating database for {} runs in batch {}", len(runs_and_prompts), batch_name
+                )
+                for i, (run_dict, _) in enumerate(runs_and_prompts):
                     run_id = run_dict["id"]
-                    if run_id in output_mapping and output_mapping[run_id]["status"] == "found":
-                        run_dir = Path("outputs") / f"run_{run_id}"
-                        run_dir.mkdir(parents=True, exist_ok=True)
-                        # Download this run's output
-                        self._download_outputs(run_id, run_dir)
+
+                    # Files are in video_X subdirectories
+                    video_subdir = outputs_dir / f"video_{i}"
+
+                    # Build outputs dictionary with paths in video_X subdirectory
+                    output_video_path = video_subdir / "output.mp4"
+
+                    outputs = {
+                        "output_path": str(output_video_path),
+                        "log_path": str(local_log),
+                        "batch_id": batch_name,
+                        "batch_index": i,
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
+                    # Check if the output video exists
+                    if not output_video_path.exists():
+                        logger.warning(
+                            "Output video not found for run {}: {}", run_id, output_video_path
+                        )
+                    else:
+                        logger.debug(
+                            "Storing batch output for run {}: {}", run_id, outputs["output_path"]
+                        )
+
+                    # Check if control files exist with _0 suffix and add them
+                    control_types = ["edge", "depth", "seg", "vis"]
+                    found_controls = []
+                    for control_type in control_types:
+                        # Control files have _0 suffix in batch outputs
+                        control_file = video_subdir / f"{control_type}_input_control_0.mp4"
+                        if control_file.exists():
+                            outputs[f"{control_type}_control"] = str(control_file)
+                            found_controls.append(control_type)
+
+                    if found_controls:
+                        logger.debug(
+                            "Found control files for run {}: {}", run_id, ", ".join(found_controls)
+                        )
+
+                    # Update run in database
+                    self.service.update_run(run_id, outputs=outputs)
+                    self.service.update_run_status(run_id, "completed")
+                    logger.info("Updated run {} with batch output paths", run_id)
 
                 return {
                     "status": "success",
                     "batch_name": batch_name,
-                    "output_mapping": output_mapping,
+                    "run_count": len(runs_and_prompts),
+                    "output_dir": str(batch_dir),
                     "duration_seconds": batch_result.get("duration_seconds", 0),
                 }
 
@@ -612,69 +921,6 @@ class GPUExecutor:
                 "error": str(e),
                 "started_at": datetime.now(timezone.utc).isoformat(),
             }
-
-    @staticmethod
-    def _split_batch_outputs(
-        runs_and_prompts: list[tuple[dict[str, Any], dict[str, Any]]],
-        batch_result: dict[str, Any],
-    ) -> dict[str, dict[str, Any]]:
-        """Split batch output files to individual run folders.
-
-        Args:
-            runs_and_prompts: Original run/prompt pairs
-            batch_result: Result from batch inference
-
-        Returns:
-            Mapping of run_id to output file info
-        """
-        output_mapping = {}
-        output_files = batch_result.get("output_files", [])
-        used_files = set()  # Track which files have been matched
-
-        # Match output files to runs
-        # NVIDIA batch inference typically names outputs with indices or prompt IDs
-        for i, (run_dict, _) in enumerate(runs_and_prompts):
-            run_id = run_dict["id"]
-
-            # Try to find matching output file
-            # Look for files with index or run_id in name
-            matched_file = None
-            for output_file in output_files:
-                if output_file in used_files:
-                    continue  # Skip already matched files
-
-                file_name = Path(output_file).name
-                # Check if file contains run_id or index
-                if run_id in file_name or f"_{i:03d}_" in file_name or f"_{i}_" in file_name:
-                    matched_file = output_file
-                    used_files.add(output_file)
-                    break
-
-            if matched_file:
-                output_mapping[run_id] = {
-                    "remote_path": matched_file,
-                    "batch_index": i,
-                    "status": "found",
-                }
-            else:
-                # If no match found, try sequential matching with unused files
-                available_files = [f for f in output_files if f not in used_files]
-                if available_files:
-                    matched_file = available_files[0]
-                    used_files.add(matched_file)
-                    output_mapping[run_id] = {
-                        "remote_path": matched_file,
-                        "batch_index": i,
-                        "status": "assumed",
-                    }
-                else:
-                    output_mapping[run_id] = {
-                        "remote_path": None,
-                        "batch_index": i,
-                        "status": "missing",
-                    }
-
-        return output_mapping
 
     # ========== Upsampling Methods ==========
 
@@ -760,7 +1006,7 @@ class GPUExecutor:
                         raise FileNotFoundError(f"Upsampler script not found at {local_script}")
                     self.file_transfer.upload_file(local_script, scripts_dir)
 
-                    # Execute prompt enhancement via DockerExecutor
+                    # Execute prompt enhancement via DockerExecutor (already synchronous)
                     logger.info("Starting prompt enhancement on GPU...")
                     enhancement_result = self.docker_executor.run_prompt_enhancement(
                         batch_filename=batch_filename,
@@ -774,29 +1020,200 @@ class GPUExecutor:
                             f"Prompt enhancement failed: {enhancement_result.get('error', 'Unknown error')}"
                         )
 
-                    elif enhancement_result["status"] == "started":
-                        # Container started successfully
-                        container_name = f"cosmos_enhance_{run_id[:8]}"
-                        # NOTE: Background monitoring has been removed in favor of lazy sync via StatusChecker
-                        # StatusChecker will check container status and download outputs when get_run() is called
+                    elif enhancement_result["status"] == "completed":
+                        # Enhancement completed successfully, download outputs
                         logger.info(
-                            "Container %s started for enhancement run %s", container_name, run_id
+                            "Enhancement completed for run {}, downloading outputs...", run_id
                         )
 
-                        # Return immediately with partial results
+                        # Download the enhanced prompts output files
+                        remote_output_dir = f"{remote_config.remote_dir}/outputs/run_{run_id}"
+                        local_output_dir = run_dir / "outputs"
+                        local_output_dir.mkdir(exist_ok=True)
+
+                        # The script may save either batch_results.json (for batch mode) or prompt_upsampled.json (single mode)
+                        # Try both to be robust
+                        remote_batch_results = f"{remote_output_dir}/batch_results.json"
+                        remote_prompt_upsampled = f"{remote_output_dir}/prompt_upsampled.json"
+                        local_batch_results = local_output_dir / "batch_results.json"
+                        local_prompt_upsampled = local_output_dir / "prompt_upsampled.json"
+
+                        results = None
+                        enhanced_text = None
+
+                        # First try batch_results.json (expected for batch mode)
+                        try:
+                            logger.info(
+                                "Checking for batch_results.json at: {}", remote_batch_results
+                            )
+                            self.file_transfer.download_file(
+                                remote_batch_results, str(local_batch_results)
+                            )
+                            logger.info(
+                                "Successfully downloaded batch_results.json to: {}",
+                                local_batch_results,
+                            )
+
+                            # Extract enhanced text from results
+                            results = self.json_handler.read_json(local_batch_results)
+                            if results and len(results) > 0:
+                                enhanced_text = results[0].get("upsampled_prompt", "")
+                                logger.info(
+                                    "Extracted enhanced text from batch_results.json (length: {} chars)",
+                                    len(enhanced_text) if enhanced_text else 0,
+                                )
+                        except Exception as e:
+                            logger.info("batch_results.json not available: {}", e)
+
+                        # If batch_results.json failed, try prompt_upsampled.json
+                        if not enhanced_text:
+                            try:
+                                logger.info(
+                                    "Checking for prompt_upsampled.json at: {}",
+                                    remote_prompt_upsampled,
+                                )
+                                self.file_transfer.download_file(
+                                    remote_prompt_upsampled, str(local_prompt_upsampled)
+                                )
+                                logger.info(
+                                    "Successfully downloaded prompt_upsampled.json to: {}",
+                                    local_prompt_upsampled,
+                                )
+
+                                # Read single result format
+                                single_result = self.json_handler.read_json(local_prompt_upsampled)
+                                enhanced_text = single_result.get("upsampled_prompt", "")
+                                # Convert to batch format for consistency
+                                results = [single_result]
+                                logger.info(
+                                    "Extracted enhanced text from prompt_upsampled.json (length: {} chars)",
+                                    len(enhanced_text) if enhanced_text else 0,
+                                )
+                            except Exception as e:
+                                logger.info("prompt_upsampled.json not available: {}", e)
+
+                        # If still no results, list directory and error
+                        if not enhanced_text:
+                            # List remote directory contents for debugging
+                            try:
+                                logger.error(
+                                    "No results files found. Listing remote directory contents:"
+                                )
+                                list_cmd = f"ls -la {remote_output_dir}/"
+                                _, stdout, _ = self.ssh_manager.execute_command(
+                                    list_cmd, timeout=10
+                                )
+                                logger.info("Remote directory contents:\n{}", stdout)
+                            except Exception as list_error:
+                                logger.error("Failed to list remote directory: {}", list_error)
+
+                            raise RuntimeError(
+                                f"No enhancement results found in {remote_output_dir}. "
+                                f"Expected batch_results.json or prompt_upsampled.json"
+                            )
+
+                        # Validate we got the enhanced text
+                        if not enhanced_text:
+                            logger.error(
+                                "Enhanced text is empty or null in results: {}",
+                                results[0] if results else "no results",
+                            )
+                            raise RuntimeError("Enhanced text is empty")
+
+                        logger.info(
+                            "Successfully extracted enhanced text (first 100 chars): {}...",
+                            enhanced_text[:100] if len(enhanced_text) > 100 else enhanced_text,
+                        )
+
+                        # Use the existing data repository service
+                        if not self.service:
+                            raise RuntimeError("DataRepository service not initialized")
+
+                        data_repo = self.service
+
+                        # Handle prompt creation/update based on create_new flag
+                        create_new = execution_config.get("create_new", True)
+                        prompt_id = prompt["id"]
+                        enhanced_prompt_id = None
+
+                        if create_new:
+                            # Create new enhanced prompt
+                            name = prompt.get("parameters", {}).get("name", "unnamed")
+                            enhanced_prompt = data_repo.create_prompt(
+                                prompt_text=enhanced_text,
+                                inputs=prompt.get("inputs", {}),
+                                parameters={
+                                    **prompt.get("parameters", {}),
+                                    "name": f"{name}_enhanced",
+                                    "enhanced": True,
+                                    "parent_prompt_id": prompt_id,
+                                },
+                            )
+                            enhanced_prompt_id = enhanced_prompt["id"]
+                            logger.info(
+                                "Created enhanced prompt {} from {} for run {}",
+                                enhanced_prompt_id,
+                                prompt_id,
+                                run_id,
+                            )
+                        else:
+                            # Update existing prompt
+                            updated_params = {**prompt.get("parameters", {}), "enhanced": True}
+                            data_repo.update_prompt(
+                                prompt_id,
+                                prompt_text=enhanced_text,
+                                parameters=updated_params,
+                            )
+                            enhanced_prompt_id = prompt_id
+                            logger.info(
+                                "Updated prompt {} with enhanced text for run {}",
+                                prompt_id,
+                                run_id,
+                            )
+
+                        # Update run in database with results
+                        logger.info("Updating database run {} with enhancement results", run_id)
+                        outputs = {
+                            "enhanced_text": enhanced_text,
+                            "original_prompt_id": prompt_id,
+                            "enhanced_prompt_id": enhanced_prompt_id,
+                            "enhancement_model": model,
+                            "enhanced_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        data_repo.update_run(run_id, outputs=outputs)
+                        data_repo.update_run_status(run_id, "completed")
+                        logger.info("Database updated successfully for run {}", run_id)
+
+                        # Download any log files if they exist
+                        try:
+                            remote_log = f"{remote_output_dir}/run.log"
+                            local_log = logs_dir / "enhancement.log"
+                            self.file_transfer.download_file(remote_log, str(local_log))
+                            logger.info("Downloaded run log to: {}", local_log)
+                        except Exception as log_error:
+                            logger.debug("No run log to download: {}", log_error)
+
+                        # Return completed status with enhanced prompt ID
+                        logger.info(
+                            "Enhancement run {} completed successfully. Enhanced prompt: {}",
+                            run_id,
+                            enhanced_prompt_id,
+                        )
                         return {
-                            "status": "started",
-                            "message": "Enhancement started in background",
+                            "status": "completed",
+                            "message": "Enhancement completed successfully",
                             "run_id": run_id,
+                            "enhanced_text": enhanced_text,
+                            "enhanced_prompt_id": enhanced_prompt_id,
+                            "original_prompt_id": prompt_id,
                             "log_path": str(logs_dir / "enhancement.log"),
                         }
 
-                    # Should not reach here with current implementation
-                    return {
-                        "status": "unknown",
-                        "message": "Unexpected enhancement status",
-                        "run_id": run_id,
-                    }
+                    else:
+                        # Unexpected status
+                        raise RuntimeError(
+                            f"Unexpected enhancement status: {enhancement_result.get('status')}"
+                        )
 
             except Exception as e:
                 logger.error("Enhancement run {} failed: {}", run_id, e)
@@ -1025,6 +1442,16 @@ class GPUExecutor:
                 if upscale_script.exists():
                     logger.info("Uploading upscale script to remote")
                     self.file_transfer.upload_file(upscale_script, remote_scripts_dir)
+                    # Set execute permissions on the script after upload (like batch_inference.sh)
+                    remote_script_path = f"{remote_scripts_dir}/upscale.sh"
+                    chmod_cmd = f"chmod +x {remote_script_path}"
+                    exit_code, _, stderr = self.ssh_manager.execute_command(chmod_cmd, timeout=10)
+                    if exit_code != 0:
+                        logger.warning(
+                            "Failed to set execute permissions on upscale.sh: {}", stderr
+                        )
+                    else:
+                        logger.debug("Set execute permissions on upscale.sh")
                 else:
                     logger.warning("Upscale script not found at {}", upscale_script)
 
@@ -1062,54 +1489,64 @@ class GPUExecutor:
                     # Upload the video file
                     self.file_transfer.upload_file(local_video_path, remote_video_dir)
 
-                # Run upscaling with video path and optional prompt
+                # Run upscaling synchronously with streaming output
                 result = self.docker_executor.run_upscaling(
                     video_path=remote_video_path,
                     run_id=run_id,
                     control_weight=control_weight,
                     prompt=prompt_text,
+                    stream_output=True,  # Enable streaming for CLI visibility
                 )
 
+                # Check the result status
                 if result["status"] == "failed":
-                    raise RuntimeError(f"Upscaling failed: {result.get('error', 'Unknown error')}")
+                    error_msg = result.get(
+                        "error",
+                        f"Upscaling failed with exit code {result.get('exit_code', 'unknown')}",
+                    )
+                    raise RuntimeError(error_msg)
 
-                elif result["status"] == "started":
-                    # Container started successfully
-                    container_name = f"cosmos_upscale_{run_id[:8]}"
-                    # StatusChecker will handle lazy sync when get_run() is called
-                    logger.info("Container {} started for upscaling run {}", container_name, run_id)
+                elif result["status"] == "completed":
+                    # Upscaling completed successfully, download outputs immediately
+                    logger.info("Upscaling completed for run {}, downloading outputs...", run_id)
 
-                    # Return immediately with partial results
-                    result_data = {
-                        "status": "started",
-                        "message": "Upscaling started in background",
-                        "run_id": run_id,
-                        "log_path": (logs_dir / "upscaling.log").as_posix(),
-                    }
+                    try:
+                        output_path, thumbnail_path = self._download_outputs(
+                            run_id, run_dir, upscaled=True
+                        )
 
-                    # Add source_run_id if this was from an existing run
-                    if source_run_id:
-                        result_data["parent_run_id"] = source_run_id
+                        # Build result data
+                        result_data = {
+                            "status": "completed",
+                            "output_path": output_path.as_posix()
+                            if isinstance(output_path, Path)
+                            else str(output_path),
+                            "message": "Upscaling completed successfully",
+                            "run_id": run_id,
+                            "log_path": (logs_dir / "upscaling.log").as_posix(),
+                        }
+                        if thumbnail_path:
+                            result_data["thumbnail_path"] = str(thumbnail_path)
 
-                    return result_data
+                        # Add source_run_id if this was from an existing run
+                        if source_run_id:
+                            result_data["parent_run_id"] = source_run_id
 
-                # Should not reach here with current implementation, but handle legacy behavior
-                # Download upscaled output
-                output_path = self._download_outputs(run_id, run_dir, upscaled=True)
+                        return result_data
 
-                result_data = {
-                    "output_path": output_path.as_posix()
-                    if isinstance(output_path, Path)
-                    else str(output_path),
-                    "duration_seconds": result.get("duration_seconds", 0),
-                    "log_path": (logs_dir / "upscaling.log").as_posix(),
-                }
+                    except Exception as download_error:
+                        logger.error(
+                            "Failed to download upscaled outputs for run {}: {}",
+                            run_id,
+                            download_error,
+                        )
+                        raise RuntimeError(
+                            f"Upscaling completed but output download failed: {download_error}"
+                        ) from download_error
 
-                # Add source_run_id if this was from an existing run
-                if source_run_id:
-                    result_data["parent_run_id"] = source_run_id
-
-                return result_data
+                else:
+                    # Unexpected status
+                    raise RuntimeError(f"Unexpected upscaling status: {result.get('status')}")
         except Exception as e:
             logger.error("Upscaling run {} failed: {}", run_id, e)
             raise RuntimeError(f"Upscaling failed: {e}") from e

@@ -31,8 +31,9 @@ class LogViewer:
         Returns:
             HTML string with colored and filtered logs
         """
+        # Add a unique ID and auto-scroll script
         html_lines = [
-            '<div style="font-family:monospace; '
+            '<div id="log-container" style="font-family:monospace; '
             "padding:10px; overflow-y:auto; max-height:600px; "
             "background:var(--body-background-fill); color:var(--body-text-color); "
             'border:1px solid var(--border-color-primary);">'
@@ -83,11 +84,29 @@ class LogViewer:
             )
 
         html_lines.append("</div>")
+        # Add auto-scroll script that runs after content loads
+        html_lines.append(
+            """<script>
+            setTimeout(function() {
+                var logContainer = document.getElementById('log-container');
+                if (logContainer) {
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            }, 100);
+            </script>"""
+        )
         return "\n".join(html_lines)
 
     def clear(self):
         """Clear all logs."""
         self.entries.clear()
+
+    def get_text(self) -> str:
+        """Get plain text output for display in Textbox with autoscroll."""
+        lines = []
+        for entry in self.entries:
+            lines.append(f"{entry['time']} {entry['text']}")
+        return "\n".join(lines)
 
     def get_stats(self) -> dict:
         """Get quick statistics about the logs."""

@@ -25,7 +25,6 @@ class TestPhase2RunModelUpdates:
         """Create a sample prompt for testing."""
         prompt = Prompt(
             id="ps_test123",
-            model_type="transfer",
             prompt_text="Test prompt",
             inputs={"video": "/path/to/video.mp4"},
             parameters={"num_steps": 10},
@@ -64,7 +63,7 @@ class TestPhase2RunModelUpdates:
             execution_config={"gpu": "A100"},
             outputs={"video": "/output/video.mp4"},
             run_metadata={},
-            log_path="outputs/run_rs_test456/logs/run.log",
+            log_path="outputs/run_rs_test456/logs/rs_rs_test456.log",
         )
 
         db_session.add(run)
@@ -73,7 +72,7 @@ class TestPhase2RunModelUpdates:
         # Retrieve and verify
         retrieved_run = db_session.query(Run).filter_by(id="rs_test456").first()
         assert retrieved_run is not None
-        assert retrieved_run.log_path == "outputs/run_rs_test456/logs/run.log"
+        assert retrieved_run.log_path == "outputs/run_rs_test456/logs/rs_rs_test456.log"
 
     def test_create_run_with_error_message(self, db_session, sample_prompt):
         """Test creating a run with error_message."""
@@ -107,7 +106,7 @@ class TestPhase2RunModelUpdates:
             execution_config={"gpu": "A100"},
             outputs={},
             run_metadata={},
-            log_path="outputs/run_rs_test_both/logs/run.log",
+            log_path="outputs/run_rs_test_both/logs/rs_rs_test_both.log",
             error_message="Process terminated unexpectedly",
         )
 
@@ -117,7 +116,7 @@ class TestPhase2RunModelUpdates:
         # Retrieve and verify
         retrieved_run = db_session.query(Run).filter_by(id="rs_test_both").first()
         assert retrieved_run is not None
-        assert retrieved_run.log_path == "outputs/run_rs_test_both/logs/run.log"
+        assert retrieved_run.log_path == "outputs/run_rs_test_both/logs/rs_rs_test_both.log"
         assert retrieved_run.error_message == "Process terminated unexpectedly"
 
     def test_update_existing_run_with_log_path(self, db_session, sample_prompt):
@@ -136,13 +135,13 @@ class TestPhase2RunModelUpdates:
         db_session.commit()
 
         # Update with log_path
-        run.log_path = "outputs/run_rs_update_log/logs/run.log"
+        run.log_path = "outputs/run_rs_update_log/logs/rs_rs_update_log.log"
         run.status = "completed"
         db_session.commit()
 
         # Retrieve and verify
         retrieved_run = db_session.query(Run).filter_by(id="rs_update_log").first()
-        assert retrieved_run.log_path == "outputs/run_rs_update_log/logs/run.log"
+        assert retrieved_run.log_path == "outputs/run_rs_update_log/logs/rs_rs_update_log.log"
         assert retrieved_run.status == "completed"
 
     def test_update_existing_run_with_error_message(self, db_session, sample_prompt):

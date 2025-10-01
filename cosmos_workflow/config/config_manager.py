@@ -250,6 +250,29 @@ class ConfigManager:
             "ssh_command": timeouts.get("ssh_command", 300),  # 5 minutes default
         }
 
+    def get_ui_config(self) -> dict[str, Any]:
+        """Get UI configuration values.
+
+        Returns default values if not specified in config.
+
+        Returns:
+            Dictionary containing UI configuration:
+                - port: Gradio server port
+                - host: Gradio server host
+                - share: Whether to create public share links
+                - refresh_interval: Auto-refresh interval in seconds
+                - cleanup_containers_on_exit: Whether to kill containers on exit
+        """
+        ui_config = self.get_config_section("ui")
+        # Provide sensible defaults if not in config
+        return {
+            "port": ui_config.get("port", 7860),
+            "host": ui_config.get("host", "0.0.0.0"),
+            "share": ui_config.get("share", False),
+            "refresh_interval": ui_config.get("refresh_interval", 5),
+            "cleanup_containers_on_exit": ui_config.get("cleanup_containers_on_exit", False),
+        }
+
     def reload_config(self) -> None:
         """Reload configuration from file.
 

@@ -28,7 +28,6 @@ class TestPromptModel:
         """Test creating a prompt for cosmos transfer model."""
         prompt = Prompt(
             id="ps_20250104_120000_abc123",
-            model_type="transfer",
             prompt_text="cyberpunk city at night",
             inputs={
                 "video": "/inputs/videos/city.mp4",
@@ -41,7 +40,6 @@ class TestPromptModel:
 
         retrieved = session.get(Prompt, prompt.id)
         assert retrieved is not None
-        assert retrieved.model_type == "transfer"
         assert retrieved.prompt_text == "cyberpunk city at night"
         assert retrieved.inputs["video"] == "/inputs/videos/city.mp4"
         assert retrieved.parameters["num_steps"] == 35
@@ -51,7 +49,6 @@ class TestPromptModel:
         """Test creating a prompt for future cosmos reason model."""
         prompt = Prompt(
             id="ps_20250104_130000_def456",
-            model_type="reason",
             prompt_text="What happens next in this scene?",
             inputs={"video": "/outputs/result.mp4", "context": "urban environment"},
             parameters={"reasoning_depth": 3, "temperature": 0.7},
@@ -60,7 +57,6 @@ class TestPromptModel:
         session.commit()
 
         retrieved = session.get(Prompt, prompt.id)
-        assert retrieved.model_type == "reason"
         assert retrieved.inputs["context"] == "urban environment"
         assert retrieved.parameters["reasoning_depth"] == 3
 
@@ -68,7 +64,6 @@ class TestPromptModel:
         """Test creating a prompt for future cosmos predict model."""
         prompt = Prompt(
             id="ps_20250104_140000_ghi789",
-            model_type="predict",
             prompt_text="Continue this animation",
             inputs={
                 "frames": ["frame1.png", "frame2.png", "frame3.png"],
@@ -80,7 +75,6 @@ class TestPromptModel:
         session.commit()
 
         retrieved = session.get(Prompt, prompt.id)
-        assert retrieved.model_type == "predict"
         assert len(retrieved.inputs["frames"]) == 3
         assert retrieved.parameters["prediction_length"] == 60
 
@@ -100,7 +94,6 @@ class TestPromptModel:
 
         prompt = Prompt(
             id="ps_complex",
-            model_type="experimental",
             prompt_text="test",
             inputs=complex_inputs,
             parameters=complex_params,
@@ -123,44 +116,11 @@ class TestPromptModel:
             session.add(prompt)
             session.commit()
 
-    def test_query_prompts_by_model_type(self, session: Session):
-        """Test filtering prompts by model type."""
-        prompt1 = Prompt(
-            id="ps_1",
-            model_type="transfer",
-            prompt_text="test1",
-            inputs={},
-            parameters={},
-        )
-        prompt2 = Prompt(
-            id="ps_2",
-            model_type="reason",
-            prompt_text="test2",
-            inputs={},
-            parameters={},
-        )
-        prompt3 = Prompt(
-            id="ps_3",
-            model_type="transfer",
-            prompt_text="test3",
-            inputs={},
-            parameters={},
-        )
-        session.add_all([prompt1, prompt2, prompt3])
-        session.commit()
-
-        transfer_prompts = session.scalars(
-            select(Prompt).where(Prompt.model_type == "transfer")
-        ).all()
-        assert len(transfer_prompts) == 2
-        assert all(p.model_type == "transfer" for p in transfer_prompts)
-
     def test_prompt_timestamp_auto_set(self, session: Session):
         """Test that created_at is automatically set."""
         before = datetime.now(timezone.utc).replace(tzinfo=None)
         prompt = Prompt(
             id="ps_time",
-            model_type="transfer",
             prompt_text="test",
             inputs={},
             parameters={},
@@ -190,7 +150,6 @@ class TestRunModel:
         """Create a sample prompt for run tests."""
         prompt = Prompt(
             id="ps_test",
-            model_type="transfer",
             prompt_text="test prompt",
             inputs={"video": "/test.mp4"},
             parameters={"num_steps": 35},
@@ -204,7 +163,7 @@ class TestRunModel:
         run = Run(
             id="rs_20250104_120000_abc123",
             prompt_id=sample_prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="pending",
             execution_config={
                 "gpu_node": "gpu-001",
@@ -229,7 +188,7 @@ class TestRunModel:
         run = Run(
             id="rs_status",
             prompt_id=sample_prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="pending",
             execution_config={},
             outputs={},
@@ -250,7 +209,7 @@ class TestRunModel:
         run = Run(
             id="rs_outputs",
             prompt_id=sample_prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="completed",
             execution_config={},
             outputs={
@@ -277,7 +236,7 @@ class TestRunModel:
         run = Run(
             id="rs_time",
             prompt_id=sample_prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="pending",
             execution_config={},
             outputs={},
@@ -310,7 +269,7 @@ class TestRunModel:
             Run(
                 id=f"rs_{i}",
                 prompt_id=sample_prompt.id,
-                model_type="transfer",
+                model_type="inference",
                 status=status,
                 execution_config={},
                 outputs={},
@@ -333,7 +292,6 @@ class TestRunModel:
         """Test relationship between Run and Prompt."""
         prompt = Prompt(
             id="ps_rel",
-            model_type="transfer",
             prompt_text="test",
             inputs={},
             parameters={},
@@ -345,7 +303,7 @@ class TestRunModel:
             Run(
                 id=f"rs_rel_{i}",
                 prompt_id=prompt.id,
-                model_type="transfer",
+                model_type="inference",
                 status="pending",
                 execution_config={},
                 outputs={},
@@ -375,7 +333,6 @@ class TestModelValidation:
         with pytest.raises(ValueError, match="inputs cannot be None"):
             Prompt(
                 id="ps_invalid",
-                model_type="transfer",
                 prompt_text="test",
                 inputs=None,
                 parameters={},
@@ -384,7 +341,6 @@ class TestModelValidation:
         with pytest.raises(ValueError, match="parameters cannot be None"):
             Prompt(
                 id="ps_invalid",
-                model_type="transfer",
                 prompt_text="test",
                 inputs={},
                 parameters=None,
@@ -392,13 +348,8 @@ class TestModelValidation:
 
     def test_prompt_rejects_empty_required_fields(self):
         """Test that Prompt rejects empty required fields."""
-        with pytest.raises(ValueError, match="model_type cannot be None or empty"):
-            Prompt(id="ps_invalid", model_type="", prompt_text="test", inputs={}, parameters={})
-
         with pytest.raises(ValueError, match="prompt_text cannot be None or empty"):
-            Prompt(
-                id="ps_invalid", model_type="transfer", prompt_text="   ", inputs={}, parameters={}
-            )
+            Prompt(id="ps_invalid", prompt_text="   ", inputs={}, parameters={})
 
     def test_run_validates_required_fields(self):
         """Test that Run validates required fields."""
@@ -406,7 +357,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
-                model_type="transfer",
+                model_type="inference",
                 status="pending",
                 execution_config=None,
                 outputs={},
@@ -417,7 +368,7 @@ class TestModelValidation:
             Run(
                 id="rs_invalid",
                 prompt_id="ps_test",
-                model_type="transfer",
+                model_type="inference",
                 status="",
                 execution_config={},
                 outputs={},
@@ -441,7 +392,6 @@ class TestDatabaseIntegration:
         # Create prompt
         prompt = Prompt(
             id="ps_workflow",
-            model_type="transfer",
             prompt_text="futuristic landscape",
             inputs={
                 "video": "/inputs/landscape.mp4",
@@ -456,7 +406,7 @@ class TestDatabaseIntegration:
         run = Run(
             id="rs_workflow",
             prompt_id=prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="pending",
             execution_config={
                 "gpu_node": "gpu-002",
@@ -488,7 +438,6 @@ class TestDatabaseIntegration:
         """Test handling multiple runs for the same prompt."""
         prompt = Prompt(
             id="ps_multi",
-            model_type="transfer",
             prompt_text="test",
             inputs={},
             parameters={},
@@ -501,7 +450,7 @@ class TestDatabaseIntegration:
             run = Run(
                 id=f"rs_multi_{i}",
                 prompt_id=prompt.id,
-                model_type="transfer",
+                model_type="inference",
                 status=status,
                 execution_config={"attempt": i + 1},
                 outputs={},
@@ -524,7 +473,6 @@ class TestDatabaseIntegration:
         """Test that cascade operations work correctly."""
         prompt = Prompt(
             id="ps_cascade",
-            model_type="transfer",
             prompt_text="test",
             inputs={},
             parameters={},
@@ -532,7 +480,7 @@ class TestDatabaseIntegration:
         run = Run(
             id="rs_cascade",
             prompt_id=prompt.id,
-            model_type="transfer",
+            model_type="inference",
             status="running",
             execution_config={},
             outputs={},

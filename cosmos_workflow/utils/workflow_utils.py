@@ -47,23 +47,27 @@ def ensure_directory(path: Path | str) -> Path:
 def get_log_path(operation: str, identifier: str, run_id: str | None = None) -> Path:
     """Get standardized log path for any operation.
 
+    Always returns the unified log path for run operations.
+
     Args:
         operation: Type of operation (e.g., "inference", "upscaling", "batch")
         identifier: Unique identifier (e.g., prompt_name, batch_name)
         run_id: Optional run ID for the log file
 
     Returns:
-        Path to the log file.
+        Path to the unified log file.
     """
-    log_dir = Path(f"outputs/{identifier}/{operation}_logs")
-    ensure_directory(log_dir)
-
     if run_id:
-        return log_dir / f"{operation}_{run_id}.log"
-    else:
-        # Use timestamp if no run_id provided
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        return log_dir / f"{operation}_{timestamp}.log"
+        # For run operations, use unified log path
+        log_dir = Path(f"outputs/run_{run_id}/logs")
+        ensure_directory(log_dir)
+        return log_dir / f"{run_id}.log"
+
+    # Fallback for non-run operations (shouldn't happen in practice)
+    log_dir = Path(f"outputs/{identifier}/logs")
+    ensure_directory(log_dir)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return log_dir / f"{operation}_{timestamp}.log"
 
 
 def sanitize_remote_path(path: str) -> str:

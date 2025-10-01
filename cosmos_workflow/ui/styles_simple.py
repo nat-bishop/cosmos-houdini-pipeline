@@ -1,0 +1,446 @@
+"""Simplified styling for the Cosmos Workflow Manager UI - Focus on functionality."""
+
+
+def get_custom_css():
+    """Return simplified CSS that doesn't interfere with dropdowns."""
+    return """
+    /* Basic color scheme */
+    :root {
+        --primary-color: #667eea;
+        --secondary-color: #764ba2;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --hover-color: rgba(102, 126, 234, 0.1);
+    }
+
+    /* Simple header */
+    h1 {
+        color: var(--primary-color);
+        font-size: 2.5rem !important;
+        font-weight: 800 !important;
+    }
+
+    /* Basic card styling - no transforms or complex effects */
+    .gr-box, .gr-group {
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+    }
+
+    /* Simple button styling - only for actual buttons, not dropdown arrows */
+    button.gr-button {
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: background-color 0.2s ease !important;
+    }
+
+    button.gr-button:hover {
+        opacity: 0.9;
+    }
+
+    /* Gallery styling */
+    #input_gallery .thumbnail-item {
+        aspect-ratio: 16 / 9 !important;
+        object-fit: cover !important;
+        min-height: 200px !important;
+        border-radius: 8px !important;
+    }
+
+    #input_gallery .thumbnail-item:hover {
+        border: 2px solid var(--primary-color) !important;
+    }
+
+    /* Tabs */
+    .tab-nav button {
+        font-weight: 600 !important;
+        padding: 12px 24px !important;
+        border-radius: 8px 8px 0 0 !important;
+    }
+
+    .tab-nav button.selected {
+        background: var(--primary-color) !important;
+        color: white !important;
+    }
+
+    /* Prompts tab container - allow natural height expansion */
+    .prompts-tab {
+        min-height: 600px;
+        overflow: visible !important;
+    }
+
+    /* Tables */
+    .gr-dataframe {
+        border-radius: 8px !important;
+    }
+
+    /* Ensure the prompts table specifically has proper scrolling */
+    #prompts-table-wrapper {
+        flex: 1;  /* Take available space in flex container */
+        min-height: 300px;  /* Minimum height for usability */
+        overflow: visible !important;  /* Allow content to flow naturally */
+        margin-bottom: 12px !important;
+    }
+
+    #prompts-table-wrapper > div {
+        height: 100%;  /* Take full height of parent */
+        overflow: visible !important;  /* Allow Gradio's internal scrolling to work */
+    }
+
+    /* Target the dataframe directly by ID */
+    #prompts-dataframe {
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow, let .wrap handle scrolling */
+        display: block !important;
+    }
+
+    /* The wrap class is what Gradio uses for the scrollable area - only vertical scroll */
+    #prompts-dataframe .wrap {
+        max-height: 700px !important;  /* Doubled from ~350px */
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Gradio specific table container */
+    #prompts-dataframe .table-wrap {
+        max-height: 700px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Make table columns fit without horizontal scroll */
+    #prompts-dataframe table {
+        width: 100% !important;
+        table-layout: fixed !important;  /* Force columns to fit */
+    }
+
+    /* Adjust column widths for better fit */
+    #prompts-dataframe th:nth-child(1),
+    #prompts-dataframe td:nth-child(1) {
+        width: 5% !important;  /* Checkbox column */
+    }
+
+    #prompts-dataframe th:nth-child(2),
+    #prompts-dataframe td:nth-child(2) {
+        width: 25% !important;  /* ID column */
+    }
+
+    #prompts-dataframe th:nth-child(3),
+    #prompts-dataframe td:nth-child(3) {
+        width: 20% !important;  /* Name column */
+    }
+
+    #prompts-dataframe th:nth-child(4),
+    #prompts-dataframe td:nth-child(4) {
+        width: 35% !important;  /* Prompt Text column */
+    }
+
+    #prompts-dataframe th:nth-child(5),
+    #prompts-dataframe td:nth-child(5) {
+        width: 15% !important;  /* Created column */
+    }
+
+    /* Ensure text wraps in cells instead of causing horizontal scroll */
+    #prompts-dataframe td {
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        white-space: normal !important;
+    }
+
+    /* ===== RUNS TABLE STYLING ===== */
+    /* Apply same scrolling behavior to runs table */
+    #runs-table-wrapper {
+        max-height: 700px !important;  /* Container height limit */
+        overflow: hidden !important;  /* Hide overflow on wrapper */
+        margin-bottom: 12px !important;
+    }
+
+    #runs-table-wrapper > div {
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow on intermediate divs */
+    }
+
+    /* Target the runs dataframe directly by ID */
+    #runs-dataframe {
+        max-height: 700px !important;
+        overflow: hidden !important;  /* Hide overflow, let .wrap handle scrolling */
+        display: block !important;
+    }
+
+    /* The wrap class for runs table scrollable area */
+    #runs-dataframe .wrap {
+        max-height: 700px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Gradio specific runs table container */
+    #runs-dataframe .table-wrap {
+        max-height: 700px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;  /* No horizontal scrolling */
+    }
+
+    /* Make runs table columns fit without horizontal scroll */
+    #runs-dataframe table {
+        width: 100% !important;
+        table-layout: fixed !important;  /* Force columns to fit */
+    }
+
+    /* Adjust runs table column widths for better fit */
+    #runs-dataframe th:nth-child(1),
+    #runs-dataframe td:nth-child(1) {
+        width: 20% !important;  /* Run ID column */
+    }
+
+    #runs-dataframe th:nth-child(2),
+    #runs-dataframe td:nth-child(2) {
+        width: 10% !important;  /* Status column */
+    }
+
+    #runs-dataframe th:nth-child(3),
+    #runs-dataframe td:nth-child(3) {
+        width: 25% !important;  /* Prompt ID column */
+    }
+
+    #runs-dataframe th:nth-child(4),
+    #runs-dataframe td:nth-child(4) {
+        width: 15% !important;  /* Run Type column */
+    }
+
+    #runs-dataframe th:nth-child(5),
+    #runs-dataframe td:nth-child(5) {
+        width: 15% !important;  /* Duration column */
+    }
+
+    #runs-dataframe th:nth-child(6),
+    #runs-dataframe td:nth-child(6) {
+        width: 15% !important;  /* Created column */
+    }
+
+    /* Ensure text wraps in runs table cells */
+    #runs-dataframe td {
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        white-space: normal !important;
+    }
+
+    .gr-dataframe thead {
+        background: rgba(102, 126, 234, 0.1) !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10 !important;
+    }
+
+    .gr-dataframe tbody tr:hover {
+        background: var(--hover-color) !important;
+    }
+
+    /* Status badges */
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .status-running {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .status-completed {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+    }
+
+    .status-failed {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .status-pending {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+    }
+
+    /* Info sections */
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        padding: 16px;
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 8px;
+    }
+
+    .info-item label {
+        font-weight: 600;
+        color: #9ca3af;
+        font-size: 0.875rem;
+    }
+
+    .info-item .value {
+        color: #f3f4f6;
+        margin-top: 4px;
+    }
+
+    /* Split view layout */
+    .split-view {
+        display: flex;
+        gap: 16px;
+        max-height: calc(100vh - 250px);  /* Changed from height to max-height for flexibility */
+        min-height: 400px;  /* Ensure minimum height */
+    }
+
+    .split-left {
+        flex: 1.5;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;  /* Allow scrolling */
+        overflow-x: hidden;  /* Prevent horizontal scroll */
+        max-height: inherit;  /* Inherit max-height from parent */
+        min-height: 400px;  /* Ensure minimum height */
+    }
+
+    /* Ensure proper layout for the prompts library group */
+    .split-left .detail-card {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: visible;  /* Allow content to be scrollable by parent */
+        min-height: 0;  /* Allow flexbox to shrink properly */
+    }
+
+    .split-right {
+        flex: 1;
+        border-left: 1px solid var(--border-color);
+        padding-left: 16px;
+        overflow-y: auto;
+        max-height: inherit;  /* Inherit max-height from parent */
+        min-height: 400px;  /* Ensure minimum height */
+    }
+
+    /* CRITICAL: Ensure dropdowns work properly */
+    .gr-dropdown {
+        position: relative !important;
+    }
+
+    /* Don't apply any transforms, overflow hidden, or z-index to containers with dropdowns */
+
+    /* Log viewer */
+    .log-viewer {
+        font-family: 'Monaco', 'Consolas', monospace !important;
+        background: #1e1e1e !important;
+        color: #d4d4d4 !important;
+        padding: 16px !important;
+        border-radius: 8px !important;
+        font-size: 13px !important;
+        line-height: 1.6 !important;
+    }
+
+    /* Selection counter */
+    .selection-counter {
+        background: rgba(102, 126, 234, 0.1);
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    /* Results counter */
+    .results-counter {
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    /* Video components */
+    .video-preview-container video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+
+    /* Textbox styling */
+    .detail-card input[type="text"],
+    .detail-card textarea {
+        font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace !important;
+        background: rgba(0, 0, 0, 0.2) !important;
+        border: 1px solid rgba(102, 126, 234, 0.3) !important;
+    }
+
+    .detail-card input[type="text"]:focus,
+    .detail-card textarea:focus {
+        border-color: var(--primary-color) !important;
+        outline: none !important;
+    }
+
+    /* Loading skeleton - simple */
+    .loading-skeleton {
+        background: linear-gradient(90deg, #333 25%, #444 50%, #333 75%);
+        background-size: 200% 100%;
+    }
+
+    /* Batch operation styling */
+    .batch-operation {
+        padding: 12px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 8px;
+        margin: 12px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Detail cards */
+    .detail-card {
+        padding: 16px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.02);
+    }
+
+    /* Delete confirmation container - outside split view */
+    .delete-confirmation-container {
+        margin-top: 20px;
+        padding: 20px;
+        border: 2px solid rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.05);
+        border-radius: 8px;
+    }
+
+    .delete-confirmation-container h3 {
+        color: #ef4444;
+        margin-bottom: 16px;
+    }
+
+    /* Run details styling */
+    .run-detail-header {
+        padding: 16px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+
+    .params-json {
+        font-family: monospace;
+        white-space: pre-wrap;
+        background: rgba(0, 0, 0, 0.1);
+        padding: 12px;
+        border-radius: 8px;
+    }
+
+    /* Remove any global overflow hidden that might affect dropdowns */
+    /* NOTE: Removed global * selector as it breaks scrolling behavior */
+    /* Only reset overflow on specific elements that need it */
+    .gr-dropdown,
+    .gr-dropdown *,
+    .dropdown-arrow {
+        overflow: visible !important;
+    }
+
+    /* Only apply overflow where specifically needed */
+    .log-viewer,
+    .params-json,
+    pre,
+    code {
+        overflow: auto !important;
+    }
+    """

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Text,
 )
@@ -30,7 +31,6 @@ class Prompt(Base):
 
     # Core fields common to all AI models
     id = Column(String, primary_key=True)
-    model_type = Column(String, nullable=False)  # transfer, reason, predict, etc.
     prompt_text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -59,7 +59,7 @@ class Prompt(Base):
             raise ValueError(f"{key} cannot be None")
         return value
 
-    @validates("model_type", "prompt_text")
+    @validates("prompt_text")
     def validate_required_fields(self, key, value):
         """Validate that required string fields are not empty.
 
@@ -78,7 +78,7 @@ class Prompt(Base):
         return value
 
     def __repr__(self):
-        return f"<Prompt(id={self.id}, model={self.model_type}, text={self.prompt_text[:50]}...)>"
+        return f"<Prompt(id={self.id}, text={self.prompt_text[:50]}...)>"
 
 
 class Run(Base):
@@ -116,6 +116,9 @@ class Run(Base):
     # Logging fields (Phase 2)
     log_path = Column(String(500), nullable=True)  # Local log file path
     error_message = Column(Text, nullable=True)  # Brief error description
+
+    # User feedback
+    rating = Column(Integer, nullable=True)  # User rating 1-5, NULL for unrated
 
     # Relationships
     prompt = relationship("Prompt", back_populates="runs")
@@ -158,3 +161,68 @@ class Run(Base):
 
     def __repr__(self):
         return f"<Run(id={self.id}, prompt={self.prompt_id}, status={self.status})>"
+
+
+class JobQueue(Base):
+    """JobQueue model for tracking queued operations in the UI.
+
+    This model is specifically for the Gradio UI's job queue system.
+    The CLI continues to use direct CosmosAPI calls without queuing.
+    """
+
+    __tablename__ = "job_queue"
+
+    # Core fields
+    id = Column(String, primary_key=True)
+    prompt_ids = Column(JSON, nullable=False)  # List of prompt IDs
+    job_type = Column(String, nullable=False)  # inference, batch_inference, enhancement
+    status = Column(String, nullable=False)  # queued, running, completed, failed, cancelled
+    config = Column(JSON, nullable=False)  # Job-specific configuration
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Optional fields
+    result = Column(JSON, nullable=True)  # Results/outputs after completion
+    priority = Column(Integer, default=50, nullable=True)  # Priority for future use
+
+    @validates("prompt_ids", "config")
+    def validate_json_fields(self, key, value):
+        """Validate that JSON fields are not None.
+
+        Args:
+            key: Name of the field being validated.
+            value: Value being assigned to the field.
+
+        Returns:
+            The validated value if it passes validation.
+
+        Raises:
+            ValueError: If the value is None.
+        """
+        if value is None:
+            raise ValueError(f"{key} cannot be None")
+        return value
+
+    @validates("status", "job_type")
+    def validate_required_strings(self, key, value):
+        """Validate that required string fields are not empty.
+
+        Args:
+            key: Name of the field being validated.
+            value: Value being assigned to the field.
+
+        Returns:
+            The validated value if it passes validation.
+
+        Raises:
+            ValueError: If the value is None or empty string.
+        """
+        if value is None or (isinstance(value, str) and not value.strip()):
+            raise ValueError(f"{key} cannot be None or empty")
+        return value
+
+    def __repr__(self):
+        return f"<JobQueue(id={self.id}, type={self.job_type}, status={self.status})>"

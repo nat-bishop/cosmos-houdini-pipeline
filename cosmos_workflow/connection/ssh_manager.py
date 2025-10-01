@@ -3,6 +3,7 @@
 Handles remote connections with proper error handling and connection pooling.
 """
 
+import warnings
 from contextlib import contextmanager
 from typing import Any
 
@@ -23,14 +24,21 @@ class SSHManager:
         """Establish SSH connection to remote instance."""
         try:
             self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+            # Use AutoAddPolicy to automatically accept unknown host keys
+            # This suppresses warnings while still being reasonable for internal infrastructure
+            # For production, consider using a known_hosts file instead
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            logger.info(
+            logger.debug(
                 "Connecting to {}:{}", self.ssh_options["hostname"], self.ssh_options["port"]
             )
-            self.ssh_client.connect(**self.ssh_options)
 
-            logger.info("SSH connection established successfully")
+            # Suppress paramiko transport warnings that still appear in console
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                self.ssh_client.connect(**self.ssh_options)
+
+            logger.debug("SSH connection established successfully")
 
         except Exception as e:
             logger.error("Failed to establish SSH connection: {}", e)
@@ -46,7 +54,7 @@ class SSHManager:
             self.ssh_client.close()
             self.ssh_client = None
 
-        logger.info("SSH connection closed")
+        logger.debug("SSH connection closed")
 
     def is_connected(self) -> bool:
         """Check if SSH connection is active."""
@@ -110,7 +118,13 @@ class SSHManager:
                     line = line.strip()
                     if line:
                         logger.debug("STDOUT: {}", line)
-                        print(line, flush=True)  # Print to console for real-time streaming
+                        # Safe print with encoding handling for Windows
+                        try:
+                            print(line, flush=True)  # Print to console for real-time streaming
+                        except UnicodeEncodeError:
+                            # Fallback: encode with 'replace' to avoid crashes
+                            safe_line = line.encode("ascii", "replace").decode("ascii")
+                            print(safe_line, flush=True)
                         stdout_lines.append(line)
 
                 # Collect stderr
@@ -120,7 +134,15 @@ class SSHManager:
                     for line in stderr_lines:
                         if line.strip():
                             logger.warning("STDERR: {}", line.strip())
-                            print(f"[ERROR] {line.strip()}", flush=True)  # Print errors to console
+                            # Safe print with encoding handling for Windows
+                            try:
+                                print(
+                                    f"[ERROR] {line.strip()}", flush=True
+                                )  # Print errors to console
+                            except UnicodeEncodeError:
+                                # Fallback: encode with 'replace' to avoid crashes
+                                safe_line = line.strip().encode("ascii", "replace").decode("ascii")
+                                print(f"[ERROR] {safe_line}", flush=True)
             else:
                 # Collect all output at once
                 stdout_output = stdout.read().decode().strip()

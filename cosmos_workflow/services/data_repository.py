@@ -14,7 +14,6 @@ from sqlalchemy.orm import joinedload
 from cosmos_workflow.config.config_manager import ConfigManager
 from cosmos_workflow.database import DatabaseConnection
 from cosmos_workflow.database.models import Prompt, Run
-from cosmos_workflow.execution.status_checker import StatusChecker
 from cosmos_workflow.utils.logging import logger
 
 # Supported AI model types
@@ -50,22 +49,9 @@ class DataRepository:
 
         self.db = db_connection
         self.config = config_manager
-        self.status_checker: StatusChecker | None = None
-
-    def initialize_status_checker(self):
-        """Initialize the StatusChecker for lazy status synchronization.
-
-        StatusChecker is now self-contained and creates its own services as needed.
-        """
-        if self.config is None:
-            raise ValueError("config_manager must be set before initializing status checker")
-
-        self.status_checker = StatusChecker(config_manager=self.config)
-        logger.info("StatusChecker initialized for lazy sync")
 
     def create_prompt(
         self,
-        model_type: str,
         prompt_text: str,
         inputs: dict[str, Any],
         parameters: dict[str, Any],
@@ -73,7 +59,6 @@ class DataRepository:
         """Create a new prompt in the database.
 
         Args:
-            model_type: Type of AI model (transfer, reason, predict, etc.)
             prompt_text: The prompt text
             inputs: Input data (video paths, images, etc.)
             parameters: Model-specific parameters
@@ -84,15 +69,7 @@ class DataRepository:
         Raises:
             ValueError: If required fields are missing or invalid
         """
-        logger.info("Creating prompt with model_type={}", model_type)
-
-        # Validate inputs
-        if model_type is None:
-            raise ValueError("model_type is required")
-        if model_type not in SUPPORTED_MODEL_TYPES:
-            raise ValueError(
-                f"Unsupported model_type: {model_type}. Must be one of {SUPPORTED_MODEL_TYPES}"
-            )
+        logger.info("Creating prompt")
         if not prompt_text or prompt_text.isspace():
             raise ValueError("prompt_text cannot be empty")
         if len(prompt_text) > MAX_PROMPT_LENGTH:
@@ -112,7 +89,6 @@ class DataRepository:
         with self.db.get_session() as session:
             prompt = Prompt(
                 id=prompt_id,
-                model_type=model_type,
                 prompt_text=prompt_text,
                 inputs=inputs,
                 parameters=parameters,
@@ -123,7 +99,6 @@ class DataRepository:
             # Extract data after flush but before commit for transaction safety
             result = {
                 "id": prompt.id,
-                "model_type": prompt.model_type,
                 "prompt_text": prompt.prompt_text,
                 "inputs": prompt.inputs,
                 "parameters": prompt.parameters,
@@ -140,7 +115,7 @@ class DataRepository:
         execution_config: dict[str, Any],
         metadata: dict[str, Any] | None = None,
         initial_status: str = "pending",
-        model_type: str | None = None,
+        model_type: str = "transfer",
     ) -> dict[str, Any]:
         """Create a new run for a prompt.
 
@@ -149,8 +124,7 @@ class DataRepository:
             execution_config: Execution configuration (GPU node, weights, etc.)
             metadata: Optional metadata (user, priority, etc.)
             initial_status: Initial status for the run (default: "pending")
-            model_type: Override model type (default: use prompt's model_type)
-                       Used for "enhance" and "upscale" runs
+            model_type: Model type for the run (default: "transfer")
 
         Returns:
             Dictionary containing run data
@@ -178,24 +152,29 @@ class DataRepository:
             # Generate run ID
             run_id = self._generate_run_id()
 
-            # Validate provided model_type if specified
-            if model_type is not None and model_type not in SUPPORTED_MODEL_TYPES:
+            # Validate model_type
+            if model_type not in SUPPORTED_MODEL_TYPES:
                 raise ValueError(
                     f"Invalid model_type '{model_type}'. Must be one of: {SUPPORTED_MODEL_TYPES}"
                 )
 
-            # Use provided model_type or default to prompt's model_type
-            run_model_type = model_type if model_type is not None else prompt.model_type
+            # Set log path based on whether this is a batch run
+            if metadata and metadata.get("batch_id"):
+                batch_id = metadata["batch_id"]
+                log_path = f"outputs/{batch_id}/batch_run.log"
+            else:
+                log_path = f"outputs/run_{run_id}/logs/{run_id}.log"
 
             # Create run
             run = Run(
                 id=run_id,
                 prompt_id=prompt_id,
-                model_type=run_model_type,
+                model_type=model_type,
                 status=initial_status,
                 execution_config=execution_config,
                 outputs={},  # Empty initially
                 run_metadata=metadata,
+                log_path=log_path,  # Use appropriate log path
             )
             session.add(run)
             session.flush()  # Flush to get created_at populated
@@ -210,6 +189,7 @@ class DataRepository:
                 "outputs": run.outputs,
                 "metadata": run.run_metadata,
                 "created_at": run.created_at.isoformat(),
+                "log_path": run.log_path,  # Include log path in result
             }
 
             session.commit()
@@ -217,7 +197,7 @@ class DataRepository:
                 "Created run with id={} for prompt={} with model_type={}",
                 run.id,
                 prompt_id,
-                run_model_type,
+                model_type,
             )
             return result
 
@@ -247,7 +227,6 @@ class DataRepository:
 
             return {
                 "id": prompt.id,
-                "model_type": prompt.model_type,
                 "prompt_text": prompt.prompt_text,
                 "inputs": prompt.inputs,
                 "parameters": prompt.parameters,
@@ -279,14 +258,6 @@ class DataRepository:
                 return None
 
             run_dict = self._run_to_dict(run)
-
-            # Trigger lazy sync if status checker is available and run is running
-            if self.status_checker and run_dict.get("status") == "running":
-                try:
-                    run_dict = self.status_checker.sync_run_status(run_dict, self)
-                except Exception as e:
-                    logger.warning("Failed to sync run status for {}: {}", run_id, e)
-
             return run_dict
 
     def _run_to_dict(self, run: Run) -> dict[str, Any]:
@@ -319,6 +290,8 @@ class DataRepository:
             result["started_at"] = run.started_at.isoformat()
         if run.completed_at:
             result["completed_at"] = run.completed_at.isoformat()
+        if run.rating is not None:
+            result["rating"] = run.rating
 
         return result
 
@@ -333,7 +306,6 @@ class DataRepository:
         """
         return {
             "id": prompt.id,
-            "model_type": prompt.model_type,
             "prompt_text": prompt.prompt_text,
             "inputs": prompt.inputs,
             "parameters": prompt.parameters,
@@ -414,7 +386,7 @@ class DataRepository:
         if not run_id or run_id.isspace():
             raise ValueError("run_id cannot be empty")
 
-        # Validate allowed fields (now includes log_path and error_message)
+        # Validate allowed fields (now includes log_path, error_message, and rating)
         allowed_fields = {
             "outputs",
             "metadata",
@@ -422,6 +394,7 @@ class DataRepository:
             "run_metadata",
             "log_path",
             "error_message",
+            "rating",
         }
         invalid_fields = set(kwargs.keys()) - allowed_fields
         if invalid_fields:
@@ -449,6 +422,12 @@ class DataRepository:
 
                         if run.completed_at is None:
                             run.completed_at = datetime.now(timezone.utc)
+                elif key == "rating":
+                    # Validate rating is between 1-5 or None
+                    if value is not None and (not isinstance(value, int) or value < 1 or value > 5):
+                        raise ValueError(
+                            f"Rating must be an integer between 1-5 or None, got: {value}"
+                        )
                 setattr(run, key, value)
 
             session.flush()  # Flush to ensure updated_at is set
@@ -473,30 +452,21 @@ class DataRepository:
         unique_id = str(uuid.uuid4()).replace("-", "")[:32]
         return f"rs_{unique_id}"
 
-    def list_prompts(
-        self, model_type: str | None = None, limit: int = 50, offset: int = 0
-    ) -> list[dict[str, Any]]:
-        """List prompts with optional filtering and pagination.
+    def list_prompts(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        """List prompts with pagination.
 
         Args:
-            model_type: Optional filter by model type
             limit: Maximum number of results to return (default: 50)
             offset: Number of results to skip (default: 0)
 
         Returns:
             List of prompt dictionaries
         """
-        logger.debug(
-            "Listing prompts with model_type=%s, limit=%s, offset=%s", model_type, limit, offset
-        )
+        logger.debug("Listing prompts with limit=%s, offset=%s", limit, offset)
 
         try:
             with self.db.get_session() as session:
                 query = session.query(Prompt)
-
-                # Apply model type filter if specified
-                if model_type:
-                    query = query.filter(Prompt.model_type == model_type)
 
                 # Order by created_at descending (newest first)
                 query = query.order_by(Prompt.created_at.desc())
@@ -510,7 +480,6 @@ class DataRepository:
                     result.append(
                         {
                             "id": prompt.id,
-                            "model_type": prompt.model_type,
                             "prompt_text": prompt.prompt_text,
                             "inputs": prompt.inputs,
                             "parameters": prompt.parameters,
@@ -529,6 +498,7 @@ class DataRepository:
         prompt_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        version_filter: str | None = None,
     ) -> list[dict[str, Any]]:
         """List runs with optional filtering and pagination.
 
@@ -537,16 +507,18 @@ class DataRepository:
             prompt_id: Optional filter by prompt ID
             limit: Maximum number of results to return (default: 50)
             offset: Number of results to skip (default: 0)
+            version_filter: Optional version filter ('all', 'best', 'original', 'upscaled')
 
         Returns:
             List of run dictionaries
         """
         logger.debug(
-            "Listing runs with status=%s, prompt_id=%s, limit=%s, offset=%s",
+            "Listing runs with status=%s, prompt_id=%s, limit=%s, offset=%s, version=%s",
             status,
             prompt_id,
             limit,
             offset,
+            version_filter,
         )
 
         try:
@@ -558,6 +530,37 @@ class DataRepository:
                     query = query.filter(Run.status == status)
                 if prompt_id:
                     query = query.filter(Run.prompt_id == prompt_id)
+
+                # Apply version filter for transfer runs
+                if version_filter == "not upscaled":
+                    # Only transfer runs WITHOUT upscaled versions
+                    from sqlalchemy import and_, func, not_
+
+                    # Subquery to get source_run_ids of completed upscaled runs
+                    upscaled_sources = (
+                        session.query(func.json_extract(Run.execution_config, "$.source_run_id"))
+                        .filter(and_(Run.model_type == "upscale", Run.status == "completed"))
+                        .subquery()
+                    )
+
+                    # Only show transfer runs that are NOT in the upscaled sources
+                    query = query.filter(not_(Run.id.in_(upscaled_sources)))
+
+                elif version_filter == "upscaled":
+                    # Only transfer runs WITH upscaled versions
+                    from sqlalchemy import and_, func
+
+                    # Subquery to get source_run_ids of completed upscaled runs
+                    upscaled_sources = (
+                        session.query(func.json_extract(Run.execution_config, "$.source_run_id"))
+                        .filter(and_(Run.model_type == "upscale", Run.status == "completed"))
+                        .subquery()
+                    )
+
+                    # Only show transfer runs that ARE in the upscaled sources
+                    query = query.filter(Run.id.in_(upscaled_sources))
+
+                # version_filter == "all" or None: no additional filtering
 
                 # Order by created_at descending (newest first)
                 query = query.order_by(Run.created_at.desc())
@@ -579,19 +582,10 @@ class DataRepository:
                         "created_at": run.created_at.isoformat(),
                         "started_at": run.started_at.isoformat() if run.started_at else None,
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                        "rating": run.rating,  # Include the rating field
                     }
 
-                    # Trigger lazy sync if status checker is available and run is running
-                    if self.status_checker and run_dict.get("status") == "running":
-                        try:
-                            run_dict = self.status_checker.sync_run_status(run_dict, self)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to sync run status for %s: %s", run_dict["id"], e
-                            )
-
-                    # Only include runs that match the requested status filter after sync
-                    # If we filtered by status and the run no longer matches, skip it
+                    # Only include runs that match the requested status filter
                     if status and run_dict.get("status") != status:
                         continue
 
@@ -640,7 +634,6 @@ class DataRepository:
                     result.append(
                         {
                             "id": prompt.id,
-                            "model_type": prompt.model_type,
                             "prompt_text": prompt.prompt_text,
                             "inputs": prompt.inputs,
                             "parameters": prompt.parameters,
@@ -734,7 +727,6 @@ class DataRepository:
                 # Build prompt dictionary
                 result = {
                     "id": prompt.id,
-                    "model_type": prompt.model_type,
                     "prompt_text": prompt.prompt_text,
                     "inputs": prompt.inputs,
                     "parameters": prompt.parameters,
@@ -755,6 +747,7 @@ class DataRepository:
                         "created_at": run.created_at.isoformat(),
                         "started_at": run.started_at.isoformat() if run.started_at else None,
                         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                        "rating": run.rating,  # Include the rating field
                     }
                     result["runs"].append(run_dict)
 
@@ -798,7 +791,6 @@ class DataRepository:
         result["prompt"] = {
             "id": prompt_data["id"],
             "prompt_text": prompt_data["prompt_text"],
-            "model_type": prompt_data["model_type"],
         }
 
         # Extract runs info
@@ -1458,7 +1450,6 @@ class DataRepository:
             return [
                 {
                     "id": p.id,
-                    "model_type": p.model_type,
                     "prompt_text": p.prompt_text,
                     "inputs": p.inputs,
                     "parameters": p.parameters,
@@ -1510,3 +1501,35 @@ class DataRepository:
                 }
                 for r in enhancement_runs
             ]
+
+    def find_upscaled_run(self, source_run_id: str) -> dict[str, Any] | None:
+        """Find an upscaled version of a run by its source_run_id.
+
+        Queries the database for an upscale run that references this source run.
+
+        Args:
+            source_run_id: The original run ID to find upscaled version for
+
+        Returns:
+            The upscaled run dict if found, None otherwise
+        """
+        if not source_run_id:
+            return None
+
+        with self.db.get_session() as session:
+            # Query for upscale run with matching source_run_id in execution_config
+            from sqlalchemy import func
+
+            upscale_run = (
+                session.query(Run)
+                .filter(
+                    Run.model_type == "upscale",
+                    func.json_extract(Run.execution_config, "$.source_run_id") == source_run_id,
+                )
+                .order_by(Run.created_at.desc())  # Get most recent if multiple exist
+                .first()
+            )
+
+            if upscale_run:
+                return self._run_to_dict(upscale_run)
+            return None

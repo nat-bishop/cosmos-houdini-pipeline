@@ -48,7 +48,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="Test prompt 1",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -58,7 +57,6 @@ class TestWorkflowServiceQueries:
             ),
             MagicMock(
                 id="ps_002",
-                model_type="transfer",
                 prompt_text="Test prompt 2",
                 created_at=datetime.now() - timedelta(hours=1),
                 updated_at=datetime.now() - timedelta(hours=1),
@@ -80,41 +78,13 @@ class TestWorkflowServiceQueries:
         # Assert
         assert len(result) == 2
         assert result[0]["id"] == "ps_001"
-        assert result[0]["model_type"] == "transfer"
+        # model_type no longer returned for prompts
         assert result[1]["id"] == "ps_002"
         mock_query.order_by.assert_called_once()
         mock_query.order_by().limit.assert_called_with(50)
         mock_query.order_by().limit().offset.assert_called_with(0)
 
-    def test_list_prompts_with_model_filter(self, service, mock_session):
-        """Test listing prompts filtered by model type."""
-        # Arrange
-        mock_prompts = [
-            MagicMock(
-                id="ps_001",
-                model_type="enhance",
-                prompt_text="Enhanced prompt",
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-                inputs={},
-                parameters={},
-                model_config={},
-            )
-        ]
-
-        mock_query = MagicMock()
-        mock_filter = MagicMock()
-        mock_query.filter.return_value = mock_filter
-        mock_filter.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_prompts
-        mock_session.query.return_value = mock_query
-
-        # Act
-        result = service.list_prompts(model_type="enhance")
-
-        # Assert
-        assert len(result) == 1
-        assert result[0]["model_type"] == "enhance"
-        mock_query.filter.assert_called_once()
+    # Model filter test removed - prompts no longer have model_type filter
 
     def test_list_prompts_with_pagination(self, service, mock_session):
         """Test listing prompts with pagination."""
@@ -153,7 +123,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now() - timedelta(minutes=10),
@@ -165,7 +134,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_002",
                 prompt_id="ps_002",
-                model_type="transfer",
                 status="running",
                 created_at=datetime.now() - timedelta(hours=1),
                 started_at=datetime.now() - timedelta(hours=1),
@@ -199,7 +167,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -231,7 +198,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_specific",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -282,7 +248,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="cyberpunk city transformation",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -292,7 +257,6 @@ class TestWorkflowServiceQueries:
             ),
             MagicMock(
                 id="ps_002",
-                model_type="transfer",
                 prompt_text="futuristic cyberpunk scene",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -346,7 +310,6 @@ class TestWorkflowServiceQueries:
         mock_prompts = [
             MagicMock(
                 id="ps_001",
-                model_type="transfer",
                 prompt_text="CYBERPUNK CITY",
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
@@ -376,7 +339,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_001",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="completed",
                 created_at=datetime.now(),
                 started_at=datetime.now(),
@@ -388,7 +350,6 @@ class TestWorkflowServiceQueries:
             MagicMock(
                 id="rs_002",
                 prompt_id="ps_001",
-                model_type="transfer",
                 status="failed",
                 created_at=datetime.now() - timedelta(hours=1),
                 started_at=datetime.now() - timedelta(hours=1),
@@ -401,7 +362,6 @@ class TestWorkflowServiceQueries:
 
         mock_prompt = MagicMock(
             id="ps_001",
-            model_type="transfer",
             prompt_text="Test prompt",
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -450,7 +410,6 @@ class TestWorkflowServiceQueries:
         # Arrange
         mock_prompt = MagicMock(
             id="ps_001",
-            model_type="transfer",
             prompt_text="Test prompt",
             created_at=datetime.now(),
             updated_at=datetime.now(),

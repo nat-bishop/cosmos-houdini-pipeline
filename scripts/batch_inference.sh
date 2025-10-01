@@ -3,8 +3,12 @@ set -euo pipefail
 
 BATCH_NAME="$1"          # e.g., batch_20241206_123456
 BATCH_JSONL="$2"         # e.g., batch_20241206_123456.jsonl
-NUM_GPU="${3:-1}"
-CUDA_VISIBLE_DEVICES="${4:-0}"
+BASE_CONTROLNET_SPEC="$3" # e.g., base_controlnet_spec.json
+NUM_GPU="${4:-1}"
+CUDA_VISIBLE_DEVICES="${5:-0}"
+BATCH_SIZE="${6:-4}"     # Default batch size of 4 if not provided
+GUIDANCE="${7:-5}"       # Guidance scale (default: 5)
+SEED="${8:-1}"           # Random seed (default: 1)
 
 mkdir -p "outputs/${BATCH_NAME}"
 
@@ -17,12 +21,17 @@ export PYTHONPATH="$(pwd)"
 cat > "outputs/${BATCH_NAME}/batch_spec.json" <<JSON
 {
   "batch_input": "inputs/batches/${BATCH_JSONL}",
-  "batch_size": $(wc -l < "inputs/batches/${BATCH_JSONL}"),
-  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder outputs/${BATCH_NAME} --batch_input_path inputs/batches/${BATCH_JSONL} --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
+  "base_controlnet_spec": "inputs/batches/${BASE_CONTROLNET_SPEC}",
+  "num_prompts": $(wc -l < "inputs/batches/${BATCH_JSONL}"),
+  "batch_size": ${BATCH_SIZE},
+  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder outputs/${BATCH_NAME} --controlnet_specs inputs/batches/${BASE_CONTROLNET_SPEC} --batch_input_path inputs/batches/${BATCH_JSONL} --batch_size \$BATCH_SIZE --guidance \$GUIDANCE --seed \$SEED --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
   "environment": {
     "CUDA_VISIBLE_DEVICES": "\$CUDA_VISIBLE_DEVICES",
     "CHECKPOINT_DIR": "\$CHECKPOINT_DIR",
-    "NUM_GPU": "\$NUM_GPU"
+    "NUM_GPU": "\$NUM_GPU",
+    "BATCH_SIZE": "\$BATCH_SIZE",
+    "GUIDANCE": "\$GUIDANCE",
+    "SEED": "\$SEED"
   }
 }
 JSON
@@ -32,7 +41,11 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   cosmos_transfer1/diffusion/inference/transfer.py \
   --checkpoint_dir "$CHECKPOINT_DIR" \
   --video_save_folder "outputs/${BATCH_NAME}" \
+  --controlnet_specs "inputs/batches/${BASE_CONTROLNET_SPEC}" \
   --batch_input_path "inputs/batches/${BATCH_JSONL}" \
+  --batch_size "$BATCH_SIZE" \
+  --guidance "$GUIDANCE" \
+  --seed "$SEED" \
   --offload_text_encoder_model \
   --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \

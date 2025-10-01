@@ -55,7 +55,6 @@ class TestSimplifiedActiveOperations:
 
         # Check the run details
         assert result["active_run"]["id"] == "run_abc123"
-        assert result["active_run"]["model_type"] == "transfer"
 
         # Container should be returned
         assert result["container"] is not None
@@ -174,7 +173,13 @@ class TestEnhancedCheckStatus:
         base_status = {
             "ssh_status": "connected",
             "docker_status": {"docker_running": True},
-            "gpu_info": {"name": "NVIDIA A100", "memory_total": "40GB"},
+            "gpu_info": {
+                "name": "NVIDIA A100",
+                "memory_total": "40GB",
+                "memory_used": "12GB",
+                "memory_percentage": "30%",
+                "gpu_utilization": "85%",
+            },
         }
         mock_executor_instance.check_remote_status.return_value = base_status
 
@@ -207,7 +212,6 @@ class TestEnhancedCheckStatus:
         # Should include active run details
         assert "active_run" in result
         assert result["active_run"]["id"] == "run_test"
-        assert result["active_run"]["model_type"] == "transfer"
 
     @patch("cosmos_workflow.api.cosmos_api.init_database")
     @patch("cosmos_workflow.api.cosmos_api.DataRepository")

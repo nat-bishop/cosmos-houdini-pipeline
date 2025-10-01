@@ -19,9 +19,11 @@ class TestConfigManager:
 
     def setup_method(self):
         """Set up test fixtures before each test method."""
+        # Create a temporary directory for all test files
+        self.temp_dir = tempfile.mkdtemp()
+
         # Create a temporary config file for testing
-        self.temp_config = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".toml")
-        self.config_path = Path(self.temp_config.name)
+        self.config_path = Path(self.temp_dir) / "test_config.toml"
 
         # Sample TOML config content
         self.sample_config = """# Remote instance configuration
@@ -44,8 +46,7 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 """
 
         # Write sample config to temp file
-        self.temp_config.write(self.sample_config)
-        self.temp_config.close()
+        self.config_path.write_text(self.sample_config)
 
         # Create a dummy SSH key file for testing
         self.dummy_ssh_key = Path("./test_ssh_key")
@@ -56,12 +57,15 @@ image = "nvcr.io/ubuntu/cosmos-transfer1:latest"
 
     def teardown_method(self):
         """Clean up test fixtures after each test method."""
-        # Remove temporary config file
-        if self.config_path.exists():
-            os.unlink(self.config_path)
         # Remove dummy SSH key file
         if self.dummy_ssh_key.exists():
             os.unlink(self.dummy_ssh_key)
+
+        # Remove entire temp directory
+        import shutil
+
+        if hasattr(self, "temp_dir") and Path(self.temp_dir).exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_with_valid_config_path(self):
         """Test ConfigManager initialization with valid config file path."""

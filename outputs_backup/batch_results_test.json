@@ -1,9 +1,0 @@
-[
-  {
-    "name": "pre_dawn_blue_hour_calm",
-    "original_prompt": "Cool slate-blue ambient light before sunrise; low overall luminance; faint tungsten or LED warmth from existing interior sources; colors slightly desaturated; air crisp and clear; metal and glass respond with subtle, cold reflections; deep, quiet shadows with soft edges.",
-    "upsampled_prompt": "The video is shot from a high vantage point, looking down at a balcony with a metal railing. The balcony is surrounded by buildings with visible windows and doors. The sky is a cool slate-blue, indicating it is either dawn or dusk. There are no people or moving objects in the frame. The lighting is dim, with some lights visible in the distance, suggesting the presence of other buildings or streetlights. The video has a calm and serene atmosphere.",
-    "video_path": "inputs\\videos\\city_scene_20250830_203504\\color.mp4",
-    "success": true
-  }
-]

@@ -5,6 +5,8 @@ RUN_ID="$1"                # e.g., rs_xxxxx (run ID)
 NUM_GPU="${2:-1}"
 CUDA_VISIBLE_DEVICES="${3:-0}"
 PROMPT_NAME="${4:-$RUN_ID}"  # For backwards compatibility
+GUIDANCE="${5:-5}"         # Guidance scale (default: 5)
+SEED="${6:-1}"             # Random seed (default: 1)
 
 # Use run_id for output directory
 OUTPUT_DIR="outputs/run_${RUN_ID}"
@@ -19,11 +21,13 @@ export PYTHONPATH="$(pwd)"
 cat > "${OUTPUT_DIR}/spec_used.json" <<JSON
 {
   "prompt_spec": $(cat "runs/${RUN_ID}/inputs/spec.json"),
-  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder ${OUTPUT_DIR} --controlnet_specs runs/${RUN_ID}/inputs/spec.json --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
+  "inference_command": "torchrun --nproc_per_node=\$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py --checkpoint_dir \$CHECKPOINT_DIR --video_save_folder ${OUTPUT_DIR} --controlnet_specs runs/${RUN_ID}/inputs/spec.json --guidance \$GUIDANCE --seed \$SEED --offload_text_encoder_model --offload_guardrail_models --num_gpus \$NUM_GPU",
   "environment": {
     "CUDA_VISIBLE_DEVICES": "\$CUDA_VISIBLE_DEVICES",
     "CHECKPOINT_DIR": "\$CHECKPOINT_DIR",
-    "NUM_GPU": "\$NUM_GPU"
+    "NUM_GPU": "\$NUM_GPU",
+    "GUIDANCE": "\$GUIDANCE",
+    "SEED": "\$SEED"
   }
 }
 JSON
@@ -33,6 +37,8 @@ torchrun --nproc_per_node="$NUM_GPU" --nnodes=1 --node_rank=0 \
   --checkpoint_dir "$CHECKPOINT_DIR" \
   --video_save_folder "${OUTPUT_DIR}" \
   --controlnet_specs "runs/${RUN_ID}/inputs/spec.json" \
+  --guidance "$GUIDANCE" \
+  --seed "$SEED" \
   --offload_text_encoder_model \
   --offload_guardrail_models \
   --num_gpus "$NUM_GPU" \

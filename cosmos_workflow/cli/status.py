@@ -64,12 +64,29 @@ def status(ctx, stream):
         if gpu_util:
             status_data["GPU Usage"] = gpu_util
 
-        # Add memory usage details if available
+        # Add memory usage details with actual percentage
         mem_used = gpu_info.get("memory_used")
         mem_total = gpu_info.get("memory_total")
-        mem_util = gpu_info.get("memory_utilization")
-        if mem_used and mem_total and mem_util:
-            status_data["Memory Usage"] = f"{mem_used} / {mem_total} ({mem_util})"
+        mem_percentage = gpu_info.get("memory_percentage", "0%")
+        if mem_used and mem_total:
+            status_data["Memory Usage"] = f"{mem_used} / {mem_total} ({mem_percentage})"
+
+        # Add temperature if available
+        temperature = gpu_info.get("temperature")
+        if temperature and temperature != "N/A":
+            status_data["Temperature"] = temperature
+
+        # Add power metrics if available
+        power_draw = gpu_info.get("power_draw")
+        power_limit = gpu_info.get("power_limit")
+        if power_draw and power_draw != "N/A" and power_limit and power_limit != "N/A":
+            status_data["Power"] = f"{power_draw} / {power_limit}"
+
+        # Add clock speeds if available
+        clock_current = gpu_info.get("clock_current")
+        clock_max = gpu_info.get("clock_max")
+        if clock_current and clock_current != "N/A" and clock_max and clock_max != "N/A":
+            status_data["Clock Speed"] = f"{clock_current} / {clock_max}"
     else:
         status_data["GPU"] = "[yellow]Not detected[/yellow]"
 

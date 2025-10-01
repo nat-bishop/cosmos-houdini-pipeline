@@ -1,8 +1,8 @@
 # Cosmos AI Video Pipeline
 
-I built a production Python system that runs NVIDIA Cosmos AI models on remote H100 GPUs. It handles the full workflow: SSH orchestration, Docker execution, file transfers, database tracking, and a web UI.
+I built a production Python system that runs NVIDIA Cosmos world foundation models on remote H100 GPUs. It handles the full workflow to create fully synthetic data with traditional procedural tools and AI augmentation: SSH orchestration, Docker execution, file transfers, database tracking, queue system with smart inference batching, and a web UI.
 
-**Project Stats:** 797 tests • 80%+ coverage • 21K lines • Production-ready
+**Project Stats:** 797 tests • 80%+ coverage • Production-ready
 
 ## 📑 Table of Contents
 - [Overview](#-what-this-system-does)
@@ -15,21 +15,21 @@ I built a production Python system that runs NVIDIA Cosmos AI models on remote H
 
 • **Generates synthetic training data** - Custom Houdini tool creates destroyed cities with pixel-perfect depth and segmentation maps
 
-• **Runs Cosmos AI on remote GPUs** - Manages H100/H200 clusters via SSH and Docker for video generation
+• **Runs NVIDIA Cosmos foundation models on remote GPUs** - Manages H100/H200 GPUs via SSH and Docker for video generation
 
 • **Handles the full pipeline** - Data creation → AI processing → output retrieval with database tracking
 
-• **Smart batching** - Groups similar jobs to reuse GPU model loads, reducing overhead by ~30-40%
+• **Smart batching** - Groups similar jobs for batch iference, reducing overhead by ~30-40%
 
 • **Clean Python API** - Single facade abstracts infrastructure complexity behind simple method calls
 
 ## 📋 Why Physical AI Needs This
 
-Physical AI models (robotics, autonomous vehicles) need training data for rare scenarios: disasters, structural damage, hazardous environments. Real-world data is expensive and dangerous to capture.
+Physical AI models (robotics, autonomous vehicles) need training data for rare or sensitve scenarios: hazardous environments, protected health data, ect. Real-world data is expensive or non-existent.
 
 My system solves this by:
 1. **Generating perfect synthetic data** - Houdini procedural generation creates destroyed cities with pixel-perfect depth/segmentation
-2. **Augmenting with AI** - Cosmos AI transforms base scenes into diverse variations
+2. **Augmenting with AI** - Cosmos AI transforms base scenes into diverse variations using multimodal inputs
 3. **Managing at scale** - Handles the full workflow from generation → augmentation → tracking
 
 This lets companies generate thousands of rare-scenario training examples without real-world capture.

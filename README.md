@@ -1,29 +1,38 @@
-# Cosmos Workflow System
+# Cosmos AI Video Pipeline
 
-**A production Python system that orchestrates NVIDIA Cosmos AI video generation on remote GPU clusters, featuring a custom Houdini procedural city generator for synthetic training data.**
+I built a production Python system that runs NVIDIA Cosmos AI models on remote H100 GPUs. It handles the full workflow: SSH orchestration, Docker execution, file transfers, database tracking, and a web UI.
+
+**Project Stats:** 797 tests • 80%+ coverage • 21K lines • Production-ready
 
 ## 📑 Table of Contents
 - [Overview](#-what-this-system-does)
 - [Web Interface](#️-gradio-web-interface)
-- [Technical Implementation](#-technical-achievements)
+- [Technical Implementation](#-what-this-demonstrates)
 - [Quick Start](#-quick-start)
-- [Future Work](#-future-work)
+- [Future Work](#-future-direction)
 
 ## 🎯 What This System Does
 
-• **Generates synthetic training data** using my custom Houdini tool that creates destroyed cities with perfect multimodal outputs (depth, segmentation, etc.)
+• **Generates synthetic training data** - Custom Houdini tool creates destroyed cities with pixel-perfect depth and segmentation maps
 
-• **Orchestrates AI video generation** on remote H100 GPU instances via SSH and Docker
+• **Runs Cosmos AI on remote GPUs** - Manages H100/H200 clusters via SSH and Docker for video generation
 
-• **Manages complex workflows** from data creation → AI processing → output retrieval with database tracking
+• **Handles the full pipeline** - Data creation → AI processing → output retrieval with database tracking
 
-• **Provides enterprise features** like smart batching (2-5x performance gains), real-time monitoring, and 4K upscaling
+• **Smart batching** - Groups similar jobs to reuse GPU model loads, reducing overhead by ~30-40%
 
-• **Abstracts infrastructure complexity** behind a clean Python API and Gradio UI
+• **Clean Python API** - Single facade abstracts infrastructure complexity behind simple method calls
 
-## 📋 Why This Matters
+## 📋 Why Physical AI Needs This
 
-Physical AI models need diverse synthetic data for rare scenarios (destroyed buildings, disasters). My system combines procedural 3D generation with state-of-the-art AI video models to create this data at scale, managing the entire pipeline from creation to augmentation.
+Physical AI models (robotics, autonomous vehicles) need training data for rare scenarios: disasters, structural damage, hazardous environments. Real-world data is expensive and dangerous to capture.
+
+My system solves this by:
+1. **Generating perfect synthetic data** - Houdini procedural generation creates destroyed cities with pixel-perfect depth/segmentation
+2. **Augmenting with AI** - Cosmos AI transforms base scenes into diverse variations
+3. **Managing at scale** - Handles the full workflow from generation → augmentation → tracking
+
+This lets companies generate thousands of rare-scenario training examples without real-world capture.
 
 <div align="center">
 
@@ -33,7 +42,7 @@ Physical AI models need diverse synthetic data for rare scenarios (destroyed bui
 https://github.com/user-attachments/assets/ca96da3a-ef7a-4625-beda-ebeae7dcfb94
 
 
-*Cosmos AI output using my Houdini-generated synthetic inputs (color + depth + segmentation)*
+*From my Houdini procedural generator → Cosmos AI augmentation. This shows the full pipeline from synthetic data generation to AI-powered video transformation.*
 
 </div>
 
@@ -79,37 +88,53 @@ https://github.com/user-attachments/assets/ca96da3a-ef7a-4625-beda-ebeae7dcfb94
 
 </div>
 
+## What This Demonstrates
+
+**System Architecture**
+- Facade pattern API that abstracts 40+ modules behind a single interface
+- Database-first design with SQLAlchemy ORM (no JSON file management)
+- 797 automated tests with 80%+ coverage on critical paths
+
+**Infrastructure & Scale**
+- SSH/Docker automation on remote H100 clusters via Paramiko
+- Built cross-platform SFTP file transfer with integrity checks (replaced rsync for Windows)
+- Smart batching reduces overhead ~30-40% by grouping jobs and reusing GPU model loads
+
+**Performance Engineering**
+- Reduced Gradio UI from 3,255 to 152 lines (95% reduction) through modular refactoring
+- Database transactions with `SELECT FOR UPDATE SKIP LOCKED` for atomic job claiming
+- Real-time log streaming from remote containers without blocking execution
+
+**Production Patterns**
+- Type hints and Google-style docstrings throughout
+- Context managers for resource safety (SSH connections, database sessions)
+- Parameterized logging for production debugging (no f-strings in logs)
+
 ## 🚀 Code Example
 
 ```python
 from cosmos_workflow.api import CosmosAPI
 
-# Single interface for entire system
 api = CosmosAPI()
 
-# Create prompt from Houdini-generated videos
+# Create prompt from video directory
 prompt = api.create_prompt(
-    "Transform this destroyed city into cyberpunk style",
-    "outputs/houdini_export/scene_042/"  # Contains color.mp4, depth.mp4, segmentation.mp4
+    "Cyberpunk cityscape transformation",
+    "inputs/my_video_dir/"  # Contains: color.mp4, depth.mp4, segmentation.mp4
 )
 
-# Run on remote H100 GPU with multimodal control
+# Run on remote H100 GPU (blocks until complete)
 result = api.quick_inference(
     prompt["id"],
     weights={"vis": 0.3, "edge": 0.4, "depth": 0.2, "seg": 0.1}
 )
-print(f"Generated: {result['output_path']}")  # outputs/run_rs_abc123/output.mp4
 
-# Smart batch processing (2-5x faster)
-# First, add jobs to queue via UI, then analyze and execute batches
-queue_service = SimplifiedQueueService()
-analysis = queue_service.analyze_queue_for_smart_batching(mix_controls=False)
-results = queue_service.execute_smart_batches()  # Executes optimized batches
+print(f"Output: {result['output_path']}")  # outputs/run_rs_abc123/output.mp4
 ```
 
 ## 🏗️ Houdini Procedural City Generator (Input Creation)
 
-I built a production-ready Houdini tool that generates the synthetic input data for Cosmos AI:
+I built a production-ready Houdini tool that generates synthetic input data for Cosmos AI:
 
 • **Procedural city generation** - Randomized buildings with architectural details (fire escapes, facades)
 
@@ -117,7 +142,9 @@ I built a production-ready Houdini tool that generates the synthetic input data 
 
 • **Perfect multimodal outputs** - Pixel-perfect depth, segmentation, edge maps (no AI estimation errors)
 
-• **Rare scenario data** - Generates training data for edge cases like disasters and destroyed infrastructure
+• **Rare scenario focus** - Training data for edge cases like disasters and destroyed infrastructure
+
+**Scale:** Can generate hundreds of unique destroyed city variations from a single parameter sweep
 
 <table>
 <tr>
@@ -147,30 +174,28 @@ https://github.com/user-attachments/assets/43565e9a-f675-4ec1-b454-e8318f611194
 
 ## 💪 Technical Achievements
 
-### Infrastructure & Scale
-• **Remote GPU orchestration** - Manages GPUs (H100, H200, ect.) via SSH/Docker with zero downtime
+### Performance & Scale
+• **Smart batching reduces overhead ~30-40%** - Groups similar jobs to reuse GPU model loads instead of reinitializing
 
-• **2-5x performance gains** - Smart batching with run-level optimization and weights_list API, processing 10 videos in 20-30min vs 90min sequential
+• **Remote GPU management** - Handles H100/H200 clusters via SSH/Docker with automatic container cleanup
 
-• **Lazy evaluation monitoring** - Novel pattern solving CLI lifecycle issues (runs don't get stuck as "running")
-
-• **Production reliability** - Automatic retry, graceful degradation, comprehensive error recovery
+• **Production reliability** - 797 tests with 80%+ coverage, automatic retry, graceful degradation
 
 ### Architecture & Code Quality
-• **Database-first design** - SQLAlchemy database systen, no JSON file management
+• **Database-first design** - SQLAlchemy ORM with atomic transactions, no JSON file management
 
-• **Comprehensive testing** - 600+ tests with 80%+ coverage on critical paths
+• **Clean API design** - Single facade abstracts 40+ modules behind simple interface
 
-• **Enterprise patterns** - Dependency injection, parameterized logging
+• **Modular UI** - Reduced main Gradio file from 3,255 → 152 lines (95% reduction)
 
 ### AI & Video Processing
-• **Multimodal pipeline** - Handles color, depth, segmentation, edge maps with weight control (0.0-1.0)
+• **Multimodal pipeline** - Handles color, depth, segmentation, edge with configurable weights (0.0-1.0)
 
-• **Video-agnostic 4K upscaling** - Works with any video source, not just inference outputs
+• **4K upscaling** - Works with any video source, not just inference outputs
 
-• **Pixtral AI enhancement** - Automatic prompt improvement using vision-language models
+• **AI prompt enhancement** - Pixtral vision-language model integration for automatic improvement
 
-• **Real-time streaming** - Live log streaming from containers with gradio GUI + CLI
+• **Real-time log streaming** - Live container logs without blocking execution
 
 ## 🛠️ Tech Stack
 
@@ -206,84 +231,44 @@ Local Machine                                    Remote GPU Server (H100)
 
 ## ✨ Core Features
 
+### **Production Job Queue System**
+- Database-backed queue with SQLite persistence (survives UI restarts)
+- Atomic job claiming using `SELECT FOR UPDATE SKIP LOCKED` (no race conditions)
+- Single warm container strategy prevents resource accumulation
+- FIFO processing with position tracking and estimated wait times
+- Automatic cleanup: deletes successful jobs, keeps last 50 failed for debugging
+- Timer-based processing (2-second intervals) without background threads
+
+### **Smart Batching (~30-40% speedup)**
+- Groups similar jobs to reuse GPU model loads
+- Run-level optimization extracts individual runs and reorganizes into efficient batches
+- Two modes: Strict (identical controls) and Mixed (master batch approach)
+- Safe batch sizing based on control count prevents GPU out-of-memory errors
+
 ### **Database-First Architecture**
-- SQLAlchemy models with migration support
-- Transaction safety with automatic rollback
-- No persistent JSON files - pure database operations
-- Extensible schema for multiple AI models
+- SQLAlchemy ORM with transaction safety and automatic rollback
+- No JSON files - pure database operations
+- 797 tests with 80%+ coverage on critical paths
+- Extensible schema supports multiple AI models
 
-### **Remote GPU Orchestration**
-- SSH-based Docker container management with synchronous execution
-- Automatic file transfer with integrity checks
-- Real-time log streaming from containers
-- Single container paradigm for reliable resource utilization
-- Graceful shutdown handling with container cleanup
+### **Remote GPU Management**
+- SSH/Docker automation on H100/H200 clusters via Paramiko
+- Cross-platform SFTP file transfer with integrity checks (replaced rsync for Windows)
+- Real-time log streaming without blocking execution
+- Automatic container cleanup prevents resource leaks
 
-### **Batch Processing Engine**
-- JSONL format for efficient batch operations
-- Single model load for multiple inferences
-- Streamlined batch execution with shared GPU resources
-- Automatic retry and error recovery
-
-### **Synchronous Execution Model**
-- Blocking operations that complete before returning control
-- Immediate status updates and output downloading
-- No background threads or async complexity
-- Direct exit code handling from Docker containers
-
-### **Advanced Web Interface (Gradio)**
-- **Cross-Tab Navigation System**: Complete workflow navigation between all tabs with intelligent filtering
-  - Navigate from Inputs tab to Runs tab filtering by input directory
-  - Navigate from Inputs tab to Prompts tab with automatic search filtering
-  - Navigate from Prompts tab to Runs tab with selected prompts filtering
-  - Persistent filter state with clear visual indicators showing active filters
-- **Enhanced Prompts Tab**: Advanced filtering with search, enhanced status, run status, and date range filters
-  - Interactive limit control (10-500 prompts) for performance optimization
-  - Selection tracking with checkbox functionality and real-time count display
-  - Batch operations including "Select All", "Clear Selection", and "Delete Selected"
-  - "View Runs" button that filters runs by currently selected prompts
-- **Improved Runs Tab**: Persistent filtering when navigating from other tabs with filter indicators
-  - Filter display showing active cross-tab filters ("Filtering by X prompt(s)" or "Filtering by input: directory_name")
-  - Version filtering for upscaled content and rating filter functionality
-  - Clear Filter functionality that properly resets navigation state while preserving other filters
-- **Operations Tab**: Two-column layout with prompt selection and inference controls
-- **Run History Tab**: Comprehensive run management with advanced filtering, search, and batch operations
-- **Active Jobs Tab**: Real-time container monitoring with auto-refresh, log streaming, and job queue management
-- **Gallery Navigation**: Previous/Next buttons in Run Details for browsing through video results
-- **Inference Controls**: Adjustable weights for visual, edge, depth, and segmentation controls (0.0-1.0)
-- **AI Enhancement**: Prompt enhancement using Pixtral model for improved descriptions with enhanced status indicators
-- **Advanced Filtering**: Multi-criteria filtering by status, date range, text search, and rating across all runs
-- **Batch Operations**: Select multiple runs with batch delete functionality and selection controls
-- **Simplified Production Job Queue System**:
-  - **UI-Only Architecture**: Queue system exclusively for Gradio UI while CLI uses direct execution
-  - **Database-First Design**: Uses database transactions for atomic job claiming without application locks
-  - **FIFO Processing**: First-in, first-out job processing with position tracking and estimated wait times
-  - **Single Container Strategy**: Maintains one warm container preventing resource accumulation
-  - **Timer-Based Processing**: Gradio Timer component processes queue every 2 seconds without background threads
-  - **Persistent State**: SQLite-backed queue survives UI restarts and maintains job history
-  - **Live Monitoring**: Real-time queue status with job position, type, and elapsed time display
-  - **Complete Job Lifecycle**: Support for inference, batch inference, enhancement, and upscale operations
-  - **Atomic Operations**: Database-level locking ensures only one process can claim jobs
-  - **Intelligent Cleanup**: Automatic deletion of successful jobs and trimming of failed jobs (keeps last 50)
-  - **Graceful Shutdown**: Properly marks running jobs as cancelled when app closes
-  - **Enhanced Job Management**: Cancel selected jobs, kill active jobs with database updates
-  - **Smart Batching Overlay**: Advanced 2-5x performance optimization through intelligent job grouping
-- **Professional Design**: Gradient animations, glassmorphism effects, and loading skeleton animations
-- **Multi-tab Details**: Comprehensive run details with General, Parameters, Logs, and Output tabs
-- **User Rating System**: Rate completed runs with 1-5 stars for quality assessment and analytics
-- **Real-time Progress**: Progress tracking with gr.Progress() and completion feedback
-- **Enhanced Status Display**: Comprehensive GPU, Docker, SSH status with detailed system information
-- **Auto-refresh Behavior**: Active Jobs tab refreshes automatically when selected
-- **Visual Gallery**: Browse and manage generated videos with comprehensive metadata
-- **Auto-Download Controls**: Automatic download of NVIDIA-generated control files (depth, normal, canny)
+### **Web Interface (Gradio)**
+- Cross-tab navigation with intelligent filtering
+- Real-time container monitoring with live log streaming
+- Video gallery with rating system (1-5 stars)
+- Batch operations (select, delete multiple runs/prompts)
+- Modular architecture: reduced main file from 3,255 → 152 lines (95%)
 
 ### **AI Enhancement Pipeline**
-- Prompt optimization using Pixtral model
-- **Video-agnostic 4K upscaling** - upscale any video file or inference output
-- **Guided upscaling** with optional prompts for AI-directed enhancement
-- **Flexible upscaling sources** - from inference runs or arbitrary video files
-- Safety controls and content filtering
-- Metadata tracking for all operations
+- Prompt optimization using Pixtral vision-language model
+- 4K upscaling works with any video (not just inference outputs)
+- Optional guided upscaling with custom prompts
+- Automatic download of control files (depth, normal, canny)
 
 ## 🚀 Quick Start
 
@@ -301,7 +286,7 @@ cosmos inference ps_xxxxx --weights 0.3 0.4 0.2 0.1  # Blocks until complete
 cosmos status --stream  # Watch live execution logs
 
 # Advanced features
-cosmos batch-inference ps_001 ps_002 ps_003  # 40% faster
+cosmos batch-inference ps_001 ps_002 ps_003  # ~30-40% faster
 cosmos upscale --from-run rs_xxxxx --prompt "8K cinematic"
 cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 ```
@@ -317,30 +302,30 @@ cosmos prompt-enhance ps_xxxxx  # AI prompt improvement
 ## 🎯 Skills Demonstrated
 
 ### System Architecture
-• Designed facade pattern abstracting 40+ modules behind single API
+• Designed facade pattern that abstracts 40+ modules behind single API
 
-• Implemented database-first architecture with SQLAlchemy ORM
+• Database-first architecture with SQLAlchemy ORM and atomic transactions
 
-• Created lazy evaluation pattern solving distributed system lifecycle issues
+• Solved distributed system lifecycle issues through lazy evaluation patterns
 
 ### Infrastructure & DevOps
-• Orchestrated remote GPU clusters via SSH/Docker automation
+• Remote GPU cluster management via SSH/Docker automation
 
-• Built SFTP file transfer with integrity verification and retry logic
+• Built cross-platform SFTP file transfer with integrity verification and retry logic
 
-• Implemented real-time log streaming from remote containers
+• Real-time log streaming from remote containers
 
 ### Performance & Scale
-• Achieved 40-60% speedup through batch processing optimization
+• Smart batching achieves ~30-40% speedup through GPU model reuse
 
 • Managed concurrent operations on H100 GPUs
 
-• Built transaction-safe database operations with automatic rollback
+• Transaction-safe database operations with automatic rollback
 
 ### Python & Software Engineering
-• Comprehensive type hints and Google-style docstrings
+• Type hints and Google-style docstrings throughout
 
-• Context managers for resource management
+• Context managers for resource safety
 
 • Parameterized logging for production debugging
 
@@ -359,65 +344,8 @@ See [Development Guide](docs/DEVELOPMENT.md) for detailed setup.
 
 ---
 
-## 🚀 Future Work
+## 🚀 Future Direction
 
-### Intelligent Data Curation with Cosmos Reason
+Exploring integration with **NVIDIA Cosmos Reason** (7B vision-language model) to automatically validate augmented outputs for physical accuracy. This would create a quality-assurance loop ensuring only physically plausible training data enters the pipeline.
 
-Leveraging **NVIDIA Cosmos Reason** — a 7B-parameter reasoning vision-language model — to automatically analyze and validate augmented synthetic data from Cosmos Transfer. This ensures only physically accurate and high-quality training data enters the pipeline.
-
-#### Quality Assurance Pipeline:
-
-**1. Automated Physics Validation**
-- Deploy Cosmos Reason to analyze Cosmos Transfer augmentation outputs
-- Automatically identify and prune physically inaccurate results (e.g., floating debris, impossible structural deformations)
-- Validate temporal consistency across video sequences
-- Score outputs based on physical plausibility and visual coherence
-
-**2. Intelligent Data Filtering**
-- Use Cosmos Reason's understanding of physics and common sense to detect anomalies
-- Filter out augmentations with rendering artifacts or domain gaps
-- Ensure structural integrity is maintained in disaster scenarios
-- Create confidence scores for each augmented sample
-
-### Post-Training NVIDIA Cosmos with Synthetic Disaster Data
-
-This project explores a **self-improving feedback loop** for physical AI models through synthetic data generation and augmentation. The approach focuses on creating specialized training data for rare scenarios that are difficult or dangerous to capture in real life.
-
-#### Planned Enhancement Pipeline:
-
-**1. Synthetic Data Generation & Augmentation Loop**
-- Generate initial disaster scenarios using my Houdini procedural system (earthquakes, building collapses, floods)
-- Augment this data using NVIDIA Cosmos Transfer/Predict to create diverse variations
-- **NEW**: Apply Cosmos Reason to validate physical accuracy before training
-- Use the augmented and validated Cosmos-generated data to post-train Cosmos models themselves
-- Create a feedback loop where each iteration improves the model's understanding of:
-  - Structural damage patterns and physics
-  - Environmental variations (weather, lighting, debris patterns)
-  - Emergency response scenarios
-
-**2. Applications**
-- Specialized models for disaster assessment and emergency response
-- Training data for autonomous systems in hazardous environments
-- Synthetic scenarios for urban planning and resilience testing
-
-### LeRobot Integration for Physical AI Training
-
-Leveraging Hugging Face's **LeRobot framework** (12,000+ GitHub stars) to create a robust sim-to-real pipeline for robotic training.
-
-#### Planned Approach:
-
-**1. Synthetic Data Pipeline**
-- Generate teleoperation data in NVIDIA Omniverse with LeRobot integration
-- Augment this data using my Cosmos workflow (Transfer/Predict models)
-- Train robots to generalize across diverse environments using augmented datasets
-
-**2. Key Benefits**
-- **Cost-effective**: LeRobot's $100 hardware democratizes robotic experimentation
-- **Generalization**: Cosmos augmentation helps robots adapt to unseen environments
-- **Safety**: Test dangerous scenarios in simulation before real-world deployment
-
-### Integration with NVIDIA Omniverse and Isaac Sim
-
-Future exploration of NVIDIA's physical AI ecosystem for enhanced simulation capabilities, including USD pipeline integration and physics-based validation of synthetic data.
-
-This positions the project at the intersection of **procedural generation**, **world models**, and **embodied AI** — three of the most critical areas in physical AI development for 2025 and beyond.
+Also investigating **LeRobot** integration for sim-to-real robot training using augmented synthetic data.

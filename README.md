@@ -1,6 +1,6 @@
 # Cosmos AI Video Pipeline
 
-I built a production Python system that runs NVIDIA Cosmos world foundation models on remote H100 GPUs. It handles the full workflow to create fully synthetic data with traditional procedural tools and AI augmentation: SSH orchestration, Docker execution, file transfers, database tracking, queue system with smart inference batching, and a web UI.
+I built a production Python system that runs NVIDIA Cosmos world foundation models (https://github.com/nvidia-cosmos) on remote H100 GPUs. It handles the full workflow to create fully synthetic data with traditional procedural tools and AI augmentation: SSH orchestration, Docker execution, file transfers, database tracking, queue system with smart inference batching, and a web UI.
 
 **Project Stats:** 797 tests • 80%+ coverage • Production-ready
 

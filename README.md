@@ -17,7 +17,7 @@ I built a production Python system that runs NVIDIA Cosmos world foundation mode
 
 • **Handles the full pipeline** - Data creation → AI processing → output retrieval with database tracking
 
-• **Smart batching** - Groups similar jobs for batch iference, reducing overhead by ~30-40%
+• **Smart batching** - Groups similar jobs in a queue for batch inference, reducing overhead by ~30-40%
 
 • **Clean Python API** - Single facade abstracts infrastructure complexity behind simple method calls
 
